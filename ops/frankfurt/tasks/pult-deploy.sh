@@ -22,6 +22,16 @@ deploy(){
 }
 health_gateway(){ [[ $(code http://127.0.0.1:8788/) == 200 && $(code http://127.0.0.1:8788/api/status) == 401 ]]; }
 health_connect(){ [[ $(code http://127.0.0.1:8789/.well-known/oauth-protected-resource) == 200 && $(code -X POST http://127.0.0.1:8789/mcp -H 'Content-Type: application/json' -d '{}') == 401 ]]; }
+# Защита: первый переход на репозиторий — только если код совпадает с работающим (кроме тестов и служебных файлов)
+guard(){
+  local name=$1 dir; dir=$(readlink -f "$2")
+  [[ "$(basename "$dir")" == papa-* ]] && return 0
+  local d; d=$(diff -rq -x __pycache__ -x .pytest_cache -x '*.pyc' -x tests -x install_connect.sh -x nexus-connect.service \
+       -x requirements.txt -x README.md -x deploy -x BUILD_REPORT.md -x '*.png' "/opt/papa/modules/pult/$name" "$dir" 2>&1 | grep -v '^Only in /opt/papa' || true)
+  if [[ -n "$d" ]]; then echo "$name: код в репозитории отличается от работающего — развёртывание остановлено:"; echo "$d" | head -15; return 1; fi
+  echo "$name: код совпадает с работающим ($dir)"
+}
+[[ "${FORCE:-0}" == 1 ]] || { guard gateway /opt/nexus-private-control-v2/current && guard connect /opt/nexus-connect/current; } || { echo "== PULT_DEPLOY_STOPPED"; exit 1; }
 rc=0
 deploy gateway /opt/nexus-private-control-v2 nexus-private-control-v2 || rc=1
 deploy connect /opt/nexus-connect nexus-connect || rc=1

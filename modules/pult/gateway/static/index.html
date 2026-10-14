@@ -1,22 +1,134 @@
 <!doctype html>
-<html lang="ru" data-theme="dark">
+<html lang="ru" data-theme="light">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NEXUS — личный центр управления</title><link rel="stylesheet" href="/style.css"></head>
+<meta name="theme-color" content="#ff4d0d">
+<title>NEXUS — центр управления</title><link rel="stylesheet" href="/style.css"></head>
 <body>
-<div id="login" class="login-screen"><div class="login-card"><div class="login-mark">N</div><p class="eyebrow">PRIVATE CONTROL</p><h1>Добро пожаловать в NEXUS</h1><p class="muted">Ваш защищённый центр управления устройствами и автоматизацией.</p><form id="login-form"><label for="password">Пароль владельца</label><input id="password" type="password" autocomplete="current-password" required placeholder="Введите пароль"><button class="primary wide" type="submit">Войти в систему →</button></form><p id="login-error" class="error" role="alert"></p><p class="small muted center">Доступ только владельцу • Автономный безопасный режим</p></div></div>
-<div id="app" class="layout hidden">
-  <aside class="sidebar"><div class="brand"><div class="mark">N</div><div><strong>NEXUS</strong><small>PRIVATE CONTROL</small></div></div>
-  <div class="nav-caption">УПРАВЛЕНИЕ</div><nav id="nav"><button class="nav-item active" data-view="overview"><span>◫</span> Обзор</button><button class="nav-item" data-view="tasks"><span>☷</span> Задачи</button><button class="nav-item" data-view="devices"><span>▣</span> Устройства</button><button class="nav-item" data-view="protocol"><span>⬡</span> GENPLAN</button><button class="nav-item" data-view="audit"><span>≡</span> Журнал</button></nav>
-  <div class="side-bottom"><div class="secure">◈ <span>Защищённый режим</span></div><button id="logout" class="text-button">Выйти из панели ↗</button></div></aside>
-  <main class="main"><header class="header"><div><p class="eyebrow" id="page-label">ЦЕНТР УПРАВЛЕНИЯ</p><h1 id="page-title">Панель NEXUS</h1><p class="muted" id="page-sub">Все важные процессы в одном месте</p></div><div class="header-actions"><span class="time" id="time"></span><button id="refresh" class="icon-button" title="Обновить">↻</button><button id="theme" class="icon-button" title="Сменить тему">☼</button><div class="avatar" title="Владелец">O</div></div></header>
-  <section id="overview" class="view active"><div class="intro"><div><span class="live-dot"></span> <span class="tinycaps">ЛИЧНОЕ ОБЛАКО</span><h2>Система под вашим контролем</h2><p>Мониторинг, безопасные исправления и автоматические задачи. Без зависимостей от включённого ноутбука.</p></div><span class="mode-tag">◉ Автономный режим</span></div>
-  <div class="metrics"><div class="metric"><div class="metric-top"><span>Облачный шлюз</span><span class="symbol blue">◈</span></div><strong id="core-state">—</strong><small>Постоянное ядро</small></div><div class="metric"><div class="metric-top"><span>Устройства</span><span class="symbol purple">▣</span></div><strong id="online-count">—</strong><small>Агентов онлайн</small></div><div class="metric"><div class="metric-top"><span>Задачи в очереди</span><span class="symbol orange">☷</span></div><strong id="queue-count">—</strong><small>Ожидают выполнения</small></div><div class="metric"><div class="metric-top"><span>Завершено</span><span class="symbol green">✓</span></div><strong id="done-count">—</strong><small>Успешных задач</small></div></div>
-  <div class="cols"><section class="panel"><div class="panel-title"><div><h3>Быстрые действия</h3><p>Запускаются самостоятельно и безопасно</p></div></div><div class="quick-grid"><button class="quick" data-op="gateway_health"><span class="quick-icon">♥</span><strong>Проверить шлюз</strong><small>Общая диагностика</small></button><button class="quick" data-op="policy_verify"><span class="quick-icon">⬡</span><strong>Проверить правила</strong><small>Безопасность и права</small></button><button class="quick" data-op="genplan_status" data-target="london"><span class="quick-icon">◷</span><strong>GENPLAN Лондон</strong><small>Службы, публикации, ошибки</small></button><button class="quick" data-op="policy_repair"><span class="quick-icon">✦</span><strong>Исправить шлюз</strong><small>Локальная конфигурация</small></button></div></section>
-  <section class="panel"><div class="panel-title"><div><h3>Подключения</h3><p>Текущий статус устройств</p></div><button class="link-button" data-goto="devices">Все устройства ↗</button></div><div id="device-summary" class="stack"></div><div class="notice">Срочный режим GENPLAN не равен обычному слоту. Публикация в Telegram пока не подключена.</div></section></div>
-  <section class="panel"><div class="panel-title"><div><h3>Последние задачи</h3><p>Действия и подтверждённые результаты</p></div><button class="link-button" data-goto="tasks">История ↗</button></div><div id="recent-tasks"></div></section></section>
-  <section id="tasks" class="view"><div class="section-heading"><h2>Задачи и автоматизация</h2><p>Безопасные действия выполняются автоматически. Критические — только по вашему подтверждению.</p></div><div class="cols"><section class="panel"><h3>Создать задачу</h3><form id="task-form" class="fields"><label>Операция<select id="task-operation"><option value="gateway_health">Диагностика шлюза</option><option value="policy_verify">Проверка протокола</option><option value="policy_repair">Восстановить локальные правила</option><option value="genplan_probe">Проверка служб GENPLAN</option><option value="urgent_prepare">Подготовить срочный пост (без публикации)</option><option value="device_health">Диагностика устройства</option><option value="startup_audit">Проверить автозагрузку</option><option value="process_snapshot">Список процессов</option><option value="genplan_status">GENPLAN Лондон (только чтение)</option><option value="restart_service_request">Запросить перезапуск службы (без исполнения)</option></select></label><label>Цель<input id="task-target" value="cloud" placeholder="cloud / device id" required></label><label id="post-row" class="hidden">Номер срочного поста<input id="task-post-id" type="number" min="1" placeholder="780"></label><label id="reason-row" class="hidden">Причина<input id="task-reason" placeholder="Для чего требуется действие"></label><button class="primary" type="submit">Добавить задачу →</button><small class="muted">Срочный пост здесь только подготавливается. Реальная публикация отключена.</small></form></section><section class="panel"><h3>Ограничения безопасности</h3><div class="stack"><div class="device-row"><span class="small-icon">✓</span><div><strong>Автономно</strong><small>Диагностика, проверки, локальное восстановление правил</small></div></div><div class="device-row"><span class="small-icon">◈</span><div><strong>Подтверждение владельца</strong><small>Изменение production, драйверов, прав, токенов</small></div></div><div class="device-row"><span class="small-icon">⛔</span><div><strong>В V2 отключено</strong><small>Произвольные команды, SSH, реальные Telegram-публикации</small></div></div></div></section></div><section class="panel"><h3>Очередь задач</h3><div id="all-tasks"></div></section></section>
-  <section id="devices" class="view"><div class="section-heading"><h2>Ваши устройства</h2><p>Windows и MacBook сами подключаются к облачному центру. Агент не открывает входящие порты.</p></div><div class="panel"><h3>Подключённые агенты</h3><div id="all-devices"></div><div class="notice">Если компьютер выключен, агент офлайн. Облачный NEXUS продолжает работу независимо.</div></div></section>
-  <section id="protocol" class="view"><div class="section-heading"><h2>GENPLAN и публикации</h2><p>Утверждённая логика без подмены результата обещанием.</p></div><div class="panel"><div class="protocol-row"><strong>Утренний режим</strong><span>По утверждённому GENPLAN 5</span></div><div class="protocol-row"><strong>Дневной режим</strong><span>Обычная очередь планирования</span></div><div class="protocol-row"><strong>Вечерний / ночной</strong><span>Отдельные правила и контроль</span></div><div class="protocol-row"><strong>Срочная публикация</strong><span>Выше обычных слотов, только по явной команде</span></div><div class="notice warning">В этом шлюзе реальная публикация НЕ подключена. Кнопка подготовки срочного поста не отправляет ничего в Telegram.</div></div></section>
-  <section id="audit" class="view"><div class="section-heading"><h2>Журнал действий</h2><p>Кто, когда и какое действие выполнил.</p></div><div class="panel"><div id="audit-list"></div></div></section>
-  <footer class="footer">NEXUS CONTROL V2 · Изолированный модуль · Производственные изменения только после приёмки</footer>
-  </main></div><div id="toast" role="status"></div><script src="/app.js" defer></script></body></html>
+<svg class="sprite" aria-hidden="true"><defs>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+<symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.5-7.5a4 4 0 0 1-2-2z"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></symbol>
+<symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="10" rx="2"/><path d="M2 19h20"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 13a8 8 0 0 0 14.6 4.5"/><path d="M5 3v4h4M19 21v-4h-4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+<symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L3 10.5l7 3 3 7z"/><path d="M10 13.5L21 3"/></symbol>
+</defs></svg>
+
+<div id="login" class="login-screen">
+  <header class="hero"><div class="hero-inner">
+    <div class="logo"><span class="logo-mark">N</span><span class="logo-word">NEXUS</span></div>
+    <p class="tagline">Личный центр управления</p><p class="subline">Вход только для владельца</p>
+  </div></header>
+  <div class="wrap"><form id="login-form" class="card login-card">
+    <label for="password">Пароль владельца</label>
+    <input id="password" type="password" autocomplete="current-password" required placeholder="Введите пароль">
+    <button class="btn btn-main wide" type="submit"><svg class="ic"><use href="#i-lock"/></svg>Войти</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+  <div class="banner"><span class="banner-ic"><svg class="ic"><use href="#i-shield"/></svg></span><div><strong>Закрытый доступ</strong><small>Доступ только владельцу, без публичного входа</small></div></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header class="hero"><div class="hero-inner">
+    <div class="hero-top">
+      <span class="time-pill" id="time"></span>
+      <div class="pill-group">
+        <button id="refresh" class="pill-btn" title="Обновить"><svg class="ic"><use href="#i-refresh"/></svg></button>
+        <button id="theme" class="pill-btn" title="Тема"><svg class="ic"><use href="#i-moon"/></svg></button>
+        <button id="logout" class="pill-btn" title="Выйти"><svg class="ic"><use href="#i-out"/></svg></button>
+      </div>
+    </div>
+    <div class="logo"><span class="logo-mark">N</span><span class="logo-word">NEXUS</span></div>
+    <p class="tagline" id="page-title">Сервер под вашим контролем</p>
+    <p class="subline" id="page-sub">Frankfurt · диагностика и безопасные задачи</p>
+  </div></header>
+
+  <div class="wrap">
+    <nav id="nav" class="tabs">
+      <button class="tab active" data-view="overview">Обзор</button>
+      <button class="tab" data-view="tasks">Задачи</button>
+      <button class="tab" data-view="audit">Журнал</button>
+    </nav>
+    <span id="page-label" class="sr"></span>
+
+    <section id="overview" class="view active">
+      <article class="card">
+        <div class="card-head"><div><h2>Шлюз Frankfurt</h2><p class="meta"><svg class="ic sm"><use href="#i-pin"/></svg>Облачный сервер · 24/7</p></div><span id="core-state" class="chip">—</span></div>
+        <div class="info"><svg class="ic"><use href="#i-clock"/></svg><span>В очереди: <b id="queue-count">—</b> · Выполнено: <b id="done-count">—</b></span></div>
+        <div class="btn-row">
+          <button class="btn btn-main" data-op="gateway_health"><svg class="ic"><use href="#i-pulse"/></svg>Проверить</button>
+          <button class="btn btn-soft" data-op="host_health"><svg class="ic"><use href="#i-server"/></svg>Сервер</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head"><div><h2>Устройства</h2><p class="meta"><svg class="ic sm"><use href="#i-laptop"/></svg>Windows · MacBook</p></div><span id="online-count" class="chip">—</span></div>
+        <div id="device-summary" class="stack"></div>
+        <div class="btn-row one"><button class="btn btn-soft" data-goto="devices"><svg class="ic"><use href="#i-list"/></svg>Все устройства</button></div>
+      </article>
+
+      <div class="banner"><span class="banner-ic"><svg class="ic"><use href="#i-shield"/></svg></span><div><strong>Режим «только безопасное»</strong><small>Публикации и изменения production отключены. Критическое — только с вашим подтверждением.</small></div></div>
+
+      <h3 class="section-title">Быстрые действия:</h3>
+      <div class="tiles">
+        <button class="tile" data-op="policy_verify"><span class="tile-ic"><svg class="ic"><use href="#i-shield"/></svg></span>Правила</button>
+        <button class="tile" data-op="policy_repair"><span class="tile-ic"><svg class="ic"><use href="#i-wrench"/></svg></span>Исправить</button>
+        <button class="quick" data-op="genplan_status" data-target="london"><span class="quick-icon">◷</span><strong>GENPLAN Лондон</strong><small>Службы, публикации, ошибки</small></button>
+        <button class="tile" data-goto="protocol"><span class="tile-ic"><svg class="ic"><use href="#i-send"/></svg></span>Публикации</button>
+      </div>
+
+      <h3 class="section-title">Последние задачи:</h3>
+      <div id="recent-tasks" class="stack"></div>
+    </section>
+
+    <section id="tasks" class="view">
+      <form id="task-form" class="card fields">
+        <h2>Новая задача</h2>
+        <label>Операция<select id="task-operation">
+          <option value="gateway_health">Диагностика шлюза</option><option value="host_health">Диагностика сервера</option>
+          <option value="policy_verify">Проверка правил</option><option value="policy_repair">Восстановить правила шлюза</option>
+          <option value="genplan_probe">Проверка служб GENPLAN</option><option value="urgent_prepare">Подготовить срочный пост (без публикации)</option>
+          <option value="device_health">Диагностика устройства</option><option value="startup_audit">Проверить автозагрузку</option>
+          <option value="process_snapshot">Список процессов</option><option value="genplan_status">GENPLAN Лондон (только чтение)</option><option value="restart_service_request">Запросить перезапуск (без исполнения)</option>
+        </select></label>
+        <label>Цель<input id="task-target" value="cloud" placeholder="cloud / id устройства" required></label>
+        <label id="post-row" class="hidden">Номер срочного поста<input id="task-post-id" type="number" min="1" placeholder="780"></label>
+        <label id="reason-row" class="hidden">Причина<input id="task-reason" placeholder="Зачем нужно действие"></label>
+        <button class="btn btn-main wide" type="submit">Добавить задачу</button>
+        <p class="hint">Срочный пост здесь только готовится. Публикация в Telegram отключена.</p>
+      </form>
+      <h3 class="section-title">Очередь задач:</h3>
+      <div id="all-tasks" class="stack"></div>
+    </section>
+
+    <section id="devices" class="view">
+      <article class="card"><div class="card-head"><div><h2>Подключённые агенты</h2><p class="meta">Агент сам подключается к шлюзу, входящие порты не открываются</p></div></div>
+      <div id="all-devices" class="stack"></div></article>
+      <div class="banner"><span class="banner-ic"><svg class="ic"><use href="#i-laptop"/></svg></span><div><strong>Компьютер выключен — шлюз работает</strong><small>Облачный NEXUS не зависит от ноутбука</small></div></div>
+    </section>
+
+    <section id="protocol" class="view">
+      <article class="card"><h2>GENPLAN и публикации</h2>
+        <div class="info"><svg class="ic"><use href="#i-clock"/></svg><span><b>Утро</b> — по утверждённому GENPLAN 5</span></div>
+        <div class="info"><svg class="ic"><use href="#i-clock"/></svg><span><b>День</b> — обычная очередь</span></div>
+        <div class="info"><svg class="ic"><use href="#i-clock"/></svg><span><b>Вечер / ночь</b> — отдельные правила</span></div>
+        <div class="info"><svg class="ic"><use href="#i-send"/></svg><span><b>Срочно</b> — выше слотов, только по явной команде</span></div>
+      </article>
+      <div class="banner warn"><span class="banner-ic"><svg class="ic"><use href="#i-lock"/></svg></span><div><strong>Публикация не подключена</strong><small>Кнопка срочного поста ничего не отправляет в Telegram</small></div></div>
+    </section>
+
+    <section id="audit" class="view"><div id="audit-list" class="stack"></div></section>
+
+    <footer class="footer">© NEXUS CONTROL V2 · <span>Frankfurt</span></footer>
+  </div>
+</div>
+<div id="toast" role="status"></div><script src="/app.js" defer></script></body></html>
