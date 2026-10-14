@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# PAPA: обновить код с GitHub и (по желанию) выполнить одну задачу из ops/<сервер>/tasks/.
+# Использование:  papa-update            — обновить и показать список задач
+#                 papa-update <задача>   — обновить и выполнить задачу
+set -Eeuo pipefail
+R=/opt/papa
+case "$(hostname)" in
+  xojaobodcity24bot) H=london ;;
+  ubuntu-s-1vcpu-1gb-fra1) H=frankfurt ;;
+  *) echo "UNKNOWN_HOST $(hostname)"; exit 1 ;;
+esac
+git -C "$R" fetch -q origin main
+git -C "$R" reset -q --hard origin/main
+install -m 755 "$R/ops/common/papa-update" /usr/local/bin/papa-update.new && mv -f /usr/local/bin/papa-update.new /usr/local/bin/papa-update
+echo "PAPA $(git -C "$R" log -1 --format='%h %cd %s' --date=format:'%Y-%m-%d %H:%M') | сервер: $H"
+T="${1:-}"
+if [[ -z "$T" ]]; then
+  echo "Задачи:"; ls "$R/ops/$H/tasks" 2>/dev/null | sed 's/\.sh$//; s/^/  /'; exit 0
+fi
+[[ "$T" =~ ^[a-z0-9-]+$ ]] || { echo BAD_TASK_NAME; exit 1; }
+F="$R/ops/$H/tasks/$T.sh"
+[[ -f "$F" ]] || { echo "NO_SUCH_TASK: $T"; exit 1; }
+echo "== задача: $T"
+bash "$F"
