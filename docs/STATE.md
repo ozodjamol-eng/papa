@@ -24,6 +24,7 @@
 - `nexus-private-control-v2` (127.0.0.1:8788) — релиз `r4-london`. Панель: `https://nexus-frankfurt.tail83fe5c.ts.net:8443/` (только tailnet).
 - `nexus-connect` (127.0.0.1:8789) — релиз `r3`, OAuth + MCP для ChatGPT и Claude. Публично через Tailscale Funnel: `https://nexus-frankfurt.tail83fe5c.ts.net/mcp`.
 - Инструменты MCP: `nexus_status`, `nexus_tasks`, `nexus_audit`, `nexus_devices`, `nexus_run_check`, `nexus_genplan`.
+- PAPA подключён: `/opt/papa`, `papa-update`. **Razvedka** установлена: пользователь `papa-razvedka`, venv `/opt/papa-venv/razvedka` (telethon 1.45), база `/var/lib/papa-razvedka/razvedka.sqlite3`, сессия `/etc/papa-razvedka/telegram.env` (0600). Вход — **временно основной профиль владельца** (устройство «PAPA Razvedka»), заменить отдельным профилем. Первый сбор 2026-10-14: 38 каналов, 5 758 постов, 0 ошибок, пик памяти 51 МБ. Ежедневный таймер пока не включён.
 - Watchdog каждые 2 мин → Healthchecks → Telegram. Шифрованная резервная копия ночью (02:17 UTC), откат `rollback.sh`.
 
 ## Отложено владельцем (делаем в конце)
