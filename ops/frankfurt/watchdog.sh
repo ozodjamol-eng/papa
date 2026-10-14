@@ -12,6 +12,13 @@ if [[ -r $hb ]]; then
   age=$(( $(date +%s) - $(cut -d. -f1 "$hb") ))
   (( age < 120 )) || fail+=("worker_stalled_${age}s")
 else fail+=("no_heartbeat"); fi
+# PAPA: Connect (MCP для ChatGPT/Claude) и Разведка
+systemctl is-active --quiet nexus-connect || fail+=("connect_not_active")
+code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:8789/.well-known/oauth-protected-resource || true)
+[[ "$code" == 200 ]] || fail+=("connect_http_$code")
+for u in papa-razvedka@run.service papa-razvedka@collect.service; do
+  systemctl is-failed --quiet "$u" && fail+=("${u%%.service}_failed")
+done
 free_kb=$(df -Pk /var/lib/nexus-private-control | awk 'NR==2{print $4}')
 (( free_kb > 1048576 )) || fail+=("disk_low")
 avail_kb=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
