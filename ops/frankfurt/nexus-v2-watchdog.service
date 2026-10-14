@@ -1,0 +1,13 @@
+[Unit]
+Description=NEXUS V2 independent watchdog (read-only)
+[Service]
+Type=oneshot
+User=nexus-private-control
+Group=nexus-private-control
+EnvironmentFile=-/etc/nexus-v2-watchdog.env
+ExecStart=/usr/local/lib/nexus-v2/watchdog.sh
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=64M

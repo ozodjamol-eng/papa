@@ -1,0 +1,48 @@
+[Unit]
+Description=NEXUS London agent (read-only GENPLAN visibility for NEXUS V2)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=nexus-agent
+Group=nexus-agent
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/nexus-london-agent.env
+ExecStart=/usr/bin/python3 -I /usr/local/lib/nexus-london-agent/nexus_london_agent.py
+Restart=always
+RestartSec=10
+# read any file (GENPLAN DB) without write rights or root; nothing else
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=0077
+# defence in depth: secrets are root-only (0600) and the agent has no capabilities
+InaccessiblePaths=-/opt/xojaobod-genplan-v5/.env.production -/opt/xojaobod-genplan-v5/.env -/opt/xojaobod-genplan-v3/.env.production -/opt/xojaobod-genplan-v3/.env -/opt/xojaobod-autopost/.env -/opt/xojaobodcity24bot/.env -/etc/nexus-private-control.env
+MemoryHigh=48M
+MemoryMax=64M
+CPUQuota=15%
+TasksMax=16
+LogRateLimitIntervalSec=60
+LogRateLimitBurst=60
+
+[Install]
+WantedBy=multi-user.target

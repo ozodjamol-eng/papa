@@ -1,0 +1,42 @@
+[Unit]
+Description=NEXUS Connect (OAuth + MCP for ChatGPT/Claude, safe tools only)
+After=network-online.target nexus-private-control-v2.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+User=nexus-connect
+Group=nexus-connect
+WorkingDirectory=/opt/nexus-connect/current
+EnvironmentFile=/etc/nexus-private-control.env
+EnvironmentFile=/etc/nexus-connect.env
+ExecStart=/opt/nexus-private-control-v2/.venv/bin/uvicorn nexus_connect.run:app --host 127.0.0.1 --port 8789 --workers 1 --no-access-log --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=5
+UMask=0077
+MemoryHigh=96M
+MemoryMax=128M
+CPUQuota=30%
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/nexus-connect
+[Install]
+WantedBy=multi-user.target

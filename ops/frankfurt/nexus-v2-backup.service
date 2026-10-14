@@ -1,0 +1,7 @@
+[Unit]
+Description=NEXUS V2 encrypted SQLite backup
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/nexus-v2/backup.sh
+Nice=10
+MemoryMax=128M
