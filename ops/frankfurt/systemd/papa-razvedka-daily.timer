@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA Razvedka — ежедневный сбор и отчёт (06:10 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 01:10:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+Unit=papa-razvedka@run.service
+
+[Install]
+WantedBy=timers.target

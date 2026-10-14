@@ -1,0 +1,34 @@
+[Unit]
+Description=PAPA Razvedka (%i) — только чтение каналов-источников
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=papa-razvedka
+Group=papa-razvedka
+EnvironmentFile=/etc/papa-razvedka/telegram.env
+Environment=PAPA_RAZVEDKA_DB=/var/lib/papa-razvedka/razvedka.sqlite3 PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/razvedka
+ExecStart=/opt/papa-venv/razvedka/bin/python -m razvedka %i
+StateDirectory=papa-razvedka
+StateDirectoryMode=0700
+TimeoutStartSec=3h
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0077
+MemoryHigh=200M
+MemoryMax=280M
+CPUQuota=40%
+TasksMax=32

@@ -1,1 +1,10 @@
-# razvedka — см. docs/PASSPORT.md, раздел 3. Код появится в своей фазе.
+# Razvedka — разведка каналов-источников и конкурентов (фаза 1)
+
+Читает каналы из папок Telegram (`config.toml`) и свои каналы, считает:
+лучшие часы и дни, силу форматов, лидеров по просмотрам и ERR, вероятную рекламу у конкурентов,
+самые сильные посты. Отчёт — в консоль и в «Избранное» аккаунта Разведки.
+
+- Только чтение. Единственная запись — отчёт в «Избранное» своего же аккаунта.
+- Работает на Франкфурте под пользователем `papa-razvedka`, сессия Telegram — `/etc/papa-razvedka/telegram.env` (root, 0600).
+- Задачи: `papa-update razvedka-install | razvedka-login | razvedka-collect | razvedka-report | razvedka-auto`.
+- Тесты: `python3 -m unittest tests/test_razvedka.py` (без внешних зависимостей).

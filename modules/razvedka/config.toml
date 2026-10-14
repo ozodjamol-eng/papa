@@ -1,0 +1,14 @@
+# PAPA Razvedka — что читать. Секретов здесь нет.
+
+# Папки Telegram (ссылка t.me/addlist/<slug>). Каждая папка = тема.
+[[folders]]
+slug = "YBPSRBlZyvI2NWJi"
+topic = "XOJAOBODCITY (38)"
+
+# Свои каналы — для сравнения с лидерами
+own_channels = ["xojaobodcity24", "ozodjamoll"]
+
+first_days = 7        # глубина первого сбора нового канала
+refresh_days = 3      # сколько дней назад обновлять просмотры при повторном сборе
+pause_seconds = 3     # пауза между каналами (бережное чтение)
+report_days = 7       # период отчёта
