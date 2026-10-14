@@ -228,14 +228,14 @@ class Store:
 
 def safe_server_execute(store: Store,op:str,payload:dict,allow_local_probes:bool=False):
     if op not in SAFE_SERVER:raise PermissionError('operation_not_safe')
+    if op=='host_health':
+        from .diagnostics import host_health
+        return host_health(store.state_dir)
     if op=='gateway_health':return {'scope':'this_gateway','healthy':True,'production_genplan_verified':False}
     if op=='policy_verify':return store.policy()
     if op=='policy_repair':return store.repair_policy()
     if op=='urgent_prepare':return {'post_id':payload['post_id'],'route':'urgent','bypasses_genplan':True,
                                   'published':False,'telegram_ack':None,'notice':'publisher_not_connected'}
-    if op=='host_health':
-        from .diagnostics import host_health
-        return host_health(store.state_dir)
     if op=='genplan_probe':
         if not allow_local_probes:
             return {'connected':False,'reason':'local_probes_disabled','production_genplan_verified':False}
