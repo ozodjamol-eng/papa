@@ -27,7 +27,7 @@ guard(){
   local name=$1 dir; dir=$(readlink -f "$2")
   [[ "$(basename "$dir")" == papa-* ]] && return 0
   local d; d=$(diff -rq -x __pycache__ -x .pytest_cache -x '*.pyc' -x tests -x install_connect.sh -x nexus-connect.service \
-       -x requirements.txt -x README.md -x deploy -x BUILD_REPORT.md -x '*.png' "/opt/papa/modules/pult/$name" "$dir" 2>&1 | grep -v '^Only in /opt/papa' || true)
+       -x requirements.txt -x README.md -x deploy -x BUILD_REPORT.md -x '*.png' "/opt/papa/modules/pult/$name" "$dir" 2>&1 | grep -v -e '^Only in /opt/papa' -e "^Only in $dir" || true)
   if [[ -n "$d" ]]; then echo "$name: код в репозитории отличается от работающего — развёртывание остановлено:"; echo "$d" | head -15; return 1; fi
   echo "$name: код совпадает с работающим ($dir)"
 }
