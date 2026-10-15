@@ -51,14 +51,20 @@ def available() -> bool:
 
 
 def _gemini(system: str, user: str, http=None) -> str:
-    model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.6}}
-    req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                                 data=json.dumps(body).encode(),
-                                 headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-    data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest", "gemini-2.5-flash"]))
+    for i, model in enumerate(models):          # перегрузка (503) — следующая бесплатная модель Gemini
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                     data=json.dumps(body).encode(),
+                                     headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+        try:
+            data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in (500, 503, 404) or i == len(models) - 1:
+                raise
     parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
     return "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
 
@@ -130,17 +136,27 @@ def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
     store.kv_set(db, k, n)
     if n > VISION_LIMIT:
         raise AIError(f"дневной лимит проверки кадров ({VISION_LIMIT}) исчерпан")
-    model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
     parts = [{"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(b).decode()}} for b in images]
     body = {"contents": [{"role": "user", "parts": parts + [{"text": prompt}]}],
             "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.1, "responseMimeType": "application/json"}}
-    req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                                 data=json.dumps(body).encode(),
-                                 headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-    try:
-        data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
-    except urllib.error.HTTPError as e:
-        raise AIError("лимит Gemini исчерпан" if e.code == 429 else f"Gemini: ошибка {e.code}") from None
+    # основная модель перегружена (503) — пробуем запасные модели Gemini (тоже бесплатные)
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest", "gemini-2.5-flash"]))
+    data, err = None, None
+    for model in models:
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                     data=json.dumps(body).encode(),
+                                     headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+        try:
+            data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
+            break
+        except urllib.error.HTTPError as e:
+            err = "лимит Gemini исчерпан" if e.code == 429 else f"Gemini: ошибка {e.code}"
+            if e.code not in (500, 503, 404):
+                break
+        except Exception as e:  # noqa: BLE001
+            err = f"Gemini недоступен ({type(e).__name__})"
+    if data is None:
+        raise AIError(err or "Gemini: нет ответа")
     parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
     raw = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
     raw = raw.strip("`").removeprefix("json").strip()

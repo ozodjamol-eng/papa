@@ -73,15 +73,15 @@ class TestMorning(unittest.TestCase):
         now = at("22:40")
         morning.ensure_all(self.db, CFG, now)
         d = self.rows("davra")
-        self.assertEqual(dt.datetime.fromisoformat(d["day"]["at"]), at("06:00", FRI))
-        self.assertEqual(dt.datetime.fromisoformat(d["greeting"]["at"]), at("06:30", FRI))
+        self.assertEqual(dt.datetime.fromisoformat(d["greeting"]["at"]), at("06:00", FRI))   # день начинается с «Хайрли тонг»
+        self.assertEqual(dt.datetime.fromisoformat(d["day"]["at"]), at("06:30", FRI))
         x = self.rows("xojaobod")                                  # без времени намаза — запасное
         self.assertEqual(dt.datetime.fromisoformat(x["day"]["at"]), at("06:10", FRI))
         namaz.save(self.db, [(THU, {"bomdod": "05:46", "peshin": "12:45", "asr": "15:59", "shom": "17:44", "xufton": "19:09"})], now)
         morning.ensure_all(self.db, CFG, now)                      # время намаза ввели — пост сдвинулся
         x = self.rows("xojaobod")
         self.assertEqual(dt.datetime.fromisoformat(x["day"]["at"]), at("06:06", FRI))
-        self.assertEqual(dt.datetime.fromisoformat(x["greeting"]["at"]), at("06:31", FRI))
+        self.assertEqual(dt.datetime.fromisoformat(x["greeting"]["at"]), at("05:01", FRI))   # до таблицы намаза (05:16)
         self.assertEqual(self.rows("davra", THU)["day"]["status"], "skipped")   # сегодняшнее утро уже прошло
 
     def test_occupied_includes_morning(self):
@@ -279,7 +279,7 @@ class TestMorning(unittest.TestCase):
 
     def test_not_prepared_is_skipped_and_reported(self):
         morning.ensure_all(self.db, CFG, at("22:40"))
-        asyncio.run(service.tick(self.db, CFG, ENV, {"bot": Pub(), "account": Acc()}, now=at("06:20", FRI), log=lambda s: None))
+        asyncio.run(service.tick(self.db, CFG, ENV, {"bot": Pub(), "account": Acc()}, now=at("06:50", FRI), log=lambda s: None))
         self.assertEqual(self.rows("davra")["day"]["status"], "skipped")
         self.assertTrue(any("не успели подготовить" in e for e in service.ERRORS))
 
