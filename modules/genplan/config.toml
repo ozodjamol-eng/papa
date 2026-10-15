@@ -1,0 +1,54 @@
+# GENPLAN PAPA — сетки публикаций. Время — Ташкент (UTC+5). Секретов нет.
+# kind: anchor — автоматический пост каждый день (намоз, дуо); content — материал из хаба по рубрике;
+#       ad — рекламное окно (непроданное отдаётся контенту, не самопиару); music — «Кун хонандаси».
+# days: 1=Пн … 7=Вс; по умолчанию все дни.
+
+signature_default = ""
+
+[channels.xojaobod]
+title = "Хўжаобод Сити 24"
+username = "xojaobodcity24"
+publisher = "account"            # группа: новый аккаунт как анонимный админ — пост от имени группы
+signature = "👉 @XOJAOBODCITY24"
+ad_days_limit = { "7" = 4 }      # Вс — не больше 4 рекламных окон
+slots = [
+  { t = "07:00", kind = "anchor", rubric = "Намоз вақтлари" },
+  { t = "07:05", kind = "anchor", rubric = "Кун дуоси" },
+  { t = "07:30", kind = "ad" },
+  { t = "08:15", kind = "content", rubric = "Тонг/Об-ҳаво", fallback = ["Янгиликлар"] },
+  { t = "09:00", kind = "content", rubric = "Янгиликлар" },
+  { t = "09:40", kind = "ad" },
+  { t = "10:30", kind = "content", rubric = "Фойдали видео", fallback = ["Видео"] },
+  { t = "11:15", kind = "content", rubric = "Хўжаобод/Андижон", fallback = ["Янгиликлар"] },
+  { t = "11:50", kind = "ad" },
+  { t = "12:40", kind = "content", rubric = "Ҳажвия", fallback = ["Видео"] },
+  { t = "14:00", kind = "content", rubric = "Соғлиқ/Оила", fallback = ["Фойдали видео"] },
+  { t = "15:10", kind = "ad" },
+  { t = "16:00", kind = "content", rubric = "Видео", fallback = ["Фойдали видео", "Ҳажвия"] },
+  { t = "17:00", kind = "content", rubric = "Хўжаобод/Андижон", fallback = ["Янгиликлар"] },
+  { t = "17:40", kind = "ad" },
+  { t = "18:40", kind = "content", rubric = "Кечки кучли пост", fallback = ["Видео", "Янгиликлар"] },
+  { t = "19:30", kind = "content", rubric = "Сўровнома", fallback = ["Савол-жавоб"] },
+  { t = "20:00", kind = "music", rubric = "Кун хонандаси" },
+  { t = "20:10", kind = "ad" },
+  { t = "21:00", kind = "content", rubric = "Ҳажвия", fallback = ["Видео"] },
+  { t = "21:40", kind = "content", rubric = "Якуний пост", fallback = ["Лирик чекиниш"] },
+]
+
+[channels.paparazzi]
+title = "PaparazziUZ"
+username = "ozodjamoll"
+publisher = "bot"                # канал: бот публикует от имени канала, автора не видно
+signature = "⭐ @ozodjamoll"
+slots = [
+  { t = "08:30", kind = "content", rubric = "Шоу-бизнес янгилик", fallback = ["Юлдузлар ҳаёти"] },
+  { t = "10:30", kind = "content", rubric = "Клип/премьера", fallback = ["Қўшиқ"] },
+  { t = "12:30", kind = "content", rubric = "Юлдузлар ҳаёти", fallback = ["Шоу-бизнес янгилик"] },
+  { t = "14:30", kind = "content", rubric = "Қўшиқ", fallback = ["Клип/премьера"] },
+  { t = "16:30", kind = "content", rubric = "Шоу-бизнес янгилик", fallback = ["Видео"] },
+  { t = "18:30", kind = "content", rubric = "Видео", fallback = ["Юлдузлар ҳаёти"] },
+  { t = "19:30", kind = "content", rubric = "Клип/премьера", fallback = ["Қўшиқ"] },
+  { t = "20:30", kind = "content", rubric = "Юлдузлар ҳаёти", fallback = ["Шоу-бизнес янгилик"] },
+  { t = "21:30", kind = "content", rubric = "Қўшиқ", fallback = ["Клип/премьера"] },
+  { t = "22:30", kind = "content", rubric = "Видео", fallback = ["Шоу-бизнес янгилик"] },
+]
