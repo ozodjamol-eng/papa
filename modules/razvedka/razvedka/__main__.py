@@ -122,8 +122,34 @@ async def _hunt() -> dict:
         await c.disconnect()
 
 
+async def _pool_latest() -> dict:
+    """Последний пост с медиа в NEXUS MORNING POOL (то, что владелец положил вручную) → pub/morning/latest.json."""
+    import json
+    from .hunt import POOL_TITLES
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        async for d in c.iter_dialogs():
+            if d.is_channel and any(t in (d.title or "").lower() for t in POOL_TITLES):
+                async for m in c.iter_messages(d.entity, limit=20):
+                    if m.media and not m.action:
+                        out = {"pool_chat": int(f"-100{d.entity.id}"), "msg_id": m.id, "text": m.message or "",
+                               "date": m.date.isoformat()}
+                        p = Path(PUB) / "morning" / "latest.json"
+                        p.parent.mkdir(parents=True, exist_ok=True)
+                        p.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+                        return {"msg_id": m.id, "date": out["date"], "text": out["text"][:60]}
+        raise SystemExit("NEXUS MORNING POOL не найден")
+    finally:
+        await c.disconnect()
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "report"
+    if cmd == "pool-latest":
+        print("POOL_LATEST", asyncio.run(_pool_latest()))
+        return
     if cmd == "hunt":
         print("HUNT_DONE", asyncio.run(_hunt()))
         return

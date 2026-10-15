@@ -303,6 +303,23 @@ class TestMorning(unittest.TestCase):
         self.assertIn("не одобрено постов: 6", t)
         self.assertIsNone(morning.approval_reminder(self.db, CFG, at("22:30")))     # раз в день
 
+    def test_use_manual_pool_post(self):
+        morning.ensure_all(self.db, CFG, at("00:20", FRI))
+        calls = []
+
+        def bot(m, **p):
+            calls.append((m, p)); return {"message_id": 700 + len(calls)}
+        done = morning.use_manual(bot, self.db, CFG, ENV, {"pool_chat": -100555, "msg_id": 9,
+                                                          "text": "🗣 ЖУМА АЙЁМИНГИЗ МУБОРАК БЎЛСИН!\n\n@muslimuzportal t.me/x"},
+                                  now=at("00:20", FRI))
+        self.assertEqual(len(done), 3)
+        cap = calls[0][1]["caption"]
+        self.assertTrue(cap.startswith("🗣 ЖУМА АЙЁМИНГИЗ МУБОРАК БЎЛСИН!"))
+        self.assertNotIn("muslimuzportal", cap)
+        r = self.rows("davra")["greeting"]
+        self.assertTrue(r["text"].rstrip().endswith("🎉 @kattadavrauz"))
+        self.assertEqual((r["prepared"], r["approved"], r["preview_sent"]), (1, 0, 0))
+
     def test_overview(self):
         morning.ensure_all(self.db, CFG, at("22:40"))
         t = morning.overview(self.db, CFG, at("22:40"))

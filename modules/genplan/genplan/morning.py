@@ -882,3 +882,29 @@ def today_lines(db, channel: str, day: dt.date) -> list[tuple[str, str]]:
     return [(f"{dt.datetime.fromisoformat(r['at']):%H:%M}",
              f"{icon.get(r['status'], '•')} {dt.datetime.fromisoformat(r['at']):%H:%M}  {TITLE[r['key']]}")
             for r in db.execute("SELECT * FROM fixed_posts WHERE channel=? AND day=? ORDER BY at", (channel, day.isoformat()))]
+
+
+# ---------- готовый пост владельца из NEXUS MORNING POOL ----------
+
+def use_manual(bot, db, cfg: dict, env: dict, latest: dict, now: dt.datetime | None = None, key: str = "greeting") -> list[str]:
+    """Владелец сам положил готовый пост в NEXUS MORNING POOL → он становится утренним постом (key) во всех каналах
+    с утренним блоком: копия в PAPA HUB с нашей подписью (чужие @ и ссылки убираются), затем предпросмотр с ✅."""
+    from . import text as T
+    now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
+    ensure_all(db, cfg, now)
+    own = tuple(c["username"] for c in cfg["channels"].values())
+    done = []
+    rows = db.execute("SELECT * FROM fixed_posts WHERE key=? AND status='pending' AND at>? ORDER BY at",
+                      (key, now.isoformat())).fetchall()
+    first = rows[0]["day"] if rows else None                 # только ближайшее утро
+    for r in [x for x in rows if x["day"] == first]:
+        ch = cfg["channels"].get(r["channel"])
+        if not ch or not opts(ch):
+            continue
+        cap = T.finalize(latest.get("text") or "", ch.get("signature", ""), own=own, limit=1024)
+        res = bot("copyMessage", chat_id=int(env["HUB_CHAT_ID"]), from_chat_id=int(latest["pool_chat"]),
+                  message_id=int(latest["msg_id"]), caption=cap)
+        update(db, r["id"], text=cap, hub_msg=int(res["message_id"]), source=f"manual:{latest['msg_id']}", prepared=1,
+               redo=0, tries=0, error=None, preview_sent=0, approved=0)
+        done.append(f"{ch['title']} {dt.datetime.fromisoformat(r['at']):%d.%m %H:%M}")
+    return done
