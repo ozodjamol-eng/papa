@@ -409,6 +409,8 @@ def pool_import(db, root: Path | None = None) -> int:
                          (c["key"], c["file"], c.get("channel"), c.get("views"), c.get("duration"), c.get("date"), c.get("weekday"),
                           c.get("text")))
         n += cur.rowcount
+        if not cur.rowcount and c.get("text"):           # строки из прошлой охоты — дописываем подпись источника
+            db.execute("UPDATE morning_pool SET text=? WHERE key=? AND text IS NULL", (c["text"], c["key"]))
     db.commit()
     return n
 
