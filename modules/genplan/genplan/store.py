@@ -36,6 +36,16 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 -- «Пульс» канала: когда в канале вышел любой пост (наш или ручной) — чтобы держать промежуток между постами
 CREATE TABLE IF NOT EXISTS pulse (channel TEXT NOT NULL, at TEXT NOT NULL, source TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_pulse ON pulse(channel, at);
+-- Fabrika: задания на обработку (ссылка → видео + текст + логотип; переписать текст ИИ)
+CREATE TABLE IF NOT EXISTS jobs (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL,             -- link / ai
+    payload     TEXT NOT NULL,             -- JSON
+    status      TEXT NOT NULL DEFAULT 'new',   -- new / working / done / failed
+    error       TEXT,
+    created_at  TEXT NOT NULL,
+    done_at     TEXT
+);
 """
 
 # Колонки, добавленные позже (миграция только добавляет, ничего не удаляет)
@@ -51,8 +61,10 @@ EXTRA = {
 
 
 def connect(path: str) -> sqlite3.Connection:
-    db = sqlite3.connect(path)
+    db = sqlite3.connect(path, timeout=15)
     db.row_factory = sqlite3.Row
+    if path != ":memory:":
+        db.execute("PRAGMA journal_mode=WAL")      # бот и Fabrika работают с базой одновременно
     db.executescript(SCHEMA)
     have = {r[1] for r in db.execute("PRAGMA table_info(materials)")}
     for col, typ in EXTRA.items():
@@ -144,3 +156,22 @@ def kv_set(db, k, v) -> None:
 def stock(db, channel: str) -> list:
     return db.execute("SELECT * FROM materials WHERE channel=? AND status='draft' AND stock=1 ORDER BY created_at",
                       (channel,)).fetchall()
+
+
+def job_add(db, kind: str, payload: dict) -> int:
+    cur = db.execute("INSERT INTO jobs(kind, payload, created_at) VALUES (?,?,?)", (kind, json.dumps(payload), now_iso()))
+    db.commit()
+    return cur.lastrowid
+
+
+def job_take(db):
+    r = db.execute("SELECT * FROM jobs WHERE status='new' ORDER BY id LIMIT 1").fetchone()
+    if r:
+        db.execute("UPDATE jobs SET status='working' WHERE id=? AND status='new'", (r["id"],))
+        db.commit()
+    return r
+
+
+def job_done(db, jid: int, error: str | None = None) -> None:
+    db.execute("UPDATE jobs SET status=?, error=?, done_at=? WHERE id=?", ("failed" if error else "done", error, now_iso(), jid))
+    db.commit()

@@ -51,7 +51,7 @@ def _word(w: str) -> str:
 def is_uz_latin(text: str) -> bool:
     lat = len(re.findall(r"[A-Za-z]", PROTECT.sub("", text or "")))
     cyr = len(re.findall(r"[А-Яа-яЁёЎўҚқҒғҲҳ]", text or ""))
-    return lat >= 20 and lat > cyr * 2 and len(UZ_MARK.findall(text)) >= 2
+    return lat >= 12 and lat > cyr * 2 and len(UZ_MARK.findall(text)) >= 2
 
 
 def to_cyrillic(text: str) -> str:

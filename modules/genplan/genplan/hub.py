@@ -73,7 +73,7 @@ def preview(text: str, has_media: bool, n_media: int = 1) -> str:
     from . import translit
     from .text import strip_sources
     t, conv = translit.auto(strip_sources(text or "").strip())       # владелец видит уже очищенный текст
-    t = (t[:280] + "…") if len(t) > 280 else t
+    t = (t[:900] + "…") if len(t) > 900 else t          # владелец видит текст почти целиком — проверить перед выходом
     notes = [n for n in (("🔤 Латиница → кириллица (автоматически)" if conv else ""), translit.language_note(text)) if n]
     note = ("\n\n" + "\n".join(notes)) if notes else ""
     icon = f" 🖼×{n_media}" if n_media > 1 else (" 🖼" if has_media else "")
@@ -103,7 +103,8 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         when = "сейчас (🆘)" if m["urgent"] else smart.fmt(t, now)
         txt = f"{base}\n\n✅ {name} · {m['rubric']} — {when}{' 🔒' if m['locked'] else ''}{dup}"
         kb = [[{"text": "🕐 Изменить время", "callback_data": f"ot:{mid}"}, {"text": "🆘 Сейчас", "callback_data": f"ur:{mid}"}],
-              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
+              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}],
+              [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}]]
         return txt, {"inline_keyboard": kb}
     # черновик — как в GENPLAN 5: сразу сетка рубрик; одно нажатие = рубрика + умное время
     rs = rubrics(cfg, m["channel"])
@@ -117,6 +118,7 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
     kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}, {"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            [{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}, {"text": "🕐 Своё время", "callback_data": f"ot:{mid}"}],
+           [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
            [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
     hint = f"\n✓ — бот думает, что это «{m['rubric']}»" if m["guessed"] else ""
     return (f"📍 Канал: {name}\n\n{base}\n\nВыберите рубрику — время GENPLAN определит сам.{hint}{dup}",
@@ -148,7 +150,7 @@ def kb_channel(mid: int, cfg: dict | None = None) -> dict:
 # ---------- приём ----------
 
 def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], msgs: list[dict],
-           reply_chat: int | None = None) -> str:
+           reply_chat: int | None = None, notes: list[str] | None = None) -> str:
     """Новый материал (одиночный пост или альбом) → черновик с угаданными каналом и рубрикой → карточка владельцу."""
     text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
     media = [md for x in msgs for md in media_of(x)]
@@ -161,6 +163,8 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=any(md["type"] == "audio" for md in media))
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft")
     txt, kb = card(db, cfg, mid)
+    if notes:
+        txt = "\n".join(notes) + "\n\n" + txt
     for o in ([reply_chat] if reply_chat else owners):
         p = {"chat_id": o, "text": txt, "reply_markup": kb, "disable_web_page_preview": True}
         if reply_chat:
@@ -240,12 +244,51 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
     if msg and int(msg["from"]["id"]) in owners and msg["chat"].get("type") == "private":
         from .menu import BY_BUTTON, B_ALL, B_QUEUE, B_TODAY, B_HELP
         txt = (msg.get("text") or "").strip()
+        cap = (msg.get("caption") or "").strip()
+        if cap.lower().startswith("/logo") and ("document" in msg or "photo" in msg):
+            return save_logo(bot, db, cfg, env, msg, cap)
         if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP):
+            store.kv_set(db, "await_text", "")
             return "cmd:" + txt.split()[0]
+        wait = store.kv_get(db, "await_text", "")
+        if wait and txt and not any(k in msg for k in MEDIA_KEYS):     # ✏️ новый текст для материала
+            store.kv_set(db, "await_text", "")
+            mid = int(wait)
+            store.update(db, mid, text=txt)
+            t, kb = card(db, cfg, mid)
+            r = bot("sendMessage", chat_id=msg["chat"]["id"], text="✏️ Текст заменён:\n\n" + t, reply_markup=kb,
+                    disable_web_page_preview=True)
+            store.update(db, mid, owner_msg=r["message_id"])
+            return "edited"
+        from .fabrika import find_link
+        link = find_link(txt) if txt and not any(k in msg for k in MEDIA_KEYS) else None
+        if link:                                                      # ссылка Instagram/TikTok/Shorts → Fabrika
+            store.job_add(db, "link", {"url": link, "owner_chat": msg["chat"]["id"]})
+            bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],
+                text="⏳ Скачиваю видео, ставлю логотип, готовлю текст — 1–3 минуты…")
+            return "link"
         if _album(msg, dm=True):
             return "album"
         return direct(bot, db, cfg, owners, hub, [msg])
     return None
+
+
+def save_logo(bot, db, cfg: dict, env: dict, msg: dict, cap: str) -> str:
+    """/logo [канал] — логотип для видео и фото канала (по умолчанию главный канал)."""
+    import urllib.request
+    from pathlib import Path
+    from . import fabrika, media as M
+    parts = cap.split()
+    channel = parts[1] if len(parts) > 1 and parts[1] in cfg["channels"] else (cfg.get("default_channel") or "davra")
+    f = msg["document"] if "document" in msg else msg["photo"][-1]
+    info = bot("getFile", file_id=f["file_id"])
+    raw = fabrika.STATE / f"logo-{channel}.src"
+    with urllib.request.urlopen(f"https://api.telegram.org/file/bot{env['GENPLAN_BOT_TOKEN']}/{info['file_path']}", timeout=60) as r:
+        raw.write_bytes(r.read())
+    M.prepare_logo(raw, fabrika.logo_path(channel))
+    bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],
+        text=f"✅ Логотип сохранён для {NAMES.get(channel, channel)}. Он будет на всех видео и фото из ссылок.")
+    return "logo"
 
 
 def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | None = None) -> str:
@@ -342,6 +385,17 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
                 t, kb = card(db, cfg, cid, now)
                 r = bot("sendMessage", chat_id=chat, text=t, reply_markup=kb, disable_web_page_preview=True)
                 store.update(db, cid, owner_msg=r["message_id"])
+    elif kind == "ed":
+        store.kv_set(db, "await_text", mid)
+        bot("sendMessage", chat_id=chat, reply_to_message_id=msg_id,
+            text="✏️ Пришлите новый текст одним сообщением — он заменит текущий (подпись и призыв бот добавит сам).")
+    elif kind == "ai":
+        from . import ai
+        if not ai.available():
+            note = "ИИ ещё не подключён — нужен ключ на сервере"
+        else:
+            store.job_add(db, "ai", {"mid": mid, "owner_chat": chat})
+            note = "🤖 Переписываю… пришлю новую карточку"
     elif kind == "bk":
         show()
     elif kind == "del":

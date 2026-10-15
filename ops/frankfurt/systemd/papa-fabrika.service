@@ -1,0 +1,39 @@
+[Unit]
+Description=PAPA FABRIKA — ссылки Instagram/TikTok → видео с логотипом + текст (ИИ) → карточка владельцу
+After=network-online.target papa-genplan.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-genplan
+Group=papa-genplan
+EnvironmentFile=/etc/papa-genplan/genplan.env
+EnvironmentFile=-/etc/papa-genplan/ai.env
+Environment=PAPA_GENPLAN_DB=/var/lib/papa-genplan/genplan.sqlite3 PYTHONUNBUFFERED=1
+Environment=PATH=/opt/papa-venv/razvedka/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/var/lib/papa-genplan XDG_CACHE_HOME=/var/lib/papa-genplan/cache
+WorkingDirectory=/opt/papa/modules/genplan
+ExecStart=/opt/papa-venv/razvedka/bin/python -m genplan fabrika
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-genplan
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+UMask=0077
+Nice=10
+MemoryHigh=550M
+MemoryMax=750M
+CPUQuota=90%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

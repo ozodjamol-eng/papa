@@ -1,6 +1,7 @@
 """GENPLAN PAPA.
   python -m genplan run    — служба: хаб (кнопки владельца) + публикации по сетке раз в минуту
   python -m genplan plan   — план на сегодня в консоль
+  python -m genplan fabrika — обработчик ссылок, логотипа и ИИ-текста (служба papa-fabrika)
 """
 from __future__ import annotations
 
@@ -118,6 +119,9 @@ def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "plan"
     if cmd == "run":
         asyncio.run(run())
+    elif cmd == "fabrika":
+        from . import fabrika
+        fabrika.loop(make_bot(os.environ["GENPLAN_BOT_TOKEN"]), store.connect(DB), cfg, dict(os.environ))
     else:
         print(service.today_text(store.connect(DB), cfg()))
 
