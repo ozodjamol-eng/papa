@@ -19,10 +19,32 @@ def strip_sources(text: str, keep: tuple[str, ...] = ()) -> str:
     return re.sub(r"[ \t]{2,}", " ", out)
 
 
-def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...] = ()) -> str:
+def pick_hook(ch: dict, rubric: str | None, n: int) -> str:
+    """Нижний хук: раз в cross.every постов — переход в соседний канал; иначе хук рубрики; иначе общий.
+    n — номер материала: хуки чередуются и не повторяются подряд."""
+    cross = ch.get("cross") or {}
+    every = int(cross.get("every", 0) or 0)
+    if every and cross.get("text") and n % every == every - 1:
+        return cross["text"]
+    pool = (ch.get("rubric_hooks") or {}).get(rubric or "") or ch.get("hooks") or []
+    if isinstance(pool, str):
+        return pool
+    return pool[n % len(pool)] if pool else ""
+
+
+def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...] = (),
+             hook: str = "", limit: int | None = None) -> str:
+    """Текст поста: чужие подписи убраны, внизу — хук и наша подпись. При лимите (подпись к медиа — 1024)
+    сокращается текст, а не подпись."""
     if is_ad:
         return (text or "").strip()
     body = strip_sources(text, keep=own)
-    if signature and signature not in body:
-        body = f"{body}\n\n{signature}" if body else signature
-    return body
+    for line in (signature, hook):
+        if line:
+            body = "\n".join(ln for ln in body.splitlines() if ln.strip() != line.strip()).strip()
+    footer = "\n".join(x for x in (hook, signature) if x)
+    if limit and footer and len(body) + len(footer) + 2 > limit:
+        room = limit - len(footer) - 3
+        body = (body[:max(room, 0)].rstrip() + "…") if room > 0 else ""
+    out = f"{body}\n\n{footer}" if body and footer else (body or footer)
+    return out[:limit] if limit else out

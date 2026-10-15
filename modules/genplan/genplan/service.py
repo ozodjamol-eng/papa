@@ -25,15 +25,27 @@ def target(cfg: dict, env: dict, channel: str) -> str | int:
     return int(env["TEST_GROUP_ID"]) if cfg["channels"][channel]["publisher"] == "account" else int(env["TEST_CHANNEL_ID"])
 
 
+def share_button(ch: dict) -> dict | None:
+    """Кнопка под постом «Дўстларга улашиш» — подписчик одним нажатием отправляет канал друзьям (рост)."""
+    if not ch.get("share_button"):
+        return None
+    from urllib.parse import quote
+    url = f"https://t.me/{ch['username']}"
+    return {"text": ch["share_button"], "url": f"https://t.me/share/url?url={quote(url)}&text={quote(ch.get('share_text', ''))}"}
+
+
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print) -> bool:
     ch = cfg["channels"][channel]
-    body = text.finalize(m["text"], ch.get("signature", ""), own=(ch["username"],))
+    own = (ch["username"],) + tuple(c["username"] for c in cfg["channels"].values())
+    body = text.finalize(m["text"], ch.get("signature", ""), own=own, hook=text.pick_hook(ch, m["rubric"], int(m["id"])),
+                         limit=1024 if m["has_media"] else 4096)
     p = pubs[ch["publisher"]]
     try:
         if ch["publisher"] == "account":
             mid = await p.publish(target(cfg, env, channel), body, m["hub_chat"], m["hub_msg"], bool(m["has_media"]))
         else:
-            mid = p.publish(target(cfg, env, channel), body, m["hub_chat"], m["hub_msg"], bool(m["has_media"]))
+            mid = p.publish(target(cfg, env, channel), body, m["hub_chat"], m["hub_msg"], bool(m["has_media"]),
+                            button=share_button(ch))
         store.update(db, m["id"], status="published")
         store.record(db, channel, day, slot, m["id"], "done", mid)
         log(f"{channel} {slot or 'срочно'}: опубликовано ({m['rubric']})")

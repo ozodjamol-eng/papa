@@ -30,12 +30,14 @@ class BotPublisher:
             return json.loads(e.read() or b"{}")
 
     def publish(self, chat: str, text: str, hub_chat: int | None = None, hub_msg: int | None = None,
-                has_media: bool = False) -> int:
+                has_media: bool = False, button: dict | None = None) -> int:
+        extra = {"reply_markup": {"inline_keyboard": [[button]]}} if button else {}
         if hub_chat and hub_msg and has_media:
             r = self.http("copyMessage", {"chat_id": chat, "from_chat_id": hub_chat, "message_id": hub_msg,
-                                          "caption": text[:1024]})
+                                          "caption": text[:1024], **extra})
         else:
-            r = self.http("sendMessage", {"chat_id": chat, "text": text[:4096], "disable_web_page_preview": False})
+            r = self.http("sendMessage", {"chat_id": chat, "text": text[:4096], "disable_web_page_preview": False,
+                                          **extra})
         if not r.get("ok"):
             raise PublishError(r.get("description", "unknown"))
         return int(r["result"]["message_id"])

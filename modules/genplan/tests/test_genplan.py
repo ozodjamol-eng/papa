@@ -98,6 +98,23 @@ class TestText(unittest.TestCase):
         self.assertEqual(text.finalize("Матн\n👉 @XOJAOBODCITY24", "👉 @XOJAOBODCITY24", own=("XOJAOBODCITY24",)).count("XOJAOBODCITY24"), 1)
 
 
+class TestHook(unittest.TestCase):
+    CH = {"hooks": ["A", "B"], "rubric_hooks": {"Мусиқа": ["M1", "M2"]}, "cross": {"every": 5, "text": "X"}}
+
+    def test_rotation_rubric_cross(self):
+        self.assertEqual([text.pick_hook(self.CH, "Видео", n) for n in range(4)], ["A", "B", "A", "B"])
+        self.assertEqual(text.pick_hook(self.CH, "Мусиқа", 1), "M2")
+        self.assertEqual(text.pick_hook(self.CH, "Мусиқа", 4), "X")
+        self.assertEqual(text.pick_hook({}, "Видео", 3), "")
+
+    def test_footer_survives_caption_limit(self):
+        out = text.finalize("ж" * 2000, "🎉 @kattadavrauz", hook="🔔 Хук", limit=1024)
+        self.assertLessEqual(len(out), 1024)
+        self.assertTrue(out.endswith("🔔 Хук\n🎉 @kattadavrauz"))
+        out2 = text.finalize("Матн\n🎉 @kattadavrauz", "🎉 @kattadavrauz", own=("kattadavrauz",), hook="🔔 Хук")
+        self.assertEqual(out2, "Матн\n\n🔔 Хук\n🎉 @kattadavrauz")
+
+
 class FakeHTTP:
     def __init__(self, ok=True):
         self.calls, self.ok = [], ok
@@ -113,8 +130,9 @@ class TestPublish(unittest.TestCase):
         b = publish.BotPublisher("t", http=h)
         self.assertEqual(b.publish("@ozodjamoll", "caption", -100, 5, has_media=True), 42)
         self.assertEqual(h.calls[0][0], "copyMessage")          # без «переслано из»
-        b.publish("@ozodjamoll", "just text")
+        b.publish("@ozodjamoll", "just text", button={"text": "📲", "url": "https://t.me/share/url?url=x"})
         self.assertEqual(h.calls[1][0], "sendMessage")
+        self.assertEqual(h.calls[1][1]["reply_markup"]["inline_keyboard"][0][0]["text"], "📲")
 
     def test_bot_error(self):
         with self.assertRaises(publish.PublishError):

@@ -75,7 +75,7 @@ class FakeBotPub:
     def __init__(self):
         self.sent = []
 
-    def publish(self, chat, body, hub_chat, hub_msg, has_media):
+    def publish(self, chat, body, hub_chat, hub_msg, has_media, button=None):
         self.sent.append((chat, body)); return 2
 
 
