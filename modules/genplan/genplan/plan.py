@@ -123,7 +123,8 @@ def render(title: str, plan: list[Entry]) -> str:
     for e in plan:
         what = "Реклама" if e.kind == "ad" else (e.rubric or "—")
         extra = f" ({e.note})" if e.note else ""
-        what = "Реклама — свободно" if e.status == FREE else what
+        if e.status == FREE:
+            what, extra = "Реклама — свободно", ""
         lines.append(f"{ICON.get(e.status, '•')} {e.at:%H:%M}  {what}{extra}")
     empty = sum(1 for e in plan if e.status == EMPTY)
     if empty:

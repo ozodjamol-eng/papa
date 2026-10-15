@@ -125,3 +125,15 @@ class TestService(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMenu(unittest.TestCase):
+    def test_buttons(self):
+        from genplan import menu
+        db = store.connect(":memory:")
+        self.assertIn("КАТТА ДАВРА", menu.reply(db, CFG, menu.B_DAVRA) or "") if "davra" in CFG["channels"] else None
+        self.assertIn("📋", menu.reply(db, CFG, menu.B_QUEUE))
+        self.assertIn("📊 Итог дня", menu.reply(db, CFG, menu.B_TODAY))
+        self.assertIn("PAPA HUB", menu.reply(db, CFG, "/start"))
+        self.assertIsNone(menu.reply(db, CFG, "просто текст"))
+        self.assertTrue(menu.KEYBOARD["is_persistent"])

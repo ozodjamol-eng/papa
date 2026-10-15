@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import hub, service, store
+from . import hub, menu, service, store
 from .publish import AccountPublisher, BotPublisher
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +57,13 @@ async def run() -> None:
     offset = int(store.kv_get(db, "offset", "0"))
     next_tick = 0.0
     print(f"GENPLAN PAPA запущен, режим: {cfg()['mode']}", flush=True)
+    if store.kv_get(db, "menu_v") != "1":          # один раз: показать владельцу постоянную панель
+        for o in str(env.get("OWNER_IDS", "")).split(","):
+            try:
+                bot("sendMessage", chat_id=int(o), text="Панель PAPA готова 👇\n\n" + menu.HELP, reply_markup=menu.KEYBOARD)
+            except Exception as e:  # noqa: BLE001
+                print(f"menu: {e}", flush=True)
+        store.kv_set(db, "menu_v", "1")
     while True:
         c = cfg()
         try:
@@ -65,9 +72,11 @@ async def run() -> None:
             for u in ups:
                 try:
                     r = hub.handle(bot, db, c, env, u)
-                    if r and r.startswith("cmd:") and r[4:] in ("/plan", "/start", "/today"):
-                        for o in str(env.get("OWNER_IDS", "")).split(","):
-                            bot("sendMessage", chat_id=int(o), text=service.today_text(db, c))
+                    msg = u.get("message") or {}
+                    if r and r.startswith("cmd:"):
+                        ans = menu.reply(db, c, msg.get("text", ""))
+                        if ans:
+                            bot("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.KEYBOARD)
                 except Exception as e:  # noqa: BLE001 — одно сообщение не должно ронять службу
                     print(f"hub: {type(e).__name__}: {e}", flush=True)
                 offset = u["update_id"] + 1
