@@ -10,7 +10,7 @@ key = os.environ["GEMINI_API_KEY"]; base = "https://generativelanguage.googleapi
 def get(url, body=None):
     req = urllib.request.Request(url, data=json.dumps(body).encode() if body else None,
                                  headers={"content-type": "application/json", "x-goog-api-key": key})
-    return json.loads(urllib.request.urlopen(req, timeout=40).read())
+    return json.loads(urllib.request.urlopen(req, timeout=25).read())
 try:
     models = get(f"{base}/models?pageSize=200").get("models", [])
 except urllib.error.HTTPError as e:
@@ -21,14 +21,18 @@ cands = [m["name"].split("/", 1)[1] for m in models
          and not any(b in m["name"] for b in bad)]
 ver = lambda n: [float(x) for x in re.findall(r"\d+(?:\.\d+)?", n)[:1]] or [0]
 cands.sort(key=lambda n: (ver(n), "preview" not in n, "latest" in n), reverse=True)
-for name in cands[:6] + ["gemini-flash-latest"]:
+import sys
+for name in (["gemini-flash-latest"] + cands)[:8]:
     try:
         r = get(f"{base}/models/{name}:generateContent",
                 {"contents": [{"parts": [{"text": "Translate to Uzbek Cyrillic, one word: Hello"}]}]})
         if r.get("candidates"):
             print(name); break
-    except urllib.error.HTTPError:
-        continue
+        print(f"  {name}: пустой ответ", file=sys.stderr)
+    except urllib.error.HTTPError as e:
+        print(f"  {name}: ошибка {e.code}", file=sys.stderr)
+    except Exception as e:  # медленная/зависшая модель — пробуем следующую
+        print(f"  {name}: {type(e).__name__}", file=sys.stderr)
 else:
     raise SystemExit("NO_MODEL")
 PY
