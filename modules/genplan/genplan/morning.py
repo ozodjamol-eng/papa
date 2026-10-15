@@ -522,8 +522,10 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
     _LAST_VISION = time.monotonic()
     try:
         v = ai.vision(db, VISION_PROMPT, frames(src, root / ".frames"), http)
-    except ai.AIError as e:                                  # лимит / сбой — пауза на час, видео ждёт
-        store.kv_set(db, "pool_vision_pause", (dt.datetime.now(plan.TZ) + dt.timedelta(hours=1)).isoformat())
+    except ai.AIError as e:                                  # лимит — пауза на час; перегрузка Gemini (503) — на 3 минуты
+        busy = "503" in str(e) or "недоступ" in str(e)
+        store.kv_set(db, "pool_vision_pause",
+                     (dt.datetime.now(plan.TZ) + dt.timedelta(minutes=3 if busy else 60)).isoformat())
         print(f"pool: {e}", flush=True)
         return False
     reasons = [n for k, n in (("date", "дата на видео"), ("people", "неподходящие кадры")) if v.get(k)]
@@ -784,6 +786,14 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
         return True                                           # сначала проверяем свежие видео, потом готовим посты
     work_root = work_root or Path(os.environ.get("PAPA_GENPLAN_STATE", "/var/lib/papa-genplan")) / "work"
     rows = to_prepare(db, cfg, now)
+    # «Хайрли тонг» не собираем, пока в пуле ждут проверки видео под этот день (но не позже чем за 90 минут до выхода)
+    def waiting(r) -> bool:
+        if r["key"] != "greeting" or dt.datetime.fromisoformat(r["at"]) - now < dt.timedelta(minutes=90):
+            return False
+        wd = WEEKDAY[dt.date.fromisoformat(r["day"]).weekday()]
+        return db.execute("SELECT 1 FROM morning_pool WHERE status='new' AND (weekday=? OR weekday IS NULL) LIMIT 1",
+                          (wd,)).fetchone() is not None
+    rows = [r for r in rows if not waiting(r)]
     if not rows:
         pend = db.execute("SELECT id FROM fixed_posts WHERE status='pending' AND prepared=1 AND preview_sent=0").fetchall()
         for p in pend:
