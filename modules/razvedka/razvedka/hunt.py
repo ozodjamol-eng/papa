@@ -18,7 +18,9 @@ WEEKDAYS = {
     "Пайшанба": ("пайшанба", "payshanba"), "Жума": ("жума", "juma", "жумъа", "jum'a", "jumʼa"),
     "Шанба": ("шанба", "shanba"), "Якшанба": ("якшанба", "yakshanba"),
 }
-MORNING = re.compile(r"тонг|tong|субҳ|субх|xayrli|хайрли", re.I)
+# только поздравление с утром, а не любое «тонгда» в новостях
+MORNING = re.compile(r"хайрли\s+тонг|xayrli\s+tong|тонги\s+муборак|tongi\s+muborak|тонгингиз|tongingiz|"
+                     r"субҳингиз|хайрли\s+субҳ|good\s+morning|доброе\s+утро", re.I)
 QUERIES = ("тонг", "tong")
 MAX_BYTES = 20 * 1024 * 1024
 PER_DAY = 14            # видео на каждый день недели

@@ -390,6 +390,7 @@ VISION_PROMPT = """Ты проверяешь утреннее видео («Ха
  "people": true, если главный объект — люди в откровенной одежде, романтическая сцена или что-то неприличное для мусульманской семейной аудитории,
  "weekday": день недели, написанный НА ВИДЕО по-узбекски (одно из: Душанба, Сешанба, Чоршанба, Пайшанба, Жума, Шанба, Якшанба) или null,
  "season": "autumn" | "winter" | "spring" | "summer" | "neutral" — какое время года видно на природе,
+ "greeting": true, только если это спокойное утреннее видео-поздравление (природа, рассвет, чай/кофе, цветы, красивый город, надпись «Хайрли тонг»/«… тонги муборак»); false — если это новости, ДТП, политика, реклама, интервью, юмор-скетч,
  "quality": 1–5 (5 — красивое чёткое видео, 1 — плохое качество)}"""
 WD_ALIASES = {w.lower(): w for w in WEEKDAY} | {"juma": "Жума", "shanba": "Шанба", "yakshanba": "Якшанба",
                                                  "dushanba": "Душанба", "seshanba": "Сешанба", "chorshanba": "Чоршанба",
@@ -472,6 +473,8 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
     reasons = [n for k, n in (("date", "дата на видео"), ("people", "неподходящие кадры")) if v.get(k)]
     if v.get("foreign") and not allow_foreign:
         reasons.append("чужой логотип/@")
+    if v.get("greeting") is False:
+        reasons.append("не утреннее поздравление")
     if int(v.get("quality") or 3) < 3:
         reasons.append("плохое качество")
     if reasons:
