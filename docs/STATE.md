@@ -28,6 +28,7 @@
 - Инструменты MCP: `nexus_status`, `nexus_tasks`, `nexus_audit`, `nexus_devices`, `nexus_run_check`, `nexus_genplan`, `nexus_razvedka` (отчёт из `/var/lib/papa-razvedka-pub/latest.json`, читает только шлюз).
 - Ожидает перезапуска для обновлений безопасности ядра (System restart required) — согласовать время с владельцем.
 - PAPA подключён: `/opt/papa`, `papa-update`. **Razvedka** установлена: пользователь `papa-razvedka`, venv `/opt/papa-venv/razvedka` (telethon 1.45), база `/var/lib/papa-razvedka/razvedka.sqlite3`, сессия `/etc/papa-razvedka/telegram.env` (0600). Вход — **временно основной профиль владельца** (устройство «PAPA Razvedka»), заменить отдельным профилем. Первый сбор 2026-10-14: 38 каналов, 5 758 постов, 0 ошибок, пик памяти 51 МБ. Ежедневный таймер `papa-razvedka-daily.timer` включён (06:10 Ташкент, отчёт в «Избранное»).
+- **Тестовый контур** (2026-10-15): закрытый канал «PAPA TEST» (id -1004318108675), бот `@papa_test_88fb84_bot` — админ канала; токен `/etc/papa-test/bot.env` (0600). Проверка: `papa-update test-setup`.
 - Watchdog каждые 2 мин (шлюз, Connect, Разведка, диск, память) → Healthchecks → Telegram. Шифрованная резервная копия ночью (02:17 UTC): база шлюза + база Разведки, по 14 копий. Скрипты ставятся из репозитория: `papa-update monitoring`.
 
 ## Отложено владельцем (делаем в конце)
