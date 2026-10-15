@@ -23,7 +23,6 @@ import random
 import shutil
 import subprocess
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 from . import plan
@@ -272,10 +271,22 @@ def greeting_caption(ch: dict, o: dict, day: dt.date) -> str:
     return "\n".join(lines) + (f"\n\n{sig}" if sig else "")
 
 
+def _curl(url: str, dst: Path | None = None, timeout: int = 30, limit: int | None = None) -> bytes:
+    """Pixabay закрыт Cloudflare для Python-urllib (403), а curl пропускает — качаем через curl."""
+    cmd = ["curl", "-sS", "-L", "--fail", "--max-time", str(timeout)]
+    if limit:
+        cmd += ["--max-filesize", str(limit)]
+    cmd += (["-o", str(dst)] if dst else []) + [url]
+    r = subprocess.run(cmd, capture_output=True, timeout=timeout + 10)
+    if r.returncode != 0:
+        err = (r.stderr or b"").decode(errors="replace").strip().replace(url, "<url>")
+        err = err.split("key=")[0]                        # ключ не попадает в ошибки и сообщения
+        raise RuntimeError(f"загрузка не удалась: {err[:160]}")
+    return r.stdout
+
+
 def _http_json(url: str) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": "PAPA-genplan/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read())
+    return json.loads(_curl(url))
 
 
 def video_ok(h: dict) -> bool:
@@ -328,15 +339,8 @@ def pick_video(db, key: str, day: dt.date, salt: int = 0, fetch=_http_json) -> d
 
 
 def download_file(url: str, dst: Path, limit: int = 80 * 1024 * 1024) -> Path:
-    req = urllib.request.Request(url, headers={"User-Agent": "PAPA-genplan/1.0"})
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(req, timeout=120) as r, open(dst, "wb") as f:
-        n = 0
-        while chunk := r.read(1 << 16):
-            n += len(chunk)
-            if n > limit:
-                raise RuntimeError("видео слишком большое")
-            f.write(chunk)
+    _curl(url, dst, timeout=180, limit=limit)
     return dst
 
 

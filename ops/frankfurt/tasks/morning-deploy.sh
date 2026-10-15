@@ -7,6 +7,18 @@ DB=/var/lib/papa-genplan/genplan.sqlite3
 PY=/opt/papa-venv/razvedka/bin/python
 cp -a "$DB" "$DB.bak-morning-$(date +%F-%H%M)"
 ( cd /opt/papa/modules/genplan && $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
+# неудачные попытки подготовки (до исправления) обнуляем; «Хайрли тонг», ушедший в запасной текст, — снова на видео
+sudo -u papa-genplan $PY - "$DB" <<'PY' || true
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+try:
+    a = db.execute("UPDATE fixed_posts SET tries=0, next_try=NULL WHERE status='pending' AND prepared=0").rowcount
+    b = db.execute("UPDATE fixed_posts SET prepared=0, tries=0, next_try=NULL, preview_sent=0 "
+                   "WHERE status='pending' AND key='greeting' AND hub_msg IS NULL AND prepared=1").rowcount
+    db.commit(); print(f"попытки сброшены: {a + b}")
+except sqlite3.OperationalError:
+    pass
+PY
 systemctl restart papa-genplan; systemctl restart papa-fabrika; sleep 6
 echo "genplan: $(systemctl is-active papa-genplan) · fabrika: $(systemctl is-active papa-fabrika)"
 set -a; . /etc/papa-genplan/genplan.env; [ -f /etc/papa-genplan/ai.env ] && . /etc/papa-genplan/ai.env; set +a
@@ -26,16 +38,18 @@ for ch in ("@kattadavrauz", "@ozodjamoll"):
     ok = st.get("status") == "administrator" and st.get("can_post_messages")
     print(f"{'✅' if ok else '❌'} бот @{me['username']} в {ch}: {st.get('status', r.get('description'))}"
           + ("" if ok else "  ← нужно сделать админом с правом публикации"))
+import sys; sys.path.insert(0, "/opt/papa/modules/genplan")
+from genplan import morning
 key = os.environ.get("PIXABAY_API_KEY", "")
 try:
-    with urllib.request.urlopen("https://pixabay.com/api/videos/?" + urllib.parse.urlencode({"key": key, "q": "autumn morning", "per_page": 3}), timeout=20) as r:
-        print(f"✅ Pixabay: {json.loads(r.read()).get('totalHits')} видео")
+    j = morning._http_json("https://pixabay.com/api/videos/?" + urllib.parse.urlencode({"key": key, "q": "autumn morning", "per_page": 3}))
+    print(f"✅ Pixabay: {j.get('totalHits')} видео")
 except Exception as e:
     print(f"❌ Pixabay: {e}")
 print("ИИ:", "✅ Gemini" if os.environ.get("GEMINI_API_KEY") else "— нет ключа (будет шаблон)")
 PY
-sleep 20
-echo "== Утро на завтра:"
+sleep 90
+echo "== Утро на завтра (prepared 1 = готово, предпросмотр у вас в боте):"
 sudo -u papa-genplan $PY - "$DB" <<'PY'
 import sqlite3, sys
 db = sqlite3.connect(sys.argv[1])
