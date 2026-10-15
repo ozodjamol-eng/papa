@@ -83,6 +83,16 @@ class TestPlan(unittest.TestCase):
         self.assertIn("⚠️ Нет материала", out)
 
 
+class TestPast(unittest.TestCase):
+    def test_past_slot_does_not_eat_material(self):
+        now = plan.slot_time(MON, "17:00")
+        e = plan.build("paparazzi", P, MON, [M(1, "Юлдузлар ҳаёти")], ads={}, now=now)
+        got = [x for x in e if x.material_id == 1]
+        self.assertEqual(len(got), 1)
+        self.assertGreater(got[0].at, now)                      # 20:30, а не прошедшие 12:30
+        self.assertEqual(next(x for x in e if x.at.strftime("%H:%M") == "08:30").status, plan.PAST)
+
+
 class TestText(unittest.TestCase):
     def test_strip_and_sign(self):
         src = "Янгилик матни\n\n👉 @bugungi_gap\nhttps://t.me/bugungi_gap\nМанба: @kunuzofficial"

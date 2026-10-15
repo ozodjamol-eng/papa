@@ -15,8 +15,9 @@ from dataclasses import dataclass, field
 
 TZ = dt.timezone(dt.timedelta(hours=5))  # Ташкент
 
-READY, QUEUED, EMPTY, AD, AUTO, DONE, MISSED, FREE = "ready", "queued", "empty", "ad", "auto", "done", "missed", "free"
-ICON = {READY: "✅", QUEUED: "⏳", EMPTY: "⚠️", AD: "💰", AUTO: "🔁", DONE: "✔️", MISSED: "❌", FREE: "▫️"}
+READY, QUEUED, EMPTY, AD, AUTO, DONE, MISSED, FREE, PAST = "ready", "queued", "empty", "ad", "auto", "done", "missed", "free", "past"
+GRACE = dt.timedelta(minutes=20)
+ICON = {READY: "✅", QUEUED: "⏳", EMPTY: "⚠️", AD: "💰", AUTO: "🔁", DONE: "✔️", MISSED: "❌", FREE: "▫️", PAST: "·"}
 
 
 @dataclass
@@ -86,6 +87,8 @@ def build(ch_name: str, ch_cfg: dict, day: dt.date, materials: list[Material], a
         kind, rubric = s["kind"], s.get("rubric")
         if s["t"] in published:
             entries[i] = Entry(at, kind, rubric, published[s["t"]])
+        elif now and kind != "anchor" and at + GRACE < now:      # время прошло — материал ждёт следующий слот
+            entries[i] = Entry(at, kind, rubric, PAST)
         elif kind == "anchor":
             entries[i] = Entry(at, kind, rubric, AUTO)
         elif kind == "ad":
@@ -125,6 +128,8 @@ def render(title: str, plan: list[Entry]) -> str:
         extra = f" ({e.note})" if e.note else ""
         if e.status == FREE:
             what, extra = "Реклама — свободно", ""
+        if e.status == PAST:
+            what, extra = f"{what} — прошло", ""
         lines.append(f"{ICON.get(e.status, '•')} {e.at:%H:%M}  {what}{extra}")
     empty = sum(1 for e in plan if e.status == EMPTY)
     if empty:
