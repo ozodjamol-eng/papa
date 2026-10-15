@@ -178,6 +178,13 @@ class TestJoins(unittest.TestCase):
         row = db.execute("SELECT invite_name, welcomed, approved FROM joins").fetchone()
         self.assertEqual(tuple(row), ("ig-M1", 1, 1))
 
+    def test_channel_by_username(self):
+        db, b = store.connect(":memory:"), FakeBot()
+        b.call = lambda m, **p: (b.calls.append(m) or ([{"update_id": 1, "chat_join_request": {
+            "chat": {"id": -555, "username": "OzodJamoll"}, "from": {"id": 9}, "user_chat_id": 9}}] if m == "getUpdates" else {}))
+        joins.poll_once(b, db, {"channels": [{"title": "P", "username": "ozodjamoll", "welcome": "hi"}]}, "t", log=lambda *_: None)
+        self.assertEqual(b.calls, ["getUpdates", "sendMessage", "approveChatJoinRequest"])
+
     def test_welcome_failure_still_approves(self):
         db, b = store.connect(":memory:"), FakeBot(fail_welcome=True)
         joins.poll_once(b, db, self.CFG, "t", log=lambda *_: None)

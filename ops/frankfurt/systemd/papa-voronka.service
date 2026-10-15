@@ -7,8 +7,9 @@ Wants=network-online.target
 Type=simple
 User=papa-voronka
 Group=papa-voronka
-# пока бот — тестовый (PAPA TEST); боевой бот подключается отдельным шагом
-EnvironmentFile=/etc/papa-test/bot.env
+# боевой бот PAPA (bot.env) важнее тестового; без bot.env работает тестовый
+EnvironmentFile=-/etc/papa-test/bot.env
+EnvironmentFile=-/etc/papa-voronka/bot.env
 Environment=PAPA_VORONKA_DB=/var/lib/papa-voronka/voronka.sqlite3 PAPA_VORONKA_IG_ENV=/etc/papa-voronka/instagram.env PAPA_VORONKA_PUB=/var/lib/papa-voronka-pub PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/papa/modules/voronka
 ExecStart=/usr/bin/python3 -m voronka loop

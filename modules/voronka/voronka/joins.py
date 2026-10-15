@@ -12,7 +12,10 @@ def handle_update(bot, db, cfg: dict, upd: dict, at: str, log=print) -> str | No
     if not r:
         return None
     chat_id = r["chat"]["id"]
-    ch = next((c for c in cfg.get("channels", []) if int(c["chat_id"]) == int(chat_id)), None)
+    uname = (r["chat"].get("username") or "").lower()
+    ch = next((c for c in cfg.get("channels", [])
+               if ("chat_id" in c and int(c["chat_id"]) == int(chat_id))
+               or (c.get("username") and c["username"].lower() == uname)), None)
     if ch is None:
         return "чужой чат"
     user = r["from"]
