@@ -67,6 +67,8 @@ def setup(db) -> None:
     db.executescript(SCHEMA)
     if "source" not in {r[1] for r in db.execute("PRAGMA table_info(fixed_posts)")}:
         db.execute("ALTER TABLE fixed_posts ADD COLUMN source TEXT")        # откуда видео: pool:<key> / pixabay:<id>
+    if "text" not in {r[1] for r in db.execute("PRAGMA table_info(morning_pool)")}:
+        db.execute("ALTER TABLE morning_pool ADD COLUMN text TEXT")         # подпись источника — ориентир для ИИ
 
 
 def opts(ch: dict) -> dict | None:
@@ -334,14 +336,18 @@ def examples(weekday: str, root: Path | None = None, n: int = 3) -> list[str]:
     return [_clean_example(e["text"]) for e in same[:n] if e.get("text")]
 
 
-def greeting_body(db, ch: dict, day: dt.date, fresh: bool = False, http=None, root: Path | None = None) -> tuple[str, str]:
+def greeting_body(db, ch: dict, day: dt.date, fresh: bool = False, http=None, root: Path | None = None,
+                  source_text: str | None = None) -> tuple[str, str]:
     from . import ai
     wd = WEEKDAY[day.weekday()]
     s = season(day)
     system = GREET_SYSTEM.format(title=ch["title"], wd_up=wd.upper(), season=SEASON_UZ[s],
                                  juma=JUMA_NOTE if day.weekday() == 4 else "")
     ex = examples(wd, root)
-    user = f"Кун: {wd}. Фасл: {SEASON_UZ[s]}." + ("\nБошқа каналларнинг кўп кўрилган тонгги постлари — фақат тон ва узунлик учун, КЎЧИРМА, ўзингча ёз:\n---\n"
+    src = _clean_example(source_text or "")
+    if len(src) > 40:                                        # подпись того же видео у источника — главный ориентир
+        ex = [src] + [e for e in ex if e != src][:2]
+    user = f"Кун: {wd}. Фасл: {SEASON_UZ[s]}." + ("\nБошқа каналларнинг кўп кўрилган тонгги постлари (биринчиси — шу видеонинг асл матни). Улар билан солиштир: мазмуни, руҳи ва узунлигини ол, лекин сўзма-сўз КЎЧИРМА — ўзимизча, янада самимийроқ қайта ёз:\n---\n"
                                                 + "\n---\n".join(ex) if ex else "")
     if fresh:
         user += "\nОлдинги вариантдан бутунлай бошқача ёз."
@@ -399,8 +405,9 @@ def pool_import(db, root: Path | None = None) -> int:
         if not ln.strip():
             continue
         c = json.loads(ln)
-        cur = db.execute("INSERT OR IGNORE INTO morning_pool(key,file,channel,views,duration,posted,weekday) VALUES (?,?,?,?,?,?,?)",
-                         (c["key"], c["file"], c.get("channel"), c.get("views"), c.get("duration"), c.get("date"), c.get("weekday")))
+        cur = db.execute("INSERT OR IGNORE INTO morning_pool(key,file,channel,views,duration,posted,weekday,text) VALUES (?,?,?,?,?,?,?,?)",
+                         (c["key"], c["file"], c.get("channel"), c.get("views"), c.get("duration"), c.get("date"), c.get("weekday"),
+                          c.get("text")))
         n += cur.rowcount
     db.commit()
     return n
@@ -653,13 +660,13 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
         body, note = day_text(db, ch["title"], day, fresh=bool(r["redo"]))
         update(db, r["id"], text=body + (f"\n\n{sig}" if sig else ""), prepared=1, redo=0, error=None, preview_sent=0)
         return note
-    body, note = greeting_body(db, ch, day, fresh=bool(r["redo"]))
-    caption = greeting_caption(ch, o, day, body)
     if upload is None:
         from .fabrika import upload_video as upload
     work = work_root / f"morning-{r['id']}-{r['tries']}"
     try:
         p = pool_pick(db, day, salt=r["id"] * 7 + r["tries"])
+        body, note = greeting_body(db, ch, day, fresh=bool(r["redo"]), source_text=p["text"] if p else None)
+        caption = greeting_caption(ch, o, day, body)
         if p and (pool_dir() / p["file"]).exists():
             from . import media
             logo = media.text_logo("@" + ch["username"], work / "wm.png")

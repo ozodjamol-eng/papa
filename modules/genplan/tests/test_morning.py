@@ -180,7 +180,7 @@ class TestMorning(unittest.TestCase):
                             "-f", "lavfi", "-i", "sine=frequency=440:duration=6", "-shortest",
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(root / f"{k}.mp4")], check=True)
         rows = [{"key": "a", "file": "a.mp4", "channel": "Катта канал", "views": 900, "duration": 6, "date": "2026-10-09", "weekday": "Жума"},
-                {"key": "b", "file": "b.mp4", "channel": "Катта канал", "views": 800, "duration": 6, "date": "2026-10-09", "weekday": "Жума"},
+                {"key": "b", "file": "b.mp4", "channel": "Катта канал", "views": 800, "duration": 6, "date": "2026-10-09", "weekday": "Жума", "text": "🤲 Жума куни муборак бўлсин, азизлар! Барчага барака тилаймиз @begona"},
                 {"key": "c", "file": "c.mp4", "channel": "Бошқа", "views": 700, "duration": 6, "date": "2026-10-10", "weekday": None}]
         (root / "index.jsonl").write_text("\n".join(__import__("json").dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
         (root / "examples.json").write_text('[{"weekday": "Жума", "views": 5, "text": "🕌 ЖУМА ТОНГИ МУБОРАК! @begona #juma t.me/x"}]', encoding="utf-8")
@@ -219,6 +219,8 @@ class TestMorning(unittest.TestCase):
                 note = morning.prepare_one(Bot(), self.db, CFG, ENV, r, at("22:40"), Path(tmp) / "w", upload=upload)
             self.assertIn("Готовое видео (Жума)", note)
             self.assertIn("ЖУМА ТОНГИ МУБОРАК", seen[0])             # образец больших каналов передан ИИ
+            self.assertIn("Жума куни муборак бўлсин, азизлар", seen[0])   # подпись этого же видео — главный ориентир
+            self.assertNotIn("@begona", seen[0])
             self.assertTrue(uploads[0][1].startswith("#Хайрли_тонг\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
             self.assertTrue(uploads[0][1].endswith("🎉 @kattadavrauz"))
             self.assertEqual(self.rows("davra")["greeting"]["source"], "pool:b")
