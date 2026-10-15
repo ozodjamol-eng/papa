@@ -104,6 +104,18 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(self.run1(now=NOW + dt.timedelta(minutes=61))["sent"], 1)  # ошибочный не повторяется
 
 
+class TestRetention(unittest.TestCase):
+    def test_purge_after_90_days(self):
+        db, ig = store.connect(":memory:"), FakeIG()
+        engine.run_once(ig, db, CFG, NOW, log=lambda *_: None)
+        ig.cm["M1"] = [c("2", "11", "a")]
+        engine.run_once(ig, db, CFG, NOW, log=lambda *_: None)
+        self.assertTrue(store.seen(db, "2"))
+        ig.media = []
+        engine.run_once(ig, db, CFG, NOW + dt.timedelta(days=91), log=lambda *_: None)
+        self.assertFalse(store.seen(db, "2"))
+
+
 class TestOnlyUsers(unittest.TestCase):
     def test_only_testers_answered_including_backlog(self):
         db, ig = store.connect(":memory:"), FakeIG()

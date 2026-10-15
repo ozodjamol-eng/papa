@@ -71,3 +71,11 @@ def add_join(db, chat_id, user_id, invite_name, at, welcomed, approved, detail="
     db.execute("INSERT INTO joins(chat_id,user_id,invite_name,at,welcomed,approved,detail) VALUES (?,?,?,?,?,?,?)",
                (str(chat_id), str(user_id), invite_name, at, int(welcomed), int(approved), detail[:300]))
     db.commit()
+
+
+def purge(db, before_iso: str) -> int:
+    """Удалить личные данные старше срока (обещано в политике конфиденциальности: 90 дней)."""
+    n = db.execute("DELETE FROM comments WHERE at < ?", (before_iso,)).rowcount
+    n += db.execute("DELETE FROM joins WHERE at < ?", (before_iso,)).rowcount
+    db.commit()
+    return n

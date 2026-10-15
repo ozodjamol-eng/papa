@@ -51,6 +51,7 @@ def target_media(ig, cfg: dict, now: dt.datetime) -> list[dict]:
 
 
 def run_once(ig, db, cfg: dict, now: dt.datetime | None = None, log=print) -> dict:
+    store.purge(db, ((now or utcnow()) - dt.timedelta(days=int(cfg.get("retention_days", 90)))).isoformat())
     s = _run_once(ig, db, cfg, now or utcnow(), log)
     store.kv_set(db, "last_run", f"{(now or utcnow()).isoformat()[:19]} {s}")
     return s
