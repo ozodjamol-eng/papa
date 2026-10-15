@@ -54,8 +54,12 @@ class Instagram:
 
     def comments(self, media_id: str, limit: int = 50) -> list[dict]:
         """Последние комментарии верхнего уровня (новые первыми)."""
-        r = self._get(f"{media_id}/comments", fields="id,text,timestamp,from{id,username}", limit=limit)
-        return r.get("data", [])
+        r = self._get(f"{media_id}/comments", fields="id,text,timestamp,username,from{id,username}", limit=limit)
+        out = r.get("data", [])
+        for c in out:  # API может отдать автора как from{} или только username
+            f = c.setdefault("from", {})
+            f.setdefault("username", c.get("username"))
+        return out
 
     def private_reply(self, comment_id: str, text: str) -> dict:
         """Личный ответ в директ на комментарий (1 раз на комментарий, в течение 7 дней)."""

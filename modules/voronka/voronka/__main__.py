@@ -78,6 +78,13 @@ def status(db, c: dict) -> None:
     n = db.execute("SELECT COUNT(*), SUM(welcomed), SUM(approved) FROM joins").fetchone()
     print(f"заявок в Telegram: {n[0]} (приветствий {n[1] or 0}, одобрено {n[2] or 0})")
     print(f"токен продлевался: {store.kv_get(db, 'token_refreshed', 'ещё нет')}")
+    print(f"последний проход: {store.kv_get(db, 'last_run', 'ещё не было')}")
+    for m in media:  # что видит API (без токенов)
+        for cm in i.comments(m["id"], limit=10):
+            u = cm.get("from") or {}
+            print(f"  комментарий {cm['id']} от @{u.get('username')} (id {u.get('id')}): {(cm.get('text') or '')[:30]!r}")
+    for row in db.execute("SELECT at, username, action, detail FROM comments ORDER BY at DESC LIMIT 5"):
+        print(f"  {row['at'][:19]} @{row['username']} {row['action']} {row['detail'] or ''}")
 
 
 def loop(db, c: dict) -> None:

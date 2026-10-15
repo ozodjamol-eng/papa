@@ -51,7 +51,12 @@ def target_media(ig, cfg: dict, now: dt.datetime) -> list[dict]:
 
 
 def run_once(ig, db, cfg: dict, now: dt.datetime | None = None, log=print) -> dict:
-    now = now or utcnow()
+    s = _run_once(ig, db, cfg, now or utcnow(), log)
+    store.kv_set(db, "last_run", f"{(now or utcnow()).isoformat()[:19]} {s}")
+    return s
+
+
+def _run_once(ig, db, cfg: dict, now: dt.datetime, log=print) -> dict:
     at = now.isoformat()
     stats = {"media": 0, "new": 0, "sent": 0, "dry": 0, "dup": 0, "own": 0, "skip": 0, "error": 0, "paused": False}
     pause_until = store.kv_get(db, "pause_until")
