@@ -137,3 +137,26 @@ class TestMenu(unittest.TestCase):
         self.assertIn("PAPA HUB", menu.reply(db, CFG, "/start"))
         self.assertIsNone(menu.reply(db, CFG, "просто текст"))
         self.assertTrue(menu.KEYBOARD["is_persistent"])
+
+
+class TestDirect(unittest.TestCase):
+    def test_owner_forwards_to_bot(self):
+        db = store.connect(":memory:")
+        calls = []
+
+        def bot(method, **p):
+            calls.append((method, p))
+            return {"message_id": 500 + len(calls)}
+        env = {"OWNER_IDS": "1", "HUB_CHAT_ID": "-100777"}
+        u = {"message": {"message_id": 9, "from": {"id": 1}, "chat": {"id": 1, "type": "private"},
+                         "video": {"file_id": "x"}, "caption": "Янги клип"}}
+        self.assertEqual(hub.handle(bot, db, CFG, env, u), "material")
+        self.assertEqual(calls[0][0], "copyMessage")
+        self.assertEqual(calls[0][1]["chat_id"], -100777)              # копия в хаб — источник для публикации
+        self.assertIn("inline_keyboard", calls[1][1]["reply_markup"])
+        m = db.execute("SELECT * FROM materials").fetchone()
+        self.assertEqual((m["hub_chat"], m["hub_msg"], m["has_media"]), (-100777, 501, 1))
+        cmd = {"message": {"message_id": 10, "from": {"id": 1}, "chat": {"id": 1, "type": "private"}, "text": "📋 Очередь"}}
+        self.assertEqual(hub.handle(bot, db, CFG, env, cmd), "cmd:📋")
+        stranger = {"message": {"message_id": 11, "from": {"id": 2}, "chat": {"id": 2, "type": "private"}, "text": "hi"}}
+        self.assertIsNone(hub.handle(bot, db, CFG, env, stranger))

@@ -12,11 +12,11 @@ BY_BUTTON = {B_DAVRA: "davra", B_PAP: "paparazzi", B_XOJ: "xojaobod"}
 KEYBOARD = {"keyboard": [[{"text": B_DAVRA}, {"text": B_PAP}, {"text": B_XOJ}],
                          [{"text": B_QUEUE}, {"text": B_TODAY}],
                          [{"text": B_ALL}, {"text": B_HELP}]],
-            "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Посты — в PAPA HUB"}
+            "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Перешлите пост сюда"}
 
 HELP = """Как работать:
-1. Пересылайте хорошие посты в канал PAPA HUB.
-2. Здесь появятся кнопки: канал → рубрика. Пост встанет в ближайший слот по плану.
+1. Пересылайте хорошие посты прямо сюда, в этот чат (или в канал PAPA HUB — тоже работает).
+2. Под постом появятся кнопки: канал → рубрика. Пост встанет в ближайший слот по плану.
 3. 🆘 Срочно — публикуется сразу. 🗑 Убрать — не публикуется.
 
 Бот сам: убирает чужие @ и ссылки, переводит латиницу в кириллицу, ставит хук по смыслу и наш юзернейм.

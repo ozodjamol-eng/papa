@@ -1,4 +1,4 @@
-"""PAPA HUB: владелец пересылает пост в закрытый канал-хаб → бот спрашивает канал и рубрику (2 нажатия).
+"""PAPA HUB: владелец пересылает пост прямо боту (или в закрытый канал-хаб) → бот спрашивает канал и рубрику (2 нажатия).
 Кнопки: канал (Хўжаобод / PaparazziUZ / оба) → рубрика → в очередь; «🆘 Срочно» — сразу; «🗑» — убрать.
 Интерфейс владельца — по-русски (как в GENPLAN 5)."""
 from __future__ import annotations
@@ -116,6 +116,27 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         return kind
 
     msg = upd.get("message")
-    if msg and int(msg["from"]["id"]) in owners:
-        return "cmd:" + (msg.get("text") or "").split()[0] if msg.get("text") else None
+    if msg and int(msg["from"]["id"]) in owners and msg["chat"].get("type") == "private":
+        from .menu import BY_BUTTON, B_ALL, B_QUEUE, B_TODAY, B_HELP
+        txt = (msg.get("text") or "").strip()
+        if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP):
+            return "cmd:" + txt.split()[0]
+        return direct(bot, db, hub, msg)
     return None
+
+
+def direct(bot, db, hub: int, msg: dict) -> str:
+    """Пост прямо в чат с ботом (как в боте Хўжаобода): копия уходит в PAPA HUB (архив и источник для публикации),
+    владельцу — те же кнопки ответом на его сообщение."""
+    has_media = any(k in msg for k in MEDIA_KEYS)
+    txt = msg.get("text") or msg.get("caption") or ""
+    if not has_media and not txt.strip():
+        return "skip"
+    r = bot("copyMessage", chat_id=hub, from_chat_id=msg["chat"]["id"], message_id=msg["message_id"])
+    mid = store.add_material(db, hub, r["message_id"], txt, has_media)
+    if mid is None:
+        return "dup"
+    sent = bot("sendMessage", chat_id=msg["chat"]["id"], text=preview(txt, has_media), reply_markup=kb_channel(mid),
+               reply_to_message_id=msg["message_id"], disable_web_page_preview=True)
+    store.update(db, mid, owner_msg=sent["message_id"])
+    return "material"
