@@ -5,21 +5,21 @@
 
 ## Лондон — `xojaobodcity24bot`, 165.227.239.109, tailnet `nexus-core`
 
-- 1 vCPU, ~1 ГБ RAM, диск 24 ГБ — **занято 73 %** (свободно 6,5 ГБ) после уборки 2026-10-14 (+2,1 ГБ).
+- 1 vCPU, ~1 ГБ RAM, диск 24 ГБ — **занято 54 %** (свободно 11 ГБ) после purge 2026-10-15 (+5 ГБ).
 - PAPA подключён: `/opt/papa` (ключ только для чтения `/root/.ssh/papa_deploy`, порт 443), команда `papa-update [задача]`.
 - **Ядро PAPA**: база PostgreSQL `papa` (владелец роль `papa`, NOLOGIN), схема v1, 11 таблиц, 3 пространства, 2 площадки; доступ пока только локальный. Установлено 2026-10-15.
-- Память: 56 % занято, **swap 47 %** (2026-10-15 08:31) — следить; кандидат на +1 ГБ RAM (+6 $/мес) по замерам. Ожидает перезапуска для обновлений безопасности.
+- Память после остановки старого NEXUS: 597 МБ, swap 748 МБ (снижается). Апгрейд не нужен. Ожидает перезапуска для обновлений безопасности.
 - Журналы ограничены 300 МБ: `/etc/systemd/journald.conf.d/papa-limit.conf`.
 - Работает:
   - `xojaobod-genplan-v3.service` — **на самом деле GENPLAN 5** из `/opt/xojaobod-genplan-v5`, база `data/genplan_v3_production.db`. Публикует в группу Xo'jaobod City 24 через бота XOJAOBODCITYAVTOPOST24.
   - `xojaobodcity24bot.service`, `goldwater-bot.service`, nginx (goldwater.uz), PostgreSQL, `ozixon-mobile-api`.
-  - Старый NEXUS: `nexus-mcp`, `nexus-taskd`, `nexus-tunnel` (туннель OpenAI), `nexus-control-center`, `ozod-nexus-*`, `nexus-media-director` и др.; ~30 служб `nexus-*`, большинство выключены.
+  - **Старый NEXUS остановлен и выключен 2026-10-15** (23 работавших юнита из 41; список `/var/backups/papa-archive/old-nexus-units-*.state`, вернуть `papa-update nexus-old-restore`). Код `/opt/nexus` (903 МБ) пока на месте. Мёртвый маршрут Tailscale `nexus-core:443 → 8876` (старая панель) убрать.
+  - Tailscale: `nexus-core:8443 → 8890` (ozixon-mobile-api) — работает, не трогать.
   - `nexus-london-agent.service` — агент NEXUS V2, только чтение (GENPLAN, службы, ресурсы). Без особых прав; файлы секретов ему недоступны.
 - Крупное на диске:
-  - `/opt/xojaobod-genplan-v5/data/nexus_handoff` — 2,8 ГБ, `intelligence_media` — 1,7 ГБ (медиа NEXUS → GENPLAN).
+  - Медиа NEXUS → GENPLAN очищены от старше 7 дней: `nexus_handoff` 313 МБ, `intelligence_media` 183 МБ.
   - `/root/.cache` (без pip), `/root/.local`, `/root/.claude-server-commander` — не трогаем (инструменты).
-  - `/root/gp2_*_stage` 330 МБ — в архив.
-- Старое (кандидаты в архив): `/opt/xojaobod-autopost` (V2, служба остановлена; `xojaobod-maintenance` работает только с ним), `/opt/xojaobod-genplan-v3` (99 МБ, на неё ссылается только комментарий в unit-файле), старые копии баз в `v5/backups` и `/opt/nexus/backups`.
+- Старое (V2 автопост, GENPLAN v3, gp2-заготовки, старые базы) — удалено, лежит в архиве `/var/backups/papa-archive/old-genplan-20261014_2249.tar.gz` (417 МБ).
 
 ## Франкфурт — `ubuntu-s-1vcpu-1gb-fra1`, 161.35.202.97, tailnet `nexus-frankfurt`
 
