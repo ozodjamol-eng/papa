@@ -18,7 +18,7 @@ from telethon.tl.functions.chatlists import EditExportedInviteRequest, GetExport
 from telethon.tl.functions.messages import EditChatAboutRequest, GetDialogFiltersRequest, UpdateDialogFilterRequest  # noqa: E402
 
 OLD = "XOJAOBODLIKLARIMIZ"
-TITLE = "Katta Davra"
+TITLE = "КАТТА ДАВРА"
 USERNAMES = ["kattadavra", "katta_davra", "kattadavra_uz", "kattadavrauz", "kattadavra24"]
 ABOUT = ("🎉 Katta Davra — бутун Ўзбекистон бир даврада!\n"
          "🎵 Мусиқа • 😂 ҳажвия • 💡 фойдали ва қизиқарли видеолар • 🔥 энг долзарб янгиликлар\n"
@@ -92,7 +92,7 @@ async def main():
             for i in inv.invites:
                 await c(EditExportedInviteRequest(chatlist=types.InputChatlistDialogFilter(filter_id=flt.id),
                                                   slug=i.url.rsplit("/", 1)[-1], peers=peers))
-            print(f"папка PAPA: Katta Davra + PaparazziUZ ({inv.invites[0].url if inv.invites else 'нет ссылки'})")
+            print(f"папка PAPA: КАТТА ДАВРА + PaparazziUZ ({inv.invites[0].url if inv.invites else 'нет ссылки'})")
         except Exception as e:  # noqa: BLE001
             print(f"папка — {type(e).__name__}: {e}")
         print("== DAVRA_DONE")
