@@ -79,7 +79,7 @@ def test_full_flow_claude_and_gpt(env):
         init = rpc(c, tok['access_token'], 'initialize', {'protocolVersion': '2025-06-18'}).json()
         assert init['result']['protocolVersion'] == '2025-06-18'
         names = [t['name'] for t in rpc(c, tok['access_token'], 'tools/list').json()['result']['tools']]
-        assert names == ['nexus_status', 'nexus_tasks', 'nexus_audit', 'nexus_devices', 'nexus_run_check', 'nexus_genplan']
+        assert names == ['nexus_status', 'nexus_tasks', 'nexus_audit', 'nexus_devices', 'nexus_run_check', 'nexus_genplan', 'nexus_razvedka']
         out = rpc(c, tok['access_token'], 'tools/call', {'name': 'nexus_run_check', 'arguments': {'check': 'host_health'}}).json()['result']
         assert out['isError'] is False and out['structuredContent']['status'] == 'succeeded'
         aud = rpc(c, tok['access_token'], 'tools/call', {'name': 'nexus_audit', 'arguments': {'limit': 5}}).json()['result']

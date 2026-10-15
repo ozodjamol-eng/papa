@@ -210,6 +210,17 @@ def create_app(config:Settings|None=None):
                             'online':x['online'],'last_seen':x['last_seen'],'details':json.loads(x['details'])}
                            for x in store.devices()]}
 
+    @app.get('/api/razvedka')
+    def razvedka(request:Request):
+        context(request,allow_ai=True)
+        p=Path(os.getenv('NEXUS_RAZVEDKA_REPORT','/var/lib/papa-razvedka-pub/latest.json'))
+        try: data=json.loads(p.read_text(encoding='utf-8'))
+        except FileNotFoundError: raise HTTPException(404,'no_report_yet')
+        except (OSError,ValueError): raise HTTPException(503,'report_unreadable')
+        if not isinstance(data,dict): raise HTTPException(503,'report_unreadable')
+        data['age_hours']=round((time.time()-p.stat().st_mtime)/3600,1)
+        return data
+
     @app.post('/api/agent/hello')
     def hello(request:Request,body:AgentHello):
         device_id=device_auth(request)

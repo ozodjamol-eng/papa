@@ -11,6 +11,11 @@ echo "telethon $(/opt/papa-venv/razvedka/bin/python -c 'import telethon;print(te
 /opt/papa-venv/razvedka/bin/python -c 'from telethon.tl.functions.chatlists import CheckChatlistInviteRequest; print("chatlists API: ok")'
 install -d -m 700 /etc/papa-razvedka
 install -m 644 /opt/papa/ops/frankfurt/systemd/papa-razvedka@.service /opt/papa/ops/frankfurt/systemd/papa-razvedka-daily.timer /etc/systemd/system/
+# отчёт для Pult: читает только шлюз (группа nexus-private-control), файлы наследуют группу
+install -d -m 2750 -o papa-razvedka -g nexus-private-control /var/lib/papa-razvedka-pub
 systemctl daemon-reload
+if [[ -s /etc/papa-razvedka/telegram.env && -s /var/lib/papa-razvedka/razvedka.sqlite3 ]]; then
+  systemctl start papa-razvedka@publish.service && journalctl -u papa-razvedka@publish.service -n 3 -o cat --no-pager | grep PUBLISHED || true
+fi
 echo "gateway=$(systemctl is-active nexus-private-control-v2) connect=$(systemctl is-active nexus-connect) mem_free=$(free -m | awk '/Mem/{print $7}')MB"
 echo "== RAZVEDKA_INSTALLED (дальше: papa-update razvedka-login)"

@@ -110,6 +110,19 @@ class TestRazvedka(unittest.TestCase):
         for part in ("ЛУЧШИЕ ЧАСЫ", "ЛИДЕРЫ", "СВОИ КАНАЛЫ", "РЕКЛАМА У КОНКУРЕНТОВ", "Big News"):
             self.assertIn(part, text)
 
+    def test_publish_for_pult(self):
+        import json, os, tempfile
+        from razvedka.__main__ import publish
+        run(collect(FakeSource(), self.db, self.cfg, log=lambda *_: None))
+        a = analyze.analyze(self.db, days=7, now=NOW)
+        d = tempfile.mkdtemp()
+        path = publish(report.render(a), a, d)
+        data = json.load(open(path, encoding="utf-8"))
+        self.assertEqual(data["channels_total"], 3)
+        self.assertIn("ЛИДЕРЫ", data["text"])
+        self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o640")
+        self.assertIsNone(publish("x", a, os.path.join(d, "missing")))
+
 
 if __name__ == "__main__":
     unittest.main()

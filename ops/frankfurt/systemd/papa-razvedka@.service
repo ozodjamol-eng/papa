@@ -8,11 +8,12 @@ Type=oneshot
 User=papa-razvedka
 Group=papa-razvedka
 EnvironmentFile=/etc/papa-razvedka/telegram.env
-Environment=PAPA_RAZVEDKA_DB=/var/lib/papa-razvedka/razvedka.sqlite3 PYTHONUNBUFFERED=1
+Environment=PAPA_RAZVEDKA_DB=/var/lib/papa-razvedka/razvedka.sqlite3 PAPA_RAZVEDKA_PUB=/var/lib/papa-razvedka-pub PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/papa/modules/razvedka
 ExecStart=/opt/papa-venv/razvedka/bin/python -m razvedka %i
 StateDirectory=papa-razvedka
 StateDirectoryMode=0700
+ReadWritePaths=/var/lib/papa-razvedka-pub
 TimeoutStartSec=3h
 NoNewPrivileges=yes
 CapabilityBoundingSet=

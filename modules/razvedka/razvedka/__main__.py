@@ -4,6 +4,7 @@
   python -m razvedka report [--send]  — отчёт в консоль (и в «Избранное» аккаунта с --send)
   python -m razvedka send             — отчёт в консоль и в «Избранное» аккаунта
   python -m razvedka run              — collect + send (для ежедневного таймера)
+  python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
 """
 from __future__ import annotations
 
@@ -18,6 +19,35 @@ from . import analyze, report, store
 
 CONFIG = Path(os.environ.get("PAPA_RAZVEDKA_CONFIG", Path(__file__).resolve().parent.parent / "config.toml"))
 DB = os.environ.get("PAPA_RAZVEDKA_DB", "/var/lib/papa-razvedka/razvedka.sqlite3")
+PUB = os.environ.get("PAPA_RAZVEDKA_PUB", "/var/lib/papa-razvedka-pub")
+
+
+def build() -> tuple[str, dict]:
+    a = analyze.analyze(store.connect(DB), int(cfg().get("report_days", 7)))
+    return report.render(a), a
+
+
+def publish(text: str, a: dict, pub_dir: str | None = None) -> str | None:
+    """Отчёт для Pult (ChatGPT/Claude): latest.json в общем каталоге, без секретов."""
+    import json
+    d = Path(pub_dir or PUB)
+    if not d.is_dir():
+        return None
+    data = {
+        "generated": a["generated"], "days": a["days"], "posts_total": a["posts_total"],
+        "channels_total": len(a["channels"]),
+        "best_hours": sorted([h for h in a["hours"] if h["strength"] is not None],
+                             key=lambda h: h["strength"], reverse=True)[:5],
+        "top_channels": [{k: c[k] for k in ("title", "username", "folder", "is_own", "subscribers",
+                                             "median_views", "err", "per_day", "ads_per_day")}
+                         for c in a["channels"][:15]],
+        "text": text[:15000],
+    }
+    tmp = d / ".latest.json.tmp"
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, d / "latest.json")
+    return str(d / "latest.json")
 
 
 def cfg() -> dict:
@@ -86,15 +116,20 @@ def main(argv: list[str]) -> None:
         s = asyncio.run(_collect())
         print(f"COLLECT_DONE каналов={s['channels']} постов={s['posts']} ошибок={len(s['errors'])}")
         if cmd == "run":
-            text = report.render(analyze.analyze(store.connect(DB), int(cfg().get("report_days", 7))))
+            text, a = build()
+            print("PUBLISHED", publish(text, a))
             asyncio.run(_send(text))
             print("REPORT_SENT")
+    elif cmd == "publish":
+        text, a = build()
+        print("PUBLISHED", publish(text, a))
     elif cmd == "send":
         argv = ["report", "--send"]
         main(argv)
     elif cmd == "report":
-        text = report.render(analyze.analyze(store.connect(DB), int(cfg().get("report_days", 7))))
+        text, a = build()
         print(text)
+        print("PUBLISHED", publish(text, a))
         if "--send" in argv:
             asyncio.run(_send(text))
             print("REPORT_SENT")
