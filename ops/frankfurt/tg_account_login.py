@@ -21,8 +21,14 @@ async def main():
     c = TelegramClient(StringSession(), api_id, api_hash, device_model="PAPA Server", app_version="1.0",
                        system_version="Linux")
     await c.connect()
-    await c.send_code_request(phone)
-    code = input("код из Telegram (придёт в приложение нового аккаунта): ").strip()
+    sent = await c.send_code_request(phone)
+    print(f"код отправлен: {type(sent.type).__name__.replace('SentCodeType', '')}  (App — в приложение Telegram, Sms — СМС, Email — на почту)")
+    code = input("код (или напишите sms — прислать заново другим способом): ").strip()
+    while code.lower() in ("sms", "смс"):
+        from telethon.tl.functions.auth import ResendCodeRequest
+        sent = await c(ResendCodeRequest(phone_number=phone, phone_code_hash=sent.phone_code_hash))
+        print(f"код отправлен заново: {type(sent.type).__name__.replace('SentCodeType', '')}")
+        code = input("код: ").strip()
     try:
         await c.sign_in(phone=phone, code=code)
     except SessionPasswordNeededError:
