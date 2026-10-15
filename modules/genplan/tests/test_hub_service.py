@@ -105,7 +105,7 @@ class TestService(unittest.TestCase):
 
     def test_urgent_now_and_paparazzi_via_bot(self):
         self.queue(2, "paparazzi", "Видео", urgent=True)
-        asyncio.run(service.tick(self.db, CFG, ENV, self.pubs, plan.slot_time(dt.date(2026, 10, 19), "03:00"), print))
+        asyncio.run(service.tick(self.db, CFG, ENV, self.pubs, plan.slot_time(dt.date(2026, 10, 19), "03:00"), lambda *_: None))
         self.assertEqual(self.pubs["bot"].sent[0][0], -100222)
 
     def test_live_targets_real_channels(self):
