@@ -5,6 +5,8 @@ set -euo pipefail
 PY=/opt/papa-venv/razvedka/bin/python
 DB=/var/lib/papa-genplan/genplan.sqlite3
 cp -a "$DB" "$DB.bak-usepool-$(date +%F-%H%M)"
+( cd /opt/papa/modules/genplan && PAPA_GENPLAN_STATE=$(mktemp -d) POOL_VISION_GAP=0 $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
+systemctl restart papa-genplan papa-fabrika
 echo "1/2 последний пост в NEXUS MORNING POOL:"
 systemctl start papa-razvedka@pool-latest.service
 journalctl -u papa-razvedka@pool-latest.service -n 3 --no-pager -o cat | grep -E "POOL_LATEST|Error|не найден" || true
