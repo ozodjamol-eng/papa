@@ -21,9 +21,19 @@ sys.path.insert(0, "/opt/papa/modules/genplan")
 from genplan import morning, store
 from genplan.__main__ import cfg, make_bot
 db = store.connect(sys.argv[1])
+# будущие утренние посты, которые выпали из очереди (пропуск/отмена), — вернуть; время — по новым правилам
+n = db.execute("UPDATE fixed_posts SET status='pending', error=NULL, prepared=0, approved=0, preview_sent=0 "
+               "WHERE status IN ('skipped','cancelled','failed') AND substr(at,1,16)>strftime('%Y-%m-%dT%H:%M','now','+5 hours')").rowcount
+db.commit()
+print(f"  возвращено в очередь: {n}")
 latest = json.load(open("/var/lib/papa-genplan/pool-latest.json", encoding="utf-8"))
 done = morning.use_manual(make_bot(os.environ["GENPLAN_BOT_TOKEN"]), db, cfg(), dict(os.environ), latest)
 print("  готово:", *done, sep="\n   ")
+morning.ensure_all(db, cfg(), __import__("datetime").datetime.now(morning.plan.TZ))
+print("  утро (канал · пост · время · статус · готов · ✅):")
+for r in db.execute("SELECT channel, key, day, substr(at,12,5) t, status, prepared, approved FROM fixed_posts "
+                    "WHERE day>=date('now','+5 hours') ORDER BY day, at"):
+    print("   ", r["day"][5:], r["channel"], r["key"], r["t"], r["status"], r["prepared"], r["approved"])
 PY
 echo "Предпросмотры с ✅ придут в бот через минуту. Без ✅ не выйдет."
 echo "== MORNING_USE_POOL_DONE"
