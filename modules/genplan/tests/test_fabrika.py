@@ -54,6 +54,30 @@ class TestEditText(unittest.TestCase):
         self.assertEqual(hub.handle(bot, db, CFG, ENV, dm(3, text="Бу энди янги пост")), "material")   # ожидание снято
 
 
+class TestGemini(unittest.TestCase):
+    def setUp(self):
+        os.environ["GEMINI_API_KEY"] = "g"
+
+    def tearDown(self):
+        os.environ.pop("GEMINI_API_KEY", None)
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    def test_gemini_and_fallback(self):
+        db = store.connect(":memory:")
+        g = lambda req: {"candidates": [{"content": {"parts": [{"text": "🌧 Ёмғирли жаннат"}]}}]}
+        self.assertEqual(ai.rewrite(db, "Rainy paradise", "КАТТА ДАВРА", http=g), "🌧 Ёмғирли жаннат")
+        import urllib.error
+        def limited(req):
+            if "googleapis" in req.full_url:
+                raise urllib.error.HTTPError(req.full_url, 429, "limit", {}, None)
+            return {"content": [{"type": "text", "text": "Claude матни"}]}
+        with self.assertRaises(ai.AIError) as e:
+            ai.rewrite(db, "x text", "КАТТА ДАВРА", http=limited)
+        self.assertIn("лимит", str(e.exception))                                  # без Claude — понятная ошибка
+        os.environ["ANTHROPIC_API_KEY"] = "a"
+        self.assertEqual(ai.rewrite(db, "x text", "КАТТА ДАВРА", http=limited), "Claude матни")   # запасной
+
+
 class TestAI(unittest.TestCase):
     def setUp(self):
         os.environ["ANTHROPIC_API_KEY"] = "test"

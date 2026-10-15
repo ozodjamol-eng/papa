@@ -1,5 +1,7 @@
-"""ИИ-редактор (Fabrika): переписывает подпись к посту так, как владелец делал вручную через ChatGPT.
-Ключ — ANTHROPIC_API_KEY в /etc/papa-genplan/ai.env (вводит владелец на сервере). Дневной лимит вызовов — AI_DAILY_LIMIT."""
+"""ИИ-редактор (Fabrika): переводит и переписывает подпись к посту так, как владелец делал вручную через ChatGPT.
+Основной — Google Gemini (бесплатный тариф, GEMINI_API_KEY + GEMINI_MODEL). Запасной — Anthropic Claude (ANTHROPIC_API_KEY, платный):
+если Gemini недоступен или исчерпан лимит — пробуем Claude (если ключ есть), иначе остаётся оригинал + кнопка ✏️.
+Ключи — в /etc/papa-genplan/ai.env (вводит владелец на сервере). Дневной лимит вызовов — AI_DAILY_LIMIT."""
 from __future__ import annotations
 
 import datetime as dt
@@ -28,7 +30,29 @@ class AIError(Exception):
 
 
 def available() -> bool:
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def _gemini(system: str, user: str, http=None) -> str:
+    model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+    body = {"systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.6}}
+    req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                 data=json.dumps(body).encode(),
+                                 headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+    data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
+    parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    return "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+
+
+def _claude(system: str, user: str, http=None) -> str:
+    body = {"model": MODEL, "max_tokens": 800, "system": system, "messages": [{"role": "user", "content": user}]}
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
+                                 headers={"content-type": "application/json", "anthropic-version": "2023-06-01",
+                                          "x-api-key": os.environ["ANTHROPIC_API_KEY"]})
+    data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
+    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
 
 
 def _count(db) -> int:
@@ -46,22 +70,22 @@ def rewrite(db, text: str, title: str, http=None) -> str:
         raise AIError("нет исходного текста — напишите текст кнопкой ✏️")
     if _count(db) > LIMIT:
         raise AIError(f"дневной лимит ИИ ({LIMIT}) исчерпан")
-    body = {"model": MODEL, "max_tokens": 800, "system": SYSTEM.format(title=title),
-            "messages": [{"role": "user", "content": f"Манба матни:\n\n{text[:4000]}"}]}
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
-                                 headers={"content-type": "application/json", "anthropic-version": "2023-06-01",
-                                          "x-api-key": os.environ["ANTHROPIC_API_KEY"]})
-    try:
-        if http:
-            data = http(req)
-        else:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                data = json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        raise AIError(f"ИИ ответил ошибкой {e.code}") from None
-    except Exception as e:  # noqa: BLE001
-        raise AIError(f"ИИ недоступен: {type(e).__name__}") from None
-    out = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
+    system, user = SYSTEM.format(title=title), f"Манба матни:\n\n{text[:4000]}"
+    providers = [(n, f) for n, f, k in (("Gemini", _gemini, "GEMINI_API_KEY"), ("Claude", _claude, "ANTHROPIC_API_KEY"))
+                 if os.environ.get(k)]
+    out, errs = "", []
+    for name, fn in providers:
+        try:
+            out = fn(system, user, http)
+            if out:
+                break
+            errs.append(f"{name}: пустой ответ")
+        except urllib.error.HTTPError as e:
+            errs.append(f"{name}: {'лимит исчерпан' if e.code == 429 else f'ошибка {e.code}'}")
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"{name}: недоступен ({type(e).__name__})")
+    if not out and errs:
+        raise AIError("; ".join(errs))
     if not out:
         raise AIError("ИИ вернул пустой ответ")
     if out.strip().upper() in ("РАД", "RAD"):
