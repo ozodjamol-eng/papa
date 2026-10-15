@@ -3,6 +3,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 command -v ffmpeg >/dev/null || { apt-get update -qq && apt-get install -y -qq ffmpeg >/dev/null; }
+[[ -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ]] || { apt-get update -qq && apt-get install -y -qq fonts-dejavu-core >/dev/null; }
 /opt/papa-venv/razvedka/bin/pip install -q --upgrade yt-dlp pillow
 echo "ffmpeg: $(ffmpeg -version | head -1 | cut -d' ' -f3) | yt-dlp: $(/opt/papa-venv/razvedka/bin/yt-dlp --version)"
 install -d -o papa-genplan -g papa-genplan -m 0700 /var/lib/papa-genplan/work /var/lib/papa-genplan/cache

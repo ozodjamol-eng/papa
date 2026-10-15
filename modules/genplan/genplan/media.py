@@ -31,6 +31,43 @@ def prepare_logo(src: Path, dst: Path) -> Path:
     return dst
 
 
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def text_logo(text: str, dst: Path, height: int = 64) -> Path:
+    """Надпись-водяной знак как у больших каналов: значок Telegram (самолётик) + @юзернейм, белая, с лёгкой тенью."""
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    font = ImageFont.truetype(FONT, height)
+    tw = int(font.getlength(text))
+    icon = int(height * 1.05)
+    pad = int(height * 0.35)
+    W, H = icon + pad + tw + 2 * pad, int(height * 1.6)
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cy, x0 = H // 2, pad
+    plane = [(x0, cy - icon * 0.05), (x0 + icon, cy - icon * 0.45), (x0 + icon * 0.78, cy + icon * 0.42),
+             (x0 + icon * 0.45, cy + icon * 0.12), (x0 + icon * 0.36, cy + icon * 0.40), (x0 + icon * 0.30, cy + icon * 0.08)]
+    d.polygon(plane, fill=(255, 255, 255, 255))
+    d.text((x0 + icon + pad, cy), text, font=font, fill=(255, 255, 255, 255), anchor="lm")
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    shadow.putalpha(img.getchannel("A").filter(ImageFilter.GaussianBlur(height * 0.06)).point(lambda v: int(v * 0.8)))
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.alpha_composite(shadow, (2, 2))
+    out.alpha_composite(img)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    out.save(dst, "PNG")
+    return dst
+
+
+def drift_filter(w: int, opacity: float = 0.85, width_part: float = 0.5) -> str:
+    """Надпись медленно «плавает» по средней части кадра (как у больших каналов) — всегда видна, вырезать нельзя."""
+    lw = max(120, int(w * width_part))
+    return (f"[1:v]format=rgba,scale={lw}:-1,colorchannelmixer=aa={opacity}[wm];"
+            f"[0:v][wm]overlay=eval=frame:"
+            f"x='(main_w-overlay_w)/2+(main_w-overlay_w)/2*0.85*sin(2*PI*t/17)':"
+            f"y='main_h*0.42+main_h*0.24*sin(2*PI*t/23+1)',format=yuv420p[v]")
+
+
 def probe(path: Path) -> dict:
     out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                           "stream=width,height:format=duration", "-of", "json", str(path)],
@@ -54,13 +91,13 @@ def video_filter(w: int) -> str:
     )
 
 
-def watermark_video(src: Path, logo: Path, dst: Path, crf: int = 23, timeout: int = 900) -> Path:
+def watermark_video(src: Path, logo: Path, dst: Path, crf: int = 23, timeout: int = 900, style: str = "drift") -> Path:
     info = probe(src)
     dur = info["dur"] or 60
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src),
-           "-loop", "1", "-framerate", "30", "-t", f"{dur:.2f}", "-i", str(logo),
-           "-loop", "1", "-framerate", "30", "-t", f"{dur:.2f}", "-i", str(logo),
-           "-filter_complex", video_filter(info["w"] or 720),
+    inputs = ["-loop", "1", "-framerate", "30", "-t", f"{dur:.2f}", "-i", str(logo)]
+    fl = drift_filter(info["w"] or 720) if style == "drift" else video_filter(info["w"] or 720)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src), *inputs, *(inputs if style != "drift" else []),
+           "-filter_complex", fl,
            "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf),
            "-threads", "2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-shortest", str(dst)]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)

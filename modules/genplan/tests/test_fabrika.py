@@ -85,16 +85,20 @@ class TestMediaAndPipeline(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
+    def test_text_watermark_drift(self):
+        lg = media.text_logo("@kattadavrauz", self.tmp / "wm.png")
+        out = media.watermark_video(self.tmp / "in.mp4", lg, self.tmp / "o.mp4")
+        self.assertAlmostEqual(media.probe(out)["dur"], 3, delta=0.3)
+
     def test_logo_circle_and_watermark(self):
         lg = media.prepare_logo(self.tmp / "logo.jpg", self.tmp / "logo.png")
         from PIL import Image
         self.assertEqual(Image.open(lg).getpixel((0, 0))[3], 0)                 # угол прозрачный — круг вырезан
-        out = media.watermark_video(self.tmp / "in.mp4", lg, self.tmp / "out.mp4")
+        out = media.watermark_video(self.tmp / "in.mp4", lg, self.tmp / "out.mp4", style="classic")
         self.assertAlmostEqual(media.probe(out)["dur"], 3, delta=0.3)
 
     def test_pipeline_with_fake_download(self):
         db, bot = store.connect(":memory:"), Bot()
-        media.prepare_logo(self.tmp / "logo.jpg", self.tmp / "logo-davra.png")
         orig_dl, orig_up, orig_logo = fabrika.download, fabrika.upload_video, fabrika.logo_path
         fabrika.download = lambda url, work: (work.mkdir(parents=True, exist_ok=True) or shutil.copy(self.tmp / "in.mp4", work / "src.mp4")
                                               and (work / "src.mp4", "Yangi klip chiqdi! @boshqa_kanal"))

@@ -76,14 +76,11 @@ def process_link(bot, db, cfg: dict, env: dict, p: dict, work_root: Path = STATE
     notes = []
     try:
         src, original = download(p["url"], work)
-        logo = logo_path(channel)
-        out = src
-        if logo.exists():
-            out = media.watermark_video(src, logo, work / "out.mp4")
-            if out.stat().st_size > MAX_UPLOAD:
-                out = media.watermark_video(src, logo, work / "out2.mp4", crf=30)
-        else:
-            notes.append("ℹ️ Логотипа нет — пришлите его боту файлом с подписью /logo")
+        mark = ch.get("watermark") or "@" + ch["username"]            # водяной знак — @юзернейм канала
+        logo = media.text_logo(mark, work / "wm.png")
+        out = media.watermark_video(src, logo, work / "out.mp4")
+        if out.stat().st_size > MAX_UPLOAD:
+            out = media.watermark_video(src, logo, work / "out2.mp4", crf=30)
         if out.stat().st_size > MAX_UPLOAD:
             raise RuntimeError("видео больше 50 МБ даже после сжатия")
         text = original
