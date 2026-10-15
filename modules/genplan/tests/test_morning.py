@@ -327,6 +327,23 @@ class TestMorning(unittest.TestCase):
         self.assertTrue(r["text"].rstrip().endswith("🎉 @kattadavrauz"))
         self.assertEqual((r["prepared"], r["approved"], r["preview_sent"]), (1, 0, 0))
 
+    def test_use_sklad(self):
+        morning.ensure_all(self.db, CFG, at("00:50", FRI))
+        calls = []
+
+        def bot(m, **p):
+            calls.append((m, p)); return {"message_id": 800 + len(calls)}
+        items = [{"chat": -100999, "msg_id": 1, "text": "🌿 Жума тонги муборак! @begona"},
+                 {"chat": -100999, "msg_id": 2, "text": ""}, {"chat": -100999, "msg_id": 3, "text": ""}]
+        done = morning.use_sklad(bot, self.db, CFG, ENV, items, now=at("00:50", FRI))
+        self.assertEqual(len(done), 3)
+        d, p, x = (self.rows(c)["day"] for c in ("davra", "paparazzi", "xojaobod"))
+        self.assertEqual((d["source"], p["source"], x["source"]), ("sklad:1", "sklad:2", "sklad:3"))
+        self.assertTrue(d["text"].startswith("📅 16-октябр · Жума\n\n🌿 Жума тонги муборак!"))
+        self.assertNotIn("@begona", p["text"])
+        self.assertTrue(p["text"].rstrip().endswith("⭐ @ozodjamoll"))
+        self.assertEqual((d["prepared"], d["approved"]), (1, 0))
+
     def test_overview(self):
         morning.ensure_all(self.db, CFG, at("22:40"))
         t = morning.overview(self.db, CFG, at("22:40"))

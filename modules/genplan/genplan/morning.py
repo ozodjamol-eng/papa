@@ -759,7 +759,9 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
     at = dt.datetime.fromisoformat(r["at"])
     from . import smart
     where = "в канал" if str(target(cfg, env, r["channel"])).startswith("@") else "в тестовый чат"
-    head = f"👁 {ch['title']} · {TITLE[r['key']]} · {smart.fmt(at, dt.datetime.now(plan.TZ))} ({where})" + (f"\n{note}" if note else "")
+    what = "Готовый пост из PAPA СКЛАД" if (r["source"] or "").startswith("sklad") else (
+        "Ваш пост из NEXUS MORNING POOL" if (r["source"] or "").startswith("manual") else TITLE[r["key"]])
+    head = f"👁 {ch['title']} · {what} · {smart.fmt(at, dt.datetime.now(plan.TZ))} ({where})" + (f"\n{note}" if note else "")
     kb = buttons(rid, "new")
     owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
     for o in owners:
@@ -923,5 +925,37 @@ def use_manual(bot, db, cfg: dict, env: dict, latest: dict, now: dt.datetime | N
                   message_id=int(latest["msg_id"]), caption=cap)
         update(db, r["id"], text=cap, hub_msg=int(res["message_id"]), source=f"manual:{latest['msg_id']}", prepared=1,
                redo=0, tries=0, error=None, preview_sent=0, approved=0)
+        done.append(f"{ch['title']} {dt.datetime.fromisoformat(r['at']):%d.%m %H:%M}")
+    return done
+
+
+MONTHS = ("январ", "феврал", "март", "апрел", "май", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
+SKLAD_ORDER = ("davra", "paparazzi", "xojaobod")
+
+
+def use_sklad(bot, db, cfg: dict, env: dict, items: list[dict], key: str = "day",
+              now: dt.datetime | None = None) -> list[str]:
+    """Материалы владельца из PAPA СКЛАД → ближайшие утренние посты (key) по одному на канал (Давра, Paparazzi, Хўжаобод).
+    Текст — один на всех (первая подпись, что есть) + дата сверху, наша подпись внизу; выходит только после ✅."""
+    from . import text as T
+    now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
+    ensure_all(db, cfg, now)
+    body = next((i["text"] for i in items if (i.get("text") or "").strip()), "")
+    allr = db.execute("SELECT * FROM fixed_posts WHERE key=? AND at>? AND status IN ('pending','cancelled','skipped') ORDER BY at",
+                      (key, now.isoformat())).fetchall()
+    first = allr[0]["day"] if allr else None                  # только ближайшее утро
+    rows = {r["channel"]: r for r in allr if r["day"] == first}
+    own = tuple(c["username"] for c in cfg["channels"].values())
+    done = []
+    chans = [c for c in SKLAD_ORDER if c in rows and opts(cfg["channels"].get(c, {}) or {})]
+    for item, channel in zip(items, chans):
+        r, ch = rows[channel], cfg["channels"][channel]
+        day = dt.date.fromisoformat(r["day"])
+        head = f"📅 {day.day}-{MONTHS[day.month - 1]} · {WEEKDAY[day.weekday()]}"
+        cap = T.finalize(f"{head}\n\n{body}".strip(), ch.get("signature", ""), own=own, limit=1024)
+        res = bot("copyMessage", chat_id=int(env["HUB_CHAT_ID"]), from_chat_id=int(item["chat"]),
+                  message_id=int(item["msg_id"]), caption=cap)
+        update(db, r["id"], text=cap, hub_msg=int(res["message_id"]), source=f"sklad:{item['msg_id']}", prepared=1,
+               status="pending", redo=0, tries=0, error=None, preview_sent=0, approved=0)
         done.append(f"{ch['title']} {dt.datetime.fromisoformat(r['at']):%d.%m %H:%M}")
     return done

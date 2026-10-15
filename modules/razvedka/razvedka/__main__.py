@@ -145,8 +145,37 @@ async def _pool_latest() -> dict:
         await c.disconnect()
 
 
+async def _sklad_latest(n: int = 3) -> dict:
+    """Последние n постов с медиа в PAPA СКЛАД (подготовил владелец) → pub/morning/sklad.json, по порядку (старый первым)."""
+    import json
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        async for d in c.iter_dialogs():
+            if d.is_channel and "papa склад" in (d.title or "").lower():
+                items = []
+                async for m in c.iter_messages(d.entity, limit=30):
+                    if m.media and not m.action:
+                        items.append({"chat": int(f"-100{d.entity.id}"), "msg_id": m.id, "text": m.message or "",
+                                      "date": m.date.isoformat()})
+                        if len(items) >= n:
+                            break
+                items.reverse()
+                p = Path(PUB) / "morning" / "sklad.json"
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
+                return {"items": [(i["msg_id"], i["text"][:40]) for i in items]}
+        raise SystemExit("PAPA СКЛАД не найден")
+    finally:
+        await c.disconnect()
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "report"
+    if cmd == "sklad-latest":
+        print("SKLAD_LATEST", asyncio.run(_sklad_latest()))
+        return
     if cmd == "pool-latest":
         print("POOL_LATEST", asyncio.run(_pool_latest()))
         return
