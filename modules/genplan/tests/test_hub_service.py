@@ -83,13 +83,14 @@ class TestIntake(Base):
         self.assertEqual((m["channel"], m["rubric"], m["status"]), ("davra", "Мусиқа", "draft"))   # канал и рубрика — сами
         now = at("08:00")
         txt, kb = hub.card(self.db, CFG, 1, now)
-        self.assertIn("🧠 УМНОЕ ВРЕМЯ: сегодня 13:30", txt)                  # музыка — не раньше 10:00, слот «Мусиқа»
-        first = kb["inline_keyboard"][0][0]
-        self.assertTrue(first["text"].startswith("🧠 Умное время · 13:30"))
-        self.tap(first["callback_data"], now)
+        self.assertIn("Выберите рубрику", txt)
+        flat = [b for row in kb["inline_keyboard"] for b in row]
+        music = next(b for b in flat if "Мусиқа" in b["text"])
+        self.assertTrue(music["text"].endswith("✓"))                          # угаданная рубрика отмечена
+        self.tap(music["callback_data"], now)                                  # одно нажатие: рубрика + умное время
         m = store.get(self.db, 1)
         self.assertEqual(m["status"], "queued")
-        self.assertEqual(dt.datetime.fromisoformat(m["scheduled_at"]), at("13:30"))
+        self.assertEqual(dt.datetime.fromisoformat(m["scheduled_at"]), at("13:30"))   # музыка не раньше 10:00, слот «Мусиқа»
         self.assertIn("✅", self.last_card()["text"])
 
     def test_gap_and_next_slot(self):
@@ -257,7 +258,7 @@ class TestMenu(unittest.TestCase):
         self.assertIn("КАТТА ДАВРА", menu.reply(db, CFG, menu.B_DAVRA) or "") if "davra" in CFG["channels"] else None
         self.assertIn("📋", menu.reply(db, CFG, menu.B_QUEUE))
         self.assertIn("📊 Итог дня", menu.reply(db, CFG, menu.B_TODAY))
-        self.assertIn("Умное время", menu.reply(db, CFG, "/start"))
+        self.assertIn("умное время", menu.reply(db, CFG, "/start"))
         self.assertIsNone(menu.reply(db, CFG, "просто текст"))
         self.assertFalse(menu.KEYBOARD["is_persistent"])
 

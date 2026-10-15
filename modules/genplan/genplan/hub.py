@@ -105,19 +105,18 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         kb = [[{"text": "🕐 Изменить время", "callback_data": f"ot:{mid}"}, {"text": "🆘 Сейчас", "callback_data": f"ur:{mid}"}],
               [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
         return txt, {"inline_keyboard": kb}
-    st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid)
-    head = f"{name} · {m['rubric']}{' (угадано)' if m['guessed'] else ''}"
-    kb = []
-    if st:
-        t, why = st
-        head += f"\n🧠 УМНОЕ ВРЕМЯ: {smart.fmt(t, now)} — {why}"
-        kb.append([{"text": f"🧠 Умное время · {t:%H:%M}", "callback_data": f"sm:{mid}:{int(t.timestamp())}"}])
-    else:
-        head += "\n⚠️ Свободного времени в ближайшие дни нет — выберите время вручную или 🆘"
-    kb += [[{"text": "🆘 Сейчас", "callback_data": f"ur:{mid}"}, {"text": "🕐 Другое время", "callback_data": f"ot:{mid}"}],
-           [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "📺 Канал", "callback_data": f"cs:{mid}"}],
-           [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
-    return f"{base}\n\n{head}{dup}", {"inline_keyboard": kb}
+    # черновик — как в GENPLAN 5: сразу сетка рубрик; одно нажатие = рубрика + умное время
+    rs = rubrics(cfg, m["channel"])
+    icons = cfg["channels"][m["channel"]].get("icons") or {}
+    btn = [{"text": f"{icons.get(r, '•')} {r}{' ✓' if r == m['rubric'] and m['guessed'] else ''}",
+            "callback_data": f"rq:{mid}:{i}"} for i, r in enumerate(rs)]
+    kb = [btn[i:i + 2] for i in range(0, len(btn), 2)]
+    kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}],
+           [{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}, {"text": "🕐 Своё время", "callback_data": f"ot:{mid}"}],
+           [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
+    hint = f"\n✓ — бот думает, что это «{m['rubric']}»" if m["guessed"] else ""
+    return (f"📍 Канал: {name}\n\n{base}\n\nВыберите рубрику — время GENPLAN определит сам.{hint}{dup}",
+            {"inline_keyboard": kb})
 
 
 def kb_times(db, cfg, mid: int, now: dt.datetime) -> dict:
@@ -276,6 +275,17 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             note = "Это время уже занято — показываю новое"
         show()
+    elif kind == "rq":
+        r = rubrics(cfg, m["channel"])[int(arg[0])]
+        store.update(db, mid, rubric=r, guessed=0)
+        st = smart.smart_time(db, cfg, m["channel"], r, now, exclude=mid)
+        if st:
+            store.update(db, mid, status="queued", scheduled_at=st[0].isoformat(), urgent=0, locked=0)
+            note = f"🧠 {smart.fmt(st[0], now)} — {st[1]}"
+            show()
+        else:
+            t, _ = card(db, cfg, mid, now)
+            show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
     elif kind == "ur":
         store.update(db, mid, status="queued", urgent=1, scheduled_at=now.isoformat(), rubric=m["rubric"] or "Срочно")
         show()
