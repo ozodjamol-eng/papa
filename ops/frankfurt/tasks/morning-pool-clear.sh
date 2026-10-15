@@ -8,7 +8,7 @@ POOL=/var/lib/papa-genplan/pool
 systemctl stop papa-razvedka@hunt.service 2>/dev/null || true
 systemctl stop papa-fabrika
 cp -a "$DB" "$DB.bak-poolclear-$(date +%F-%H%M)"
-( cd /opt/papa/modules/genplan && POOL_VISION_GAP=0 $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
+( cd /opt/papa/modules/genplan && PAPA_GENPLAN_STATE=$(mktemp -d) POOL_VISION_GAP=0 $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
 systemctl restart papa-genplan; sleep 3
 sudo -u papa-genplan $PY - "$DB" "$POOL" <<'PY'
 import sqlite3, sys

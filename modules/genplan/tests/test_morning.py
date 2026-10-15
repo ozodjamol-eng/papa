@@ -54,6 +54,12 @@ def hit(i, tags="autumn, leaves, forest", dur=15, w=1280):
 
 class TestMorning(unittest.TestCase):
     def setUp(self):
+        # тесты не должны видеть настоящий запас сервера (/var/lib/papa-genplan/pool)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env = mock.patch.dict(os.environ, {"PAPA_GENPLAN_STATE": tmp.name, "POOL_VISION_GAP": "0"})
+        env.start()
+        self.addCleanup(env.stop)
         self.db = store.connect(":memory:")
         os.environ.pop("GEMINI_API_KEY", None)
         os.environ.pop("ANTHROPIC_API_KEY", None)

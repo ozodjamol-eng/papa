@@ -516,7 +516,7 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
         reject("нет файла")
         return True
     global _LAST_VISION
-    wait = VISION_GAP - (time.monotonic() - _LAST_VISION)
+    wait = float(os.environ.get("POOL_VISION_GAP", VISION_GAP)) - (time.monotonic() - _LAST_VISION)
     if wait > 0:                                             # бесплатный Gemini: не чаще ~8 кадров-проверок в минуту
         time.sleep(wait)
     _LAST_VISION = time.monotonic()

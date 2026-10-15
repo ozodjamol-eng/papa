@@ -6,7 +6,7 @@ set -euo pipefail
 DB=/var/lib/papa-genplan/genplan.sqlite3
 PY=/opt/papa-venv/razvedka/bin/python
 cp -a "$DB" "$DB.bak-morning-$(date +%F-%H%M)"
-( cd /opt/papa/modules/genplan && $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
+( cd /opt/papa/modules/genplan && PAPA_GENPLAN_STATE=$(mktemp -d) POOL_VISION_GAP=0 $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
 # неудачные попытки подготовки (до исправления) обнуляем; «Хайрли тонг», ушедший в запасной текст, — снова на видео
 sudo -u papa-genplan $PY - "$DB" <<'PY' || true
 import sqlite3, sys

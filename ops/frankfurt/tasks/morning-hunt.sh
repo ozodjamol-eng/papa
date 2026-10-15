@@ -15,7 +15,7 @@ if systemctl is-active -q papa-razvedka@collect.service || systemctl is-active -
 fi
 cp -a "$DB" "$DB.bak-hunt-$(date +%F-%H%M)"
 echo "1/4 код и тесты:"
-( cd /opt/papa/modules/genplan && $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
+( cd /opt/papa/modules/genplan && PAPA_GENPLAN_STATE=$(mktemp -d) POOL_VISION_GAP=0 $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
 ( cd /opt/papa/modules/razvedka && $PY -m unittest discover -q -s tests 2>&1 | tail -1 )
 systemctl restart papa-genplan; systemctl stop papa-fabrika
 echo "2/4 охота (10–25 минут, ход ниже):"
