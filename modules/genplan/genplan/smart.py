@@ -129,6 +129,31 @@ def shift_after_urgent(db, cfg: dict, channel: str, at: dt.datetime, now: dt.dat
     return moved
 
 
+STOCK_DAYS = 30
+STOCK_AHEAD = dt.timedelta(minutes=90)
+
+
+def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
+    """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
+    ch = cfg["channels"][channel]
+    pool = [m for m in store.stock(db, channel)
+            if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)]
+    if not pool:
+        return []
+    used: list[int] = []
+    for t, s in grid(ch, now.date()):
+        if s["kind"] == "ad" or not (now + LEAD <= t <= now + STOCK_AHEAD):
+            continue
+        if not is_free(ch, t, occupied(db, channel, now)):
+            continue
+        wanted = [s.get("rubric")] + list(s.get("fallback", []))
+        pick = next((m for r in wanted for m in pool if m["rubric"] == r and m["id"] not in used and allowed(ch, t, r)), None)
+        if pick:
+            store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
+            used.append(pick["id"])
+    return used
+
+
 def fmt(t: dt.datetime, now: dt.datetime) -> str:
     if t.date() == now.date():
         return f"сегодня {t:%H:%M}"
@@ -165,6 +190,13 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {s['rubric']} — нет материала"))
     items.sort(key=lambda x: x[0])
     later = len(sched) - len(today)
+    st = store.stock(db, channel)
+    if st:
+        by: dict[str, int] = {}
+        for m in st:
+            by[m["rubric"]] = by.get(m["rubric"], 0) + 1
+        items.append(("99", ""))
+        items.append(("99:1", "📦 В запасе: " + ", ".join(f"{r} {n}" for r, n in by.items())))
     head = f"📅 {ch['title']} — {day:%d.%m}"
     tail = []
     if empty:

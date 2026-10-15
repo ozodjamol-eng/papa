@@ -46,6 +46,7 @@ EXTRA = {
     "fp": "TEXT",                  # отпечаток содержимого (повторы)
     "locked": "INTEGER NOT NULL DEFAULT 0",   # время выбрал владелец — не двигать автоматически
     "guessed": "INTEGER NOT NULL DEFAULT 0",  # рубрика угадана ботом
+    "stock": "INTEGER NOT NULL DEFAULT 0",    # 📦 в запасе: выйдет сам, когда у рубрики будет пустой слот
 }
 
 
@@ -138,3 +139,8 @@ def kv_get(db, k, default=None):
 def kv_set(db, k, v) -> None:
     db.execute("INSERT INTO kv VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, str(v)))
     db.commit()
+
+
+def stock(db, channel: str) -> list:
+    return db.execute("SELECT * FROM materials WHERE channel=? AND status='draft' AND stock=1 ORDER BY created_at",
+                      (channel,)).fetchall()

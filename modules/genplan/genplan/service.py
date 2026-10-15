@@ -94,6 +94,7 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
     out = {"published": 0, "failed": 0, "moved": 0, "ids": [], "errors": []}
     reconcile(db, cfg, now)
     for channel in cfg["channels"]:
+        out["ids"] += smart.fill_from_stock(db, cfg, channel, now)        # 📦 запас → в пустые слоты
         due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
         urgent = [m for m in due if m["urgent"]]
         regular = [m for m in due if not m["urgent"]]

@@ -160,6 +160,29 @@ class TestIntake(Base):
         self.assertEqual((store.get(self.db, 1)["rubric"], store.get(self.db, 1)["guessed"]), ("Ҳажвия", 0))
 
 
+class TestStock(Base):
+    def test_stock_fills_empty_slot(self):
+        self.h(dm(90, "Кулги видео 😂", photo_uid="k1"))
+        i = hub.rubrics(CFG, "davra").index("Ҳажвия")
+        self.tap("sr:1", at("09:00"))
+        self.tap(f"sk:1:{i}", at("09:00"))
+        m = store.get(self.db, 1)
+        self.assertEqual((m["stock"], m["status"], m["scheduled_at"]), (1, "draft", None))
+        self.assertIn("📦 В запасе", hub.card(self.db, CFG, 1, at("09:00"))[0])
+        self.assertIn("📦 В запасе: Ҳажвия 1", smart.day_view(self.db, CFG, "davra", at("09:00")))
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("09:00")), [])      # 12:00 ещё далеко
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("10:45")), [1])     # слот «Ҳажвия» 12:00 пуст
+        m = store.get(self.db, 1)
+        self.assertEqual((m["status"], dt.datetime.fromisoformat(m["scheduled_at"])), ("queued", at("12:00")))
+
+    def test_stock_not_used_when_slot_busy(self):
+        self.h(dm(91, "Ҳажвия 1", photo_uid="k2")); self.h(dm(92, "Ҳажвия 2", photo_uid="k3"))
+        i = hub.rubrics(CFG, "davra").index("Ҳажвия")
+        self.tap(f"rq:1:{i}", at("10:45"))                       # первый — в план на 12:00
+        self.tap(f"sk:2:{i}", at("10:45"))                       # второй — в запас
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("10:45")), [])
+
+
 class FakeAcc:
     def __init__(self):
         self.sent = []

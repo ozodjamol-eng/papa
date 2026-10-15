@@ -111,7 +111,11 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     btn = [{"text": f"{icons.get(r, '•')} {r}{' ✓' if r == m['rubric'] and m['guessed'] else ''}",
             "callback_data": f"rq:{mid}:{i}"} for i, r in enumerate(rs)]
     kb = [btn[i:i + 2] for i in range(0, len(btn), 2)]
-    kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}],
+    if m["stock"]:
+        return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — выйдет сам, когда у рубрики будет пустой слот{dup}",
+                {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
+                                     [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
+    kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}, {"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            [{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}, {"text": "🕐 Своё время", "callback_data": f"ot:{mid}"}],
            [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
     hint = f"\n✓ — бот думает, что это «{m['rubric']}»" if m["guessed"] else ""
@@ -271,13 +275,26 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         busy = smart.occupied(db, m["channel"], now, exclude=mid)
         ch = cfg["channels"][m["channel"]]
         if t and t >= now - dt.timedelta(minutes=1) and smart.is_free(ch, t, busy) and smart.allowed(ch, t, m["rubric"]):
-            store.update(db, mid, status="queued", scheduled_at=t.isoformat(), urgent=0, locked=int(kind == "tm"))
+            store.update(db, mid, status="queued", scheduled_at=t.isoformat(), urgent=0, locked=int(kind == "tm"), stock=0)
         else:
             note = "Это время уже занято — показываю новое"
         show()
+    elif kind == "sr":                                  # 📦 В запас: выбрать рубрику
+        rs = rubrics(cfg, m["channel"])
+        icons = cfg["channels"][m["channel"]].get("icons") or {}
+        btn = [{"text": f"{icons.get(r, '•')} {r}{' ✓' if r == m['rubric'] else ''}", "callback_data": f"sk:{mid}:{i}"}
+               for i, r in enumerate(rs)]
+        t, _ = card(db, cfg, mid, now)
+        show({"inline_keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]},
+             t + "\n\n📦 В запас — какая рубрика?")
+    elif kind == "sk":
+        r = rubrics(cfg, m["channel"])[int(arg[0])]
+        store.update(db, mid, rubric=r, guessed=0, stock=1, status="draft", scheduled_at=None, urgent=0, locked=0)
+        note = "📦 В запасе — выйдет сам в пустой слот рубрики"
+        show()
     elif kind == "rq":
         r = rubrics(cfg, m["channel"])[int(arg[0])]
-        store.update(db, mid, rubric=r, guessed=0)
+        store.update(db, mid, rubric=r, guessed=0, stock=0)
         st = smart.smart_time(db, cfg, m["channel"], r, now, exclude=mid)
         if st:
             store.update(db, mid, status="queued", scheduled_at=st[0].isoformat(), urgent=0, locked=0)
@@ -287,7 +304,7 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             t, _ = card(db, cfg, mid, now)
             show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
     elif kind == "ur":
-        store.update(db, mid, status="queued", urgent=1, scheduled_at=now.isoformat(), rubric=m["rubric"] or "Срочно")
+        store.update(db, mid, status="queued", urgent=1, scheduled_at=now.isoformat(), rubric=m["rubric"] or "Срочно", stock=0)
         show()
     elif kind == "ot":
         t, _ = card(db, cfg, mid, now)
