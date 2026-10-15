@@ -3,6 +3,7 @@
 # («Хайрли тонг», «Жума тонги муборак»…) и ПЕРЕСЫЛАЕТ лучшие в NEXUS MORNING POOL (внутри Telegram, без скачивания).
 # Бот берёт видео из пула, Gemini проверяет кадры (даты, чужие логотипы, не поздравление) → утро на завтра пересобирается.
 set -Eeuo pipefail
+trap 'systemctl start papa-fabrika' EXIT
 PY=/opt/papa-venv/razvedka/bin/python
 DB=/var/lib/papa-genplan/genplan.sqlite3
 OUT=/var/lib/papa-razvedka-pub/morning
@@ -35,9 +36,12 @@ echo "  видео в пуле для проверки: $(wc -l < "$POOL/index.j
 echo "4/4 утро на завтра пересобирается (новые видео + новый текст):"
 sudo -u papa-genplan $PY - "$DB" <<'PY'
 import sqlite3, sys
+sys.path.insert(0, "/opt/papa/modules/genplan")
+from genplan import store
+store.connect(sys.argv[1]).close()          # миграции (новые колонки) до сброса
 db = sqlite3.connect(sys.argv[1])
 n = db.execute("UPDATE fixed_posts SET prepared=0, redo=1, tries=0, next_try=NULL, hub_msg=NULL, preview_sent=0, approved=0 "
-               "WHERE status='pending' AND day=date('now','+5 hours','+1 day')").rowcount
+               "WHERE status='pending' AND substr(at,1,16)>strftime('%Y-%m-%dT%H:%M','now','+5 hours')").rowcount
 db.commit(); print(f"  постов на пересборку: {n}")
 PY
 systemctl start papa-fabrika; sleep 240
@@ -49,7 +53,7 @@ print("  годные по дням:", dict(db.execute("SELECT coalesce(weekday,
 for r in db.execute("SELECT reason, count(*) FROM morning_pool WHERE status='rejected' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"):
     print("  отбраковано:", *r)
 for r in db.execute("SELECT channel, key, substr(at,12,5), prepared, coalesce(source,'') FROM fixed_posts "
-                    "WHERE day=date('now','+5 hours','+1 day') ORDER BY at, channel"):
+                    "WHERE substr(at,1,16)>strftime('%Y-%m-%dT%H:%M','now','+5 hours','-1 hour') ORDER BY at, channel"):
     print("  ", *r)
 PY
 journalctl -u papa-fabrika -n 4 --no-pager -o cat

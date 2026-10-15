@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 🌅 Быстро применить новый код утреннего блока без повторной охоты: тесты → перезапуск → утро на завтра пересобирается.
 set -euo pipefail
+trap 'systemctl start papa-fabrika' EXIT
 PY=/opt/papa-venv/razvedka/bin/python
 DB=/var/lib/papa-genplan/genplan.sqlite3
 cp -a "$DB" "$DB.bak-refresh-$(date +%F-%H%M)"
@@ -8,9 +9,12 @@ cp -a "$DB" "$DB.bak-refresh-$(date +%F-%H%M)"
 systemctl restart papa-genplan; systemctl stop papa-fabrika
 sudo -u papa-genplan $PY - "$DB" <<'PY'
 import sqlite3, sys
+sys.path.insert(0, "/opt/papa/modules/genplan")
+from genplan import store
+store.connect(sys.argv[1]).close()          # миграции (новые колонки) до сброса
 db = sqlite3.connect(sys.argv[1])
 n = db.execute("UPDATE fixed_posts SET prepared=0, redo=1, tries=0, next_try=NULL, hub_msg=NULL, preview_sent=0, approved=0 "
-               "WHERE status='pending' AND day=date('now','+5 hours','+1 day')").rowcount
+               "WHERE status='pending' AND substr(at,1,16)>strftime('%Y-%m-%dT%H:%M','now','+5 hours')").rowcount
 db.execute("DELETE FROM kv WHERE k='pool_vision_pause'")      # снять паузу проверки кадров (Gemini был перегружен)
 db.commit(); print(f"постов на пересборку: {n}")
 PY
@@ -24,7 +28,7 @@ try:
 except sqlite3.OperationalError:
     pass
 for r in db.execute("SELECT channel, key, substr(at,12,5), prepared, coalesce(source,'') FROM fixed_posts "
-                    "WHERE day=date('now','+5 hours','+1 day') ORDER BY at, channel"):
+                    "WHERE substr(at,1,16)>strftime('%Y-%m-%dT%H:%M','now','+5 hours','-1 hour') ORDER BY at, channel"):
     print("  ", *r)
 PY
 echo "== MORNING_REFRESH_DONE"
