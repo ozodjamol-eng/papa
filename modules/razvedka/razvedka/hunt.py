@@ -49,6 +49,25 @@ def video_meta(m) -> dict | None:
     return {"duration": float(att.duration or 0), "w": att.w, "h": att.h, "size": int(doc.size or 0)}
 
 
+async def _download(client, m, ent, path: Path, log=print) -> bool:
+    """Скачать видео; при ошибке — повтор со свежим сообщением (у старых ссылок на файл истекает срок)."""
+    for attempt in range(2):
+        try:
+            if attempt:
+                m = await client.get_messages(ent, ids=m.id)
+            res = await client.download_media(m.media.document if attempt else m, file=str(path))
+            if res and path.exists() and path.stat().st_size > 10_000:
+                return True
+            if res and Path(res).exists() and Path(res) != path:      # библиотека сохранила под своим именем
+                Path(res).replace(path)
+                return True
+        except Exception as e:  # noqa: BLE001
+            log(f"  скачать {ent.id}_{m.id} (попытка {attempt + 1}): {type(e).__name__}: {str(e)[:150]}")
+        await asyncio.sleep(2)
+    path.unlink(missing_ok=True)
+    return False
+
+
 def pick(cands: list[dict]) -> list[dict]:
     """Лучшие по просмотрам: до PER_DAY на день недели и до ANY общих; дубли (размер+длительность) — вон."""
     seen, out, per = set(), [], {}
@@ -72,23 +91,25 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
     out.mkdir(parents=True, exist_ok=True)
     src = TelethonSource(client)
     chans = await src.channels(cfg)
-    ents = [(c["title"], c["username"], src._entities[c["id"]]) for c in chans]
+    ents = [(c["title"], c["username"], src._entities[c["id"]], False) for c in chans]
     async for d in client.iter_dialogs():
         if d.is_channel and any(t in (d.title or "").lower() for t in POOL_TITLES):
-            ents.append((d.title, getattr(d.entity, "username", None), d.entity))
+            ents.append((d.title, getattr(d.entity, "username", None), d.entity, True))
             log(f"пул: {d.title}")
     since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
-    cands, msgs = [], {}
-    for title, uname, ent in ents:
+    cands, msgs, where = [], {}, {}
+    for title, uname, ent, is_pool in ents:
         n = 0
-        for q in QUERIES:
+        # пул — наш собственный утренний склад: берём все видео (подпись может быть пустой); каналы — поиск по «тонг/tong»
+        for q in ((None,) if is_pool else QUERIES):
             try:
-                async for m in client.iter_messages(ent, search=q, filter=InputMessagesFilterVideo, limit=60, wait_time=1):
+                async for m in client.iter_messages(ent, search=q, filter=InputMessagesFilterVideo,
+                                                    limit=300 if is_pool else 60, wait_time=1):
                     if m.date < since:
                         break
                     text = m.message or ""
                     meta = video_meta(m)
-                    if not meta or not MORNING.search(text):
+                    if not meta or (not is_pool and not MORNING.search(text)):
                         continue
                     if not (5 <= meta["duration"] <= 90) or meta["size"] > MAX_BYTES:
                         continue
@@ -96,12 +117,13 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
                     if key in msgs:
                         continue
                     msgs[key] = m
+                    where[key] = ent
                     cands.append({"key": key, "channel": title, "username": uname, "msg_id": m.id,
                                   "date": m.date.isoformat(), "views": m.views or 0, "weekday": weekday_of(text),
                                   "text": text[:1500], **meta})
                     n += 1
             except Exception as e:  # noqa: BLE001 — один канал не должен ронять охоту
-                log(f"  {title}: {type(e).__name__}")
+                log(f"  {title}: {type(e).__name__}: {str(e)[:120]}")
             await asyncio.sleep(2)
         log(f"{title}: найдено {n}")
     chosen = pick(cands)
@@ -115,10 +137,8 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
             if c["key"] in have:
                 continue
             path = out / f"{c['key']}.mp4"
-            try:
-                await client.download_media(msgs[c["key"]], file=str(path))
-            except Exception as e:  # noqa: BLE001
-                log(f"  скачать {c['key']}: {type(e).__name__}")
+            ok = await _download(client, msgs[c["key"]], where[c["key"]], path, log)
+            if not ok:
                 continue
             c["file"] = path.name
             f.write(json.dumps(c, ensure_ascii=False) + "\n")
