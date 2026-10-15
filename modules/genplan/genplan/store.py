@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import sqlite3
 
 SCHEMA = """
@@ -32,13 +33,33 @@ CREATE TABLE IF NOT EXISTS publications (
     UNIQUE (channel, slot_date, slot)
 );
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+-- «Пульс» канала: когда в канале вышел любой пост (наш или ручной) — чтобы держать промежуток между постами
+CREATE TABLE IF NOT EXISTS pulse (channel TEXT NOT NULL, at TEXT NOT NULL, source TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_pulse ON pulse(channel, at);
 """
+
+# Колонки, добавленные позже (миграция только добавляет, ничего не удаляет)
+EXTRA = {
+    "scheduled_at": "TEXT",        # точное время публикации (ISO, Ташкент) — как в GENPLAN 5
+    "media": "TEXT",               # JSON [{type, file_id, uid}] — для альбомов и проверки повторов
+    "hub_msgs": "TEXT",            # JSON [id, …] — сообщения альбома в хабе
+    "fp": "TEXT",                  # отпечаток содержимого (повторы)
+    "locked": "INTEGER NOT NULL DEFAULT 0",   # время выбрал владелец — не двигать автоматически
+    "guessed": "INTEGER NOT NULL DEFAULT 0",  # рубрика угадана ботом
+}
 
 
 def connect(path: str) -> sqlite3.Connection:
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    have = {r[1] for r in db.execute("PRAGMA table_info(materials)")}
+    for col, typ in EXTRA.items():
+        if col not in have:
+            db.execute(f"ALTER TABLE materials ADD COLUMN {col} {typ}")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_mat_time ON materials(channel, status, scheduled_at)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_mat_fp ON materials(fp)")
+    db.commit()
     return db
 
 
@@ -46,20 +67,38 @@ def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
-def add_material(db, hub_chat: int, hub_msg: int, text: str, has_media: bool) -> int | None:
+def add_material(db, hub_chat: int, hub_msg: int, text: str, has_media: bool, media: list | None = None,
+                 hub_msgs: list | None = None, fp: str | None = None) -> int | None:
     if db.execute("SELECT 1 FROM materials WHERE hub_chat=? AND hub_msg=?", (hub_chat, hub_msg)).fetchone():
         return None
-    cur = db.execute("INSERT INTO materials(hub_chat,hub_msg,text,has_media,created_at) VALUES (?,?,?,?,?)",
-                     (hub_chat, hub_msg, text or "", int(has_media), now_iso()))
+    cur = db.execute("INSERT INTO materials(hub_chat,hub_msg,text,has_media,created_at,media,hub_msgs,fp) "
+                     "VALUES (?,?,?,?,?,?,?,?)",
+                     (hub_chat, hub_msg, text or "", int(has_media), now_iso(), json.dumps(media or []),
+                      json.dumps(hub_msgs or [hub_msg]), fp))
     db.commit()
     return cur.lastrowid
 
 
+def pulse_add(db, channel: str, at: dt.datetime, source: str) -> None:
+    db.execute("INSERT INTO pulse(channel, at, source) VALUES (?,?,?)", (channel, at.isoformat(), source))
+    db.commit()
+
+
+def pulse_since(db, channel: str, since: dt.datetime) -> list[dt.datetime]:
+    return [dt.datetime.fromisoformat(r[0]) for r in db.execute(
+        "SELECT at FROM pulse WHERE channel=? AND at>=?", (channel, since.isoformat()))]
+
+
+def scheduled(db, channel: str) -> list:
+    return db.execute("SELECT * FROM materials WHERE channel=? AND status='queued' AND scheduled_at IS NOT NULL "
+                      "ORDER BY scheduled_at", (channel,)).fetchall()
+
+
 def clone_for(db, mid: int, channel: str) -> int:
     r = get(db, mid)
-    cur = db.execute("INSERT INTO materials(hub_chat,hub_msg,text,has_media,channel,created_at,owner_msg) "
-                     "VALUES (?,?,?,?,?,?,?)", (r["hub_chat"], r["hub_msg"], r["text"], r["has_media"], channel,
-                                               r["created_at"], r["owner_msg"]))
+    cur = db.execute("INSERT INTO materials(hub_chat,hub_msg,text,has_media,channel,created_at,owner_msg,media,hub_msgs,fp) "
+                     "VALUES (?,?,?,?,?,?,?,?,?,?)", (r["hub_chat"], r["hub_msg"], r["text"], r["has_media"], channel,
+                                                     r["created_at"], r["owner_msg"], r["media"], r["hub_msgs"], r["fp"]))
     db.commit()
     return cur.lastrowid
 

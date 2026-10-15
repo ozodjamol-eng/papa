@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from . import plan, service, store
+from . import plan, service, smart, store
 
 B_DAVRA, B_PAP, B_XOJ = "🎉 Давра", "⭐ Paparazzi", "📍 Хўжаобод"
 B_ALL, B_QUEUE, B_TODAY, B_HELP = "📅 План — все", "📋 Очередь", "📊 Итог дня", "❓ Помощь"
@@ -17,11 +17,13 @@ KEYBOARD = {"keyboard": [[{"text": B_DAVRA}, {"text": B_PAP}, {"text": B_XOJ}],
             "input_field_placeholder": "Перешлите пост сюда"}
 
 HELP = """Как работать:
-1. Пересылайте хорошие посты прямо сюда, в этот чат (или в канал PAPA HUB — тоже работает).
-2. Под постом появятся кнопки: канал → рубрика. Пост встанет в ближайший слот по плану.
-3. 🆘 Срочно — публикуется сразу. 🗑 Убрать — не публикуется.
+1. Бросайте готовый пост прямо сюда (можно с чужим юзернеймом, можно альбом).
+2. Бот сам выберет канал и рубрику и предложит время. Нажмите «🧠 Умное время» — и всё.
+   🆘 Сейчас — сразу. 🕐 Другое время, 📂 Рубрика, 📺 Канал — если нужно иначе. 🗑 — убрать.
+3. Под каждой карточкой видно, когда пост выйдет; время можно поменять.
 
-Бот сам: убирает чужие @ и ссылки, переводит латиницу в кириллицу, ставит хук по смыслу и наш юзернейм.
+Бот сам: убирает чужие @ и ссылки, переводит латиницу в кириллицу, ставит наш юзернейм и призыв по смыслу,
+держит промежуток между постами, музыку — не раньше 10:00, публикует с 07:00 до 22:00, предупреждает о повторах.
 
 Кнопки панели:
 🎉 ⭐ 📍 — план канала на сегодня
@@ -37,19 +39,16 @@ def _mode(cfg, ch):
 
 def plan_one(db, cfg: dict, channel: str, now: dt.datetime | None = None) -> str:
     now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
-    ch = cfg["channels"][channel]
-    entries = plan.build(channel, ch, now.date(), service.to_materials(store.queued(db, channel)), ads={},
-                         published=store.published_today(db, channel, now.date().isoformat()), now=now)
-    return f"{_mode(cfg, channel)}\n" + plan.render(ch["title"], entries)
+    return f"{_mode(cfg, channel)}\n" + smart.day_view(db, cfg, channel, now)
 
 
-def queue_text(db, cfg: dict) -> str:
+def queue_text(db, cfg: dict, now: dt.datetime | None = None) -> str:
+    now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
     parts = []
     for c, ch in cfg["channels"].items():
-        rows = db.execute("SELECT rubric, text, urgent FROM materials WHERE status='queued' AND channel=? ORDER BY created_at",
-                          (c,)).fetchall()
-        lines = [f"{'🆘' if r['urgent'] else '•'} {r['rubric'] or '—'}: {(r['text'] or '(медиа)').strip().splitlines()[0][:50]}"
-                 for r in rows[:15]]
+        rows = store.scheduled(db, c)
+        lines = [f"{'🆘' if r['urgent'] else '⏳'} {smart.fmt(dt.datetime.fromisoformat(r['scheduled_at']), now)} · "
+                 f"{r['rubric'] or '—'}: {smart.short(r['text'], 45)}{' 🔒' if r['locked'] else ''}" for r in rows[:15]]
         more = f"\n… ещё {len(rows) - 15}" if len(rows) > 15 else ""
         parts.append(f"📋 {ch['title']} — {len(rows)}\n" + ("\n".join(lines) + more if rows else "пусто"))
     return "\n\n".join(parts)

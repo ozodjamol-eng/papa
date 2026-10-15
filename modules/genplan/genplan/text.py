@@ -70,7 +70,7 @@ def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...
     for line in (signature, hook):
         if line:
             body = "\n".join(ln for ln in body.splitlines() if ln.strip() != line.strip()).strip()
-    footer = "\n".join(x for x in (hook, signature) if x)
+    footer = "\n".join(x for x in (signature, hook) if x)      # как в GENPLAN 5: текст → @юзернейм → призыв
     if limit and footer and len(body) + len(footer) + 2 > limit:
         room = limit - len(footer) - 3
         body = (body[:max(room, 0)].rstrip() + "…") if room > 0 else ""

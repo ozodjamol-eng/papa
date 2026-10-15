@@ -43,6 +43,24 @@ class BotPublisher:
         return int(r["result"]["message_id"])
 
 
+def _album_payload(media: list[dict], caption: str) -> list[dict]:
+    kinds = {"photo": "photo", "video": "video", "document": "document", "audio": "audio"}
+    out = [{"type": kinds.get(m["type"], "photo"), "media": m["file_id"]} for m in media if m["type"] in kinds][:10]
+    if out:
+        out[0]["caption"] = caption[:1024]
+    return out
+
+
+def _bot_album(self, chat: str, media: list[dict], caption: str) -> int:
+    r = self.http("sendMediaGroup", {"chat_id": chat, "media": _album_payload(media, caption)})
+    if not r.get("ok"):
+        raise PublishError(r.get("description", "unknown"))
+    return int(r["result"][0]["message_id"])
+
+
+BotPublisher.publish_album = _bot_album
+
+
 class AccountPublisher:
     """client — подключённый Telethon-клиент отдельного аккаунта (анонимный админ группы)."""
 
@@ -64,3 +82,16 @@ class AccountPublisher:
         except Exception as e:  # noqa: BLE001 — любая ошибка Telegram → понятная ошибка публикации
             raise PublishError(f"{type(e).__name__}: {e}") from None
         return int(m.id)
+
+    async def publish_album(self, chat: str, hub_chat: int, hub_ids: list[int], caption: str) -> int:
+        try:
+            msgs = [m for m in await self.c.get_messages(hub_chat, ids=hub_ids) if m and m.media]
+            if not msgs:
+                raise PublishError("в хабе нет медиа альбома")
+            res = await self.c.send_file(chat, [m.media for m in msgs], caption=[caption[:1024]] + [""] * (len(msgs) - 1))
+        except PublishError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise PublishError(f"{type(e).__name__}: {e}") from None
+        first = res[0] if isinstance(res, list) else res
+        return int(first.id)

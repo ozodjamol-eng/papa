@@ -120,9 +120,9 @@ class TestHook(unittest.TestCase):
     def test_footer_survives_caption_limit(self):
         out = text.finalize("ж" * 2000, "🎉 @kattadavrauz", hook="🔔 Хук", limit=1024)
         self.assertLessEqual(len(out), 1024)
-        self.assertTrue(out.endswith("🔔 Хук\n🎉 @kattadavrauz"))
+        self.assertTrue(out.endswith("🎉 @kattadavrauz\n🔔 Хук"))
         out2 = text.finalize("Матн\n🎉 @kattadavrauz", "🎉 @kattadavrauz", own=("kattadavrauz",), hook="🔔 Хук")
-        self.assertEqual(out2, "Матн\n\n🔔 Хук\n🎉 @kattadavrauz")
+        self.assertEqual(out2, "Матн\n\n🎉 @kattadavrauz\n🔔 Хук")
 
 
 class TestSmartHook(unittest.TestCase):

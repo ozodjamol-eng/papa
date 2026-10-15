@@ -57,21 +57,23 @@ async def run() -> None:
     offset = int(store.kv_get(db, "offset", "0"))
     next_tick = 0.0
     print(f"GENPLAN PAPA запущен, режим: {cfg()['mode']}", flush=True)
-    if store.kv_get(db, "menu_v") != "2":          # один раз: показать владельцу постоянную панель
+    if store.kv_get(db, "menu_v") != "3":          # один раз: показать владельцу постоянную панель
         for o in str(env.get("OWNER_IDS", "")).split(","):
             try:
                 bot("sendMessage", chat_id=int(o), text="Панель PAPA готова 👇\n\n" + menu.HELP, reply_markup=menu.KEYBOARD)
             except Exception as e:  # noqa: BLE001
                 print(f"menu: {e}", flush=True)
-        store.kv_set(db, "menu_v", "2")
+        store.kv_set(db, "menu_v", "3")
     while True:
         c = cfg()
         try:
-            ups = await asyncio.to_thread(bot, "getUpdates", offset=offset, timeout=20,
+            ups = await asyncio.to_thread(bot, "getUpdates", offset=offset, timeout=1 if hub.ALBUMS else 20,
                                           allowed_updates=["channel_post", "callback_query", "message"])
             for u in ups:
                 try:
                     r = hub.handle(bot, db, c, env, u)
+                    if r == "ur":
+                        next_tick = 0.0                      # 🆘 — публикуем сразу, не ждём минуту
                     msg = u.get("message") or {}
                     if r and r.startswith("cmd:"):
                         ans = menu.reply(db, c, msg.get("text", ""))
@@ -84,11 +86,29 @@ async def run() -> None:
         except Exception as e:  # noqa: BLE001
             print(f"getUpdates: {e}", flush=True)
             await asyncio.sleep(10)
+        try:
+            hub.flush_albums(bot, db, c, env)
+        except Exception as e:  # noqa: BLE001
+            print(f"albums: {e}", flush=True)
         if time.time() >= next_tick:
             try:
                 if not acc.is_connected():
                     await acc.connect()
-                await service.tick(db, c, env, pubs, log=lambda s: print(s, flush=True))
+                res = await service.tick(db, c, env, pubs, log=lambda s: print(s, flush=True))
+                owners = [int(o) for o in str(env.get("OWNER_IDS", "")).split(",") if o.strip()]
+                for mid in res["ids"]:                       # карточка у владельца: «опубликовано»
+                    m = store.get(db, mid)
+                    if m and m["owner_msg"]:
+                        t, kb = hub.card(db, c, mid)
+                        for o in owners:
+                            try:
+                                bot("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t, reply_markup=kb)
+                            except Exception:  # noqa: BLE001 — карточка могла быть в другом чате
+                                pass
+                while service.ERRORS:
+                    err = service.ERRORS.pop(0)
+                    for o in owners:
+                        bot("sendMessage", chat_id=o, text=err)
             except Exception as e:  # noqa: BLE001
                 print(f"tick: {type(e).__name__}: {e}", flush=True)
             next_tick = time.time() + 60
