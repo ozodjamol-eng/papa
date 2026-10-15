@@ -41,3 +41,7 @@
 
 - Смена всех паролей и токенов (Google, DigitalOcean, GitHub, Telegram, токен агента London).
 - Перевод 2FA Instagram/YouTube с SMS на приложение-аутентификатор.
+
+## 2026-10-15 18:07 — КАТТА ДАВРА в работе
+- Франкфурт переименован: hostname `papa-frankfurt` (метка DO `papa-frankfurt`); papa-update понимает оба имени. Лондон — имя `xojaobodcity24bot` оставлено (GENPLAN 5).
+- GENPLAN PAPA: КАТТА ДАВРА — 🟢 работа (посты в @kattadavrauz), Хўжаобод и PaparazziUZ — 🧪 тест. Владелец бросает посты прямо в бот; PAPA HUB — склад. Постоянная панель владельца (сворачивается).
