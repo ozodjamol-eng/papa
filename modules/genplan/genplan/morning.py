@@ -844,28 +844,36 @@ def callback(bot, db, cq: dict) -> str:
         return "done"
     at = dt.datetime.fromisoformat(r["at"])
 
-    def mark(state):
+
+    def mark(state, msg):
+        """Кнопки под предпросмотром меняются; если Telegram не дал изменить — отдельное сообщение-подтверждение."""
         try:
             bot("editMessageReplyMarkup", chat_id=chat, message_id=mid, reply_markup=buttons(int(rid), state))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            print(f"morning: кнопки не изменились ({e})", flush=True)
+            try:
+                bot("sendMessage", chat_id=chat, text=msg, reply_to_message_id=mid)
+            except Exception:  # noqa: BLE001
+                pass
     if act == "n":
         bot("answerCallbackQuery", callback_query_id=cq["id"],
             text="Уже одобрено ✅" if r["approved"] else "Не будет опубликован 🗑")
         return "mo:n"
     if act == "a":
         update(db, r["id"], approved=1, status="pending")
-        mark("approved")
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text=f"✅ Одобрено — выйдет в {at:%H:%M}")
+        mark("approved", f"✅ Одобрено — выйдет {at:%d.%m в %H:%M}")
+        bot("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True,
+            text=f"✅ ОДОБРЕНО\nВыйдет {at:%d.%m в %H:%M}. Повторно нажимать не нужно.")
         return "mo:a"
     if act == "x":
         update(db, r["id"], status="cancelled", approved=0)
-        mark("cancelled")
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text="🗑 Не будет опубликован. «↩️ Вернуть» — передумали")
+        mark("cancelled", "🗑 Не будет опубликован")
+        bot("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True,
+            text="🗑 НЕ БУДЕТ ОПУБЛИКОВАН\nПередумали — «↩️ Вернуть».")
         return "mo:x"
     if act == "u":
         update(db, r["id"], status="pending", approved=0)
-        mark("new")
+        mark("new", "↩️ Вернул — нажмите ✅, чтобы вышел")
         bot("answerCallbackQuery", callback_query_id=cq["id"], text="↩️ Вернул — нажмите ✅, чтобы вышел")
         return "mo:u"
     # «🔄 Заменить» со старых предпросмотров — новый вариант поста
