@@ -30,7 +30,7 @@ from pathlib import Path
 
 from . import plan
 
-DEFAULTS = {"day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
+DEFAULTS = {"approval": True, "day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
             "tag": "#Хайрли_тонг", "live": False, "max_seconds": 20}
 KEYS = ("day", "greeting")
 TITLE = {"day": "Бугун — … куни", "greeting": "Хайрли тонг"}
@@ -66,8 +66,11 @@ CREATE TABLE IF NOT EXISTS stock_used (source TEXT NOT NULL, item_id TEXT NOT NU
 
 def setup(db) -> None:
     db.executescript(SCHEMA)
-    if "source" not in {r[1] for r in db.execute("PRAGMA table_info(fixed_posts)")}:
+    fp = {r[1] for r in db.execute("PRAGMA table_info(fixed_posts)")}
+    if "source" not in fp:
         db.execute("ALTER TABLE fixed_posts ADD COLUMN source TEXT")        # откуда видео: pool:<key> / pixabay:<id>
+    if "approved" not in fp:
+        db.execute("ALTER TABLE fixed_posts ADD COLUMN approved INTEGER NOT NULL DEFAULT 0")   # ✅ владелец одобрил
     have = {r[1] for r in db.execute("PRAGMA table_info(morning_pool)")}
     for col in ("text TEXT", "pool_chat INTEGER", "msg_id INTEGER"):     # подпись источника; пост в NEXUS MORNING POOL
         if col.split()[0] not in have:
@@ -139,18 +142,40 @@ def update(db, rid: int, **kw) -> None:
     db.commit()
 
 
-def due(db, channel: str, now: dt.datetime, grace: int = 15) -> tuple[list, list]:
-    """(готовые к публикации, пропущенные сейчас). Не готовый к сроку пост ждёт grace минут, потом пропуск."""
+def due(db, channel: str, now: dt.datetime, grace: int = 15, approval: bool = False) -> tuple[list, list]:
+    """(готовые к публикации, пропущенные сейчас). Не готовый к сроку пост ждёт grace минут, потом пропуск.
+    approval=True — выходит только то, что владелец одобрил кнопкой ✅ (решение владельца 15.10)."""
     ready, missed = [], []
     for r in db.execute("SELECT * FROM fixed_posts WHERE channel=? AND status='pending' AND at<=? ORDER BY at",
                         (channel, now.isoformat())).fetchall():
         late = now - dt.datetime.fromisoformat(r["at"]) > dt.timedelta(minutes=grace)
+        ok = r["prepared"] and (r["approved"] or not approval)
         if late:
-            update(db, r["id"], status="skipped", error="не успели подготовить" if not r["prepared"] else "опоздание")
-            missed.append(r)
-        elif r["prepared"]:
+            why = "не успели подготовить" if not r["prepared"] else ("не одобрен" if not ok else "опоздание")
+            update(db, r["id"], status="skipped", error=why)
+            missed.append(get(db, r["id"]))
+        elif ok:
             ready.append(r)
     return ready, missed
+
+
+def approval_reminder(db, cfg: dict, now: dt.datetime, at: str = "22:00") -> str | None:
+    """Вечером, раз в день: на утро есть готовые, но не одобренные посты — напомнить владельцу."""
+    from . import store
+    if now.time() < plan.slot_time(now.date(), at).time():
+        return None
+    k = f"morning_approve_remind_{now.date().isoformat()}"
+    if store.kv_get(db, k):
+        return None
+    tomorrow = (now.date() + dt.timedelta(days=1)).isoformat()
+    rows = db.execute("SELECT channel, key FROM fixed_posts WHERE day=? AND status='pending' AND prepared=1 AND approved=0",
+                      (tomorrow,)).fetchall()
+    rows = [r for r in rows if r["channel"] in cfg["channels"] and (opts(cfg["channels"][r["channel"]]) or {}).get("approval")]
+    if not rows:
+        return None
+    store.kv_set(db, k, "1")
+    return (f"🌅 На утро не одобрено постов: {len(rows)}. Без ✅ они не выйдут.\n"
+            "Нажмите «✅ Одобряю» под предпросмотрами (или /morning — прислать их ещё раз).")
 
 
 def target(cfg: dict, env: dict, channel: str):
@@ -733,8 +758,7 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
     from . import smart
     where = "в канал" if str(target(cfg, env, r["channel"])).startswith("@") else "в тестовый чат"
     head = f"👁 {ch['title']} · {TITLE[r['key']]} · {smart.fmt(at, dt.datetime.now(plan.TZ))} ({where})" + (f"\n{note}" if note else "")
-    kb = {"inline_keyboard": [[{"text": "🔄 Заменить", "callback_data": f"mo:r:{rid}"},
-                               {"text": "🗑 Не публиковать", "callback_data": f"mo:x:{rid}"}]]}
+    kb = {"inline_keyboard": [[{"text": "✅ Одобряю", "callback_data": f"mo:a:{rid}"}]]}
     owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
     for o in owners:
         if r["hub_msg"]:
@@ -793,11 +817,25 @@ def callback(bot, db, cq: dict) -> str:
     if r["status"] == "done":
         bot("answerCallbackQuery", callback_query_id=cq["id"], text="Уже опубликован")
         return "done"
+    if act == "n":
+        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Уже одобрено ✅")
+        return "mo:n"
+    if act == "a":
+        update(db, r["id"], approved=1)
+        try:
+            bot("editMessageReplyMarkup", chat_id=chat, message_id=mid,
+                reply_markup={"inline_keyboard": [[{"text": "✅ Одобрено", "callback_data": f"mo:n:{rid}"}]]})
+        except Exception:  # noqa: BLE001
+            pass
+        at = dt.datetime.fromisoformat(r["at"])
+        bot("answerCallbackQuery", callback_query_id=cq["id"], text=f"✅ Одобрено — выйдет в {at:%H:%M}")
+        return "mo:a"
     if act == "x":
         update(db, r["id"], status="cancelled")
         note = "🗑 Не будет опубликован. «🔄 Заменить» — вернуть с новым вариантом."
     else:
-        update(db, r["id"], status="pending", prepared=0, redo=1, tries=0, next_try=None, hub_msg=None, preview_sent=0)
+        update(db, r["id"], status="pending", prepared=0, redo=1, tries=0, next_try=None, hub_msg=None, preview_sent=0,
+               approved=0)
         note = "🔄 Готовлю новый вариант — пришлю через 1–2 минуты."
     try:
         bot("editMessageReplyMarkup", chat_id=chat, message_id=mid,
@@ -819,7 +857,8 @@ def overview(db, cfg: dict, now: dt.datetime) -> str:
         lines.append(f"\n📅 {d:%d.%m} · {WEEKDAY[d.weekday()]}")
         for r in rows:
             ch = cfg["channels"].get(r["channel"], {"title": r["channel"]})
-            ready = "" if r["status"] != "pending" else (" — готов" if r["prepared"] else " — готовится")
+            ready = "" if r["status"] != "pending" else (
+                (" — ✅ одобрен" if r["approved"] else " — ждёт ✅") if r["prepared"] else " — готовится")
             lines.append(f"{icon.get(r['status'], '•')} {dt.datetime.fromisoformat(r['at']):%H:%M} {ch['title']}: "
                          f"{TITLE[r['key']]}{ready}" + (f" ({r['error']})" if r["error"] and r["status"] != "done" else ""))
     db.execute("UPDATE fixed_posts SET preview_sent=0 WHERE status='pending' AND prepared=1 AND day>=?", (now.date().isoformat(),))

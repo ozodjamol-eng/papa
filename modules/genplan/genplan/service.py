@@ -157,17 +157,19 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
     """Утренний блок: «Бугун — … куни» и «Хайрли тонг» в точное время (готовит Fabrika заранее)."""
     from . import morning
     n = 0
+    rem = morning.approval_reminder(db, cfg, now)
+    if rem:
+        ERRORS.append(rem)
     for channel, ch in cfg["channels"].items():
         o = morning.opts(ch)
         if not o:
             continue
         for d in (now.date(), now.date() + dt.timedelta(days=1)):
             morning.ensure_day(db, cfg, channel, d, now)
-        ready, missed = morning.due(db, channel, now, o["grace"])
+        ready, missed = morning.due(db, channel, now, o["grace"], approval=bool(o.get("approval")))
         for r in missed:
-            if not r["prepared"]:
-                ERRORS.append(f"⚠️ {ch['title']}: {morning.TITLE[r['key']]} не вышел — не успели подготовить"
-                              + (f" ({r['error']})" if r["error"] else ""))
+            if r["error"] in ("не успели подготовить", "не одобрен"):
+                ERRORS.append(f"⚠️ {ch['title']}: {morning.TITLE[r['key']]} не вышел — {r['error']}")
         for r in ready:
             p = pubs[ch["publisher"]]
             to = morning.target(cfg, env, channel)

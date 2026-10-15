@@ -155,7 +155,12 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(len(uploads), 3)                          # по видео на каждый канал
         previews = [c for c in bot.calls if c[0] in ("copyMessage", "sendMessage")]
         self.assertEqual(len(previews), 6)
-        self.assertIn("mo:r:", str(previews[0][1]["reply_markup"]))
+        self.assertIn("mo:a:", str(previews[0][1]["reply_markup"]))   # одна кнопка «✅ Одобряю»
+        # без ✅ не выходит: Хўжаобод не одобряем — пропуск с напоминанием
+        for r in self.db.execute("SELECT id, channel FROM fixed_posts WHERE day=?", (FRI.isoformat(),)).fetchall():
+            if r["channel"] != "xojaobod":
+                hub.callback(Bot(), self.db, CFG, {42}, {"id": "1", "from": {"id": 42}, "data": f"mo:a:{r['id']}",
+                                                       "message": {"chat": {"id": 42}, "message_id": 5}})
         vids = {r["source"] for r in self.db.execute("SELECT source FROM fixed_posts WHERE key='greeting' AND day=?", (FRI.isoformat(),))}
         self.assertEqual(len(vids), 3)                             # разные видео в разных каналах
         # утро: публикация
@@ -169,8 +174,10 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(len(greet), 2)
         self.assertTrue(all(s[1].startswith("#Хайрли_тонг") for s in greet))
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:35", FRI), log=lambda s: None))
-        self.assertEqual([c for c, _, _ in acc.sent], [-100111, -100111])   # Хўжаобод — в тестовую группу
-        self.assertFalse(service.ERRORS)
+        self.assertEqual(acc.sent, [])                                       # Хўжаобод не одобрен — не вышел
+        asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:55", FRI), log=lambda s: None))
+        self.assertTrue(any("не одобрен" in e for e in service.ERRORS))
+        self.assertEqual(self.rows("xojaobod")["greeting"]["error"], "не одобрен")
 
     def make_pool(self, tmp):
         root = Path(tmp) / "pool"
@@ -281,6 +288,14 @@ class TestMorning(unittest.TestCase):
         hub.callback(bot, self.db, CFG, {42}, {**cq, "data": f"mo:r:{rid}"})
         r = morning.get(self.db, rid)
         self.assertEqual((r["status"], r["prepared"], r["redo"]), ("pending", 0, 1))
+
+    def test_evening_approval_reminder(self):
+        morning.ensure_all(self.db, CFG, at("22:40"))
+        self.db.execute("UPDATE fixed_posts SET prepared=1"); self.db.commit()
+        self.assertIsNone(morning.approval_reminder(self.db, CFG, at("21:00")))
+        t = morning.approval_reminder(self.db, CFG, at("22:05"))
+        self.assertIn("не одобрено постов: 6", t)
+        self.assertIsNone(morning.approval_reminder(self.db, CFG, at("22:30")))     # раз в день
 
     def test_overview(self):
         morning.ensure_all(self.db, CFG, at("22:40"))
