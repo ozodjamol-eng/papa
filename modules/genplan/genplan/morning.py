@@ -779,6 +779,11 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
     ensure_all(db, cfg, now)
     if pool_import(db):
         pass
+    pend = db.execute("SELECT id FROM fixed_posts WHERE status='pending' AND prepared=1 AND preview_sent=0").fetchall()
+    for p in pend:                                            # готовые предпросмотры — владельцу сразу, до проверок пула
+        preview(bot, db, cfg, env, p["id"])
+    if pend:
+        return True
     tomorrow = now.date() + dt.timedelta(days=1) if now.hour >= 12 else now.date()
     if any(opts(c) for c in cfg["channels"].values()) and pool_check_one(
             db, tomorrow, allow_foreign=bool(cfg.get("morning_allow_foreign")),
