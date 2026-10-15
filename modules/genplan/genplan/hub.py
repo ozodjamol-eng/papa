@@ -331,6 +331,9 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     if int(cq["from"]["id"]) not in owners:
         bot("answerCallbackQuery", callback_query_id=cq["id"], text="Нет доступа")
         return "denied"
+    if cq["data"].startswith("mo:"):                      # предпросмотр утреннего блока
+        from . import morning
+        return morning.callback(bot, db, cq)
     chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
     kind, mid_s, *arg = cq["data"].split(":")
     mid = int(mid_s)

@@ -42,7 +42,9 @@ def allowed(ch: dict, t: dt.datetime, rubric: str | None) -> bool:
 def occupied(db, channel: str, now: dt.datetime, exclude: int | None = None) -> list[dt.datetime]:
     from . import namaz
     out = [dt.datetime.fromisoformat(m["scheduled_at"]) for m in store.scheduled(db, channel) if m["id"] != exclude]
-    return out + store.pulse_since(db, channel, now - dt.timedelta(hours=3)) + namaz.busy(db, channel, now - dt.timedelta(hours=3))
+    from . import morning
+    since = now - dt.timedelta(hours=3)
+    return out + store.pulse_since(db, channel, since) + namaz.busy(db, channel, since) + morning.busy(db, channel, since)
 
 
 def blocked(db, channel: str, t: dt.datetime) -> bool:
@@ -197,6 +199,8 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {s['rubric']} — нет материала"))
     from . import namaz
     items += namaz.today_lines(db, channel, day)
+    from . import morning
+    items += morning.today_lines(db, channel, day)
     items.sort(key=lambda x: x[0])
     later = len(sched) - len(today)
     st = store.stock(db, channel)

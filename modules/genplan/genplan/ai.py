@@ -85,9 +85,15 @@ def rewrite(db, text: str, title: str, http=None) -> str:
         raise AIError("нет ключа ИИ")
     if not (text or "").strip():
         raise AIError("нет исходного текста — напишите текст кнопкой ✏️")
+    return generate(db, SYSTEM.format(title=title), f"Манба матни:\n\n{text[:4000]}", http)
+
+
+def generate(db, system: str, user: str, http=None) -> str:
+    """Общий вызов: Gemini → (если не вышло) Claude. Для рерайта и утреннего блока."""
+    if not available():
+        raise AIError("нет ключа ИИ")
     if _count(db) > LIMIT:
         raise AIError(f"дневной лимит ИИ ({LIMIT}) исчерпан")
-    system, user = SYSTEM.format(title=title), f"Манба матни:\n\n{text[:4000]}"
     providers = [(n, f) for n, f, k in (("Gemini", _gemini, "GEMINI_API_KEY"), ("Claude", _claude, "ANTHROPIC_API_KEY"))
                  if os.environ.get(k)]
     out, errs = "", []

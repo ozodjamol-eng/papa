@@ -94,6 +94,7 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
     out = {"published": 0, "failed": 0, "moved": 0, "ids": [], "errors": []}
     reconcile(db, cfg, now)
     out["namaz"] = await tick_namaz(db, cfg, env, pubs, now, log)
+    out["morning"] = await tick_morning(db, cfg, env, pubs, now, log)
     for channel in cfg["channels"]:
         out["ids"] += smart.fill_from_stock(db, cfg, channel, now)        # 📦 запас → в пустые слоты
         due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
@@ -149,6 +150,40 @@ async def tick_namaz(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log
             except PublishError as e:
                 namaz.mark(db, channel, r["day"], r["key"], "failed", error=str(e))
                 ERRORS.append(f"❌ {ch['title']}: намоз ({r['key']}) не вышел — {e}")
+    return n
+
+
+async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log=print) -> int:
+    """Утренний блок: «Бугун — … куни» и «Хайрли тонг» в точное время (готовит Fabrika заранее)."""
+    from . import morning
+    n = 0
+    for channel, ch in cfg["channels"].items():
+        o = morning.opts(ch)
+        if not o:
+            continue
+        for d in (now.date(), now.date() + dt.timedelta(days=1)):
+            morning.ensure_day(db, cfg, channel, d, now)
+        ready, missed = morning.due(db, channel, now, o["grace"])
+        for r in missed:
+            if not r["prepared"]:
+                ERRORS.append(f"⚠️ {ch['title']}: {morning.TITLE[r['key']]} не вышел — не успели подготовить"
+                              + (f" ({r['error']})" if r["error"] else ""))
+        for r in ready:
+            p = pubs[ch["publisher"]]
+            to = morning.target(cfg, env, channel)
+            hub_chat = int(env["HUB_CHAT_ID"]) if r["hub_msg"] else None
+            try:
+                if ch["publisher"] == "account":
+                    mid = await p.publish(to, r["text"], hub_chat, r["hub_msg"], bool(r["hub_msg"]))
+                else:
+                    mid = p.publish(to, r["text"], hub_chat, r["hub_msg"], bool(r["hub_msg"]), button=share_button(ch))
+                morning.update(db, r["id"], status="done", message_id=mid)
+                store.pulse_add(db, channel, now, "morning")
+                log(f"{channel} утро {r['key']}: опубликовано")
+                n += 1
+            except PublishError as e:
+                morning.update(db, r["id"], status="failed", error=str(e)[:300])
+                ERRORS.append(f"❌ {ch['title']}: {morning.TITLE[r['key']]} не вышел — {e}")
     return n
 
 

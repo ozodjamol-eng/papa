@@ -73,6 +73,8 @@ def connect(path: str) -> sqlite3.Connection:
     db.execute("CREATE INDEX IF NOT EXISTS idx_mat_time ON materials(channel, status, scheduled_at)")
     from . import namaz
     namaz.setup(db)
+    from . import morning
+    morning.setup(db)
     db.execute("CREATE INDEX IF NOT EXISTS idx_mat_fp ON materials(fp)")
     db.commit()
     return db

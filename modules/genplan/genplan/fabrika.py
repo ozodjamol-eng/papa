@@ -133,6 +133,17 @@ def run_once(bot, db, cfg: dict, env: dict) -> bool:
 def loop(bot, db, cfg_fn, env: dict) -> None:
     (STATE / "work").mkdir(parents=True, exist_ok=True)
     print("FABRIKA запущена", flush=True)
+    from . import morning
+    idle = 0.0
     while True:
-        if not run_once(bot, db, cfg_fn(), env):
-            time.sleep(3)
+        c = cfg_fn()
+        if run_once(bot, db, c, env):
+            continue
+        if time.time() >= idle:                       # свободна — готовим утренний блок
+            try:
+                if morning.prepare_next(bot, db, c, env):
+                    continue
+            except Exception as e:  # noqa: BLE001
+                print(f"morning: {type(e).__name__}: {e}", flush=True)
+            idle = time.time() + 30
+        time.sleep(3)
