@@ -100,6 +100,8 @@ async def main():
                 print(f"@{chat}: описание обновлено")
             except Exception as e:  # noqa: BLE001
                 print(f"@{chat}: описание — {type(e).__name__}")
+            if os.environ.get("PAPA_NEW_LINKS") != "1":
+                continue  # ссылки уже созданы; новые — только PAPA_NEW_LINKS=1
             r = api(token, "createChatInviteLink", chat_id=f"@{chat}", name="panel", creates_join_request=True)
             if r.get("ok"):
                 links[chat] = r["result"]["invite_link"]
