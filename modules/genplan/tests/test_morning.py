@@ -123,8 +123,9 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(morning.season(dt.date(2026, 11, 30)), "autumn")
         self.assertEqual(morning.season(dt.date(2026, 12, 1)), "winter")
         cap = morning.greeting_caption(CFG["channels"]["davra"], morning.opts(CFG["channels"]["davra"]), FRI)
-        self.assertTrue(cap.startswith("#Хайрли_тонг\n🍂☀️ ХАЙРЛИ ТОНГ!"))
-        self.assertIn("Жума тонги муборак", cap)
+        self.assertTrue(cap.startswith("#Хайрли_тонг\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
+        self.assertGreater(len(cap), 350)                          # не сухо: несколько тёплых абзацев
+        self.assertIn("🤲", cap)
         self.assertTrue(cap.endswith("🎉 @kattadavrauz"))
 
     def test_prepare_waits_until_evening(self):
@@ -155,7 +156,7 @@ class TestMorning(unittest.TestCase):
         previews = [c for c in bot.calls if c[0] in ("copyMessage", "sendMessage")]
         self.assertEqual(len(previews), 6)
         self.assertIn("mo:r:", str(previews[0][1]["reply_markup"]))
-        vids = {r["video_id"] for r in self.db.execute("SELECT video_id FROM fixed_posts WHERE key='greeting' AND day=?", (FRI.isoformat(),))}
+        vids = {r["source"] for r in self.db.execute("SELECT source FROM fixed_posts WHERE key='greeting' AND day=?", (FRI.isoformat(),))}
         self.assertEqual(len(vids), 3)                             # разные видео в разных каналах
         # утро: публикация
         pb, acc = Pub(), Acc()
@@ -170,6 +171,58 @@ class TestMorning(unittest.TestCase):
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:35", FRI), log=lambda s: None))
         self.assertEqual([c for c, _, _ in acc.sent], [-100111, -100111])   # Хўжаобод — в тестовую группу
         self.assertFalse(service.ERRORS)
+
+    def make_pool(self, tmp):
+        root = Path(tmp) / "pool"
+        root.mkdir()
+        for k in ("a", "b", "c"):
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=green:s=720x1280:d=6",
+                            "-f", "lavfi", "-i", "sine=frequency=440:duration=6", "-shortest",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(root / f"{k}.mp4")], check=True)
+        rows = [{"key": "a", "file": "a.mp4", "channel": "Катта канал", "views": 900, "duration": 6, "date": "2026-10-09", "weekday": "Жума"},
+                {"key": "b", "file": "b.mp4", "channel": "Катта канал", "views": 800, "duration": 6, "date": "2026-10-09", "weekday": "Жума"},
+                {"key": "c", "file": "c.mp4", "channel": "Бошқа", "views": 700, "duration": 6, "date": "2026-10-10", "weekday": None}]
+        (root / "index.jsonl").write_text("\n".join(__import__("json").dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+        (root / "examples.json").write_text('[{"weekday": "Жума", "views": 5, "text": "🕌 ЖУМА ТОНГИ МУБОРАК! @begona #juma t.me/x"}]', encoding="utf-8")
+        return root
+
+    def test_pool_check_pick_and_prepare(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"PAPA_GENPLAN_STATE": tmp, "GEMINI_API_KEY": "x"}):
+            root = self.make_pool(tmp)
+            self.assertEqual(morning.pool_import(self.db), 3)
+            self.assertEqual(morning.pool_import(self.db), 0)
+            answers = iter([{"date": True, "foreign": False, "people": False, "weekday": None, "season": "autumn", "quality": 5},
+                            {"date": False, "foreign": False, "people": False, "weekday": "Жума", "season": "autumn", "quality": 4},
+                            {"date": False, "foreign": True, "people": False, "weekday": None, "season": "neutral", "quality": 4}])
+            with mock.patch.object(ai, "vision", side_effect=lambda *a, **k: next(answers)):
+                self.assertTrue(morning.pool_check_one(self.db, FRI))
+                self.assertTrue(morning.pool_check_one(self.db, FRI))
+                self.assertTrue(morning.pool_check_one(self.db, FRI))
+                self.assertFalse(morning.pool_check_one(self.db, FRI))
+            st = {r["key"]: (r["status"], r["reason"]) for r in self.db.execute("SELECT * FROM morning_pool")}
+            self.assertEqual(st["a"], ("rejected", "дата на видео"))
+            self.assertEqual(st["b"], ("ok", None))
+            self.assertEqual(st["c"][0], "rejected")                # чужой логотип — по умолчанию не берём
+            self.assertFalse((root / "a.mp4").exists())              # отбракованное удаляется
+            self.assertIn("ЖУМА ТОНГИ", morning.examples("Жума")[0])
+            self.assertNotIn("@begona", morning.examples("Жума")[0])
+            # подготовка: ИИ пишет текст, видео — из пула (с музыкой), с нашим @
+            seen = []
+            gen = lambda db, s, u, http=None: seen.append(u) or "🕌 ЖУМА ТОНГИ МУБОРАК!\n\n☀️ Ассалому алайкум!"
+            uploads = []
+
+            def upload(token, chat, path, caption):
+                uploads.append((path.stat().st_size, caption)); return {"message_id": 900}
+            morning.ensure_all(self.db, CFG, at("22:40"))
+            with mock.patch.object(ai, "generate", side_effect=gen):
+                r = self.rows("davra")["greeting"]
+                note = morning.prepare_one(Bot(), self.db, CFG, ENV, r, at("22:40"), Path(tmp) / "w", upload=upload)
+            self.assertIn("Готовое видео (Жума)", note)
+            self.assertIn("ЖУМА ТОНГИ МУБОРАК", seen[0])             # образец больших каналов передан ИИ
+            self.assertTrue(uploads[0][1].startswith("#Хайрли_тонг\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
+            self.assertTrue(uploads[0][1].endswith("🎉 @kattadavrauz"))
+            self.assertEqual(self.rows("davra")["greeting"]["source"], "pool:b")
+            self.assertIsNone(morning.pool_pick(self.db, FRI))      # одно видео не повторяется
 
     def test_not_prepared_is_skipped_and_reported(self):
         morning.ensure_all(self.db, CFG, at("22:40"))

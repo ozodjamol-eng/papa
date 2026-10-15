@@ -20,8 +20,10 @@ import datetime as dt
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
+import time
 import urllib.parse
 from pathlib import Path
 
@@ -48,6 +50,14 @@ CREATE TABLE IF NOT EXISTS fixed_posts (
     message_id INTEGER, error TEXT,
     UNIQUE (channel, day, key)
 );
+CREATE TABLE IF NOT EXISTS morning_pool (
+    key TEXT PRIMARY KEY,                            -- <канал>_<сообщение> из охоты Разведки
+    file TEXT NOT NULL, channel TEXT, views INTEGER, duration REAL, posted TEXT,
+    weekday TEXT,                                    -- день недели (с видео важнее, чем из подписи); NULL — общий
+    season TEXT, quality INTEGER,
+    status TEXT NOT NULL DEFAULT 'new',              -- new / ok / rejected
+    reason TEXT, checked_at TEXT
+);
 CREATE TABLE IF NOT EXISTS stock_used (source TEXT NOT NULL, item_id TEXT NOT NULL, used_at TEXT NOT NULL,
                                        PRIMARY KEY (source, item_id));
 """
@@ -55,6 +65,8 @@ CREATE TABLE IF NOT EXISTS stock_used (source TEXT NOT NULL, item_id TEXT NOT NU
 
 def setup(db) -> None:
     db.executescript(SCHEMA)
+    if "source" not in {r[1] for r in db.execute("PRAGMA table_info(fixed_posts)")}:
+        db.execute("ALTER TABLE fixed_posts ADD COLUMN source TEXT")        # откуда видео: pool:<key> / pixabay:<id>
 
 
 def opts(ch: dict) -> dict | None:
@@ -157,8 +169,9 @@ DAY_SYSTEM = """Сен — «{title}» Telegram-каналининг муҳар�
 Тузилма:
 1) Биринчи қатор: «📅 БУГУН — <КУН НОМИ БОШ ҲАРФЛАР БИЛАН>!»
 2) 2 та қисқа хатбоши (ҳар бири мос эмодзи билан, 1–2 гап): кун нима ҳақида ва бизга қандай алоқаси бор.
-3) Охирида — битта самимий тилак ёки ўйлантирувчи савол, эмодзи билан.
-Хатбошилар орасида бўш қатор. Жами 450 белгидан ошмасин. Фақат тайёр матнни қайтар."""
+3) Битта самимий тилак ёки ўйлантирувчи савол, эмодзи билан.
+4) Охирги қатор — реакция қолдириш ёки дўстларга улашишга чақириқ.
+Самимий ва илиқ ёз, қуруқ расмий тил эмас. Хатбошилар орасида бўш қатор. 400–700 белги. Фақат тайёр матнни қайтар."""
 
 CREATIVE_SYSTEM = """Сен — «{title}» Telegram-каналининг муҳарририсан. Бугун расмий нишонланадиган кун йўқ,
 шунинг учун эрталаб ўқувчиларга «бугунни ўзимиз бир ёқимли кунга айлантирайлик» деган таклиф ёзасан.
@@ -172,7 +185,7 @@ CREATIVE_SYSTEM = """Сен — «{title}» Telegram-каналининг муҳ
 1) Биринчи қатор: «✨ БУГУННИ «<НОМ>» КУНИГА АЙЛАНТИРАЙЛИК!» (НОМ — 2–4 сўз, бош ҳарфлар билан).
 2) 2 та қисқа хатбоши эмодзи билан: бугун нима қилишни таклиф қиламиз (аниқ, оддий иш).
 3) Охирги қатор — реакция ёки дўстларга улашишга чақириқ. Изоҳ ёзишни сўрама.
-Хатбошилар орасида бўш қатор. Жами 450 белгидан ошмасин. Фақат тайёр матнни қайтар."""
+Самимий ва илиқ ёз. Хатбошилар орасида бўш қатор. 400–700 белги. Фақат тайёр матнни қайтар."""
 
 CREATIVE_FALLBACK = [
     ("ЯХШИ СЎЗ", "💬 Бугун камида уч кишига илиқ, самимий сўз айтайлик.", "🌷 Яхши сўз — энг арзон, лекин энг қимматли совға."),
@@ -260,15 +273,221 @@ WISHES = {
 }
 
 
-def greeting_caption(ch: dict, o: dict, day: dt.date) -> str:
-    s = season(day)
+SEASON_UZ = {"autumn": "куз (олтин хазон, салқин тонг)", "winter": "қиш (қор, совуқ, иссиқ чой)",
+             "spring": "баҳор (гуллар, янгиланиш)", "summer": "ёз (қуёш, салқин тонг)"}
+
+GREET_SYSTEM = """Сен — «{title}» Telegram-каналининг муҳарририсан. Эрталабки «Хайрли тонг» видеоси остига матн ёзасан.
+Қоидалар:
+- Фақат ўзбек тилида, КИРИЛЛ алифбосида.
+- Самимий, илиқ, юракдан — қуруқ шаблон гаплар эмас. Ҳар куни бошқача ёз.
+- Хэштег, @юзернейм, ҳавола, имзо, сана ва рақам ҚЎЙМА — уларни тизим ўзи қўшади.
+Тузилма:
+1) Биринчи қатор: 1–2 мос эмодзи + БОШ ҲАРФЛАР билан сарлавҳа ({wd_up} ТОНГИ ёки ХАЙРЛИ ТОНГ мавзусида).
+2) 3–4 қисқа хатбоши, ҳар бири мос эмодзи билан, 1–2 гапдан:
+   — салом ва тонг табриги;
+   — фаслга мос илиқ манзара: {season};
+   — оила, яқинлар, саломатлик, ризқ-рўз учун самимий тилак ва дуо{juma}.
+3) Битта самимий савол-қатор (ўқувчини ўйлантирадиган), эмодзи билан.
+4) Охирги қатор — реакция қолдириш ёки дўстларга улашишга чақириқ. Изоҳ ёзишни сўрама.
+Хатбошилар орасида бўш қатор. 450–750 белги. Фақат тайёр матнни қайтар.
+
+Услуб намунаси (бошқа мавзуда):
+🌧🤍 ЁМҒИРЛИ КУНЛАРНИНГ ЎЗГАЧА ГАШТИ БОР!
+
+🚪 Эшик ортидаги манзарага бир қаранг… Худди жаннатнинг бир гўшасидек! 😍
+
+☕ Ёмғирнинг майин шовқини, шинам муҳит ва қалбга ором берадиган сокинлик… 🌿
+
+❤️ Сиз ҳам шундай жойда бир пиёла чой ичиб ўтиришни истармидингиз?
+
+👍 Ёққан бўлса, реакция қолдиринг!"""
+
+JUMA_NOTE = " (бугун Жума: «Жума муборак», дуолар ижобати, барака ва раҳмат ҳақида самимий сўзлар)"
+
+GREET_FALLBACK = {
+    "Жума": ("🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!",
+             "☀️ Ассалому алайкум, азизлар! Ҳафтанинг энг табаррук кунига эсон-омон етказганига шукр!",
+             "🍂 Салқин куз тонги, тиниқ ҳаво ва қалбларга ором берувчи сокинлик… Бу кун ҳаммамизга хайр-барака олиб келсин.",
+             "🤲 Аллоҳ дуоларимизни ижобат қилсин, хонадонларимизга тинчлик, яқинларимизга саломатлик, дастурхонимизга барака берсин!",
+             "❤️ Бугун кимнинг ҳақига дуо қиласиз?"),
+    "default": ("🌅☀️ ХАЙРЛИ ТОНГ, АЗИЗЛАР!",
+                "☀️ Ассалому алайкум! {wd} тонги муборак бўлсин! Янги кун — янги имконият, янги умид.",
+                "🍂 Салқин тонг ҳавоси, бир пиёла иссиқ чой ва яқинларингизнинг табассуми — бахт деганлари шу эмасми?",
+                "🤲 Бугунги кунингиз хайрли, ишларингиз баракали, хонадонингиз тинч ва хотиржам бўлсин!",
+                "❤️ Сиз бугунги кунни нимадан бошладингиз?"),
+}
+
+
+def _clean_example(t: str) -> str:
+    t = re.sub(r"(https?://\S+|t\.me/\S+|@\w+|#\w+)", "", t or "")
+    return "\n".join(ln.rstrip() for ln in t.splitlines() if ln.strip())[:700]
+
+
+def examples(weekday: str, root: Path | None = None, n: int = 3) -> list[str]:
+    """Лучшие утренние подписи больших каналов (из охоты Разведки) — только как ориентир тона и длины."""
+    f = (root or pool_dir()) / "examples.json"
+    try:
+        ex = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    same = [e for e in ex if e.get("weekday") == weekday] + [e for e in ex if not e.get("weekday")]
+    return [_clean_example(e["text"]) for e in same[:n] if e.get("text")]
+
+
+def greeting_body(db, ch: dict, day: dt.date, fresh: bool = False, http=None, root: Path | None = None) -> tuple[str, str]:
+    from . import ai
     wd = WEEKDAY[day.weekday()]
-    wish = "Жума куни барчамизга барака, хотиржамлик ва шодлик олиб келсин! 🤲" if day.weekday() == 4 else \
-        WISHES[s][day.toordinal() % len(WISHES[s])]
-    lines = [o["tag"]] if o.get("tag") else []
-    lines += [f"{SEASON_EMOJI[s]}☀️ ХАЙРЛИ ТОНГ!", "", f"Ассалому алайкум, азизлар! {wd} тонги муборак бўлсин! 🌿", wish]
+    s = season(day)
+    system = GREET_SYSTEM.format(title=ch["title"], wd_up=wd.upper(), season=SEASON_UZ[s],
+                                 juma=JUMA_NOTE if day.weekday() == 4 else "")
+    ex = examples(wd, root)
+    user = f"Кун: {wd}. Фасл: {SEASON_UZ[s]}." + ("\nБошқа каналларнинг кўп кўрилган тонгги постлари — фақат тон ва узунлик учун, КЎЧИРМА, ўзингча ёз:\n---\n"
+                                                + "\n---\n".join(ex) if ex else "")
+    if fresh:
+        user += "\nОлдинги вариантдан бутунлай бошқача ёз."
+    try:
+        if ai.available():
+            out = ai.generate(db, system, user, http)
+            if out:
+                return out, "🤖 ИИ-текст" + (f" (ориентир: {len(ex)} поста больших каналов)" if ex else "")
+    except ai.AIError as e:
+        note = f"⚠️ ИИ: {e} · шаблон"
+    else:
+        note = "шаблон"
+    t = GREET_FALLBACK.get(wd, GREET_FALLBACK["default"])
+    return "\n\n".join(x.format(wd=wd) for x in t[:4]) + f"\n\n{t[4]}\n\n👍 Ёққан бўлса, реакция қолдиринг ва дўстларингизга улашинг!", note
+
+
+def greeting_caption(ch: dict, o: dict, day: dt.date, body: str | None = None) -> str:
+    if body is None:
+        t = GREET_FALLBACK.get(WEEKDAY[day.weekday()], GREET_FALLBACK["default"])
+        body = "\n\n".join(x.format(wd=WEEKDAY[day.weekday()]) for x in t)
+    tag = o.get("tag") or ""
     sig = ch.get("signature", "")
-    return "\n".join(lines) + (f"\n\n{sig}" if sig else "")
+    out = (f"{tag}\n" if tag else "") + body.strip() + (f"\n\n{sig}" if sig else "")
+    if len(out) > 1024:                                   # подпись к видео — не длиннее 1024
+        keep = 1024 - len(tag) - len(sig) - 6
+        out = (f"{tag}\n" if tag else "") + body.strip()[:keep].rsplit("\n", 1)[0] + (f"\n\n{sig}" if sig else "")
+    return out
+
+
+# ---------- пул готовых утренних видео (охота Разведки + проверка кадров Gemini) ----------
+
+def pool_dir() -> Path:
+    return Path(os.environ.get("PAPA_GENPLAN_STATE", "/var/lib/papa-genplan")) / "pool"
+
+
+VISION_PROMPT = """Ты проверяешь утреннее видео («Хайрли тонг») для узбекского Telegram-канала. Перед тобой 3 кадра из начала, середины и конца.
+Ответь ТОЛЬКО JSON:
+{"date": true, если на кадрах видна дата, год, число месяца или календарь (как текст),
+ "foreign": true, если видно чужое имя канала, @юзернейм, ссылка, номер телефона, логотип-водяной знак или рекламный текст,
+ "people": true, если главный объект — люди в откровенной одежде, романтическая сцена или что-то неприличное для мусульманской семейной аудитории,
+ "weekday": день недели, написанный НА ВИДЕО по-узбекски (одно из: Душанба, Сешанба, Чоршанба, Пайшанба, Жума, Шанба, Якшанба) или null,
+ "season": "autumn" | "winter" | "spring" | "summer" | "neutral" — какое время года видно на природе,
+ "quality": 1–5 (5 — красивое чёткое видео, 1 — плохое качество)}"""
+WD_ALIASES = {w.lower(): w for w in WEEKDAY} | {"juma": "Жума", "shanba": "Шанба", "yakshanba": "Якшанба",
+                                                 "dushanba": "Душанба", "seshanba": "Сешанба", "chorshanba": "Чоршанба",
+                                                 "payshanba": "Пайшанба"}
+
+
+def pool_import(db, root: Path | None = None) -> int:
+    idx = (root or pool_dir()) / "index.jsonl"
+    if not idx.exists():
+        return 0
+    n = 0
+    for ln in idx.read_text(encoding="utf-8").splitlines():
+        if not ln.strip():
+            continue
+        c = json.loads(ln)
+        cur = db.execute("INSERT OR IGNORE INTO morning_pool(key,file,channel,views,duration,posted,weekday) VALUES (?,?,?,?,?,?,?)",
+                         (c["key"], c["file"], c.get("channel"), c.get("views"), c.get("duration"), c.get("date"), c.get("weekday")))
+        n += cur.rowcount
+    db.commit()
+    return n
+
+
+def frames(src: Path, work: Path) -> list[bytes]:
+    from . import media
+    dur = media.probe(src)["dur"] or 10
+    out = []
+    work.mkdir(parents=True, exist_ok=True)
+    for i, k in enumerate((0.15, 0.5, 0.85)):
+        f = work / f"f{i}.jpg"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{dur * k:.2f}", "-i", str(src), "-frames:v", "1",
+                        "-vf", "scale=512:-2", "-q:v", "4", str(f)], capture_output=True, timeout=60)
+        if f.exists():
+            out.append(f.read_bytes())
+    return out
+
+
+VISION_GAP = float(os.environ.get("POOL_VISION_GAP", "7"))
+_LAST_VISION = -1e9
+
+
+def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_foreign: bool = False) -> bool:
+    """Проверить одно новое видео (сначала — под ближайший день недели). False — проверять нечего или Gemini недоступен."""
+    from . import ai, store
+    root = root or pool_dir()
+    pause = store.kv_get(db, "pool_vision_pause")
+    if pause and pause > dt.datetime.now(plan.TZ).isoformat():
+        return False
+    wd = WEEKDAY[day.weekday()]
+    r = db.execute("SELECT * FROM morning_pool WHERE status='new' ORDER BY (weekday=?) DESC, (weekday IS NULL) DESC, "
+                   "views DESC LIMIT 1", (wd,)).fetchone()
+    if not r:
+        return False
+    src = root / r["file"]
+    now = dt.datetime.now(plan.TZ).isoformat()
+
+    def reject(reason):
+        db.execute("UPDATE morning_pool SET status='rejected', reason=?, checked_at=? WHERE key=?", (reason, now, r["key"]))
+        db.commit()
+        try:
+            src.unlink()
+        except OSError:
+            pass
+    if not src.exists():
+        reject("нет файла")
+        return True
+    global _LAST_VISION
+    wait = VISION_GAP - (time.monotonic() - _LAST_VISION)
+    if wait > 0:                                             # бесплатный Gemini: не чаще ~8 кадров-проверок в минуту
+        time.sleep(wait)
+    _LAST_VISION = time.monotonic()
+    try:
+        v = ai.vision(db, VISION_PROMPT, frames(src, root / ".frames"), http)
+    except ai.AIError as e:                                  # лимит / сбой — пауза на час, видео ждёт
+        store.kv_set(db, "pool_vision_pause", (dt.datetime.now(plan.TZ) + dt.timedelta(hours=1)).isoformat())
+        print(f"pool: {e}", flush=True)
+        return False
+    reasons = [n for k, n in (("date", "дата на видео"), ("people", "неподходящие кадры")) if v.get(k)]
+    if v.get("foreign") and not allow_foreign:
+        reasons.append("чужой логотип/@")
+    if int(v.get("quality") or 3) < 3:
+        reasons.append("плохое качество")
+    if reasons:
+        reject(", ".join(reasons))
+        return True
+    seen = WD_ALIASES.get(str(v.get("weekday") or "").strip().lower())
+    db.execute("UPDATE morning_pool SET status='ok', weekday=?, season=?, quality=?, reason=NULL, checked_at=? WHERE key=?",
+               (seen or r["weekday"], v.get("season") or "neutral", int(v.get("quality") or 3), now, r["key"]))
+    db.commit()
+    return True
+
+
+def pool_pick(db, day: dt.date, salt: int = 0):
+    """Видео под день недели (сезон совпадает или нейтральный), не повторялось 60 дней; иначе — общее «Хайрли тонг»."""
+    wd = WEEKDAY[day.weekday()]
+    s = season(day)
+    for cond, args in (("weekday=?", (wd,)), ("weekday IS NULL", ())):
+        rows = [r for r in db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND season IN (?, 'neutral') "
+                                      "ORDER BY quality DESC, views DESC", (*args, s)).fetchall()
+                if not used(db, "pool", r["key"])]
+        if rows:
+            r = random.Random(day.toordinal() * 17 + salt).choice(rows[:5])
+            mark_used(db, "pool", r["key"])
+            return r
+    return None
 
 
 def _curl(url: str, dst: Path | None = None, timeout: int = 30, limit: int | None = None) -> bytes:
@@ -434,21 +653,32 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
         body, note = day_text(db, ch["title"], day, fresh=bool(r["redo"]))
         update(db, r["id"], text=body + (f"\n\n{sig}" if sig else ""), prepared=1, redo=0, error=None, preview_sent=0)
         return note
-    key = env.get("PIXABAY_API_KEY") or os.environ.get("PIXABAY_API_KEY")
-    caption = greeting_caption(ch, o, day)
-    if not key:
-        raise RuntimeError("нет PIXABAY_API_KEY")
+    body, note = greeting_body(db, ch, day, fresh=bool(r["redo"]))
+    caption = greeting_caption(ch, o, day, body)
+    if upload is None:
+        from .fabrika import upload_video as upload
     work = work_root / f"morning-{r['id']}-{r['tries']}"
     try:
-        v = pick_video(db, key, day, salt=r["id"] * 7 + r["tries"] + (r["video_id"] or 0), fetch=fetch)
-        src = download_file(v["url"], work / "src.mp4")
-        out = render_greeting(src, day, ch["username"], work / "out.mp4", int(o["max_seconds"]))
-        if upload is None:
-            from .fabrika import upload_video as upload
+        p = pool_pick(db, day, salt=r["id"] * 7 + r["tries"])
+        if p and (pool_dir() / p["file"]).exists():
+            from . import media
+            logo = media.text_logo("@" + ch["username"], work / "wm.png")
+            out = media.watermark_video(pool_dir() / p["file"], logo, work / "out.mp4", style="rise")
+            src_note = f"🎬 Готовое видео ({p['weekday'] or 'Хайрли тонг'}) из «{p['channel']}», {int(p['duration'] or 0)} с, с музыкой"
+            source = f"pool:{p['key']}"
+        else:
+            key = env.get("PIXABAY_API_KEY") or os.environ.get("PIXABAY_API_KEY")
+            if not key:
+                raise RuntimeError("нет готовых видео и нет PIXABAY_API_KEY")
+            v = pick_video(db, key, day, salt=r["id"] * 7 + r["tries"] + (r["video_id"] or 0), fetch=fetch)
+            src = download_file(v["url"], work / "src.mp4")
+            out = render_greeting(src, day, ch["username"], work / "out.mp4", int(o["max_seconds"]))
+            src_note = f"🎬 Pixabay #{v['id']} («{v['query']}», {v['duration']} с) — под этот день готового видео нет"
+            source = f"pixabay:{v['id']}"
         res = upload(env["GENPLAN_BOT_TOKEN"], int(env["HUB_CHAT_ID"]), out, caption)
-        update(db, r["id"], text=caption, hub_msg=int(res["message_id"]), video_id=int(v["id"]), prepared=1, redo=0,
+        update(db, r["id"], text=caption, hub_msg=int(res["message_id"]), source=source, prepared=1, redo=0,
                error=None, preview_sent=0)
-        return f"🎬 Pixabay #{v['id']} («{v['query']}», {v['duration']} с)"
+        return f"{src_note}\n{note}"
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -478,6 +708,12 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
     """Один шаг подготовки (вызывается Fabrika, когда нет других заданий). True — что-то сделано."""
     now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
     ensure_all(db, cfg, now)
+    if pool_import(db):
+        pass
+    tomorrow = now.date() + dt.timedelta(days=1) if now.hour >= 12 else now.date()
+    if any(opts(c) for c in cfg["channels"].values()) and pool_check_one(db, tomorrow,
+                                                                         allow_foreign=bool(cfg.get("morning_allow_foreign"))):
+        return True                                           # сначала проверяем свежие видео, потом готовим посты
     work_root = work_root or Path(os.environ.get("PAPA_GENPLAN_STATE", "/var/lib/papa-genplan")) / "work"
     rows = to_prepare(db, cfg, now)
     if not rows:

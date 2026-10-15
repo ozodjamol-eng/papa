@@ -5,6 +5,7 @@
   python -m razvedka send             — отчёт в консоль и в «Избранное» аккаунта
   python -m razvedka run              — collect + send (для ежедневного таймера)
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
+  python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
 from __future__ import annotations
 
@@ -108,8 +109,24 @@ async def _send(text: str) -> None:
         await c.disconnect()
 
 
+async def _hunt() -> dict:
+    from .hunt import hunt
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED: выполните login")
+    try:
+        return await hunt(c, cfg(), Path(PUB) / "morning", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "report"
+    if cmd == "hunt":
+        print("HUNT_DONE", asyncio.run(_hunt()))
+        return
     if cmd == "login":
         asyncio.run(_login(argv[1] if len(argv) > 1 else "/etc/papa-razvedka/telegram.env"))
     elif cmd in ("collect", "run"):
