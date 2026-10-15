@@ -161,7 +161,8 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(len(uploads), 3)                          # по видео на каждый канал
         previews = [c for c in bot.calls if c[0] in ("copyMessage", "sendMessage")]
         self.assertEqual(len(previews), 6)
-        self.assertIn("mo:a:", str(previews[0][1]["reply_markup"]))   # одна кнопка «✅ Одобряю»
+        kb = str(previews[0][1]["reply_markup"])
+        self.assertIn("mo:a:", kb); self.assertIn("mo:x:", kb)        # ✅ Одобрить и 🗑 Не публиковать
         # без ✅ не выходит: Хўжаобод не одобряем — пропуск с напоминанием
         for r in self.db.execute("SELECT id, channel FROM fixed_posts WHERE day=?", (FRI.isoformat(),)).fetchall():
             if r["channel"] != "xojaobod":
@@ -291,6 +292,12 @@ class TestMorning(unittest.TestCase):
         cq = {"id": "1", "from": {"id": 42}, "data": f"mo:x:{rid}", "message": {"chat": {"id": 42}, "message_id": 5}}
         hub.callback(bot, self.db, CFG, {42}, cq)
         self.assertEqual(morning.get(self.db, rid)["status"], "cancelled")
+        self.assertIn("НЕ ВЫЙДЕТ", str(bot.calls[-2][1]["reply_markup"]))
+        hub.callback(bot, self.db, CFG, {42}, {**cq, "data": f"mo:u:{rid}"})
+        self.assertEqual(morning.get(self.db, rid)["status"], "pending")
+        hub.callback(bot, self.db, CFG, {42}, {**cq, "data": f"mo:a:{rid}"})
+        self.assertEqual(morning.get(self.db, rid)["approved"], 1)
+        self.assertIn("ОДОБРЕНО", str(bot.calls[-2][1]["reply_markup"]))
         hub.callback(bot, self.db, CFG, {42}, {**cq, "data": f"mo:r:{rid}"})
         r = morning.get(self.db, rid)
         self.assertEqual((r["status"], r["prepared"], r["redo"]), ("pending", 0, 1))

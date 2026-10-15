@@ -760,7 +760,7 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
     from . import smart
     where = "в канал" if str(target(cfg, env, r["channel"])).startswith("@") else "в тестовый чат"
     head = f"👁 {ch['title']} · {TITLE[r['key']]} · {smart.fmt(at, dt.datetime.now(plan.TZ))} ({where})" + (f"\n{note}" if note else "")
-    kb = {"inline_keyboard": [[{"text": "✅ Одобряю", "callback_data": f"mo:a:{rid}"}]]}
+    kb = buttons(rid, "new")
     owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
     for o in owners:
         if r["hub_msg"]:
@@ -822,6 +822,14 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
 
 # ---------- кнопки и обзор ----------
 
+def buttons(rid: int, state: str) -> dict:
+    """Кнопки под предпросмотром: что нажато — видно сразу (решение владельца 16.10: ✅ и 🗑)."""
+    rows = {"new": [("✅ Одобрить", "a"), ("🗑 Не публиковать", "x")],
+            "approved": [("✅ ОДОБРЕНО", "n"), ("🗑 Не публиковать", "x")],
+            "cancelled": [("🗑 НЕ ВЫЙДЕТ", "n"), ("↩️ Вернуть", "u")]}[state]
+    return {"inline_keyboard": [[{"text": t, "callback_data": f"mo:{a}:{rid}"} for t, a in rows]]}
+
+
 def callback(bot, db, cq: dict) -> str:
     _, act, rid = cq["data"].split(":")
     r = get(db, int(rid))
@@ -832,33 +840,37 @@ def callback(bot, db, cq: dict) -> str:
     if r["status"] == "done":
         bot("answerCallbackQuery", callback_query_id=cq["id"], text="Уже опубликован")
         return "done"
-    if act == "n":
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Уже одобрено ✅")
-        return "mo:n"
-    if act == "a":
-        update(db, r["id"], approved=1)
+    at = dt.datetime.fromisoformat(r["at"])
+
+    def mark(state):
         try:
-            bot("editMessageReplyMarkup", chat_id=chat, message_id=mid,
-                reply_markup={"inline_keyboard": [[{"text": "✅ Одобрено", "callback_data": f"mo:n:{rid}"}]]})
+            bot("editMessageReplyMarkup", chat_id=chat, message_id=mid, reply_markup=buttons(int(rid), state))
         except Exception:  # noqa: BLE001
             pass
-        at = dt.datetime.fromisoformat(r["at"])
+    if act == "n":
+        bot("answerCallbackQuery", callback_query_id=cq["id"],
+            text="Уже одобрено ✅" if r["approved"] else "Не будет опубликован 🗑")
+        return "mo:n"
+    if act == "a":
+        update(db, r["id"], approved=1, status="pending")
+        mark("approved")
         bot("answerCallbackQuery", callback_query_id=cq["id"], text=f"✅ Одобрено — выйдет в {at:%H:%M}")
         return "mo:a"
     if act == "x":
-        update(db, r["id"], status="cancelled")
-        note = "🗑 Не будет опубликован. «🔄 Заменить» — вернуть с новым вариантом."
-    else:
-        update(db, r["id"], status="pending", prepared=0, redo=1, tries=0, next_try=None, hub_msg=None, preview_sent=0,
-               approved=0)
-        note = "🔄 Готовлю новый вариант — пришлю через 1–2 минуты."
-    try:
-        bot("editMessageReplyMarkup", chat_id=chat, message_id=mid,
-            reply_markup={"inline_keyboard": [[{"text": "🔄 Заменить", "callback_data": f"mo:r:{rid}"}]]})
-    except Exception:  # noqa: BLE001
-        pass
-    bot("answerCallbackQuery", callback_query_id=cq["id"], text=note[:190])
-    return "mo:" + act
+        update(db, r["id"], status="cancelled", approved=0)
+        mark("cancelled")
+        bot("answerCallbackQuery", callback_query_id=cq["id"], text="🗑 Не будет опубликован. «↩️ Вернуть» — передумали")
+        return "mo:x"
+    if act == "u":
+        update(db, r["id"], status="pending", approved=0)
+        mark("new")
+        bot("answerCallbackQuery", callback_query_id=cq["id"], text="↩️ Вернул — нажмите ✅, чтобы вышел")
+        return "mo:u"
+    # «🔄 Заменить» со старых предпросмотров — новый вариант поста
+    update(db, r["id"], status="pending", prepared=0, redo=1, tries=0, next_try=None, hub_msg=None, preview_sent=0,
+           approved=0)
+    bot("answerCallbackQuery", callback_query_id=cq["id"], text="🔄 Готовлю новый вариант — пришлю через 1–2 минуты.")
+    return "mo:r"
 
 
 def overview(db, cfg: dict, now: dt.datetime) -> str:
