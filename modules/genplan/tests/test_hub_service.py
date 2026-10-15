@@ -111,10 +111,15 @@ class TestService(unittest.TestCase):
     def test_live_targets_real_channels(self):
         self.assertEqual(service.target(dict(CFG, mode="live"), ENV, "paparazzi"), "@ozodjamoll")
 
+    def test_per_channel_live(self):
+        c = {**CFG, "channels": {**CFG["channels"], "paparazzi": {**CFG["channels"]["paparazzi"], "mode": "live"}}}
+        self.assertEqual(service.target(c, ENV, "paparazzi"), "@ozodjamoll")
+        self.assertEqual(service.target(c, ENV, "xojaobod"), -100111)   # Хўжаобод остаётся в тесте
+
     def test_today_text(self):
         self.queue(3, "paparazzi", "Қўшиқ")
         t = service.today_text(self.db, CFG, plan.slot_time(dt.date(2026, 10, 19), "09:00"))
-        self.assertIn("ТЕНЕВОЙ", t)
+        self.assertIn("🧪 тест", t)
         self.assertIn("PaparazziUZ", t)
 
 

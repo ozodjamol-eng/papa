@@ -14,8 +14,13 @@ def to_materials(rows) -> list[plan.Material]:
             for r in rows]
 
 
+def channel_mode(cfg: dict, channel: str) -> str:
+    """Режим канала: свой (channels.X.mode) важнее общего — каналы переводятся в работу по одному."""
+    return cfg["channels"][channel].get("mode") or cfg.get("mode", "shadow")
+
+
 def target(cfg: dict, env: dict, channel: str) -> str | int:
-    if cfg.get("mode", "shadow") == "live":
+    if channel_mode(cfg, channel) == "live":
         return "@" + cfg["channels"][channel]["username"]
     return int(env["TEST_GROUP_ID"]) if cfg["channels"][channel]["publisher"] == "account" else int(env["TEST_CHANNEL_ID"])
 
@@ -68,5 +73,6 @@ def today_text(db, cfg: dict, now: dt.datetime | None = None) -> str:
         entries = plan.build(channel, ch, now.date(), to_materials(store.queued(db, channel)), ads={},
                              published=store.published_today(db, channel, day), now=now)
         parts.append(plan.render(ch["title"], entries))
-    mode = "🧪 ТЕНЕВОЙ режим — публикации идут в тестовые чаты" if cfg.get("mode", "shadow") != "live" else "🟢 Рабочий режим"
-    return mode + "\n\n" + "\n\n".join(parts)
+    modes = ", ".join(f"{ch['title']}: {'🟢 работа' if channel_mode(cfg, c) == 'live' else '🧪 тест'}"
+                      for c, ch in cfg["channels"].items())
+    return f"Режим — {modes}\n(🧪 тест — публикации идут в тестовые чаты)\n\n" + "\n\n".join(parts)
