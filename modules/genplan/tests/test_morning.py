@@ -226,6 +226,44 @@ class TestMorning(unittest.TestCase):
             self.assertEqual(self.rows("davra")["greeting"]["source"], "pool:b")
             self.assertIsNone(morning.pool_pick(self.db, FRI))      # одно видео не повторяется
 
+    def test_pool_from_telegram_channel(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"PAPA_GENPLAN_STATE": tmp, "GEMINI_API_KEY": "x"}):
+            root = Path(tmp) / "pool"
+            root.mkdir()
+            (root / "index.jsonl").write_text(__import__("json").dumps(
+                {"key": "pool_77", "pool_chat": -100555, "msg_id": 77, "source": "Катта канал", "views": 5, "duration": 8,
+                 "date": "2026-10-09", "weekday": "Жума", "text": "Жума тонги муборак"}, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual(morning.pool_import(self.db), 1)
+            got = []
+
+            def fetch(row, dst):
+                got.append((row["pool_chat"], row["msg_id"]))
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=640x360:d=3",
+                                "-c:v", "libx264", "-pix_fmt", "yuv420p", str(dst)], check=True)
+            ans = {"date": False, "foreign": False, "people": False, "greeting": True, "weekday": None, "season": "autumn", "quality": 4}
+            with mock.patch.object(ai, "vision", return_value=ans):
+                self.assertTrue(morning.pool_check_one(self.db, FRI, fetch_file=fetch))
+            self.assertEqual(got, [(-100555, 77)])
+            self.assertEqual(self.db.execute("SELECT status FROM morning_pool").fetchone()[0], "ok")
+            self.assertTrue((root / "pool_77.mp4").exists())
+            # бот: пересылка в хаб, удаление копии, getFile
+            bot = Bot()
+            calls = []
+
+            def fake_bot(m, **p):
+                calls.append(m)
+                return {"forwardMessage": {"message_id": 5, "video": {"file_id": "F"}}, "getFile": {"file_path": "v/1.mp4"}}.get(m, {})
+            with mock.patch("urllib.request.urlopen", return_value=__import__("io").BytesIO(b"x" * 20)):
+                morning.tg_fetch(fake_bot, ENV, {"pool_chat": -100555, "msg_id": 77}, Path(tmp) / "f.mp4")
+            self.assertEqual(calls, ["forwardMessage", "deleteMessage", "getFile"])
+            ans2 = {**ans, "greeting": False}
+            (root / "index.jsonl").write_text('{"key": "pool_78", "pool_chat": -100555, "msg_id": 78, "weekday": null}', encoding="utf-8")
+            morning.pool_import(self.db)
+            with mock.patch.object(ai, "vision", return_value=ans2):
+                morning.pool_check_one(self.db, FRI, fetch_file=fetch)
+            self.assertEqual(self.db.execute("SELECT reason FROM morning_pool WHERE key='pool_78'").fetchone()[0],
+                             "не утреннее поздравление")
+
     def test_not_prepared_is_skipped_and_reported(self):
         morning.ensure_all(self.db, CFG, at("22:40"))
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": Pub(), "account": Acc()}, now=at("06:20", FRI), log=lambda s: None))

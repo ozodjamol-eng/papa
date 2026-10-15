@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import time
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from . import plan
@@ -67,8 +68,10 @@ def setup(db) -> None:
     db.executescript(SCHEMA)
     if "source" not in {r[1] for r in db.execute("PRAGMA table_info(fixed_posts)")}:
         db.execute("ALTER TABLE fixed_posts ADD COLUMN source TEXT")        # откуда видео: pool:<key> / pixabay:<id>
-    if "text" not in {r[1] for r in db.execute("PRAGMA table_info(morning_pool)")}:
-        db.execute("ALTER TABLE morning_pool ADD COLUMN text TEXT")         # подпись источника — ориентир для ИИ
+    have = {r[1] for r in db.execute("PRAGMA table_info(morning_pool)")}
+    for col in ("text TEXT", "pool_chat INTEGER", "msg_id INTEGER"):     # подпись источника; пост в NEXUS MORNING POOL
+        if col.split()[0] not in have:
+            db.execute(f"ALTER TABLE morning_pool ADD COLUMN {col}")
 
 
 def opts(ch: dict) -> dict | None:
@@ -406,9 +409,10 @@ def pool_import(db, root: Path | None = None) -> int:
         if not ln.strip():
             continue
         c = json.loads(ln)
-        cur = db.execute("INSERT OR IGNORE INTO morning_pool(key,file,channel,views,duration,posted,weekday,text) VALUES (?,?,?,?,?,?,?,?)",
-                         (c["key"], c["file"], c.get("channel"), c.get("views"), c.get("duration"), c.get("date"), c.get("weekday"),
-                          c.get("text")))
+        cur = db.execute("INSERT OR IGNORE INTO morning_pool(key,file,channel,views,duration,posted,weekday,text,pool_chat,msg_id) "
+                         "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                         (c["key"], c.get("file") or f"{c['key']}.mp4", c.get("source") or c.get("channel"), c.get("views"),
+                          c.get("duration"), c.get("date"), c.get("weekday"), c.get("text"), c.get("pool_chat"), c.get("msg_id")))
         n += cur.rowcount
         if not cur.rowcount and c.get("text"):           # строки из прошлой охоты — дописываем подпись источника
             db.execute("UPDATE morning_pool SET text=? WHERE key=? AND text IS NULL", (c["text"], c["key"]))
@@ -434,7 +438,28 @@ VISION_GAP = float(os.environ.get("POOL_VISION_GAP", "7"))
 _LAST_VISION = -1e9
 
 
-def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_foreign: bool = False) -> bool:
+def tg_fetch(bot, env: dict, r, dst: Path) -> None:
+    """Видео из NEXUS MORNING POOL → файл: бот пересылает пост в PAPA HUB (получает файл), сразу удаляет копию,
+    скачивает файл (Bot API — до 20 МБ). Пересылка нужна только чтобы узнать файл; в хабе ничего не остаётся."""
+    hub = int(env["HUB_CHAT_ID"])
+    m = bot("forwardMessage", chat_id=hub, from_chat_id=int(r["pool_chat"]), message_id=int(r["msg_id"]),
+            disable_notification=True)
+    try:
+        bot("deleteMessage", chat_id=hub, message_id=m["message_id"])
+    except Exception:  # noqa: BLE001
+        pass
+    v = m.get("video") or m.get("animation") or m.get("document") or {}
+    if not v.get("file_id"):
+        raise RuntimeError("в посте пула нет видео")
+    f = bot("getFile", file_id=v["file_id"])
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    url = f"https://api.telegram.org/file/bot{env['GENPLAN_BOT_TOKEN']}/{f['file_path']}"
+    with urllib.request.urlopen(url, timeout=180) as resp, open(dst, "wb") as out:
+        shutil.copyfileobj(resp, out)
+
+
+def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_foreign: bool = False,
+                   fetch_file=None) -> bool:
     """Проверить одно новое видео (сначала — под ближайший день недели). False — проверять нечего или Gemini недоступен."""
     from . import ai, store
     root = root or pool_dir()
@@ -456,6 +481,12 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
             src.unlink()
         except OSError:
             pass
+    if not src.exists() and fetch_file and r["msg_id"]:
+        try:
+            fetch_file(r, src)
+        except Exception as e:  # noqa: BLE001 — пост удалён из пула, файл больше 20 МБ и т.п.
+            reject(f"не скачалось из пула: {str(e)[:80]}")
+            return True
     if not src.exists():
         reject("нет файла")
         return True
@@ -723,8 +754,9 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
     if pool_import(db):
         pass
     tomorrow = now.date() + dt.timedelta(days=1) if now.hour >= 12 else now.date()
-    if any(opts(c) for c in cfg["channels"].values()) and pool_check_one(db, tomorrow,
-                                                                         allow_foreign=bool(cfg.get("morning_allow_foreign"))):
+    if any(opts(c) for c in cfg["channels"].values()) and pool_check_one(
+            db, tomorrow, allow_foreign=bool(cfg.get("morning_allow_foreign")),
+            fetch_file=lambda row, dst: tg_fetch(bot, env, row, dst)):
         return True                                           # сначала проверяем свежие видео, потом готовим посты
     work_root = work_root or Path(os.environ.get("PAPA_GENPLAN_STATE", "/var/lib/papa-genplan")) / "work"
     rows = to_prepare(db, cfg, now)

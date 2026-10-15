@@ -26,6 +26,7 @@ MAX_BYTES = 20 * 1024 * 1024
 PER_DAY = 14            # видео на каждый день недели
 ANY = 24                # общие «Хайрли тонг» без дня
 POOL_TITLES = ("morning pool",)
+FORWARD_MAX = 60       # пересылок в пул за один запуск (бережно)
 
 
 def weekday_of(text: str) -> str | None:
@@ -49,25 +50,6 @@ def video_meta(m) -> dict | None:
     if not att or getattr(att, "round_message", False):
         return None
     return {"duration": float(att.duration or 0), "w": att.w, "h": att.h, "size": int(doc.size or 0)}
-
-
-async def _download(client, m, ent, path: Path, log=print) -> bool:
-    """Скачать видео; при ошибке — повтор со свежим сообщением (у старых ссылок на файл истекает срок)."""
-    for attempt in range(2):
-        try:
-            if attempt:
-                m = await client.get_messages(ent, ids=m.id)
-            res = await client.download_media(m.media.document if attempt else m, file=str(path))
-            if res and path.exists() and path.stat().st_size > 10_000:
-                return True
-            if res and Path(res).exists() and Path(res) != path:      # библиотека сохранила под своим именем
-                Path(res).replace(path)
-                return True
-        except Exception as e:  # noqa: BLE001
-            log(f"  скачать {ent.id}_{m.id} (попытка {attempt + 1}): {type(e).__name__}: {str(e)[:150]}")
-        await asyncio.sleep(2)
-    path.unlink(missing_ok=True)
-    return False
 
 
 def pick(cands: list[dict]) -> list[dict]:
@@ -128,29 +110,46 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
                 log(f"  {title}: {type(e).__name__}: {str(e)[:120]}")
             await asyncio.sleep(2)
         log(f"{title}: найдено {n}")
-    chosen = pick(cands)
-    idx = out / "index.jsonl"
-    have = set()
-    if idx.exists():
-        have = {json.loads(ln)["key"] for ln in idx.read_text(encoding="utf-8").splitlines() if ln.strip()}
-    got = 0
-    with idx.open("a", encoding="utf-8") as f:
-        for c in chosen:
-            if c["key"] in have:
-                continue
-            path = out / f"{c['key']}.mp4"
-            ok = await _download(client, msgs[c["key"]], where[c["key"]], path, log)
-            if not ok:
-                continue
-            c["file"] = path.name
-            f.write(json.dumps(c, ensure_ascii=False) + "\n")
-            got += 1
-            await asyncio.sleep(1)
+    pool = next((e for t, u, e, is_pool in ents if is_pool), None)
+    if pool is None:
+        raise RuntimeError("не найден канал NEXUS MORNING POOL у этого профиля")
+    pool_chat = int(f"-100{pool.id}")
+    own = [c for c in cands if where[c["key"]] is pool]
+    ext = [c for c in cands if where[c["key"]] is not pool]
+    have_sig = {(c["size"], round(c["duration"])) for c in own}
+    ext = [c for c in pick(ext) if (c["size"], round(c["duration"])) not in have_sig]
+    sent_f = out / "forwarded.json"
+    try:
+        sent = set(json.loads(sent_f.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        sent = set()
+    rows = [{**c, "key": f"pool_{c['msg_id']}", "pool_chat": pool_chat, "source": c["channel"]} for c in own]
+    fwd = 0
+    for c in ext:
+        if c["key"] in sent or fwd >= FORWARD_MAX:
+            continue
+        try:   # пересылка внутри Telegram, без скачивания; «без автора» — в пуле как свой пост
+            res = await client.forward_messages(pool, msgs[c["key"]], from_peer=where[c["key"]], drop_author=True)
+            m = res[0] if isinstance(res, list) else res
+        except Exception as e:  # noqa: BLE001 — защищённые от пересылки каналы и т.п.
+            log(f"  переслать {c['key']}: {type(e).__name__}: {str(e)[:100]}")
+            sent.add(c["key"])
+            continue
+        sent.add(c["key"])
+        fwd += 1
+        rows.append({**c, "key": f"pool_{m.id}", "msg_id": m.id, "pool_chat": pool_chat, "source": c["channel"]})
+        await asyncio.sleep(3)
+    sent_f.write_text(json.dumps(sorted(sent)), encoding="utf-8")
+    with (out / "index.jsonl").open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps({k: r[k] for k in ("key", "pool_chat", "msg_id", "source", "views", "duration", "date",
+                                                  "weekday", "text")}, ensure_ascii=False) + "\n")
     # образцы текста (лучшие утренние подписи) — для тона ИИ, не для публикации
     ex = sorted((c for c in cands if len(c["text"]) > 120), key=lambda c: -(c["views"] or 0))[:40]
     (out / "examples.json").write_text(json.dumps([{"weekday": c["weekday"], "views": c["views"], "text": c["text"]}
                                                     for c in ex], ensure_ascii=False), encoding="utf-8")
     by = {}
-    for c in chosen:
-        by[c["weekday"] or "без дня"] = by.get(c["weekday"] or "без дня", 0) + 1
-    return {"channels": len(ents), "found": len(cands), "chosen": len(chosen), "downloaded": got, "by_day": by}
+    for r in rows:
+        by[r["weekday"] or "без дня"] = by.get(r["weekday"] or "без дня", 0) + 1
+    return {"channels": len(ents), "found": len(cands), "in_pool": len(own), "forwarded": fwd, "pool_total": len(rows),
+            "by_day": by}
