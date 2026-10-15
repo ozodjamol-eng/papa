@@ -29,10 +29,20 @@ async def main():
         sent = await c(ResendCodeRequest(phone_number=phone, phone_code_hash=sent.phone_code_hash))
         print(f"код отправлен заново: {type(sent.type).__name__.replace('SentCodeType', '')}")
         code = input("код: ").strip()
-    try:
-        await c.sign_in(phone=phone, code=code)
-    except SessionPasswordNeededError:
-        await c.sign_in(password=getpass.getpass("облачный пароль нового аккаунта (не отображается): "))
+    from telethon.errors import PhoneCodeInvalidError, PhoneCodeExpiredError
+    for attempt in range(3):
+        try:
+            await c.sign_in(phone=phone, code=code.replace(" ", ""), phone_code_hash=sent.phone_code_hash)
+            break
+        except PhoneCodeInvalidError:
+            code = input("код не подошёл — введите САМЫЙ ПОСЛЕДНИЙ код из чата «Telegram»: ").strip()
+        except PhoneCodeExpiredError:
+            raise SystemExit("CODE_EXPIRED — запустите команду заново")
+        except SessionPasswordNeededError:
+            await c.sign_in(password=getpass.getpass("облачный пароль нового аккаунта (не отображается): "))
+            break
+    else:
+        raise SystemExit("CODE_INVALID — запустите команду заново")
     me = await c.get_me()
     session = c.session.save()
     await c.disconnect()
