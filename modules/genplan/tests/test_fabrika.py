@@ -85,7 +85,7 @@ class TestMediaAndPipeline(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_text_watermark_drift(self):
+    def test_text_watermark_rise(self):
         lg = media.text_logo("@kattadavrauz", self.tmp / "wm.png")
         out = media.watermark_video(self.tmp / "in.mp4", lg, self.tmp / "o.mp4")
         self.assertAlmostEqual(media.probe(out)["dur"], 3, delta=0.3)

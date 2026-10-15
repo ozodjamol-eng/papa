@@ -68,6 +68,21 @@ def drift_filter(w: int, opacity: float = 0.85, width_part: float = 0.5) -> str:
             f"y='main_h*0.42+main_h*0.24*sin(2*PI*t/23+1)',format=yuv420p[v]")
 
 
+RISE_CYCLE, RISE_MOVE = 15, 4.5   # раз в 15 с; подъём длится 4,5 с
+
+
+def rise_filter(w: int, opacity: float = 0.85, width_part: float = 0.5) -> str:
+    """Надпись выходит снизу по центру, плавно поднимается и, не доходя до середины кадра, растворяется.
+    Потом пауза до следующего цикла — смотреть не мешает (человеческий фактор)."""
+    lw = max(120, int(w * width_part))
+    c, mv = RISE_CYCLE, RISE_MOVE
+    a = f"clip(min(mod(T\\,{c})/0.7\\,({mv}-mod(T\\,{c}))/1.6)\\,0\\,1)"
+    return (f"[1:v]format=rgba,scale={lw}:-1,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*{opacity}*{a}'[wm];"
+            f"[0:v][wm]overlay=eval=frame:x='(main_w-overlay_w)/2':"
+            f"y='main_h*0.88-overlay_h-main_h*0.26*min(mod(t\\,{c})/{mv}\\,1)':"
+            f"enable='lt(mod(t\\,{c})\\,{mv})',format=yuv420p[v]")
+
+
 def probe(path: Path) -> dict:
     out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                           "stream=width,height:format=duration", "-of", "json", str(path)],
@@ -91,12 +106,12 @@ def video_filter(w: int) -> str:
     )
 
 
-def watermark_video(src: Path, logo: Path, dst: Path, crf: int = 23, timeout: int = 900, style: str = "drift") -> Path:
+def watermark_video(src: Path, logo: Path, dst: Path, crf: int = 23, timeout: int = 900, style: str = "rise") -> Path:
     info = probe(src)
     dur = info["dur"] or 60
     inputs = ["-loop", "1", "-framerate", "30", "-t", f"{dur:.2f}", "-i", str(logo)]
-    fl = drift_filter(info["w"] or 720) if style == "drift" else video_filter(info["w"] or 720)
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src), *inputs, *(inputs if style != "drift" else []),
+    fl = {"drift": drift_filter, "rise": rise_filter}.get(style, video_filter)(info["w"] or 720)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src), *inputs, *(inputs if style == "classic" else []),
            "-filter_complex", fl,
            "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf),
            "-threads", "2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-shortest", str(dst)]
