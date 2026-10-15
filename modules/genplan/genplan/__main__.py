@@ -57,13 +57,13 @@ async def run() -> None:
     offset = int(store.kv_get(db, "offset", "0"))
     next_tick = 0.0
     print(f"GENPLAN PAPA запущен, режим: {cfg()['mode']}", flush=True)
-    if store.kv_get(db, "menu_v") != "1":          # один раз: показать владельцу постоянную панель
+    if store.kv_get(db, "menu_v") != "2":          # один раз: показать владельцу постоянную панель
         for o in str(env.get("OWNER_IDS", "")).split(","):
             try:
                 bot("sendMessage", chat_id=int(o), text="Панель PAPA готова 👇\n\n" + menu.HELP, reply_markup=menu.KEYBOARD)
             except Exception as e:  # noqa: BLE001
                 print(f"menu: {e}", flush=True)
-        store.kv_set(db, "menu_v", "1")
+        store.kv_set(db, "menu_v", "2")
     while True:
         c = cfg()
         try:

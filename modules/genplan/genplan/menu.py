@@ -1,18 +1,20 @@
-"""Постоянная панель владельца в чате с ботом (кнопки внизу, всегда на месте; сворачивается значком ⌘)."""
+"""Постоянная панель владельца в чате с ботом (кнопки внизу; сворачивается и открывается значком ⌘ в поле ввода)."""
 from __future__ import annotations
 
 import datetime as dt
 
 from . import plan, service, store
 
-B_DAVRA, B_PAP, B_XOJ = "🎉 План Давра", "⭐ План Paparazzi", "📍 План Хўжаобод"
+B_DAVRA, B_PAP, B_XOJ = "🎉 Давра", "⭐ Paparazzi", "📍 Хўжаобод"
 B_ALL, B_QUEUE, B_TODAY, B_HELP = "📅 План — все", "📋 Очередь", "📊 Итог дня", "❓ Помощь"
-BY_BUTTON = {B_DAVRA: "davra", B_PAP: "paparazzi", B_XOJ: "xojaobod"}
+BY_BUTTON = {B_DAVRA: "davra", B_PAP: "paparazzi", B_XOJ: "xojaobod",
+             "🎉 План Давра": "davra", "⭐ План Paparazzi": "paparazzi", "📍 План Хўжаобод": "xojaobod"}  # старые кнопки
 
 KEYBOARD = {"keyboard": [[{"text": B_DAVRA}, {"text": B_PAP}, {"text": B_XOJ}],
                          [{"text": B_QUEUE}, {"text": B_TODAY}],
                          [{"text": B_ALL}, {"text": B_HELP}]],
-            "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Перешлите пост сюда"}
+            "resize_keyboard": True, "is_persistent": False,   # сворачивается значком ⌘ в поле ввода
+            "input_field_placeholder": "Перешлите пост сюда"}
 
 HELP = """Как работать:
 1. Пересылайте хорошие посты прямо сюда, в этот чат (или в канал PAPA HUB — тоже работает).
@@ -23,6 +25,7 @@ HELP = """Как работать:
 
 Кнопки панели:
 🎉 ⭐ 📍 — план канала на сегодня
+⌘ — свернуть / открыть панель
 📋 Очередь — что ждёт публикации
 📊 Итог дня — что уже вышло
 📅 План — все каналы сразу"""

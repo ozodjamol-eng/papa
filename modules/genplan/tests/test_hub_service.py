@@ -136,7 +136,7 @@ class TestMenu(unittest.TestCase):
         self.assertIn("📊 Итог дня", menu.reply(db, CFG, menu.B_TODAY))
         self.assertIn("PAPA HUB", menu.reply(db, CFG, "/start"))
         self.assertIsNone(menu.reply(db, CFG, "просто текст"))
-        self.assertTrue(menu.KEYBOARD["is_persistent"])
+        self.assertFalse(menu.KEYBOARD["is_persistent"])
 
 
 class TestDirect(unittest.TestCase):
