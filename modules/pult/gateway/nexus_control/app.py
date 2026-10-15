@@ -221,6 +221,17 @@ def create_app(config:Settings|None=None):
         data['age_hours']=round((time.time()-p.stat().st_mtime)/3600,1)
         return data
 
+    @app.get('/api/voronka')
+    def voronka(request:Request):
+        context(request,allow_ai=True)
+        p=Path(os.getenv('NEXUS_VORONKA_STATS','/var/lib/papa-voronka-pub/stats.json'))
+        try: data=json.loads(p.read_text(encoding='utf-8'))
+        except FileNotFoundError: raise HTTPException(404,'no_stats_yet')
+        except (OSError,ValueError): raise HTTPException(503,'stats_unreadable')
+        if not isinstance(data,dict): raise HTTPException(503,'stats_unreadable')
+        data['age_minutes']=round((time.time()-p.stat().st_mtime)/60,1)
+        return data
+
     @app.post('/api/agent/hello')
     def hello(request:Request,body:AgentHello):
         device_id=device_auth(request)

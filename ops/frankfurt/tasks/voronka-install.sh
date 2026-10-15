@@ -7,6 +7,8 @@ id papa-voronka >/dev/null 2>&1 || useradd --system --no-create-home --home-dir 
 chown -R papa-voronka:papa-voronka /etc/papa-voronka && chmod 700 /etc/papa-voronka && chmod 600 /etc/papa-voronka/instagram.env
 ( cd /opt/papa/modules/voronka && python3 -m unittest -q tests/test_voronka.py 2>&1 | tail -1 )
 install -m 644 /opt/papa/ops/frankfurt/systemd/papa-voronka.service /etc/systemd/system/
+# сводка для Пульта: читает только шлюз (группа nexus-private-control)
+install -d -m 2750 -o papa-voronka -g nexus-private-control /var/lib/papa-voronka-pub
 systemctl daemon-reload
 systemctl enable -q papa-voronka.service
 systemctl restart papa-voronka.service

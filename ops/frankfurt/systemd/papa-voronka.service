@@ -9,14 +9,14 @@ User=papa-voronka
 Group=papa-voronka
 # пока бот — тестовый (PAPA TEST); боевой бот подключается отдельным шагом
 EnvironmentFile=/etc/papa-test/bot.env
-Environment=PAPA_VORONKA_DB=/var/lib/papa-voronka/voronka.sqlite3 PAPA_VORONKA_IG_ENV=/etc/papa-voronka/instagram.env PYTHONUNBUFFERED=1
+Environment=PAPA_VORONKA_DB=/var/lib/papa-voronka/voronka.sqlite3 PAPA_VORONKA_IG_ENV=/etc/papa-voronka/instagram.env PAPA_VORONKA_PUB=/var/lib/papa-voronka-pub PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/papa/modules/voronka
 ExecStart=/usr/bin/python3 -m voronka loop
 Restart=on-failure
 RestartSec=30
 StateDirectory=papa-voronka
 StateDirectoryMode=0700
-ReadWritePaths=/etc/papa-voronka
+ReadWritePaths=/etc/papa-voronka /var/lib/papa-voronka-pub
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 ProtectSystem=strict

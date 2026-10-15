@@ -133,6 +133,25 @@ class TestOnlyUsers(unittest.TestCase):
         self.assertFalse(store.seen(db, "2"))  # чужой не помечен — после теста обработается обычным порядком
 
 
+class TestPublish(unittest.TestCase):
+    def test_stats_without_personal_data(self):
+        import json, os, tempfile
+        from voronka.__main__ import publish_stats
+        db, ig = store.connect(":memory:"), FakeIG()
+        engine.run_once(ig, db, CFG, NOW, log=lambda *_: None)
+        ig.cm["M1"] = [c("2", "11", "a", "secret_user")]
+        engine.run_once(ig, db, CFG, dt.datetime.now(UTC), log=lambda *_: None)
+        d = tempfile.mkdtemp()
+        path = publish_stats(db, dict(CFG, page_url="https://x/"), ig.media[:1], d)
+        raw = open(path, encoding="utf-8").read()
+        data = json.loads(raw)
+        self.assertEqual(data["mode"], "work")
+        self.assertEqual(data["comments_24h"].get("sent"), 1)
+        self.assertNotIn("secret_user", raw)
+        self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o640")
+        self.assertIsNone(publish_stats(db, CFG, [], os.path.join(d, "missing")))
+
+
 class FakeBot:
     def __init__(self, fail_welcome=False):
         self.calls, self.fail_welcome = [], fail_welcome

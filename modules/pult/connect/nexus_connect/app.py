@@ -283,6 +283,9 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
         {'name': 'nexus_razvedka', 'title': 'Отчёт Разведки', 'description': 'Последний отчёт Разведки PAPA по каналам-источникам и конкурентам в Telegram: лучшие часы и дни, форматы, лидеры по просмотрам и ERR, вероятная реклама у конкурентов, самые сильные посты, свои каналы. Обновляется каждый день в 06:10 по Ташкенту. Только чтение.',
          'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
          'annotations': {'readOnlyHint': True, 'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': False}, 'scope': 'nexus.read'},
+        {'name': 'nexus_voronka', 'title': 'Воронка Instagram', 'description': 'Состояние Voronka PAPA: режим (работа/проверка), сколько комментариев под постами @paparazzi.uz обработано и сколько директов со ссылкой отправлено за час/сутки/всего, пропуски (спам, дубли), ошибки и паузы Meta, заявки в Telegram, посты под наблюдением. Обновляется каждые 2 минуты. Без личных данных. Только чтение.',
+         'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
+         'annotations': {'readOnlyHint': True, 'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': False}, 'scope': 'nexus.read'},
     ]
     TOOL_BY = {t['name']: t for t in TOOLS}
 
@@ -299,6 +302,7 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
         if name == 'nexus_status': return g('GET', '/api/status')
         if name == 'nexus_devices': return g('GET', '/api/devices')
         if name == 'nexus_razvedka': return g('GET', '/api/razvedka')
+        if name == 'nexus_voronka': return g('GET', '/api/voronka')
         if name == 'nexus_tasks': return {'tasks': g('GET', '/api/tasks')['tasks'][:lim]}
         if name == 'nexus_audit': return {'events': g('GET', '/api/audit')['events'][:lim]}
         if name == 'nexus_run_check':

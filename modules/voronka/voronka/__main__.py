@@ -21,6 +21,41 @@ from .api import ApiError, Bot, Instagram
 CONFIG = Path(os.environ.get("PAPA_VORONKA_CONFIG", Path(__file__).resolve().parent.parent / "config.toml"))
 DB = os.environ.get("PAPA_VORONKA_DB", "/var/lib/papa-voronka/voronka.sqlite3")
 IG_ENV = Path(os.environ.get("PAPA_VORONKA_IG_ENV", "/etc/papa-voronka/instagram.env"))
+PUB = os.environ.get("PAPA_VORONKA_PUB", "/var/lib/papa-voronka-pub")
+
+
+def publish_stats(db, c: dict, media: list | None = None, pub_dir: str | None = None) -> str | None:
+    """Сводка для Пульта (ChatGPT/Claude): только счётчики, без имён и id людей."""
+    import json
+    d = Path(pub_dir or PUB)
+    if not d.is_dir():
+        return None
+    now = dt.datetime.now(dt.timezone.utc)
+
+    def cnt(since=None):
+        q = "SELECT action, COUNT(*) FROM comments" + (" WHERE at >= ?" if since else "") + " GROUP BY action"
+        return dict(db.execute(q, (since,) if since else ()).fetchall())
+    day = (now - dt.timedelta(hours=24)).isoformat()
+    j = db.execute("SELECT COUNT(*), COALESCE(SUM(welcomed),0), COALESCE(SUM(approved),0) FROM joins WHERE at >= ?", (day,)).fetchone()
+    data = {
+        "generated": now.isoformat()[:19] + "Z",
+        "mode": "work" if not c.get("dry_run", True) else "dry_run",
+        "reply_to": c.get("mode"), "max_per_hour": c.get("max_per_hour"),
+        "paused_until": store.kv_get(db, "pause_until"),
+        "last_run": store.kv_get(db, "last_run"),
+        "token_refreshed": store.kv_get(db, "token_refreshed"),
+        "comments_last_hour": cnt((now - dt.timedelta(hours=1)).isoformat()),
+        "comments_24h": cnt(day), "comments_total": cnt(),
+        "telegram_joins_24h": {"requests": j[0], "welcomed": j[1], "approved": j[2]},
+        "posts": [{"time": m.get("timestamp"), "comments": m.get("comments_count"), "url": m.get("permalink")}
+                  for m in (media or [])],
+        "page": c.get("page_url"),
+    }
+    tmp = d / ".stats.json.tmp"
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, d / "stats.json")
+    return str(d / "stats.json")
 
 
 def cfg() -> dict:
@@ -98,9 +133,15 @@ def loop(db, c: dict) -> None:
                     store.kv_set(db, "token_refreshed", now_iso())
                 elif dt.datetime.fromisoformat(last) < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7):
                     refresh(db)
-                s = engine.run_once(ig(), db, cfg())
+                cc = cfg()
+                i = ig()
+                s = engine.run_once(i, db, cc)
                 if s["new"] or s["error"]:
                     print(f"IG: {s}", flush=True)
+                try:
+                    publish_stats(db, cc, engine.target_media(i, cc, engine.utcnow()))
+                except (ApiError, OSError) as e:
+                    print(f"stats: {e}", flush=True)
             except (ApiError, OSError) as e:
                 print(f"IG ошибка: {e}", flush=True)
             next_ig = time.time() + int(c.get("poll_seconds", 120))

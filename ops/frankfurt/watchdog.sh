@@ -19,6 +19,12 @@ code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:8789/.well-k
 for u in papa-razvedka@run.service papa-razvedka@collect.service; do
   systemctl is-failed --quiet "$u" && fail+=("${u%%.service}_failed")
 done
+# Voronka: служба жива и сводка свежая (обновляется каждые 2 мин)
+if systemctl is-enabled --quiet papa-voronka 2>/dev/null; then
+  systemctl is-active --quiet papa-voronka || fail+=("voronka_not_active")
+  vs=/var/lib/papa-voronka-pub/stats.json
+  if [[ -e $vs ]]; then (( $(date +%s) - $(stat -c %Y "$vs") < 900 )) || fail+=("voronka_stalled"); fi
+fi
 free_kb=$(df -Pk /var/lib/nexus-private-control | awk 'NR==2{print $4}')
 (( free_kb > 1048576 )) || fail+=("disk_low")
 avail_kb=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
