@@ -171,8 +171,24 @@ async def _sklad_latest(n: int = 3) -> dict:
         await c.disconnect()
 
 
+async def _sort_folders() -> dict:
+    from .sortfolders import run
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    try:
+        return await run(c, Path(PUB) / "morning", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "report"
+    if cmd == "sort-folders":
+        print("FOLDERS_DONE", asyncio.run(_sort_folders()))
+        return
     if cmd == "sklad-latest":
         print("SKLAD_LATEST", asyncio.run(_sklad_latest()))
         return
