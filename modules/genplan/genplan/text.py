@@ -59,6 +59,17 @@ def pick_hook(ch: dict, rubric: str | None, n: int, body: str = "", topics: list
     return pool[n % len(pool)] if pool else ""
 
 
+HASHTAG_LINE = re.compile(r"^\s*(#[\w\u0400-\u04FF_]+[\s,]*)+$")
+
+
+def strip_hashtags(text: str, keep: tuple[str, ...] = ()) -> str:
+    """Строки, состоящие только из чужих хэштегов, убираем (наш канал хэштеги не ставит)."""
+    keep_l = {k.lower() for k in keep}
+    out = [ln for ln in (text or "").splitlines()
+           if not (HASHTAG_LINE.match(ln) and not any(t.lower().lstrip("#") in keep_l for t in ln.split()))]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...] = (),
              hook: str = "", limit: int | None = None) -> str:
     """Текст поста: чужие подписи убраны, внизу — хук и наша подпись. При лимите (подпись к медиа — 1024)
@@ -67,6 +78,11 @@ def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...
         return (text or "").strip()
     body = strip_sources(text, keep=own)
     body, _ = translit.auto(body)
+    body = strip_hashtags(body, keep=own)
+    if not hook:                                   # свой призыв в конце текста (ИИ или автор) — переносим под юзернейм
+        lines = body.rstrip().splitlines()
+        if lines and len(lines[-1]) <= 90 and CTA.search(lines[-1]):
+            hook, body = lines[-1].strip(), "\n".join(lines[:-1]).rstrip()
     for line in (signature, hook):
         if line:
             body = "\n".join(ln for ln in body.splitlines() if ln.strip() != line.strip()).strip()
