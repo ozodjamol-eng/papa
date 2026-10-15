@@ -5,8 +5,8 @@
 set -Eeuo pipefail
 R=/opt/papa
 case "$(hostname)" in
-  xojaobodcity24bot) H=london ;;
-  ubuntu-s-1vcpu-1gb-fra1) H=frankfurt ;;
+  xojaobodcity24bot|papa-london) H=london ;;
+  ubuntu-s-1vcpu-1gb-fra1|papa-frankfurt) H=frankfurt ;;
   *) echo "UNKNOWN_HOST $(hostname)"; exit 1 ;;
 esac
 git -C "$R" fetch -q origin main

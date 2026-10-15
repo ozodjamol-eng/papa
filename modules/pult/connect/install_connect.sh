@@ -2,7 +2,7 @@
 # NEXUS Connect install. New separate service only; gateway, bots, nginx untouched. Public exposure is a SEPARATE step.
 set -Eeuo pipefail; umask 022
 S=/root/nexus-connect-ship; B=/opt/nexus-connect; PY=/opt/nexus-private-control-v2/.venv/bin/python; R=$B/releases/r1
-[[ "$(hostname)" == ubuntu-s-1vcpu-1gb-fra1 ]] || { echo WRONG_HOST; exit 1; }
+[[ "$(hostname)" == ubuntu-s-1vcpu-1gb-fra1 || "$(hostname)" == papa-frankfurt ]] || { echo WRONG_HOST; exit 1; }
 HOST=$(tailscale status --json | $PY -c 'import json,sys;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')
 BASE="https://$HOST:8443"; echo "BASE=$BASE"
 echo "== 1. code + tests"
