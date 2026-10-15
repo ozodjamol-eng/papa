@@ -6,12 +6,12 @@ import datetime as dt
 from . import plan, service, smart, store
 
 B_DAVRA, B_PAP, B_XOJ = "🎉 Давра", "⭐ Paparazzi", "📍 Хўжаобод"
-B_ALL, B_QUEUE, B_TODAY, B_HELP = "📅 План — все", "📋 Очередь", "📊 Итог дня", "❓ Помощь"
+B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ = "📅 План — все", "📋 Очередь", "📊 Итог дня", "❓ Помощь", "🕌 Намоз"
 BY_BUTTON = {B_DAVRA: "davra", B_PAP: "paparazzi", B_XOJ: "xojaobod",
              "🎉 План Давра": "davra", "⭐ План Paparazzi": "paparazzi", "📍 План Хўжаобод": "xojaobod"}  # старые кнопки
 
 KEYBOARD = {"keyboard": [[{"text": B_DAVRA}, {"text": B_PAP}, {"text": B_XOJ}],
-                         [{"text": B_QUEUE}, {"text": B_TODAY}],
+                         [{"text": B_QUEUE}, {"text": B_TODAY}, {"text": B_NAMAZ}],
                          [{"text": B_ALL}, {"text": B_HELP}]],
             "resize_keyboard": True, "is_persistent": False,   # сворачивается значком ⌘ в поле ввода
             "input_field_placeholder": "Перешлите пост сюда"}
@@ -82,6 +82,12 @@ def reply(db, cfg: dict, text: str) -> str | None:
         return queue_text(db, cfg)
     if t == B_TODAY:
         return today_summary(db, cfg)
+    if t in (B_NAMAZ, "/namaz"):
+        from . import namaz
+        now = dt.datetime.now(plan.TZ)
+        return ("🕌 Скопируйте блок, поправьте время и пришлите одним сообщением "
+                "(разделитель любой: 19:10, 19 10, 19.10).\nНа несколько дней — по блоку на день, у каждого своя дата.\n\n"
+                + namaz.editor_text(db, now.date()))
     if t in (B_HELP, "/start", "/help"):
         return HELP
     return None

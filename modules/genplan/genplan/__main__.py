@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import sys
@@ -15,7 +16,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import hub, menu, service, store
+from . import hub, menu, plan, service, store
 from .publish import AccountPublisher, BotPublisher
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -106,6 +107,10 @@ async def run() -> None:
                                 bot("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t, reply_markup=kb)
                             except Exception:  # noqa: BLE001 — карточка могла быть в другом чате
                                 pass
+                from . import namaz
+                rem = namaz.reminder(db, c, dt.datetime.now(plan.TZ))
+                if rem:
+                    service.ERRORS.append(rem)
                 while service.ERRORS:
                     err = service.ERRORS.pop(0)
                     for o in owners:

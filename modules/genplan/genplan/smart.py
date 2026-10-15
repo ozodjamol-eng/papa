@@ -40,8 +40,15 @@ def allowed(ch: dict, t: dt.datetime, rubric: str | None) -> bool:
 
 
 def occupied(db, channel: str, now: dt.datetime, exclude: int | None = None) -> list[dt.datetime]:
+    from . import namaz
     out = [dt.datetime.fromisoformat(m["scheduled_at"]) for m in store.scheduled(db, channel) if m["id"] != exclude]
-    return out + store.pulse_since(db, channel, now - dt.timedelta(hours=3))
+    return out + store.pulse_since(db, channel, now - dt.timedelta(hours=3)) + namaz.busy(db, channel, now - dt.timedelta(hours=3))
+
+
+def blocked(db, channel: str, t: dt.datetime) -> bool:
+    """Тихое окно Жумы (и другие запреты модуля намаза)."""
+    from . import namaz
+    return namaz.locked(db, channel, t)
 
 
 def is_free(ch: dict, t: dt.datetime, busy: list[dt.datetime]) -> bool:
@@ -66,7 +73,7 @@ def smart_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime
     days = ttl(ch, rubric)
     for d in range(days + 1):
         day = now.date() + dt.timedelta(days=d)
-        slots = [(t, s) for t, s in grid(ch, day) if t >= now + LEAD and allowed(ch, t, rubric) and is_free(ch, t, busy)]
+        slots = [(t, s) for t, s in grid(ch, day) if t >= now + LEAD and allowed(ch, t, rubric) and is_free(ch, t, busy) and not blocked(db, channel, t)]
         for t, s in slots:
             if s["kind"] != "ad" and s.get("rubric") == rubric:
                 return t, f"слот «{rubric}»"
@@ -88,7 +95,7 @@ def other_times(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetim
         cands = {t for t, s in grid(ch, day) if s["kind"] != "ad"}
         cands |= {plan.slot_time(day, f"{h:02d}:{m:02d}") for h in range(7, 23) for m in (0, 30)}
         for t in sorted(cands):
-            if t >= now + LEAD and allowed(ch, t, rubric) and is_free(ch, t, busy + out):
+            if t >= now + LEAD and allowed(ch, t, rubric) and is_free(ch, t, busy + out) and not blocked(db, channel, t):
                 out.append(t)
                 if len(out) >= n:
                     return out
@@ -144,7 +151,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     for t, s in grid(ch, now.date()):
         if s["kind"] == "ad" or not (now + LEAD <= t <= now + STOCK_AHEAD):
             continue
-        if not is_free(ch, t, occupied(db, channel, now)):
+        if not is_free(ch, t, occupied(db, channel, now)) or blocked(db, channel, t):
             continue
         wanted = [s.get("rubric")] + list(s.get("fallback", []))
         pick = next((m for r in wanted for m in pool if m["rubric"] == r and m["id"] not in used and allowed(ch, t, r)), None)
@@ -188,6 +195,8 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
             continue
         empty += 1
         items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {s['rubric']} — нет материала"))
+    from . import namaz
+    items += namaz.today_lines(db, channel, day)
     items.sort(key=lambda x: x[0])
     later = len(sched) - len(today)
     st = store.stock(db, channel)

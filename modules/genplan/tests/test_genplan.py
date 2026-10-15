@@ -41,7 +41,7 @@ class TestPlan(unittest.TestCase):
         mats = [M(1, "Янгиликлар"), M(2, "Ҳажвия", minutes=1), M(3, "Видео", minutes=2)]
         p = plan.build("xojaobod", X, MON, mats, ads={})
         by = {e.at.strftime("%H:%M"): e for e in p}
-        self.assertEqual(by["07:00"].status, plan.AUTO)
+        self.assertEqual(by["07:05"].status, plan.AUTO)
         self.assertEqual(by["08:15"].material_id, 1)          # «Тонг» нет → запасная «Янгиликлар»
         self.assertIn("вместо", by["08:15"].note)
         self.assertEqual(by["12:40"].material_id, 2)

@@ -242,14 +242,19 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
 
     msg = upd.get("message")
     if msg and int(msg["from"]["id"]) in owners and msg["chat"].get("type") == "private":
-        from .menu import BY_BUTTON, B_ALL, B_QUEUE, B_TODAY, B_HELP
+        from .menu import BY_BUTTON, B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ
         txt = (msg.get("text") or "").strip()
         cap = (msg.get("caption") or "").strip()
         if cap.lower().startswith("/logo") and ("document" in msg or "photo" in msg):
             return save_logo(bot, db, cfg, env, msg, cap)
-        if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP):
+        if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ):
             store.kv_set(db, "await_text", "")
             return "cmd:" + txt.split()[0]
+        from . import namaz
+        if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):   # 🕌 время намаза
+            r = save_namaz(bot, db, cfg, msg, txt)
+            if r != "not_namaz":
+                return r
         wait = store.kv_get(db, "await_text", "")
         if wait and txt and not any(k in msg for k in MEDIA_KEYS):     # ✏️ новый текст для материала
             store.kv_set(db, "await_text", "")
@@ -271,6 +276,36 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
             return "album"
         return direct(bot, db, cfg, owners, hub, [msg])
     return None
+
+
+def save_namaz(bot, db, cfg: dict, msg: dict, txt: str) -> str:
+    from . import namaz
+    now = _now()
+    try:
+        items = namaz.parse(txt, now.date())
+    except ValueError as e:
+        tl = [ln for ln in txt.splitlines() if any(c.isdigit() for c in ln)
+              and any(v in ln.lower() for n in namaz.NAMES for v in namaz.VARIANTS[n])]
+        if len(tl) < 3:                       # это не ввод времени, а обычный пост, где упоминаются намазы
+            return "not_namaz"
+        bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],
+            text=f"⚠️ Не сохранено: {e}.\nИсправьте и пришлите весь блок ещё раз — ничего не изменено.")
+        return "namaz_error"
+    namaz.save(db, items, now)
+    for c in cfg["channels"]:
+        for d in (now.date(), now.date() + dt.timedelta(days=1)):
+            namaz.ensure_day(db, cfg, c, d, now)
+    if len(items) == 1:
+        t = items[0][1]
+        body = "\n".join(f"{namaz.ICON[n]} {namaz.LABEL[n]} — {t[n]}" for n in namaz.NAMES)
+        head = "✅ Намоз вақтлари сақланди — бугундан фаол:"
+    else:
+        body = "\n".join(f"📅 {d:%d.%m}: " + " · ".join(t[n] for n in namaz.NAMES) for d, t in items)
+        head = f"✅ Сақланди: {len(items)} кун"
+    left = [ln for _, ln in namaz.today_lines(db, "xojaobod", now.date()) if ln.startswith("🕌")] if "xojaobod" in cfg["channels"] else []
+    tail = ("\n\nСегодня ещё выйдут:\n" + "\n".join(left)) if left else ""
+    bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"], text=f"{head}\n{body}{tail}")
+    return "namaz"
 
 
 def save_logo(bot, db, cfg: dict, env: dict, msg: dict, cap: str) -> str:
@@ -317,7 +352,8 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             t = st[0] if st else None
         busy = smart.occupied(db, m["channel"], now, exclude=mid)
         ch = cfg["channels"][m["channel"]]
-        if t and t >= now - dt.timedelta(minutes=1) and smart.is_free(ch, t, busy) and smart.allowed(ch, t, m["rubric"]):
+        if (t and t >= now - dt.timedelta(minutes=1) and smart.is_free(ch, t, busy) and smart.allowed(ch, t, m["rubric"])
+                and not smart.blocked(db, m["channel"], t)):
             store.update(db, mid, status="queued", scheduled_at=t.isoformat(), urgent=0, locked=int(kind == "tm"), stock=0)
         else:
             note = "Это время уже занято — показываю новое"

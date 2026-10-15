@@ -93,6 +93,7 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
     day = now.date().isoformat()
     out = {"published": 0, "failed": 0, "moved": 0, "ids": [], "errors": []}
     reconcile(db, cfg, now)
+    out["namaz"] = await tick_namaz(db, cfg, env, pubs, now, log)
     for channel in cfg["channels"]:
         out["ids"] += smart.fill_from_stock(db, cfg, channel, now)        # 📦 запас → в пустые слоты
         due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
@@ -121,6 +122,34 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
                 store.update(db, m["id"], status="failed")
             break                                             # обычные — по одному за проход: промежуток сохраняется
     return out
+
+
+async def tick_namaz(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log=print) -> int:
+    """Намоз: посты на сегодня и завтра (идемпотентно) → публикация наступивших. Важнее любого контента."""
+    from . import namaz
+    n = 0
+    for channel, ch in cfg["channels"].items():
+        o = namaz.opts(ch)
+        if not o:
+            continue
+        for d in (now.date(), now.date() + dt.timedelta(days=1)):
+            namaz.ensure_day(db, cfg, channel, d, now)
+        for r in namaz.due(db, channel, now, o["grace"]):
+            p = pubs[ch["publisher"]]
+            to = target(cfg, env, channel)
+            try:
+                if ch["publisher"] == "account":
+                    mid = await p.publish(to, r["text"], None, None, False)
+                else:
+                    mid = p.publish(to, r["text"], None, None, False)
+                namaz.mark(db, channel, r["day"], r["key"], "done", mid)
+                store.pulse_add(db, channel, now, "namaz")
+                log(f"{channel} намоз {r['key']}: опубликовано")
+                n += 1
+            except PublishError as e:
+                namaz.mark(db, channel, r["day"], r["key"], "failed", error=str(e))
+                ERRORS.append(f"❌ {ch['title']}: намоз ({r['key']}) не вышел — {e}")
+    return n
 
 
 def today_text(db, cfg: dict, now: dt.datetime | None = None) -> str:

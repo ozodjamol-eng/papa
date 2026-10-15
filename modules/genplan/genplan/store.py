@@ -71,6 +71,8 @@ def connect(path: str) -> sqlite3.Connection:
         if col not in have:
             db.execute(f"ALTER TABLE materials ADD COLUMN {col} {typ}")
     db.execute("CREATE INDEX IF NOT EXISTS idx_mat_time ON materials(channel, status, scheduled_at)")
+    from . import namaz
+    namaz.setup(db)
     db.execute("CREATE INDEX IF NOT EXISTS idx_mat_fp ON materials(fp)")
     db.commit()
     return db
