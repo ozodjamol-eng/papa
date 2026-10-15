@@ -41,7 +41,8 @@ def pick_hook(ch: dict, rubric: str | None, n: int, body: str = "", topics: list
     t = topic_of(body, topics or [])
     if t and t.get("silent"):
         return ""
-    tail = "\n".join((body or "").strip().splitlines()[-2:])
+    lines = [ln for ln in (body or "").splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    tail = "\n".join(lines[-3:])                       # последние строки текста, без хэштегов
     if body and CTA.search(tail):
         return ""
     if t and t.get("hooks"):

@@ -30,9 +30,20 @@ def kb_channel(mid: int) -> dict:
         [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]}
 
 
+def next_free_rubric(cfg: dict, db, channel: str) -> str:
+    """Рубрика ближайшего свободного слота канала (кнопка «⏰ Ближайший слот»)."""
+    import datetime as dt
+    from . import plan, service
+    now = dt.datetime.now(plan.TZ)
+    e = plan.build(channel, cfg["channels"][channel], now.date(), service.to_materials(store.queued(db, channel)), ads={},
+                   published=store.published_today(db, channel, now.date().isoformat()), now=now)
+    nxt = next((x for x in e if x.status == plan.EMPTY and x.kind == "content" and x.at > now), None)
+    return nxt.rubric if nxt else rubrics(cfg, channel)[0]
+
+
 def kb_rubric(cfg: dict, mid: int, channel: str) -> dict:
     rs = rubrics(cfg, channel)
-    rows = [[{"text": r, "callback_data": f"rb:{mid}:{i}"} for i, r in enumerate(rs)][k:k + 2] for k in range(0, len(rs), 2)]
+    rows = [[{"text": "⏰ Ближайший слот", "callback_data": f"nx:{mid}"}]] + [[{"text": r, "callback_data": f"rb:{mid}:{i}"} for i, r in enumerate(rs)][k:k + 2] for k in range(0, len(rs), 2)]
     rows.append([{"text": "🆘 Срочно, сейчас", "callback_data": f"ur:{mid}"},
                  {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}])
     return {"inline_keyboard": rows}
@@ -92,8 +103,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
                 ch = CODE[arg[0]]
                 store.update(db, mid, channel=ch)
                 edit(f"{base}\n\n→ {NAMES[ch]}: выберите рубрику", kb_rubric(cfg, mid, ch))
-        elif kind == "rb":
-            r = rubrics(cfg, m["channel"])[int(arg[0])]
+        elif kind in ("rb", "nx"):
+            r = rubrics(cfg, m["channel"])[int(arg[0])] if kind == "rb" else next_free_rubric(cfg, db, m["channel"])
             store.update(db, mid, rubric=r, status="queued")
             sib = db.execute("SELECT id, channel FROM materials WHERE hub_chat=? AND hub_msg=? AND id<>? AND rubric IS NULL "
                              "AND status='draft'", (m["hub_chat"], m["hub_msg"], mid)).fetchone()
