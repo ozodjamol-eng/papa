@@ -6,6 +6,25 @@
 mode = "shadow"                  # shadow — всё в тестовые чаты; live — рабочие каналы (только по решению владельца)
 signature_default = ""
 
+[channels.davra]
+title = "КАТТА ДАВРА"
+username = "kattadavrauz"
+publisher = "bot"                # канал: бот публикует от имени канала
+signature = "🎉 @kattadavrauz"
+slots = [
+  { t = "08:00", kind = "content", rubric = "Тонги кайфият", fallback = ["Фойдали видео"] },
+  { t = "09:00", kind = "content", rubric = "Янгиликлар", fallback = ["Қизиқарли"] },
+  { t = "10:30", kind = "content", rubric = "Фойдали видео", fallback = ["Қизиқарли"] },
+  { t = "12:00", kind = "content", rubric = "Ҳажвия", fallback = ["Видео"] },
+  { t = "13:30", kind = "content", rubric = "Мусиқа", fallback = ["Видео"] },
+  { t = "15:00", kind = "content", rubric = "Қизиқарли", fallback = ["Фойдали видео"] },
+  { t = "17:00", kind = "content", rubric = "Видео", fallback = ["Ҳажвия"] },
+  { t = "18:30", kind = "content", rubric = "Кечки кучли пост", fallback = ["Янгиликлар", "Видео"] },
+  { t = "19:30", kind = "content", rubric = "Мусиқа", fallback = ["Қизиқарли"] },
+  { t = "20:30", kind = "content", rubric = "Ҳажвия", fallback = ["Видео"] },
+  { t = "21:30", kind = "content", rubric = "Якуний пост", fallback = ["Мусиқа"] },
+]
+
 [channels.xojaobod]
 title = "Хўжаобод Сити 24"
 username = "xojaobodcity24"

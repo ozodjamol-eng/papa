@@ -17,9 +17,9 @@ from telethon.tl.functions.channels import (CheckUsernameRequest, EditAdminReque
 from telethon.tl.functions.chatlists import EditExportedInviteRequest, GetExportedInvitesRequest  # noqa: E402
 from telethon.tl.functions.messages import EditChatAboutRequest, GetDialogFiltersRequest, UpdateDialogFilterRequest  # noqa: E402
 
-OLD = "XOJAOBODLIKLARIMIZ"
+OLD = "kattadavrauz"   # владелец уже переименовал (было @XOJAOBODLIKLARIMIZ)
 TITLE = "КАТТА ДАВРА"
-USERNAMES = ["kattadavra", "katta_davra", "kattadavra_uz", "kattadavrauz", "kattadavra24"]
+USERNAMES = ["kattadavrauz", "kattadavra", "katta_davra", "kattadavra_uz", "kattadavra24"]
 ABOUT = ("🎉 Katta Davra — бутун Ўзбекистон бир даврада!\n"
          "🎵 Мусиқа • 😂 ҳажвия • 💡 фойдали ва қизиқарли видеолар • 🔥 энг долзарб янгиликлар\n"
          "📩 Реклама: @Ozodjamol")
@@ -65,11 +65,7 @@ async def main():
                 except Exception as e:  # noqa: BLE001 — занят/недоступен → следующий
                     print(f"  @{u}: {type(e).__name__}")
         print(f"USERNAME @{uname}")
-        try:
-            await c(EditChatAboutRequest(peer=ch, about=ABOUT))
-            print("описание обновлено")
-        except Exception as e:  # noqa: BLE001
-            print(f"описание — {type(e).__name__}")
+        # описание и аватарку владелец ставит сам
         ch = await c.get_entity(ch)
         await c(EditAdminRequest(channel=ch, user_id=await c.get_entity(gp["GENPLAN_BOT_USERNAME"]), rank="PAPA",
                                  admin_rights=types.ChatAdminRights(post_messages=True, edit_messages=True, delete_messages=True)))

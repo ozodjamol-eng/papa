@@ -56,7 +56,7 @@ class TestHub(unittest.TestCase):
         self.h(cb("rb:1:0"))
         self.h(cb(f"rb:2:{hub.rubrics(CFG, 'paparazzi').index('Видео')}"))
         rows = self.db.execute("SELECT channel, status FROM materials ORDER BY id").fetchall()
-        self.assertEqual([tuple(r) for r in rows], [("xojaobod", "queued"), ("paparazzi", "queued")])
+        self.assertEqual([tuple(r) for r in rows], [("davra", "queued"), ("paparazzi", "queued")])
 
     def test_delete(self):
         self.h(post(12)); self.h(cb("ch:1:p")); self.h(cb("del:1"))

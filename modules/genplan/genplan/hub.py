@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from . import store
 
-NAMES = {"xojaobod": "📍 Хўжаобод", "paparazzi": "⭐ PaparazziUZ"}
-CODE = {"x": "xojaobod", "p": "paparazzi"}
+NAMES = {"davra": "🎉 КАТТА ДАВРА", "paparazzi": "⭐ PaparazziUZ", "xojaobod": "📍 Хўжаобод"}
+CODE = {"d": "davra", "p": "paparazzi", "x": "xojaobod"}
+BOTH = ("davra", "paparazzi")   # «в оба»: главный канал + PaparazziUZ
 MEDIA_KEYS = ("photo", "video", "animation", "document", "audio", "voice", "video_note")
 
 
@@ -22,10 +23,11 @@ def rubrics(cfg: dict, channel: str) -> list[str]:
 
 def kb_channel(mid: int) -> dict:
     return {"inline_keyboard": [
-        [{"text": NAMES["xojaobod"], "callback_data": f"ch:{mid}:x"},
+        [{"text": NAMES["davra"], "callback_data": f"ch:{mid}:d"},
          {"text": NAMES["paparazzi"], "callback_data": f"ch:{mid}:p"}],
-        [{"text": "🔁 В оба канала", "callback_data": f"ch:{mid}:b"},
-         {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]}
+        [{"text": NAMES["xojaobod"], "callback_data": f"ch:{mid}:x"},
+         {"text": "🔁 Давра + Paparazzi", "callback_data": f"ch:{mid}:b"}],
+        [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]}
 
 
 def kb_rubric(cfg: dict, mid: int, channel: str) -> dict:
@@ -80,9 +82,9 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         base = preview(m["text"], bool(m["has_media"]))
         if kind == "ch":
             if arg[0] == "b":
-                store.update(db, mid, channel="xojaobod")
-                store.clone_for(db, mid, "paparazzi")
-                edit(f"{base}\n\n→ {NAMES['xojaobod']}: выберите рубрику", kb_rubric(cfg, mid, "xojaobod"))
+                store.update(db, mid, channel=BOTH[0])
+                store.clone_for(db, mid, BOTH[1])
+                edit(f"{base}\n\n→ {NAMES[BOTH[0]]}: выберите рубрику", kb_rubric(cfg, mid, BOTH[0]))
             else:
                 ch = CODE[arg[0]]
                 store.update(db, mid, channel=ch)
