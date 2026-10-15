@@ -1,0 +1,39 @@
+[Unit]
+Description=PAPA GENPLAN — хаб владельца и публикации по сетке (режим из config.toml: shadow/live)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-genplan
+Group=papa-genplan
+EnvironmentFile=/etc/papa-genplan/genplan.env
+EnvironmentFile=/etc/papa-tg/publisher.env
+Environment=PAPA_GENPLAN_DB=/var/lib/papa-genplan/genplan.sqlite3 PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/genplan
+ExecStart=/opt/papa-venv/razvedka/bin/python -m genplan run
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-genplan
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0077
+MemoryHigh=120M
+MemoryMax=180M
+CPUQuota=25%
+TasksMax=24
+
+[Install]
+WantedBy=multi-user.target
