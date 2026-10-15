@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from . import translit
+
 MENTION = re.compile(r"(?<![\w.])@[A-Za-z][A-Za-z0-9_]{3,31}\b")
 TME = re.compile(r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/[^\s)]+", re.I)
 EMPTY_LABEL = re.compile(r"^[\s👉➡️🔗📢✅❗️|:—–-]*$")
@@ -19,14 +21,38 @@ def strip_sources(text: str, keep: tuple[str, ...] = ()) -> str:
     return re.sub(r"[ \t]{2,}", " ", out)
 
 
-def pick_hook(ch: dict, rubric: str | None, n: int) -> str:
-    """Нижний хук: раз в cross.every постов — переход в соседний канал; иначе хук рубрики; иначе общий.
-    n — номер материала: хуки чередуются и не повторяются подряд."""
+CTA = re.compile(r"(?i)(реакция|улашинг|обуна бўлинг|юборинг|қолдиринг|ёзинг|reaksiya|ulashing|obuna bo)")
+
+
+def _stem_hit(text: str, words) -> bool:
+    low = (text or "").lower()
+    return any(re.search(r"(?<![\w])" + re.escape(w.lower()), low) if w[0].isalnum() else w in low for w in words)
+
+
+def topic_of(text: str, topics: list[dict]) -> dict | None:
+    """Первая подходящая тема по смыслу текста (по ключевым словам). Порядок в настройках = приоритет."""
+    return next((t for t in topics or [] if _stem_hit(text, t.get("words", []))), None)
+
+
+def pick_hook(ch: dict, rubric: str | None, n: int, body: str = "", topics: list[dict] | None = None) -> str:
+    """Нижний хук по смыслу текста.
+    1) печальная тема (вафот, фожиа…) — без хука; 2) в конце текста уже есть призыв — свой не добавляем;
+    3) раз в cross.every — переход в соседний канал; 4) тема текста; 5) рубрика; 6) общий. Хуки чередуются (n)."""
+    t = topic_of(body, topics or [])
+    if t and t.get("silent"):
+        return ""
+    tail = "\n".join((body or "").strip().splitlines()[-2:])
+    if body and CTA.search(tail):
+        return ""
+    if t and t.get("hooks"):
+        topic_pool = t["hooks"]
+    else:
+        topic_pool = None
     cross = ch.get("cross") or {}
     every = int(cross.get("every", 0) or 0)
     if every and cross.get("text") and n % every == every - 1:
         return cross["text"]
-    pool = (ch.get("rubric_hooks") or {}).get(rubric or "") or ch.get("hooks") or []
+    pool = topic_pool or (ch.get("rubric_hooks") or {}).get(rubric or "") or ch.get("hooks") or []
     if isinstance(pool, str):
         return pool
     return pool[n % len(pool)] if pool else ""
@@ -39,6 +65,7 @@ def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...
     if is_ad:
         return (text or "").strip()
     body = strip_sources(text, keep=own)
+    body, _ = translit.auto(body)
     for line in (signature, hook):
         if line:
             body = "\n".join(ln for ln in body.splitlines() if ln.strip() != line.strip()).strip()

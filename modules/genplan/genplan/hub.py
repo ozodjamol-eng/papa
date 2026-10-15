@@ -39,9 +39,12 @@ def kb_rubric(cfg: dict, mid: int, channel: str) -> dict:
 
 
 def preview(text: str, has_media: bool) -> str:
-    t = (text or "").strip()
+    from . import translit
+    t, conv = translit.auto((text or "").strip())
     t = (t[:280] + "…") if len(t) > 280 else t
-    return f"📥 Новый материал{' 🖼' if has_media else ''}\n\n{t or '(без текста)'}"
+    notes = [n for n in (("🔤 Латиница → кириллица (автоматически)" if conv else ""), translit.language_note(text)) if n]
+    note = ("\n\n" + "\n".join(notes)) if notes else ""
+    return f"📥 Новый материал{' 🖼' if has_media else ''}\n\n{t or '(без текста)'}{note}"
 
 
 def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:

@@ -25,6 +25,12 @@ def target(cfg: dict, env: dict, channel: str) -> str | int:
     return int(env["TEST_GROUP_ID"]) if cfg["channels"][channel]["publisher"] == "account" else int(env["TEST_CHANNEL_ID"])
 
 
+def hook_for(cfg: dict, ch: dict, m) -> str:
+    body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
+    topics = [] if ch.get("topics") is False else cfg.get("topics", [])
+    return text.pick_hook(ch, m["rubric"], int(m["id"]), body, topics)
+
+
 def share_button(ch: dict) -> dict | None:
     """Кнопка под постом «Дўстларга улашиш» — подписчик одним нажатием отправляет канал друзьям (рост)."""
     if not ch.get("share_button"):
@@ -37,7 +43,7 @@ def share_button(ch: dict) -> dict | None:
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print) -> bool:
     ch = cfg["channels"][channel]
     own = (ch["username"],) + tuple(c["username"] for c in cfg["channels"].values())
-    body = text.finalize(m["text"], ch.get("signature", ""), own=own, hook=text.pick_hook(ch, m["rubric"], int(m["id"])),
+    body = text.finalize(m["text"], ch.get("signature", ""), own=own, hook=hook_for(cfg, ch, m),
                          limit=1024 if m["has_media"] else 4096)
     p = pubs[ch["publisher"]]
     try:

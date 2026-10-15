@@ -115,6 +115,29 @@ class TestHook(unittest.TestCase):
         self.assertEqual(out2, "Матн\n\n🔔 Хук\n🎉 @kattadavrauz")
 
 
+class TestSmartHook(unittest.TestCase):
+    import tomllib as _t
+    CFG = _t.load(open(Path(__file__).parent.parent / "config.toml", "rb"))
+    D = CFG["channels"]["davra"]
+
+    def h(self, body, n=1, rubric="Видео"):
+        return text.pick_hook(self.D, rubric, n, body, self.CFG["topics"])
+
+    def test_topics(self):
+        self.assertIn("Об-ҳаво", self.h("Эртага кучли ёмғир ёғади", n=0))
+        self.assertIn("Кулдингизми", self.h("Бу видео 😂😂", n=0))
+        self.assertEqual(self.h("Машҳур актёр вафот этди"), "")              # печаль — без хука
+        self.assertEqual(self.h("Ретро видео\nЁқса, реакция қолдиринг!"), "")  # свой призыв уже есть
+        self.assertNotIn("Об-ҳаво", self.h("Бошлади ишни"))                  # нет ложных совпадений
+
+    def test_translit(self):
+        out = text.finalize("Xo'jaobodda yangi bozor ochildi, bugun ko'ring va do'stlarga ayting", "🎉 @kattadavrauz")
+        self.assertTrue(out.startswith("Хўжаободда янги бозор очилди"))
+        self.assertIn("@kattadavrauz", out)
+        ru = "Сегодня в Ташкенте прошла выставка"
+        self.assertTrue(text.finalize(ru, "").startswith(ru))
+
+
 class FakeHTTP:
     def __init__(self, ok=True):
         self.calls, self.ok = [], ok
