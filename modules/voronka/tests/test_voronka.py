@@ -104,6 +104,16 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(self.run1(now=NOW + dt.timedelta(minutes=61))["sent"], 1)  # ошибочный не повторяется
 
 
+class TestOnlyUsers(unittest.TestCase):
+    def test_only_testers_answered_including_backlog(self):
+        db, ig = store.connect(":memory:"), FakeIG()
+        ig.cm["M1"] = [c("1", "10", "Омийн", "goldwaterandijon"), c("2", "11", "Омийн", "stranger")]
+        cfg = dict(CFG, only_users=["GoldWaterAndijon"])
+        s = engine.run_once(ig, db, cfg, NOW, log=lambda *_: None)
+        self.assertEqual((s["sent"], [x[0] for x in ig.sent]), (1, ["1"]))
+        self.assertFalse(store.seen(db, "2"))  # чужой не помечен — после теста обработается обычным порядком
+
+
 class FakeBot:
     def __init__(self, fail_welcome=False):
         self.calls, self.fail_welcome = [], fail_welcome

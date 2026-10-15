@@ -72,9 +72,13 @@ def run_once(ig, db, cfg: dict, now: dt.datetime | None = None, log=print) -> di
         for c in reversed(ig.comments(m["id"], limit=int(cfg.get("comments_per_poll", 50)))):
             if store.seen(db, c["id"]):
                 continue
-            stats["new"] += 1
             u = c.get("from") or {}
-            if first_time and not cfg.get("backlog", False):
+            only = {x.lower() for x in cfg.get("only_users", [])}
+            is_tester = (u.get("username") or "").lower() in only
+            if only and not is_tester:
+                continue  # тестовый режим: чужие комментарии не трогаем и не помечаем
+            stats["new"] += 1
+            if first_time and not cfg.get("backlog", False) and not is_tester:
                 store.mark(db, c, m["id"], at, "skip", "до включения")
                 stats["skip"] += 1
                 continue

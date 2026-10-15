@@ -3,12 +3,13 @@
 own_username = "paparazzi.uz"
 mode = "all"              # "all" — ответ на любой комментарий; "keyword" — только с кодовыми словами
 keywords = ["канал", "kanal"]
-dry_run = true            # true — ничего не отправляет, только показывает. Включать false после проверки.
+dry_run = false           # ЖИВОЙ ТЕСТ только для only_users. true — ничего не отправляет, только показывает. Включать false после проверки.
 
 # Посты под наблюдением: id или ссылка instagram.com/p/... Сначала — один пост.
 posts = []
-all_recent = false        # true — все посты за последние max_age_days
-scan_recent = 10
+only_users = ["xojaobodliklarmiz", "goldwaterandijon"]          # тест: отвечать только этим аккаунтам (их старые комментарии тоже)
+all_recent = true         # тест: последний пост (scan_recent = 1). true — все посты за последние max_age_days
+scan_recent = 1
 max_age_days = 7          # Meta разрешает личный ответ только в течение 7 дней
 backlog = false           # false — комментарии, оставленные до включения поста, не трогаем
 comments_per_poll = 50
@@ -16,7 +17,7 @@ poll_seconds = 120
 max_per_hour = 30
 pause_minutes = 60
 
-page_url = "https://papa.example/"   # страница-визитка (адрес будет после размещения)
+page_url = "https://t.me/ozodjamoll"   # временно; потом — страница-визитка
 
 dm_text = """Ассалому алайкум! 😊
 Янада қизиқ янгиликлар ва видеолар биринчи бўлиб Телеграм каналларимизда 🔥
