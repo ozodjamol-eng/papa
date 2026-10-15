@@ -36,7 +36,7 @@ echo "4/4 утро на завтра пересобирается (новые в
 sudo -u papa-genplan $PY - "$DB" <<'PY'
 import sqlite3, sys
 db = sqlite3.connect(sys.argv[1])
-n = db.execute("UPDATE fixed_posts SET prepared=0, redo=1, tries=0, next_try=NULL, hub_msg=NULL, preview_sent=0 "
+n = db.execute("UPDATE fixed_posts SET prepared=0, redo=1, tries=0, next_try=NULL, hub_msg=NULL, preview_sent=0, approved=0 "
                "WHERE status='pending' AND day=date('now','+5 hours','+1 day')").rowcount
 db.commit(); print(f"  постов на пересборку: {n}")
 PY

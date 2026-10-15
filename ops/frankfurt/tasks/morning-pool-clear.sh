@@ -26,7 +26,7 @@ for f in pool.glob("*.mp4") if pool.exists() else []:
 for f in (pool / "index.jsonl", ):
     if f.exists():
         f.unlink()
-r = db.execute("UPDATE fixed_posts SET prepared=0, redo=1, tries=0, next_try=NULL, hub_msg=NULL, preview_sent=0 "
+r = db.execute("UPDATE fixed_posts SET prepared=0, redo=1, tries=0, next_try=NULL, hub_msg=NULL, preview_sent=0, approved=0 "
                "WHERE status='pending' AND day=date('now','+5 hours','+1 day')").rowcount
 db.commit()
 print(f"удалено непроверенных видео: {n} · оставлено годных: {len(keep)} · утро на завтра на пересборку: {r}")
