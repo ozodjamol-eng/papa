@@ -344,6 +344,15 @@ class TestMorning(unittest.TestCase):
         self.assertTrue(p["text"].rstrip().endswith("⭐ @ozodjamoll"))
         self.assertEqual((d["prepared"], d["approved"]), (1, 0))
 
+    def test_drop_wrong_dates(self):
+        t = "🌿 ХАЙРЛИ ТОНГ!\n15 сентябрь — сешанба куни барчамиз учун омадли ўтсин! 🤲\nЖума куни муборак!\nЭНГ ЯҚИНЛАРГА УЛАШИБ ҚЎЙИНГ."
+        out = morning.drop_wrong_dates(t, FRI)
+        self.assertNotIn("сентябрь", out)
+        self.assertIn("Жума куни муборак!", out)
+        self.assertIn("ЭНГ ЯҚИНЛАРГА", out)
+        self.assertIn("Душанба", morning.drop_wrong_dates("Душанба тонги", dt.date(2026, 10, 19)))
+        self.assertEqual(morning.drop_wrong_dates("Шанба тонги", FRI), "")
+
     def test_overview(self):
         morning.ensure_all(self.db, CFG, at("22:40"))
         t = morning.overview(self.db, CFG, at("22:40"))

@@ -941,6 +941,20 @@ MONTHS = ("январ", "феврал", "март", "апрел", "май", "и�
 SKLAD_ORDER = ("davra", "paparazzi", "xojaobod")
 
 
+def drop_wrong_dates(text: str, day: dt.date) -> str:
+    """Строки с чужой датой или другим днём недели («15 сентябрь — сешанба куни…») убираются — дату ставим свою."""
+    wd = WEEKDAY[day.weekday()].lower()
+    out = []
+    for ln in (text or "").splitlines():
+        low = ln.lower()
+        other_wd = any(re.search(rf"(?<![а-яўқғҳa-z]){w.lower()}", low) for w in WEEKDAY if w.lower() != wd)
+        month = any(re.search(rf"\d{{1,2}}[\s\-–]*{m}", low) for m in MONTHS) or re.search(r"\d{1,2}[./]\d{1,2}[./]\d{2,4}", low)
+        if other_wd or month:
+            continue
+        out.append(ln)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 def use_sklad(bot, db, cfg: dict, env: dict, items: list[dict], key: str = "day",
               now: dt.datetime | None = None) -> list[str]:
     """Материалы владельца из PAPA СКЛАД → ближайшие утренние посты (key) по одному на канал (Давра, Paparazzi, Хўжаобод).
@@ -960,7 +974,7 @@ def use_sklad(bot, db, cfg: dict, env: dict, items: list[dict], key: str = "day"
         r, ch = rows[channel], cfg["channels"][channel]
         day = dt.date.fromisoformat(r["day"])
         head = f"📅 {day.day}-{MONTHS[day.month - 1]} · {WEEKDAY[day.weekday()]}"
-        cap = T.finalize(f"{head}\n\n{body}".strip(), ch.get("signature", ""), own=own, limit=1024)
+        cap = T.finalize(f"{head}\n\n{drop_wrong_dates(body, day)}".strip(), ch.get("signature", ""), own=own, limit=1024)
         res = bot("copyMessage", chat_id=int(env["HUB_CHAT_ID"]), from_chat_id=int(item["chat"]),
                   message_id=int(item["msg_id"]), caption=cap)
         update(db, r["id"], text=cap, hub_msg=int(res["message_id"]), source=f"sklad:{item['msg_id']}", prepared=1,
