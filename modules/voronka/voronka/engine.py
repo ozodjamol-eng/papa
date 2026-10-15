@@ -36,6 +36,18 @@ def wants_link(text: str, cfg: dict) -> bool:
     return any(norm(k) in t for k in cfg.get("keywords", []))
 
 
+URL_RE = re.compile(r"https?://|www\.|t\.me/|\.(com|ru|uz|net|org|io)\b", re.I)
+
+
+def is_spam(text: str, cfg: dict) -> bool:
+    """Спам-боты: ссылки, либо упоминание чужого аккаунта вместе с рекламным словом."""
+    t = norm(text)
+    if URL_RE.search(t):
+        return True
+    words = cfg.get("spam_words", [])
+    return "@" in t and any(w in t for w in words)
+
+
 def target_media(ig, cfg: dict, now: dt.datetime) -> list[dict]:
     max_age = dt.timedelta(days=int(cfg.get("max_age_days", 7)))
     recent = ig.recent_media(limit=int(cfg.get("scan_recent", 10)))
@@ -91,6 +103,10 @@ def _run_once(ig, db, cfg: dict, now: dt.datetime, log=print) -> dict:
             if u.get("id") == ig.user_id or (u.get("username") or "").lower() == cfg.get("own_username", "").lower():
                 store.mark(db, c, m["id"], at, "own")
                 stats["own"] += 1
+                continue
+            if is_spam(c.get("text", ""), cfg):
+                store.mark(db, c, m["id"], at, "skip", "спам")
+                stats["skip"] += 1
                 continue
             if not wants_link(c.get("text", ""), cfg):
                 store.mark(db, c, m["id"], at, "skip", "нет кодового слова")

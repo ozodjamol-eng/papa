@@ -77,6 +77,13 @@ class TestEngine(unittest.TestCase):
         self.assertFalse(engine.wants_link("зўр видео", dict(CFG, mode="keyword")))
         self.assertTrue(engine.wants_link("anything", CFG))
 
+    def test_spam_filter(self):
+        cfg = dict(CFG, spam_words=["vpn", "сервис", "заработ"])
+        self.assertTrue(engine.is_spam("Отличный сервис — @takoe_vpn21", cfg))
+        self.assertTrue(engine.is_spam("смотри t.me/xxx", cfg))
+        self.assertFalse(engine.is_spam("@dostim qara 😂", cfg))  # друзей отмечают — это не спам
+        self.assertFalse(engine.is_spam("Омийн🤲", cfg))
+
     def test_dry_run_sends_nothing(self):
         self.run1()
         self.ig.cm["M1"] = [c("2", "11", "a")]
