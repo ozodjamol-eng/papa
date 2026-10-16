@@ -11,6 +11,12 @@ RESTRICTED = frozenset({'deploy_request','restart_service_request','os_repair_re
 # Шлюз проверяет только форму; что можно сразу, что — по кнопке владельца в Telegram, что запрещено —
 # решает исполнитель по ops/frankfurt/autopilot/allow.json (граница безопасности — там).
 RUNNER = frozenset({'papa_task'})
+# Лондон (с 2026-10-16): задачу ops/london/tasks/<имя>.sh решает тот же автопилот Франкфурта (allow.json Лондона,
+# кнопка владельца) и переводит её в 'ready'; забирает и выполняет только исполнитель papa-runner на Лондоне
+# (своё устройство RUNNER_DEVICE со своим токеном; агент «только чтение» эти задачи не видит).
+RUNNER_TARGETS = frozenset({'frankfurt','london'})
+RUNNER_DEVICE = 'london-runner'
+RUNNER_RESULT_MAX = 32768
 OPERATIONS = SAFE_SERVER | SAFE_AGENT | RESTRICTED | RUNNER
 MAX_ATTEMPTS=3
 TASK_TTL_SECONDS=3600
@@ -85,7 +91,7 @@ class Store:
         if operation in RESTRICTED and not payload.get('reason'): raise ValueError('reason_required')
         if operation in RUNNER:
             import re
-            if target!='frankfurt': raise ValueError('runner_target_frankfurt')
+            if target not in RUNNER_TARGETS: raise ValueError('runner_target_unknown')
             if set(payload)-{'task','reason'} or not isinstance(payload.get('task'),str) \
                     or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}',payload['task']):
                 raise ValueError('invalid_task_name')
@@ -98,7 +104,7 @@ class Store:
         priority=100 if operation=='urgent_prepare' else 20 if operation in SAFE_SERVER else 10
         if operation in RUNNER:
             with self.conn() as d:
-                busy=d.execute("SELECT COUNT(*) FROM tasks WHERE operation IN ('papa_task') AND status IN ('queued','running','awaiting_owner')").fetchone()[0]
+                busy=d.execute("SELECT COUNT(*) FROM tasks WHERE operation IN ('papa_task') AND status IN ('queued','running','awaiting_owner','deciding','ready')").fetchone()[0]
             if busy>=5: raise ValueError('runner_queue_full')
         with self.conn() as d:
             d.execute('BEGIN IMMEDIATE')
@@ -168,6 +174,30 @@ class Store:
             d.execute("UPDATE tasks SET status='running',attempts=attempts+1,lease_until=?,updated_at=? WHERE id=?",(time.time()+120,utc(),r['id']))
             self.event(d,device_id,'agent_claimed',r['id'])
             return {'id':r['id'],'operation':r['operation'],'payload':json.loads(r['payload'])}
+    def next_runner(self,device_id):
+        """Исполнитель Лондона: только papa_task, target='london', уже разрешённые автопилотом (status='ready')."""
+        if device_id!=RUNNER_DEVICE: raise PermissionError('runner_only')
+        with self.conn() as d:
+            d.execute('BEGIN IMMEDIATE')
+            d.execute("UPDATE tasks SET status='expired',updated_at=? WHERE operation='papa_task' AND target='london' "
+                      "AND status='ready' AND updated_at<?",(utc(),_cutoff(TASK_TTL_SECONDS)))
+            r=d.execute("SELECT * FROM tasks WHERE operation='papa_task' AND target='london' AND status='ready' "
+                        "ORDER BY created_at ASC LIMIT 1").fetchone()
+            if not r: return None
+            d.execute("UPDATE tasks SET status='running',attempts=attempts+1,updated_at=? WHERE id=?",(utc(),r['id']))
+            self.event(d,device_id,'runner_claimed',r['id'])
+            p=json.loads(r['payload'])
+            return {'id':r['id'],'task':p['task'],'reason':p.get('reason','')}
+    def runner_finish(self,device_id,task_id,ok,result):
+        if device_id!=RUNNER_DEVICE: raise PermissionError('runner_only')
+        if not isinstance(result,dict) or len(j(result).encode())>RUNNER_RESULT_MAX: raise ValueError('invalid_result')
+        with self.conn() as d:
+            d.execute('BEGIN IMMEDIATE')
+            cur=d.execute("UPDATE tasks SET status=?,result=?,updated_at=? WHERE id=? AND operation='papa_task' "
+                          "AND target='london' AND status='running'",
+                          ('succeeded' if ok else 'failed',j(result),utc(),task_id))
+            if cur.rowcount!=1: raise ValueError('not_running')
+            self.event(d,device_id,'runner_'+('succeeded' if ok else 'failed'),task_id)
     def agent_finish(self,device_id,task_id,ok,result):
         if not isinstance(result,dict) or len(j(result).encode())>16384: raise ValueError('invalid_result')
         ops=tuple(sorted(SAFE_AGENT)); ph=_ph(len(ops))

@@ -286,13 +286,15 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
         {'name': 'nexus_voronka', 'title': 'Воронка Instagram', 'description': 'Состояние Voronka PAPA: режим (работа/проверка), сколько комментариев под постами @paparazzi.uz обработано и сколько директов со ссылкой отправлено за час/сутки/всего, пропуски (спам, дубли), ошибки и паузы Meta, заявки в Telegram, посты под наблюдением. Обновляется каждые 2 минуты. Без личных данных. Только чтение.',
          'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
          'annotations': {'readOnlyHint': True, 'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': False}, 'scope': 'nexus.read'},
-        {'name': 'nexus_papa_task', 'title': 'Автопилот PAPA (Франкфурт)',
-         'description': 'Выполнить задачу PAPA на сервере Франкфурт — то же, что владелец делает командой papa-update <задача>. '
-                        'Исполнитель сам решает по списку ops/frankfurt/autopilot/allow.json: безопасные задачи (статус, перезапуск GENPLAN, '
-                        'утро, папки, выкладка с тестами и откатом) — сразу; остальные — только после кнопки «✅ Разрешить» владельца в Telegram; '
+        {'name': 'nexus_papa_task', 'title': 'Автопилот PAPA (Франкфурт / Лондон)',
+         'description': 'Выполнить задачу PAPA на сервере — то же, что владелец делает командой papa-update <задача>. '
+                        'server=frankfurt (по умолчанию) — задачи ops/frankfurt/tasks; server=london — задачи ops/london/tasks (GENPLAN 5, '
+                        'боты Хўжаобода), их выполняет исполнитель papa-runner на Лондоне. Решает автопилот по ops/<сервер>/autopilot/allow.json: '
+                        'безопасные задачи — сразу; остальные — только после кнопки «✅ Разрешить» владельца в Telegram; '
                         'задачи с секретами и входом в аккаунты — запрещены. Ждёт до 40 с; дальше результат — nexus_papa_result.',
          'inputSchema': {'type': 'object', 'properties': {
-             'task': {'type': 'string', 'pattern': '^[a-z0-9][a-z0-9-]{1,48}$', 'description': 'имя задачи из ops/frankfurt/tasks без .sh'},
+             'task': {'type': 'string', 'pattern': '^[a-z0-9][a-z0-9-]{1,48}$', 'description': 'имя задачи из ops/<сервер>/tasks без .sh'},
+             'server': {'type': 'string', 'enum': ['frankfurt', 'london'], 'description': 'сервер; по умолчанию frankfurt'},
              'reason': {'type': 'string', 'maxLength': 300, 'description': 'зачем — коротко по-русски, владелец видит это в Telegram'}},
              'required': ['task', 'reason'], 'additionalProperties': False},
          'annotations': {'readOnlyHint': False, 'destructiveHint': True, 'idempotentHint': False, 'openWorldHint': False}, 'scope': 'nexus.checks'},
@@ -347,7 +349,9 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
             task, reason = args.get('task'), args.get('reason', '')
             if not isinstance(task, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}', task): raise ValueError('bad_task')
             if not isinstance(reason, str) or len(reason) > 300: raise ValueError('bad_reason')
-            created = g('POST', '/api/tasks', json={'operation': 'papa_task', 'target': 'frankfurt', 'payload': {'task': task, 'reason': reason},
+            server = args.get('server', 'frankfurt')
+            if server not in ('frankfurt', 'london'): raise ValueError('bad_server')
+            created = g('POST', '/api/tasks', json={'operation': 'papa_task', 'target': server, 'payload': {'task': task, 'reason': reason},
                                                      'idempotency_key': f'mcp-{who}-{secrets.token_hex(8)}'})
             tid = created['id']; t0 = time.time(); row = None
             while time.time() - t0 < 40:
@@ -364,8 +368,9 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
     def papa_view(row):
         res = json.loads(row.get('result') or '{}') if isinstance(row.get('result'), str) else (row.get('result') or {})
         hint = {'queued': 'в очереди у исполнителя', 'running': 'выполняется',
-                'awaiting_owner': 'ждёт кнопку владельца в Telegram'}.get(row.get('status'), '')
-        return {'task_id': row.get('id'), 'status': row.get('status'), 'hint': hint, **res}
+                'awaiting_owner': 'ждёт кнопку владельца в Telegram',
+                'ready': 'разрешено, ждёт исполнителя на Лондоне'}.get(row.get('status'), '')
+        return {'task_id': row.get('id'), 'status': row.get('status'), 'server': row.get('target'), 'hint': hint, **res}
 
     def rpc_result(i, result): return {'jsonrpc': '2.0', 'id': i, 'result': result}
     def rpc_error(i, code, msg): return {'jsonrpc': '2.0', 'id': i, 'error': {'code': code, 'message': msg}}

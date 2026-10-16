@@ -1,0 +1,18 @@
+[Unit]
+Description=PAPA runner (Лондон) — выполняет задачи papa-update, разрешённые автопилотом Франкфурта
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/papa-runner/runner.env
+ExecStart=/usr/bin/python3 -I /opt/papa/ops/london/runner/papa_runner.py
+Restart=always
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=30
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

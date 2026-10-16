@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from .core import Store, SAFE_AGENT, SAFE_SERVER, RESTRICTED, RUNNER, POLICY, safe_server_execute
+from .core import Store, SAFE_AGENT, SAFE_SERVER, RESTRICTED, RUNNER, RUNNER_DEVICE, POLICY, safe_server_execute
 
 ROOT=Path(__file__).resolve().parent.parent
 
@@ -251,7 +251,22 @@ def create_app(config:Settings|None=None):
     @app.post('/api/agent/result')
     def agent_result(request:Request,body:AgentResult):
         device_id=device_auth(request)
+        if device_id==RUNNER_DEVICE:raise HTTPException(403,'runner_uses_runner_api')
         try:store.agent_finish(device_id,body.task_id,body.ok,body.result)
+        except ValueError as exc:raise HTTPException(409,str(exc))
+        return {'ok':True}
+    # Исполнитель Лондона (papa-runner): только задачи, уже разрешённые автопилотом Франкфурта.
+    @app.post('/api/runner/next')
+    def runner_next(request:Request):
+        device_id=device_auth(request)
+        if device_id!=RUNNER_DEVICE:raise HTTPException(403,'runner_only')
+        store.seen(device_id,'Linux','runner',{'role':'papa-runner'})
+        return {'task':store.next_runner(device_id)}
+    @app.post('/api/runner/result')
+    def runner_result(request:Request,body:AgentResult):
+        device_id=device_auth(request)
+        if device_id!=RUNNER_DEVICE:raise HTTPException(403,'runner_only')
+        try:store.runner_finish(device_id,body.task_id,body.ok,body.result)
         except ValueError as exc:raise HTTPException(409,str(exc))
         return {'ok':True}
     return app

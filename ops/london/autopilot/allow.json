@@ -1,0 +1,26 @@
+{
+  "_": "Автопилот PAPA для Лондона (GENPLAN 5, боты Хўжаобода). Решает автопилот Франкфурта, выполняет papa-runner на Лондоне. auto — сразу (в главные часы 05:30–07:30 и 19:00–22:00 — только чтение, остальное с кнопкой); approve — после кнопки владельца; deny — никогда. Незнакомое = approve, но runner выполняет только перечисленное здесь.",
+  "auto": [
+    "status",
+    "london-diagnose",
+    "genplan-inventory",
+    "genplan5-prayer-find"
+  ],
+  "approve": [
+    "genplan5-overdue-skip",
+    "genplan5-prayer-time-fix",
+    "cleanup",
+    "nexus-old-stop",
+    "nexus-old-restore"
+  ],
+  "deny_patterns": [
+    "-key$",
+    "-token$",
+    "-login$",
+    "-qr$",
+    "^runner-",
+    "^purge",
+    "^archive",
+    "^core-install"
+  ]
+}

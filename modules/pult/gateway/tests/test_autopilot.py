@@ -33,8 +33,10 @@ def test_bad_task_rejected(client, payload):
     assert task(client, payload).status_code == 422
 
 
-def test_only_frankfurt_target(client):
-    assert task(client, {'task': 'status'}, target='london').status_code == 422
+def test_only_known_targets(client):
+    assert task(client, {'task': 'status'}, target='tokyo').status_code == 422
+    assert task(client, {'task': 'status'}, target='cloud').status_code == 422
+    assert task(client, {'task': 'status'}, target='london').status_code == 200
 
 
 def test_queue_limit(client):

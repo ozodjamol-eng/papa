@@ -39,6 +39,12 @@
 - **Тестовый контур** (2026-10-15): закрытый канал «PAPA TEST» (id -1004318108675), бот `@papa_test_88fb84_bot` — админ канала; токен `/etc/papa-test/bot.env` (0600). Проверка: `papa-update test-setup`.
 - Watchdog каждые 2 мин (шлюз, Connect, Разведка, диск, память) → Healthchecks → Telegram. Шифрованная резервная копия ночью (02:17 UTC): база шлюза + база Разведки, по 14 копий. Скрипты ставятся из репозитория: `papa-update monitoring`.
 
+## Автопилот Лондона — 2026-10-16 (код готов, ждёт установки владельцем)
+- Код: `ops/london/runner/` (papa-runner), `ops/london/autopilot/allow.json`, шлюз `/api/runner/*`, `nexus_papa_task` с `server=london`.
+- Установка: Франкфурт `papa-update london-runner-token` (шлюз + пропуск, токен показывается один раз) → Лондон `papa-update runner-install` (вставить токен).
+- Новые задачи Лондона: `london-diagnose` (только чтение: упавшие юниты и почему, просроченные посты), `genplan5-overdue-skip` (старые просрочки >6 ч → skipped, с копией базы).
+- Открыто на 16.10: `xojaobod-evening-digest.service` в состоянии failed (причину покажет `london-diagnose`); 1 просроченный пост GENPLAN 5 с 13.10 22:00.
+
 ## Отложено владельцем (делаем в конце)
 
 - Смена всех паролей и токенов (Google, DigitalOcean, GitHub, Telegram, токен агента London).

@@ -36,3 +36,35 @@ def test_papa_task_hidden_without_checks_scope(env):
     cid, v, cb, r = connect(c, allow_checks=False); tok = token(c, cid, v, cb, r)['access_token']
     names = [t['name'] for t in rpc(c, tok, 'tools/list').json()['result']['tools']]
     assert 'nexus_papa_task' not in names and 'nexus_papa_result' in names
+
+
+def _fake(c, calls, status='ready'):
+    app_gw = c.app.state.gw
+
+    def gw(method, path, **kw):
+        if method == 'POST' and path == '/api/tasks':
+            calls.append((method, path, kw)); return {'id': 'abcdef0456', 'status': 'queued'}
+        if path == '/api/tasks/abcdef0456':
+            return {'id': 'abcdef0456', 'status': status, 'target': 'london', 'result': None}
+        return app_gw(method, path, **kw)
+    c.app.state.gw = gw
+
+
+def test_papa_task_for_london(env, monkeypatch):
+    c, calls = env
+    _fake(c, calls, status='succeeded')
+    cid, v, cb, r = connect(c); tok = token(c, cid, v, cb, r)['access_token']
+    out = rpc(c, tok, 'tools/call', {'name': 'nexus_papa_task',
+                                     'arguments': {'task': 'london-diagnose', 'reason': 'тест', 'server': 'london'}}).json()['result']
+    assert out['isError'] is False and out['structuredContent']['server'] == 'london'
+    sent = [k['json'] for m, p, k in calls if m == 'POST' and p == '/api/tasks'][-1]
+    assert sent['target'] == 'london' and sent['payload'] == {'task': 'london-diagnose', 'reason': 'тест'}
+
+
+def test_papa_task_unknown_server_rejected(env):
+    c, calls = env
+    cid, v, cb, r = connect(c); tok = token(c, cid, v, cb, r)['access_token']
+    out = rpc(c, tok, 'tools/call', {'name': 'nexus_papa_task',
+                                     'arguments': {'task': 'status', 'reason': 'x', 'server': 'tokyo'}}).json()
+    assert ('error' in out) or out['result']['isError'] is True
+    assert not [1 for m, p, k in calls if m == 'POST' and p == '/api/tasks']

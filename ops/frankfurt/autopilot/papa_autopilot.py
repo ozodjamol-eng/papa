@@ -7,6 +7,8 @@
   * одна задача за раз, тайм-аут, stdin закрыт (задачи с вводом не пройдут);
   * в выводе маскируются строки, похожие на токены;
   * о каждой задаче владелец получает сообщение от «🎉 КАТТА ДАВРА Пульт».
+Лондон (с 2026-10-16): задачу target=london решает этот же исполнитель — по ops/london/autopilot/allow.json и той же
+кнопке владельца, — но не выполняет сам: переводит в 'ready', её забирает papa-runner на Лондоне; итог приходит сюда.
 Только стандартная библиотека Python. Отключить: systemctl disable --now papa-autopilot
 """
 from __future__ import annotations
@@ -28,6 +30,9 @@ from pathlib import Path
 REPO = Path(os.environ.get("PAPA_REPO", "/opt/papa"))
 HERE = Path(__file__).resolve()
 ALLOW = HERE.parent / "allow.json"
+ALLOW_LONDON = Path(os.environ.get("PAPA_ALLOW_LONDON", str(HERE.parents[2] / "london" / "autopilot" / "allow.json")))
+LONDON_WAIT = int(os.environ.get("PAPA_LONDON_WAIT", str(25 * 60)))
+SERVER_NAME = {"frankfurt": "🖥 Франкфурт", "london": "🖥 Лондон"}
 GW_DB = Path(os.environ.get("PAPA_AUTOPILOT_GW_DB", "/var/lib/nexus-private-control/control.sqlite3"))
 GP_DB = Path(os.environ.get("PAPA_GENPLAN_DB", "/var/lib/papa-genplan/genplan.sqlite3"))
 GP_ENV = Path(os.environ.get("PAPA_GENPLAN_ENV", "/etc/papa-genplan/genplan.env"))
@@ -51,9 +56,13 @@ def log(*a) -> None:
 
 
 # ---------- политика ----------
-def policy(task: str, allow: dict | None = None) -> str:
-    """auto / approve / deny для имени задачи."""
-    allow = allow if allow is not None else json.loads(ALLOW.read_text(encoding="utf-8"))
+def policy(task: str, allow: dict | None = None, server: str = "frankfurt") -> str:
+    """auto / approve / deny для имени задачи на сервере."""
+    if allow is None:
+        try:
+            allow = json.loads((ALLOW_LONDON if server == "london" else ALLOW).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return "deny"                                   # нет списка — ничего не делаем
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,48}", task):
         return "deny"
     if any(re.search(p, task) for p in allow.get("deny_patterns", [])):
@@ -108,13 +117,15 @@ def claim(path: Path = GW_DB) -> dict | None:
         c.execute("BEGIN IMMEDIATE")
         c.execute("UPDATE tasks SET status='expired', updated_at=? WHERE operation='papa_task' AND status='queued' AND created_at<?",
                   (utc(), datetime.fromtimestamp(time.time() - 3600, timezone.utc).isoformat()))
-        r = c.execute("SELECT * FROM tasks WHERE operation='papa_task' AND target='frankfurt' AND status='queued' "
-                      "ORDER BY created_at LIMIT 1").fetchone()
+        r = c.execute("SELECT * FROM tasks WHERE operation='papa_task' AND target IN ('frankfurt','london') "
+                      "AND status='queued' ORDER BY created_at LIMIT 1").fetchone()
         if not r:
             return None
-        c.execute("UPDATE tasks SET status='running', attempts=attempts+1, updated_at=? WHERE id=?", (utc(), r["id"]))
+        # Франкфурт: running сразу; Лондон: 'deciding' — исполнитель Лондона берёт только 'ready'
+        c.execute("UPDATE tasks SET status=?, attempts=attempts+1, updated_at=? WHERE id=?",
+                  ("running" if r["target"] == "frankfurt" else "deciding", utc(), r["id"]))
         audit(c, "claimed", r["id"])
-        return {"id": r["id"], **json.loads(r["payload"]), "by": r["requested_by"]}
+        return {"id": r["id"], **json.loads(r["payload"]), "by": r["requested_by"], "server": r["target"]}
 
 
 def set_status(tid: str, status: str, result: dict | None = None, path: Path = GW_DB) -> None:
@@ -128,7 +139,7 @@ def recover(path: Path = GW_DB) -> None:
     """После перезапуска исполнителя: зависшие «running/awaiting_owner» — ошибка (повторять сами не будем)."""
     with db(path) as c:
         n = c.execute("UPDATE tasks SET status='failed', result=?, updated_at=? WHERE operation='papa_task' "
-                      "AND status IN ('running','awaiting_owner')",
+                      "AND ((target='frankfurt' AND status='running') OR status IN ('awaiting_owner','deciding'))",
                       (json.dumps({"error": "autopilot_restarted", "summary": "исполнитель перезапускался — запустите заново"}),
                        utc())).rowcount
         if n:
@@ -209,13 +220,40 @@ def last_line(out: str) -> str:
     return ""
 
 
+def status_of(tid: str, path: Path = GW_DB) -> dict:
+    with db(path) as c:
+        r = c.execute("SELECT status, result FROM tasks WHERE id=?", (tid,)).fetchone()
+        return {"status": r["status"], "result": json.loads(r["result"] or "{}")} if r else {"status": "missing", "result": {}}
+
+
+def wait_london(tid: str, gw: Path, sleep) -> tuple[int, str]:
+    """Отдать задачу исполнителю Лондона и дождаться итога (выполняет papa-runner, не мы)."""
+    set_status(tid, "ready", None, gw)
+    t0 = time.time()
+    while time.time() - t0 < LONDON_WAIT:
+        st = status_of(tid, gw)
+        if st["status"] in ("succeeded", "failed", "expired"):
+            res = st["result"]
+            return (res.get("rc", 1) if st["status"] != "expired" else 125), res.get("output", "") or res.get("summary", "")
+        sleep(5)
+    st = status_of(tid, gw)
+    if st["status"] == "ready":                 # исполнитель так и не взял — снимаем, чтобы не выполнилась внезапно позже
+        set_status(tid, "failed", {"error": "runner_offline", "summary": "исполнитель Лондона не ответил — задача снята"}, gw)
+        return 126, "исполнитель Лондона (papa-runner) не ответил за 25 мин — задача снята, ничего не выполнено"
+    return 127, "Лондон ещё выполняет — итог смотрите позже (nexus_papa_result)"
+
+
 def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.sleep) -> str:
     tid, task, reason = t["id"], t.get("task", ""), (t.get("reason") or "").strip()
+    server = t.get("server", "frankfurt")
+    where = SERVER_NAME.get(server, server)
     if runner is run:                       # свежий список задач и allow.json из GitHub до решения
         subprocess.run([UPDATE], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-    pol = policy(task)
+    pol = policy(task, server=server)
     win = in_window(datetime.now(timezone.utc))
-    if pol == "auto" and task in WINDOW_TASKS and win:
+    if server == "london" and pol == "auto" and win and task not in LONDON_READ_ONLY:
+        pol = "approve"                        # GENPLAN 5 в главные часы: любое изменение — только с кнопкой владельца
+    if pol == "auto" and server == "frankfurt" and task in WINDOW_TASKS and win:
         if reason.upper().startswith("СРОЧНО"):
             pol = "approve"                    # срочная починка в прайм-тайм — только с кнопкой владельца
         else:
@@ -227,7 +265,7 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
         return "denied"
     if pol == "approve":
         set_status(tid, "awaiting_owner", None, gw)
-        msgs = notify(f"🤖 Автопилот просит разрешения (🖥 Франкфурт)\n\nЗадача: {task}\nЗачем: {reason or '—'}",
+        msgs = notify(f"🤖 Автопилот просит разрешения ({where})\n\nЗадача: {task}\nЗачем: {reason or '—'}",
                       {"inline_keyboard": [[{"text": "✅ Разрешить", "callback_data": f"ap:{tid}:y"},
                                             {"text": "❌ Нет", "callback_data": f"ap:{tid}:n"}]]})
         if not msgs:
@@ -244,20 +282,27 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
             set_status(tid, "failed", {"error": "not_approved",
                                        "summary": "владелец отказал" if ans == "no" else "владелец не ответил за 30 минут"}, gw)
             return "rejected"
-        set_status(tid, "running", None, gw)
-    notify(f"🤖 Автопилот запускает на 🖥 Франкфурте: {task}" + (f"\nЗачем: {reason}" if reason else ""))
+        if server == "frankfurt":
+            set_status(tid, "running", None, gw)
+    notify(f"🤖 Автопилот запускает ({where}): {task}" + (f"\nЗачем: {reason}" if reason else ""))
     t0 = time.time()
-    rc, out = runner(task)
+    if server == "london":
+        rc, out = wait_london(tid, gw, sleep)
+        out = mask(out)
+    else:
+        rc, out = runner(task)
     mins = round((time.time() - t0) / 60, 1)
     summary = last_line(out)
-    set_status(tid, "succeeded" if rc == 0 else "failed",
-               {"task": task, "rc": rc, "minutes": mins, "summary": summary, "output": out}, gw)
-    notify(f"{'✅' if rc == 0 else '❌'} Автопилот: {task} — {'готово' if rc == 0 else f'ошибка (код {rc})'} за {mins} мин\n{summary}")
+    if server == "frankfurt":
+        set_status(tid, "succeeded" if rc == 0 else "failed",
+                   {"task": task, "rc": rc, "minutes": mins, "summary": summary, "output": out}, gw)
+    notify(f"{'✅' if rc == 0 else '❌'} Автопилот ({where}): {task} — {'готово' if rc == 0 else f'ошибка (код {rc})'} за {mins} мин\n{summary}")
     return "ok" if rc == 0 else "failed"
 
 
 # Протокол «Окно выкладки» (16.10): в главные часы постов не перезапускаем и не выкатываем
 WINDOWS = (("05:30", "07:30"), ("19:00", "22:00"))      # Ташкент
+LONDON_READ_ONLY = {"status", "london-diagnose", "genplan-inventory"}   # только чтение — можно и в главные часы
 WINDOW_TASKS = {"genplan-restart", "pult-deploy", "morning-deploy", "morning-refresh", "curator-install", "audit-install",
                 "folders-sort", "morning-hunt"}
 
@@ -268,7 +313,7 @@ def in_window(now_utc: datetime) -> str:
 
 
 def code_hash() -> str:
-    return hashlib.sha256(HERE.read_bytes() + ALLOW.read_bytes()).hexdigest()
+    return hashlib.sha256(HERE.read_bytes() + ALLOW.read_bytes()).hexdigest()   # allow Лондона читается при каждой задаче
 
 
 def main() -> None:
