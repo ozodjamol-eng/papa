@@ -24,6 +24,7 @@ FOLDERS = {
     "PAPA·Давра": ("news", "sport", "humor", "useful", "home_business", "interesting", "recipes", "politics_official"),
     "PAPA·Музыка": ("music", "showbiz", "live_music", "humor"),
     "PAPA·Шаҳар": ("local", "useful", "health", "humor", "religion", "recipes"),
+    "PAPA·Спорт": ("sport",),                 # для рубрики «Спорт» КАТТА ДАВРА (куратор читает Давра + Спорт)
 }
 MAX_IN_FOLDER = 100          # лимит Telegram на папку (без Premium)
 SKIP_TITLES = ("papa ", "nexus", "papa hub", "papa склад", "papa test")
@@ -195,7 +196,11 @@ async def create_folders(client, layout: dict[str, list[dict]], log=print) -> di
         used.add(fid)
         peers = [await client.get_input_entity(c["entity"]) for c in chans]
         f = DialogFilter(id=fid, title=_title(name), pinned_peers=[], include_peers=peers, exclude_peers=[])
-        await client(UpdateDialogFilterRequest(id=fid, filter=f))
+        try:
+            await client(UpdateDialogFilterRequest(id=fid, filter=f))
+        except Exception as e:  # noqa: BLE001 — без Premium не больше 10 папок: спорт останется внутри «PAPA·Давра»
+            log(f"папка «{name}» не создана: {type(e).__name__}: {str(e)[:80]}")
+            continue
         done[name] = len(peers)
         log(f"папка «{name}»: {len(peers)} каналов")
         await asyncio.sleep(2)
@@ -203,7 +208,7 @@ async def create_folders(client, layout: dict[str, list[dict]], log=print) -> di
 
 
 SERVICE_TITLES = ("papa hub", "papa склад", "nexus morning pool", "papa test")
-SERVICE_USERS = ("PapaGenplanBot",)
+SERVICE_USERS = ("PapaGenplanBot", "PaparazziUZ_PultBot")
 
 
 async def add_service_to_papa(client, log=print) -> int:

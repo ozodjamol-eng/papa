@@ -5,6 +5,7 @@
   python -m razvedka send             — отчёт в консоль и в «Избранное» аккаунта
   python -m razvedka run              — collect + send (для ежедневного таймера)
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
+  python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
 from __future__ import annotations
@@ -184,8 +185,29 @@ async def _sort_folders() -> dict:
         await c.disconnect()
 
 
+async def _curate() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:                                   # один профиль — одна задача за раз
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from .curate import run
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    try:
+        return await run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "report"
+    if cmd == "curate":
+        print("CURATE_DONE", asyncio.run(_curate()))
+        return
     if cmd == "sort-folders":
         print("FOLDERS_DONE", asyncio.run(_sort_folders()))
         return

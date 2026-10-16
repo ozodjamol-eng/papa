@@ -179,6 +179,15 @@ def auto_place(db, cfg: dict, mid: int) -> str | None:
     return f"🤖 Поставил сам: {m['rubric']} · {smart.fmt(st[0], _now())}. Не так — поправьте кнопками ниже."
 
 
+def source_of(msg: dict) -> str | None:
+    """Пост переслан из канала (куратор или владелец) → @источник."""
+    o = msg.get("forward_origin") or {}
+    chat = o.get("chat") or msg.get("forward_from_chat") or {}
+    if not chat:
+        return None
+    return "@" + chat["username"] if chat.get("username") else (chat.get("title") or None)
+
+
 def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], msgs: list[dict],
            reply_chat: int | None = None, notes: list[str] | None = None, channel: str | None = None) -> str:
     """Новый материал (одиночный пост или альбом) → черновик с угаданными каналом и рубрикой → карточка владельцу."""
@@ -193,7 +202,10 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     from . import bots
     channel = channel if channel in cfg["channels"] else smart.guess_channel(cfg, text, has_audio)
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=has_audio)
-    store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot))
+    src = source_of(msgs[0])
+    store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot), source=src)
+    if src:
+        notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
     placed = auto_place(db, cfg, mid)
     if placed:
         notes = (notes or []) + [placed]

@@ -173,6 +173,9 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
     rem = morning.approval_reminder(db, cfg, now)
     if rem:
         ERRORS.append(rem)
+    rep = curator_report(db, cfg, now)
+    if rep:
+        ERRORS.append(rep)
     for channel, ch in cfg["channels"].items():
         o = morning.opts(ch)
         if not o:
@@ -208,3 +211,33 @@ def today_text(db, cfg: dict, now: dt.datetime | None = None) -> str:
     modes = ", ".join(f"{ch['title']}: {'🟢 работа' if channel_mode(cfg, c) == 'live' else '🧪 тест'}"
                       for c, ch in cfg["channels"].items())
     return f"Режим — {modes}\n\n" + "\n\n".join(parts)
+
+
+def curator_report(db, cfg: dict, now: dt.datetime, at: str = "21:30") -> str | None:
+    """Раз в день вечером: что нашёл куратор и что из этого взял владелец — по каналам и лучшим источникам."""
+    if now.time() < plan.slot_time(now.date(), at).time():
+        return None
+    k = f"curator_report_{now.date().isoformat()}"
+    if store.kv_get(db, k):
+        return None
+    day = now.date().isoformat()
+    rows = db.execute("SELECT channel, source, status FROM materials WHERE source IS NOT NULL AND substr(created_at,1,10)=?",
+                      (day,)).fetchall()
+    store.kv_set(db, k, "1")
+    if not rows:
+        return None
+    taken = ("queued", "published")
+    lines = ["📡 Куратор за сегодня"]
+    for ch in sorted({r["channel"] for r in rows}):
+        rs = [r for r in rows if r["channel"] == ch]
+        t = sum(r["status"] in taken for r in rs)
+        title = cfg["channels"].get(ch, {}).get("title", ch)
+        lines.append(f"\n{title}: найдено {len(rs)}, взято {t}, ждут ✓ {sum(r['status'] == 'draft' for r in rs)}")
+        by: dict[str, list[int]] = {}
+        for r in rs:
+            by.setdefault(r["source"], [0, 0])
+            by[r["source"]][0] += 1
+            by[r["source"]][1] += r["status"] in taken
+        best = sorted(by.items(), key=lambda x: (-x[1][1], -x[1][0]))[:3]
+        lines.append("  лучшие источники: " + ", ".join(f"{s} {v[1]}/{v[0]}" for s, v in best))
+    return "\n".join(lines)

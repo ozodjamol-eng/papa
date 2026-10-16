@@ -11,7 +11,7 @@ POOL=/var/lib/papa-genplan/pool
 [[ -s /etc/papa-razvedka/telegram.env ]] || { echo "NO_LOGIN: Разведка не авторизована"; exit 1; }
 free=$(df --output=avail -BM /var/lib | tail -1 | tr -dc 0-9)
 (( free > 2000 )) || { echo "МАЛО МЕСТА: свободно ${free} МБ, нужно 2000"; exit 1; }
-if systemctl is-active -q papa-razvedka@collect.service || systemctl is-active -q papa-razvedka@run.service; then
+if systemctl is-active -q papa-razvedka@collect.service || systemctl is-active -q papa-razvedka@run.service || systemctl is-active -q papa-razvedka@curate.service; then
   echo "Сейчас идёт сбор Разведки — повторите через 10 минут"; exit 1
 fi
 cp -a "$DB" "$DB.bak-hunt-$(date +%F-%H%M)"

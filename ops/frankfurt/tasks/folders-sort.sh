@@ -5,7 +5,7 @@
 # Откат: удалить три папки в Telegram (Настройки → Папки) — каналы остаются на месте.
 set -euo pipefail
 PY=/opt/papa-venv/razvedka/bin/python
-if systemctl is-active -q papa-razvedka@collect.service || systemctl is-active -q papa-razvedka@run.service \
+if systemctl is-active -q papa-razvedka@collect.service || systemctl is-active -q papa-razvedka@run.service || systemctl is-active -q papa-razvedka@curate.service \
    || systemctl is-active -q papa-razvedka@hunt.service; then
   echo "Сейчас работает Разведка — повторите через 10 минут"; exit 1
 fi

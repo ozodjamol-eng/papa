@@ -411,3 +411,25 @@ class TestAutopilotButton(Base):
         q = cb("ap:abc123def:y", uid=7)["callback_query"]
         self.assertEqual(hub.callback(self.bot, self.db, CFG, {42}, q), "denied")
         self.assertIsNone(store.kv_get(self.db, "autopilot_abc123def"))
+
+
+class TestCurator(Base):
+    def fwd(self, mid, text, uname):
+        u = dm(mid, text, photo_uid=f"c{mid}")
+        u["message"]["forward_origin"] = {"type": "channel", "chat": {"id": -100555, "title": "Src", "username": uname}}
+        return u
+
+    def test_source_saved_and_shown(self):
+        self.h(self.fwd(90, "Қизиқ янгилик", "daryo_uz"))
+        self.assertEqual(store.get(self.db, 1)["source"], "@daryo_uz")
+        self.assertIn("📡 Куратор нашёл · @daryo_uz", self.last_card()["text"])
+
+    def test_evening_report(self):
+        self.h(self.fwd(91, "Биринчи", "a_src"))
+        self.h(self.fwd(92, "Иккинчи", "b_src"))
+        store.update(self.db, 1, status="queued")
+        day = dt.date.fromisoformat(store.get(self.db, 1)["created_at"][:10])
+        rep = service.curator_report(self.db, CFG, plan.slot_time(day, "21:40"))
+        self.assertIn("найдено 2, взято 1", rep)
+        self.assertIn("@a_src 1/1", rep)
+        self.assertIsNone(service.curator_report(self.db, CFG, plan.slot_time(day, "21:50")))   # раз в день
