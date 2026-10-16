@@ -411,3 +411,18 @@ class TestHashtags(unittest.TestCase):
                                         "2026-10-15", log=lambda s: None))
         self.assertTrue(sent[0].startswith("#ҲАЖВИЯ\nКулгили видео"))
         self.assertNotIn("#prikol", sent[0])
+
+
+class TestPromo(unittest.TestCase):
+    def test_foreign_tail_removed(self):
+        from genplan import text as T
+        src = ("⚡ Миллийлик руҳи ёшларни тарбиялашда катта аҳамиятга эга.\n\n"
+               "⚡ ДУНЁ🌐УЗ - ТВ ДА КЎРСАТМАЙДИГАН ХАБАРЛАР КАНАЛИ!")
+        out = T.finalize(src, "🎉 @kattadavrauz", tag="#ҚИЗИҚАРЛИ")
+        self.assertNotIn("КАНАЛИ", out)
+        self.assertIn("Миллийлик руҳи", out)
+        self.assertTrue(out.endswith("🎉 @kattadavrauz"))
+
+    def test_body_kept_when_single_paragraph(self):
+        from genplan import text as T
+        self.assertIn("Бугун ҳаво илиқ", T.finalize("Бугун ҳаво илиқ бўлади.", "x"))

@@ -70,6 +70,33 @@ def strip_hashtags(text: str, keep: tuple[str, ...] = ()) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
+PROMO = re.compile(r"(канал|kanal|обуна|obuna|қўшил|qo['ʻ’]?shil|подпис|кузатиб бор|kuzatib bor|бизни кузат|bizni kuzat|"
+                   r"тезкор хабар|tezkor xabar|расмий саҳифа|rasmiy sahifa|ТВ ДА|TV DA|ҳаволани|havolani)", re.I)
+
+
+def _caps_share(s: str) -> float:
+    letters = [c for c in s if c.isalpha()]
+    return sum(c.isupper() for c in letters) / len(letters) if letters else 0.0
+
+
+def strip_promo(text: str) -> str:
+    """Решение 16.10: главное — текст сверху; чужой «хвост» снизу (реклама источника: «… ХАБАРЛАР КАНАЛИ!», «обуна бўлинг»,
+    название канала заглавными) убираем — внизу будут наши подпись и хук. Строки-рекламу чужого канала убираем и в середине."""
+    paras = [p for p in re.split(r"\n\s*\n", (text or "").strip()) if p.strip()]
+    def promo(p: str) -> bool:
+        p = p.strip()
+        return len(p) <= 220 and (bool(PROMO.search(p)) or (_caps_share(p) > 0.75 and len(p) <= 120 and len(paras) > 1))
+    while len(paras) > 1 and promo(paras[-1]):            # хвост источника — снизу вверх
+        paras.pop()
+    out = []
+    for p in paras:
+        lines = [ln for ln in p.splitlines() if not (PROMO.search(ln) and re.search(r"(канал|kanal)", ln, re.I)
+                                                       and (_caps_share(ln) > 0.6 or "!" in ln or len(ln) < 80))]
+        if lines:
+            out.append("\n".join(lines))
+    return "\n\n".join(out).strip()
+
+
 TAG = re.compile(r"#([\w\u0400-\u04FF]+)")
 TRAIL_TAGS = re.compile(r"(?:\s*#[\w\u0400-\u04FF]+)+[\s.,!]*$")
 
@@ -95,6 +122,7 @@ def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...
     body = strip_sources(text, keep=own)
     body, _ = translit.auto(body)
     body = clean_hashtags(body)
+    body = strip_promo(body)
     if tag:
         body = f"{tag}\n{body}".strip()
     if not hook:                                   # свой призыв в конце текста (ИИ или автор) — переносим под юзернейм
