@@ -90,7 +90,11 @@ def vision(jpeg: bytes) -> dict:
                 return json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
             except urllib.error.HTTPError as e:
                 if e.code == 429:
-                    raise RuntimeError("лимит Gemini") from None
+                    if attempt == 2:                 # минутный лимит ждём, дневной — сдаёмся до следующего запуска
+                        raise RuntimeError("лимит Gemini") from None
+                    errs.append(f"{m}: 429")
+                    time.sleep(65)
+                    break
                 errs.append(f"{m}: HTTP {e.code}")
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{m}: {type(e).__name__}")
