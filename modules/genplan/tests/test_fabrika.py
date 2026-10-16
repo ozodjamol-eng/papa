@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from genplan import ai, fabrika, hub, media, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+CFG["auto_place"] = False          # эти тесты проверяют ручной выбор рубрики
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "GENPLAN_BOT_TOKEN": "t"}
 
 

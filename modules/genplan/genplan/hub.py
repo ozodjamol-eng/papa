@@ -109,7 +109,8 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         txt = f"{base}\n\n✅ {name} · {m['rubric']} — {when}{' 🔒' if m['locked'] else ''}{dup}"
         kb = [[{"text": "🕐 Изменить время", "callback_data": f"ot:{mid}"}, {"text": "🆘 Сейчас", "callback_data": f"ur:{mid}"}],
               [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}],
-              [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}]]
+              [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
+              [{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}]]
         return txt, {"inline_keyboard": kb}
     # черновик — как в GENPLAN 5: сразу сетка рубрик; одно нажатие = рубрика + умное время
     rs = rubrics(cfg, m["channel"])
@@ -154,6 +155,18 @@ def kb_channel(mid: int, cfg: dict | None = None) -> dict:
 
 # ---------- приём ----------
 
+def auto_place(db, cfg: dict, mid: int) -> str | None:
+    """Решение 15.10: бросил пост — бот сам ставит рубрику (угаданную) и умное время. Возвращает пометку для карточки."""
+    if not cfg.get("auto_place"):
+        return None
+    m = store.get(db, mid)
+    st = smart.smart_time(db, cfg, m["channel"], m["rubric"], _now(), exclude=mid)
+    if not st:
+        return None
+    store.update(db, mid, status="queued", scheduled_at=st[0].isoformat(), urgent=0, locked=0)
+    return f"🤖 Поставил сам: {m['rubric']} · {smart.fmt(st[0], _now())}. Не так — поправьте кнопками ниже."
+
+
 def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], msgs: list[dict],
            reply_chat: int | None = None, notes: list[str] | None = None) -> str:
     """Новый материал (одиночный пост или альбом) → черновик с угаданными каналом и рубрикой → карточка владельцу."""
@@ -167,6 +180,9 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     from .text import strip_sources
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=any(md["type"] == "audio" for md in media))
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft")
+    placed = auto_place(db, cfg, mid)
+    if placed:
+        notes = (notes or []) + [placed]
     txt, kb = card(db, cfg, mid)
     if notes:
         txt = "\n".join(notes) + "\n\n" + txt
@@ -420,12 +436,14 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             store.update(db, mid, channel=targets[0], status="draft", scheduled_at=None, urgent=0, locked=0,
                          rubric=smart.guess_rubric(cfg, targets[0], strip_sources(m["text"])), guessed=1)
+            note = auto_place(db, cfg, mid) or ""
             show()
             for extra in targets[1:]:
                 if extra not in cfg["channels"]:
                     continue
                 cid = store.clone_for(db, mid, extra)
                 store.update(db, cid, status="draft", rubric=smart.guess_rubric(cfg, extra, strip_sources(m["text"])), guessed=1)
+                auto_place(db, cfg, cid)
                 t, kb = card(db, cfg, cid, now)
                 r = bot("sendMessage", chat_id=chat, text=t, reply_markup=kb, disable_web_page_preview=True)
                 store.update(db, cid, owner_msg=r["message_id"])

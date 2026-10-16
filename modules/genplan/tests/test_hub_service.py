@@ -11,6 +11,7 @@ import json  # noqa: E402
 from genplan import hub, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+CFG["auto_place"] = False          # эти тесты проверяют ручной выбор рубрики
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "TEST_GROUP_ID": "-100111", "TEST_CHANNEL_ID": "-100222"}
 
 
@@ -290,3 +291,20 @@ class TestMenu(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAutoPlace(unittest.TestCase):
+    def test_dropped_post_is_placed_automatically(self):
+        cfg = {**CFG, "auto_place": True}
+        db = store.connect(":memory:")
+        bot = Bot() if "Bot" in globals() else None
+        calls = []
+
+        def b(m, **p):
+            calls.append((m, p)); return {"message_id": len(calls)}
+        msg = {"message_id": 5, "caption": "Кулгили видео 😂 @begona", "video": {"file_id": "F", "file_unique_id": "U"}}
+        hub.intake(b, db, cfg, {42}, -100777, [5], [msg])
+        m = db.execute("SELECT * FROM materials").fetchone()
+        self.assertEqual(m["status"], "queued")
+        self.assertIsNotNone(m["scheduled_at"])
+        self.assertIn("🤖 Поставил сам", calls[-1][1]["text"])

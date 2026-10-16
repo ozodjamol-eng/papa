@@ -59,22 +59,28 @@ def plan(channels: list[dict], cats: dict[str, list[str]]) -> dict[str, list[dic
 def gemini(system: str, user: str) -> str:
     body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.1, "responseMimeType": "application/json"}}
-    err = None
-    for model in dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest", "gemini-2.5-flash"]):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                                     data=json.dumps(body).encode(),
-                                     headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-        try:
-            data = json.loads(urllib.request.urlopen(req, timeout=90).read())
-            parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-            return "".join(p.get("text", "") for p in parts if not p.get("thought"))
-        except urllib.error.HTTPError as e:
-            err = f"Gemini {e.code}"
-            if e.code not in (429, 500, 503, 404):
-                break
-        except Exception as e:  # noqa: BLE001
-            err = f"Gemini {type(e).__name__}"
-    raise RuntimeError(err or "Gemini: нет ответа")
+    errs = []
+    key = os.environ["GEMINI_API_KEY"].strip().strip('"').strip("'")
+    first = os.environ.get("GEMINI_MODEL", "").strip().strip('"').strip("'").removeprefix("models/")
+    for model in dict.fromkeys([m for m in (first, "gemini-flash-latest", "gemini-2.5-flash") if m]):
+        for b in (body, {**body, "generationConfig": {k: v for k, v in body["generationConfig"].items()
+                                                       if k != "responseMimeType"}}):
+            req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                         data=json.dumps(b).encode(),
+                                         headers={"content-type": "application/json", "x-goog-api-key": key})
+            try:
+                data = json.loads(urllib.request.urlopen(req, timeout=90).read())
+                parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+                return "".join(p.get("text", "") for p in parts if not p.get("thought"))
+            except urllib.error.HTTPError as e:
+                detail = (e.read() or b"")[:160].decode(errors="replace").replace("\n", " ")
+                errs.append(f"{model}: {e.code} {detail}")
+                if e.code == 429:
+                    import time
+                    time.sleep(20)
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"{model}: {type(e).__name__}")
+    raise RuntimeError("; ".join(errs[-3:]) or "Gemini: нет ответа")
 
 
 def parse_json(raw: str) -> dict:
