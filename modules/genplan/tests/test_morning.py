@@ -129,7 +129,7 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(morning.season(dt.date(2026, 11, 30)), "autumn")
         self.assertEqual(morning.season(dt.date(2026, 12, 1)), "winter")
         cap = morning.greeting_caption(CFG["channels"]["davra"], morning.opts(CFG["channels"]["davra"]), FRI)
-        self.assertTrue(cap.startswith("#Хайрли_тонг\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
+        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
         self.assertGreater(len(cap), 350)                          # не сухо: несколько тёплых абзацев
         self.assertIn("🤲", cap)
         self.assertTrue(cap.endswith("🎉 @kattadavrauz"))
@@ -179,7 +179,7 @@ class TestMorning(unittest.TestCase):
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:31", FRI), log=lambda s: None))
         greet = [s for s in pb.sent if s[2]]
         self.assertEqual(len(greet), 2)
-        self.assertTrue(all(s[1].startswith("#Хайрли_тонг") for s in greet))
+        self.assertTrue(all(s[1].startswith("#ХАЙРЛИ_ТОНГ") for s in greet))
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:35", FRI), log=lambda s: None))
         self.assertEqual(acc.sent, [])                                       # Хўжаобод не одобрен — не вышел
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:55", FRI), log=lambda s: None))
@@ -235,7 +235,7 @@ class TestMorning(unittest.TestCase):
             self.assertIn("ЖУМА ТОНГИ МУБОРАК", seen[0])             # образец больших каналов передан ИИ
             self.assertIn("Жума куни муборак бўлсин, азизлар", seen[0])   # подпись этого же видео — главный ориентир
             self.assertNotIn("@begona", seen[0])
-            self.assertTrue(uploads[0][1].startswith("#Хайрли_тонг\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
+            self.assertTrue(uploads[0][1].startswith("#ХАЙРЛИ_ТОНГ\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
             self.assertTrue(uploads[0][1].endswith("🎉 @kattadavrauz"))
             self.assertEqual(self.rows("davra")["greeting"]["source"], "pool:b")
             self.assertIsNone(morning.pool_pick(self.db, FRI))      # одно видео не повторяется
@@ -321,7 +321,7 @@ class TestMorning(unittest.TestCase):
                                   now=at("00:20", FRI))
         self.assertEqual(len(done), 3)
         cap = calls[0][1]["caption"]
-        self.assertTrue(cap.startswith("🗣 ЖУМА АЙЁМИНГИЗ МУБОРАК БЎЛСИН!"))
+        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🗣 ЖУМА АЙЁМИНГИЗ МУБОРАК БЎЛСИН!"))
         self.assertNotIn("muslimuzportal", cap)
         r = self.rows("davra")["greeting"]
         self.assertTrue(r["text"].rstrip().endswith("🎉 @kattadavrauz"))
@@ -339,7 +339,7 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(len(done), 3)
         d, p, x = (self.rows(c)["day"] for c in ("davra", "paparazzi", "xojaobod"))
         self.assertEqual((d["source"], p["source"], x["source"]), ("sklad:1", "sklad:2", "sklad:3"))
-        self.assertTrue(d["text"].startswith("📅 16-октябр · Жума\n\n🌿 Жума тонги муборак!"))
+        self.assertTrue(d["text"].startswith("#БУГУН\n📅 16-октябр · Жума\n\n🌿 Жума тонги муборак!"))
         self.assertNotIn("@begona", p["text"])
         self.assertTrue(p["text"].rstrip().endswith("⭐ @ozodjamoll"))
         self.assertEqual((d["prepared"], d["approved"]), (1, 0))
@@ -385,3 +385,29 @@ class TestAccountHealth(unittest.TestCase):
         self.assertIn("отключён", self.run_check(Acc(auth=False)))
         self.assertIn("нет прав админа", self.run_check(Acc(admin=False)))
         self.assertIn("отключён", self.run_check(Acc(exc=AuthKeyUnregisteredError("x"))))
+
+
+class TestHashtags(unittest.TestCase):
+    def test_clean_and_tag(self):
+        from genplan import text as T
+        src = "Бугун #Байрам_муборак куни барчага табрик!\nЯнгилик #tezkor #uzbekiston\n#reklama #news"
+        out = T.finalize(src, "🎉 @kattadavrauz", tag="#ЯНГИЛИКЛАР")
+        self.assertTrue(out.startswith("#ЯНГИЛИКЛАР\nБугун Байрам муборак куни барчага табрик!"))
+        self.assertNotIn("#tezkor", out); self.assertNotIn("#reklama", out); self.assertNotIn("#news", out)
+        self.assertIn("Янгилик", out)
+        self.assertEqual(out.count("#"), 1)
+
+    def test_publish_uses_rubric_tag(self):
+        from genplan import service
+        db = store.connect(":memory:")
+        mid = store.add_material(db, -100777, 5, "Кулгили видео #prikol", False)
+        store.update(db, mid, channel="davra", rubric="Ҳажвия", status="queued", scheduled_at=at("09:00").isoformat())
+        sent = []
+
+        class P:
+            def publish(self, chat, text, *a, **k):
+                sent.append(text); return 1
+        asyncio.run(service.publish_one(db, CFG, ENV, {"bot": P(), "account": P()}, "davra", store.get(db, mid), "09:00",
+                                        "2026-10-15", log=lambda s: None))
+        self.assertTrue(sent[0].startswith("#ҲАЖВИЯ\nКулгили видео"))
+        self.assertNotIn("#prikol", sent[0])

@@ -31,7 +31,7 @@ from pathlib import Path
 from . import plan
 
 DEFAULTS = {"approval": True, "day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
-            "tag": "#Хайрли_тонг", "live": False, "max_seconds": 20}
+            "tag": "#ХАЙРЛИ_ТОНГ", "day_tag": "#БУГУН", "live": False, "max_seconds": 20}
 KEYS = ("day", "greeting")
 TITLE = {"day": "Бугун — … куни", "greeting": "Хайрли тонг"}
 WEEKDAY = ("Душанба", "Сешанба", "Чоршанба", "Пайшанба", "Жума", "Шанба", "Якшанба")
@@ -721,7 +721,9 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
     sig = ch.get("signature", "")
     if r["key"] == "day":
         body, note = day_text(db, ch["title"], day, fresh=bool(r["redo"]))
-        update(db, r["id"], text=body + (f"\n\n{sig}" if sig else ""), prepared=1, redo=0, error=None, preview_sent=0)
+        dtag = o.get("day_tag") or ""
+        update(db, r["id"], text=(f"{dtag}\n" if dtag else "") + body + (f"\n\n{sig}" if sig else ""), prepared=1, redo=0,
+               error=None, preview_sent=0)
         return note
     if upload is None:
         from .fabrika import upload_video as upload
@@ -928,7 +930,9 @@ def use_manual(bot, db, cfg: dict, env: dict, latest: dict, now: dt.datetime | N
         ch = cfg["channels"].get(r["channel"])
         if not ch or not opts(ch):
             continue
-        cap = T.finalize(latest.get("text") or "", ch.get("signature", ""), own=own, limit=1024)
+        o = opts(ch) or DEFAULTS
+        cap = T.finalize(latest.get("text") or "", ch.get("signature", ""), own=own, limit=1024,
+                         tag=o.get("tag", "") if key == "greeting" else o.get("day_tag", ""))
         res = bot("copyMessage", chat_id=int(env["HUB_CHAT_ID"]), from_chat_id=int(latest["pool_chat"]),
                   message_id=int(latest["msg_id"]), caption=cap)
         update(db, r["id"], text=cap, hub_msg=int(res["message_id"]), source=f"manual:{latest['msg_id']}", prepared=1,
@@ -974,7 +978,9 @@ def use_sklad(bot, db, cfg: dict, env: dict, items: list[dict], key: str = "day"
         r, ch = rows[channel], cfg["channels"][channel]
         day = dt.date.fromisoformat(r["day"])
         head = f"📅 {day.day}-{MONTHS[day.month - 1]} · {WEEKDAY[day.weekday()]}"
-        cap = T.finalize(f"{head}\n\n{drop_wrong_dates(body, day)}".strip(), ch.get("signature", ""), own=own, limit=1024)
+        o = opts(ch) or DEFAULTS
+        cap = T.finalize(f"{head}\n\n{drop_wrong_dates(body, day)}".strip(), ch.get("signature", ""), own=own, limit=1024,
+                         tag=o.get("tag", "") if key == "greeting" else o.get("day_tag", ""))
         res = bot("copyMessage", chat_id=int(env["HUB_CHAT_ID"]), from_chat_id=int(item["chat"]),
                   message_id=int(item["msg_id"]), caption=cap)
         update(db, r["id"], text=cap, hub_msg=int(res["message_id"]), source=f"sklad:{item['msg_id']}", prepared=1,

@@ -70,15 +70,33 @@ def strip_hashtags(text: str, keep: tuple[str, ...] = ()) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
+TAG = re.compile(r"#([\w\u0400-\u04FF]+)")
+TRAIL_TAGS = re.compile(r"(?:\s*#[\w\u0400-\u04FF]+)+[\s.,!]*$")
+
+
+def clean_hashtags(text: str) -> str:
+    """Утверждено 16.10: все чужие хэштеги убираем. Строка из одних хэштегов и хэштеги в конце строки — целиком;
+    хэштег внутри фразы — только «#» (подчёркивания → пробелы), слово остаётся."""
+    out = []
+    for ln in strip_hashtags(text).splitlines():
+        ln = TRAIL_TAGS.sub("", ln) if TAG.search(ln) and not HASHTAG_LINE.match(ln) else ln
+        ln = TAG.sub(lambda m: m.group(1).replace("_", " "), ln)
+        out.append(ln.rstrip())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...] = (),
-             hook: str = "", limit: int | None = None) -> str:
-    """Текст поста: чужие подписи убраны, внизу — хук и наша подпись. При лимите (подпись к медиа — 1024)
-    сокращается текст, а не подпись."""
+             hook: str = "", limit: int | None = None, tag: str = "") -> str:
+    """Текст поста: чужие подписи и хэштеги убраны, первой строкой — наш хэштег рубрики, внизу — хук и наша подпись.
+    При лимите (подпись к медиа — 1024) сокращается текст, а не подпись."""
     if is_ad:
-        return (text or "").strip()
+        body = (text or "").strip()
+        return f"{tag}\n{body}" if tag and not body.startswith(tag) else body
     body = strip_sources(text, keep=own)
     body, _ = translit.auto(body)
-    body = strip_hashtags(body, keep=own)
+    body = clean_hashtags(body)
+    if tag:
+        body = f"{tag}\n{body}".strip()
     if not hook:                                   # свой призыв в конце текста (ИИ или автор) — переносим под юзернейм
         lines = body.rstrip().splitlines()
         if lines and len(lines[-1]) <= 90 and CTA.search(lines[-1]):
