@@ -172,9 +172,16 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
             continue
         seen.add(n)
         it = items[n - 1]
-        t, _ = translit.auto(g["t"].strip())
-        out.append({"t": t[:160], "src": it["src"], "url": it["url"]})
+        out.append({"t": cyr(g["t"].strip())[:160], "src": it["src"], "url": it["url"]})
     return out[:5]
+
+
+def cyr(t: str) -> str:
+    """Короткий заголовок латиницей — в кириллицу всегда (auto() для коротких строк осторожничает)."""
+    from . import translit
+    if re.search(r"[A-Za-z]", t) and not re.search(r"[А-Яа-яЁё]", t):
+        return translit.to_cyrillic(t)
+    return translit.auto(t)[0]
 
 
 LOCAL_RX = re.compile(r"андижон|andijon|андижан|хўжаобод|xo.?jaobod|хужаобод|фарғона|farg.?ona|наманган|namangan", re.I)
@@ -197,8 +204,7 @@ def fallback_news(items: list[dict], n: int = 4) -> list[dict]:
         if len(out) >= n or used_src.get(x["src"], 0) >= 2:
             continue
         used_src[x["src"]] = used_src.get(x["src"], 0) + 1
-        t, _ = translit.auto(x["title"])
-        out.append({"t": t[:160], "src": x["src"], "url": x["url"]})
+        out.append({"t": cyr(x["title"])[:160], "src": x["src"], "url": x["url"]})
     return out
 
 
