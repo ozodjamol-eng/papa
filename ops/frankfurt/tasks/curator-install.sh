@@ -19,7 +19,7 @@ install -m 644 /opt/papa/ops/frankfurt/systemd/papa-razvedka@.service /opt/papa/
 systemctl daemon-reload
 systemctl restart papa-genplan; sleep 3; echo "  papa-genplan: $(systemctl is-active papa-genplan)"
 systemctl enable -q --now papa-curator.timer
-systemctl list-timers papa-curator.timer --no-pager | head -2
+echo "  таймер: $(systemctl list-timers papa-curator.timer --no-pager --no-legend 2>/dev/null | cut -c1-40 || true)"
 echo "3/4 первый запуск куратора (2–6 минут):"
 run_curate
 echo "4/4 готово: карточки «📡 Куратор нашёл» — в пультах КАТТА ДАВРА и PaparazziUZ"
