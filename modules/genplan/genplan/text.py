@@ -71,7 +71,7 @@ def strip_hashtags(text: str, keep: tuple[str, ...] = ()) -> str:
 
 
 PROMO = re.compile(r"(канал|kanal|обуна|obuna|қўшил|qo['ʻ’]?shil|подпис|кузатиб бор|kuzatib bor|бизни кузат|bizni kuzat|"
-                   r"тезкор хабар|tezkor xabar|расмий саҳифа|rasmiy sahifa|ТВ ДА|TV DA|ҳаволани|havolani)", re.I)
+                   r"тезкор хабар|tezkor xabar|расмий саҳифа|rasmiy sahifa|ТВ ДА|TV DA|ҳаволани|havolani|улашинг|ulashing|tarqating|тарқатинг)", re.I)
 
 
 def _caps_share(s: str) -> float:
