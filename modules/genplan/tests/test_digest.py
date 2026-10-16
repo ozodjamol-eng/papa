@@ -90,7 +90,9 @@ class TestDigest(unittest.TestCase):
             r = digest.build(self.db, self.dir, NOW, get=fake_get, gen=broken)
         finally:
             _t.sleep = orig
-        self.assertEqual((r["status"], r["news"]), ("READY", 0))
+        self.assertEqual((r["status"], r.get("news_mode")), ("READY", "без ИИ (заголовки)"))
+        txt = (Path(r["dir"]) / "digest.txt").read_text(encoding="utf-8")
+        self.assertIn("Андижонда янги кўприк очилди", txt)
 
     def test_long_caption_trimmed(self):
         news = [{"t": "Ж" * 150, "src": "Kun.uz", "url": f"https://kun.uz/{i}"} for i in range(5)]
@@ -98,3 +100,14 @@ class TestDigest(unittest.TestCase):
         short, full = digest.compose(NOW.date(), w, digest.rates(fake_get), news * 3)
         self.assertLessEqual(len(short), 1024)
         self.assertIn("@xojaobodcity24", short)
+
+
+class TestFallback(unittest.TestCase):
+    def test_region_first_ads_and_russian_skipped(self):
+        items = [{"title": "Toshkentda yangi metro bekati ochildi", "src": "Kun.uz", "url": "u1", "time": "18:00"},
+                 {"title": "Andijonda suv ta'minoti yaxshilandi", "src": "Daryo.uz", "url": "u2", "time": "09:00"},
+                 {"title": "Reklama: chegirmalar haftaligi", "src": "Kun.uz", "url": "u3", "time": "19:00"},
+                 {"title": "В Ташкенте открыли новую станцию метро", "src": "Gazeta.uz", "url": "u4", "time": "17:00"}]
+        got = digest.fallback_news(items)
+        self.assertEqual([x["url"] for x in got], ["u2", "u1"])
+        self.assertTrue(got[0]["t"].startswith("Андижонда"))

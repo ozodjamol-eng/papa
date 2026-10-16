@@ -177,6 +177,31 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
     return out[:5]
 
 
+LOCAL_RX = re.compile(r"андижон|andijon|андижан|хўжаобод|xo.?jaobod|хужаобод|фарғона|farg.?ona|наманган|namangan", re.I)
+SKIP_RX = re.compile(r"реклама|reklama|\bpr\b|ҳамкорлик|hamkorlik|видео:|video:|фото:|foto:|тест|test|конкурс|konkurs", re.I)
+
+
+def fallback_news(items: list[dict], n: int = 4) -> list[dict]:
+    """Без ИИ (лимит Gemini): заголовки как есть — сначала наш регион, по одному из источника по кругу.
+    Только узбекский (латиница → кириллица), русские заголовки пропускаем."""
+    from . import translit
+    pool = []
+    for x in items:
+        t = x["title"]
+        if SKIP_RX.search(t) or (translit.RU_ONLY.search(t) and not translit.UZ_CYR.search(t)):
+            continue
+        pool.append({**x, "local": bool(LOCAL_RX.search(t))})
+    pool.sort(key=lambda x: (not x["local"], x["time"] and -int(x["time"].replace(":", ""))))
+    out, used_src = [], {}
+    for x in pool:
+        if len(out) >= n or used_src.get(x["src"], 0) >= 2:
+            continue
+        used_src[x["src"]] = used_src.get(x["src"], 0) + 1
+        t, _ = translit.auto(x["title"])
+        out.append({"t": t[:160], "src": x["src"], "url": x["url"]})
+    return out
+
+
 # ---------- текст ----------
 def date_uz(d: dt.date) -> str:
     return f"{d.day} {MONTHS[d.month - 1]} {d.year}"
@@ -324,6 +349,9 @@ def build(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) ->
     except Exception as e:  # noqa: BLE001
         news = []
         report["errors"].append(f"новости (ИИ): {e}")
+    if items and not news:                          # ИИ не помог — заголовки по правилам, без пересказа
+        news = fallback_news(items)
+        report["news_mode"] = "без ИИ (заголовки)"
     report.update({"news_in_feeds": len(items), "news": len(news), "weather": bool(w), "rates": bool(r)})
     if not w:
         report["status"] = "INVALID"
