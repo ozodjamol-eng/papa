@@ -80,7 +80,7 @@ class Base(unittest.TestCase):
 class TestIntake(Base):
     def test_one_tap_smart_time(self):
         self.assertEqual(self.h(dm(10, "Янги қўшиқ чиқди! 🎧 Тинглаб кўринг", photo_uid="u1")), "material")
-        self.assertEqual(self.bot.calls[0][0], "copyMessage")                 # копия — в хаб
+        self.assertEqual(self.bot.calls[0][0], "sendMessage")                 # 16.10: без хаба — сразу карточка
         m = store.get(self.db, 1)
         self.assertEqual((m["channel"], m["rubric"], m["status"]), ("davra", "Мусиқа", "draft"))   # канал и рубрика — сами
         now = at("08:00")
@@ -136,7 +136,7 @@ class TestIntake(Base):
         bot = lambda m, **p: (self.bot.calls.append((m, p)) or ([{"message_id": 700}, {"message_id": 701}] if m == "copyMessages" else {"message_id": 800}))
         self.assertEqual(hub.flush_albums(bot, self.db, CFG, ENV, now_ts=10**10), 1)
         m = store.get(self.db, 1)
-        self.assertEqual(json.loads(m["hub_msgs"]), [700, 701])
+        self.assertEqual(json.loads(m["hub_msgs"]), [60, 61])               # 16.10: альбом берётся прямо из чата с ботом
         self.assertEqual(len(json.loads(m["media"])), 2)
         self.assertEqual(m["text"], "Альбом")
 
@@ -353,6 +353,18 @@ class TestMultiBot(unittest.TestCase):
     def test_publisher_choice(self):
         pubs = {"bot": "MAIN", "bot:paparazzi": "PAP", "account": "ACC"}
         ch = self.cfg["channels"]["paparazzi"]
-        self.assertEqual(service.pub_for(pubs, ch, "paparazzi"), "PAP")
-        self.assertEqual(service.pub_for(pubs, ch, "paparazzi", via="main"), "MAIN")   # альбом пришёл через главный бот
-        self.assertEqual(service.pub_for(pubs, self.cfg["channels"]["davra"], "davra"), "MAIN")
+        self.assertEqual(service.pub_for(pubs, ch, "paparazzi", via="paparazzi", from_hub=False), "PAP")  # из чата пульта
+        self.assertEqual(service.pub_for(pubs, ch, "paparazzi", via="paparazzi", from_hub=True), "MAIN")  # из хаба
+        self.assertEqual(service.pub_for(pubs, ch, "paparazzi", via="main", from_hub=False), "MAIN")
+        self.assertEqual(service.pub_for(pubs, self.cfg["channels"]["xojaobod"], "xojaobod"), "ACC")
+
+
+class TestNoHub(Base):
+    def test_move_to_group_copies_into_hub(self):
+        self.h(dm(80, "Хўжаобод янгилиги", photo_uid="h1"))
+        m = store.get(self.db, 1)
+        self.assertEqual(m["hub_chat"], 42)                                    # лежит в чате с ботом
+        self.tap("ch:1:" + hub.REV["xojaobod"], at("09:00"))
+        m = store.get(self.db, 1)
+        self.assertEqual(str(m["hub_chat"]), ENV["HUB_CHAT_ID"])               # для группы — скопирован в хаб
+        self.assertEqual(m["channel"], "xojaobod")

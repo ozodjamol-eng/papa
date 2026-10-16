@@ -90,14 +90,19 @@ def process_link(bot, db, cfg: dict, env: dict, p: dict, work_root: Path = STATE
                 notes.append("🤖 Текст переписан ИИ — проверьте")
             except ai.AIError as e:
                 notes.append(f"🤖 ИИ: {e} — оставлен оригинал")
-        hub_chat = int(env["HUB_CHAT_ID"])
-        res = upload_video(env["GENPLAN_BOT_TOKEN"], hub_chat, out, text)
+        from . import bots
+        if ch["publisher"] == "bot":                 # решение 16.10: для каналов без хаба — видео прямо владельцу
+            res = upload_video(bots.token_of(bot, env), owner, out, text)
+            store_chat, shown_id = owner, res["message_id"]
+        else:                                        # группа — через хаб (аккаунт PAPA видит только хаб)
+            store_chat = int(env["HUB_CHAT_ID"])
+            res = upload_video(env["GENPLAN_BOT_TOKEN"], store_chat, out, text)
+            shown_id = bot("copyMessage", chat_id=owner, from_chat_id=store_chat, message_id=res["message_id"])["message_id"]
         v = res.get("video") or res.get("document") or {}
-        shown = bot("copyMessage", chat_id=owner, from_chat_id=hub_chat, message_id=res["message_id"])
-        msg = {"message_id": shown["message_id"], "caption": text,
+        msg = {"message_id": shown_id, "caption": text,
                "video": {"file_id": v.get("file_id"), "file_unique_id": v.get("file_unique_id")}}
-        hub.intake(bot, db, cfg, {owner}, hub_chat, [res["message_id"]], [msg], reply_chat=owner, notes=notes,
-                   channel=p.get("channel"))
+        hub.intake(bot, db, cfg, {owner}, store_chat, [res["message_id"]], [msg], reply_chat=owner, notes=notes,
+                   channel=channel)
         return "ok"
     finally:
         shutil.rmtree(work, ignore_errors=True)

@@ -767,7 +767,7 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
     kb = buttons(rid, "new")
     owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
     from . import bots
-    bot = bots.for_channel(r["channel"], bot)                 # предпросмотр — в пульт своего канала
+    bot = bots.REG.get("main", bot)                            # утро лежит в хабе — показывает главный бот
     for o in owners:
         if r["hub_msg"]:
             bot("copyMessage", chat_id=o, from_chat_id=int(env["HUB_CHAT_ID"]), message_id=r["hub_msg"],

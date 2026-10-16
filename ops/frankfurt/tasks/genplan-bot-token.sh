@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 🤖 Токен бота-пульта канала (сейчас — «⭐ PaparazziUZ Пульт»). Токен вводит владелец, на экране не виден,
-# в чат и репозиторий не попадает. Проверка: бот живой, админ в канале и в PAPA HUB → службы перезапускаются.
+# в чат и репозиторий не попадает. Проверка: бот живой, админ в своём канале → службы перезапускаются (хаб не нужен — 16.10).
 set -euo pipefail
 VAR=PAPARAZZI_BOT_TOKEN; CH=@ozodjamoll
 PY=/opt/papa-venv/razvedka/bin/python
@@ -23,7 +23,7 @@ if not me.get("ok"):
 me = me["result"]
 print(f"✅ бот @{me['username']} ({me['first_name']})")
 bad = 0
-for chat, need in ((ch, "публикация"), (hub, "PAPA HUB")):
+for chat, need in ((ch, "публикация"),):
     r = tg("getChatMember", chat_id=chat, user_id=me["id"]).get("result") or {}
     ok = r.get("status") == "administrator" and (chat != ch or r.get("can_post_messages"))
     print(f"{'✅' if ok else '❌'} админ в {chat if chat == ch else 'PAPA HUB'}: {r.get('status', 'нет')}"

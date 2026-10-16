@@ -136,8 +136,8 @@ class TestMediaAndPipeline(unittest.TestCase):
             fabrika.download, fabrika.upload_video, fabrika.logo_path = orig_dl, orig_up, orig_logo
         m = store.get(db, 1)
         self.assertEqual((m["hub_msg"], m["channel"], m["status"]), (77, "davra", "draft"))
-        self.assertEqual(bot.calls[0][0], "copyMessage")                         # владелец видит готовое видео
-        self.assertIn("Мусиқа", bot.calls[1][1]["text"])                          # карточка: рубрика угадана по тексту
+        self.assertEqual(m["hub_chat"], 42)                                      # 16.10: видео — прямо владельцу, без хаба
+        self.assertIn("Мусиқа", bot.calls[0][1]["text"])                          # карточка: рубрика угадана по тексту
         self.assertFalse((self.tmp / "w").exists() and any((self.tmp / "w").iterdir()))   # рабочие файлы убраны
 
 

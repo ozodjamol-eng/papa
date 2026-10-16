@@ -145,11 +145,23 @@ def kb_rubric(cfg: dict, mid: int, channel: str) -> dict:
     return {"inline_keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]}
 
 
-def kb_channel(mid: int, cfg: dict | None = None) -> dict:
-    chans = list((cfg or {}).get("channels", {}) or NAMES)
+def movable(cfg: dict, m, env_hub: int | None = None) -> list[str]:
+    """Куда можно перенести материал. Из чата бота-пульта канала — только в его канал (другие боты этот чат не видят);
+    из главного бота — в каналы, где он админ (Давра, Paparazzi); в группу — только то, что лежит в хабе или может туда
+    попасть (главный бот копирует)."""
+    via = (m["via"] if "via" in m.keys() else None) or "main"
+    if via != "main":
+        return [via]
+    return list(cfg["channels"])
+
+
+def kb_channel(mid: int, cfg: dict | None = None, allowed: list[str] | None = None) -> dict:
+    chans = [c for c in list((cfg or {}).get("channels", {}) or NAMES) if allowed is None or c in allowed]
     btn = [{"text": NAMES.get(c, c), "callback_data": f"ch:{mid}:{REV[c]}"} for c in chans if c in REV]
     rows = [btn[i:i + 2] for i in range(0, len(btn), 2)]
-    rows.append([{"text": "🔁 Давра + Paparazzi", "callback_data": f"ch:{mid}:b"}, {"text": "‹ Назад", "callback_data": f"bk:{mid}"}])
+    both = allowed is None or ("davra" in allowed and "paparazzi" in allowed)
+    rows.append(([{"text": "🔁 Давра + Paparazzi", "callback_data": f"ch:{mid}:b"}] if both else [])
+                + [{"text": "‹ Назад", "callback_data": f"bk:{mid}"}])
     return {"inline_keyboard": rows}
 
 
@@ -198,11 +210,17 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
 
 
 def direct(bot, db, cfg, owners, hub: int, msgs: list[dict], channel: str | None = None) -> str:
-    """Пост прямо в чат с ботом: копия (или весь альбом) — в PAPA HUB, карточка — ответом владельцу."""
+    """Пост прямо в чат с ботом. Решение 16.10: для каналов (публикует бот) хаб не нужен — пост берётся прямо
+    из чата с ботом. В хаб копируется только то, что пойдёт в группу (публикует аккаунт PAPA, ему нужен хаб)."""
     msgs = sorted(msgs, key=lambda x: x["message_id"])
     if not any(k in msgs[0] for k in MEDIA_KEYS) and not (msgs[0].get("text") or "").strip() and len(msgs) == 1:
         return "skip"
     chat = msgs[0]["chat"]["id"]
+    text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
+    if channel not in cfg["channels"]:
+        channel = smart.guess_channel(cfg, text, any("audio" in x for x in msgs))
+    if cfg["channels"][channel]["publisher"] == "bot":
+        return intake(bot, db, cfg, owners, chat, [x["message_id"] for x in msgs], msgs, reply_chat=chat, channel=channel)
     if len(msgs) > 1:
         r = bot("copyMessages", chat_id=hub, from_chat_id=chat, message_ids=[x["message_id"] for x in msgs])
         ids = [x["message_id"] for x in r]
@@ -244,10 +262,28 @@ def _album(msg: dict, dm: bool, channel: str | None = None) -> bool:
 
 # ---------- обработчик обновлений ----------
 
+HUB_ID: int | None = None
+
+
+def to_hub(bot, db, mid: int) -> None:
+    """Материал из чата с ботом → копия в хаб (нужно только для группы: аккаунт PAPA видит лишь хаб)."""
+    m = store.get(db, mid)
+    if HUB_ID is None or str(m["hub_chat"]) == str(HUB_ID):
+        return
+    ids = json.loads(m["hub_msgs"] or "[]") or [m["hub_msg"]]
+    if len(ids) > 1:
+        new = [x["message_id"] for x in bot("copyMessages", chat_id=HUB_ID, from_chat_id=m["hub_chat"], message_ids=ids)]
+    else:
+        new = [bot("copyMessage", chat_id=HUB_ID, from_chat_id=m["hub_chat"], message_id=ids[0])["message_id"]]
+    store.update(db, mid, hub_chat=HUB_ID, hub_msg=new[0], hub_msgs=json.dumps(new))
+
+
 def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
     from . import bots
+    global HUB_ID
     owners = {int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()}
     hub = int(env["HUB_CHAT_ID"])
+    HUB_ID = hub
     own = bots.channel_of(bot)                       # бот-пульт канала → всё, что брошено в него, идёт в этот канал
     post = upd.get("channel_post")
     if post:
@@ -425,7 +461,11 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         show(kb_rubric(cfg, mid, m["channel"]), t + "\n\n📂 Выберите рубрику:")
     elif kind == "cs":
         t, _ = card(db, cfg, mid, now)
-        show(kb_channel(mid, cfg), t + "\n\n📺 Выберите канал:")
+        allowed = movable(cfg, m)
+        if len(allowed) <= 1:
+            note = "Этот пост пришёл в пульт своего канала. Для другого канала бросьте его в пульт того канала."
+        else:
+            show(kb_channel(mid, cfg, allowed), t + "\n\n📺 Выберите канал:")
     elif kind == "rb":
         r = rubrics(cfg, m["channel"])[int(arg[0])]
         upd = {"rubric": r, "guessed": 0}
@@ -441,7 +481,12 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         targets = list(BOTH) if arg[0] == "b" else [CODE[arg[0]]]
         if targets[0] not in cfg["channels"]:
             note = "Канал не настроен"
+        elif any(t not in movable(cfg, m) for t in targets):
+            note = "Этот пост можно поставить только в канал своего пульта"
         else:
+            if any(cfg["channels"][t]["publisher"] == "account" for t in targets if t in cfg["channels"]):
+                to_hub(bot, db, mid)                 # в группу публикует аккаунт PAPA — ему нужен хаб
+                m = store.get(db, mid)
             store.update(db, mid, channel=targets[0], status="draft", scheduled_at=None, urgent=0, locked=0,
                          rubric=smart.guess_rubric(cfg, targets[0], strip_sources(m["text"])), guessed=1)
             note = auto_place(db, cfg, mid) or ""
