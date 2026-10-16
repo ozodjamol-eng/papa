@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA «боль аудитории» — сбор комментариев под сильными постами источников (10:00 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 UTC
+RandomizedDelaySec=3min
+Persistent=false
+Unit=papa-razvedka@pain.service
+
+[Install]
+WantedBy=timers.target

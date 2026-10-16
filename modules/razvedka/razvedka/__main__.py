@@ -6,6 +6,7 @@
   python -m razvedka run              — collect + send (для ежедневного таймера)
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
   python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
+  python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
 from __future__ import annotations
@@ -203,8 +204,43 @@ async def _curate() -> dict:
         await c.disconnect()
 
 
+async def _pain() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "curate") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:                                   # один профиль — одна задача за раз
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import pain
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    db = store.connect(DB)
+    try:
+        stat = await pain.run(c, db, log=lambda s: print(s, flush=True))
+        print(pain.render(stat, pain.summary(db), db), flush=True)
+        return stat
+    finally:
+        await c.disconnect()
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "report"
+    if cmd == "pain-report":                   # только база, Telegram не трогаем
+        from . import pain
+        db = pain.connect(store.connect(DB))
+        s = pain.summary(db)
+        print(f"В базе: {s['total']} · полезных: {s['useful']} ({s['useful_pct']}%) · " +
+              " · ".join(f"{k}: {v}" for k, v in s["kinds"].items()))
+        for k, t in (("request", "Просьбы"), ("complaint", "Жалобы"), ("question", "Вопросы")):
+            for x in pain.samples(db, k, 5):
+                print(f"  [{t}] {x}")
+        print("PAIN_REPORT_DONE")
+        return
+    if cmd == "pain":
+        print("PAIN_DONE", asyncio.run(_pain()))
+        return
     if cmd == "curate":
         print("CURATE_DONE", asyncio.run(_curate()))
         return
