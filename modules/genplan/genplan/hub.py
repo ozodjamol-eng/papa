@@ -79,7 +79,9 @@ def preview(text: str, has_media: bool, n_media: int = 1) -> str:
     from .text import strip_sources
     t, conv = translit.auto(strip_sources(text or "").strip())       # владелец видит уже очищенный текст
     t = (t[:900] + "…") if len(t) > 900 else t          # владелец видит текст почти целиком — проверить перед выходом
-    notes = [n for n in (("🔤 Латиница → кириллица (автоматически)" if conv else ""), translit.language_note(text)) if n]
+    from .human import headline_note
+    notes = [n for n in (("🔤 Латиница → кириллица (автоматически)" if conv else ""), translit.language_note(text),
+                         headline_note(t)) if n]
     note = ("\n\n" + "\n".join(notes)) if notes else ""
     icon = f" 🖼×{n_media}" if n_media > 1 else (" 🖼" if has_media else "")
     return f"📥 Новый материал{icon}\n\n{t or '(без текста)'}{note}"

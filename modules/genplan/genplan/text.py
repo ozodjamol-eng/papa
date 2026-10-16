@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from . import translit
+from . import human, translit
 
 MENTION = re.compile(r"(?<![\w.])@[A-Za-z][A-Za-z0-9_]{3,31}\b")
 TME = re.compile(r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/[^\s)]+", re.I)
@@ -119,7 +119,7 @@ def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...
     if is_ad:
         body = (text or "").strip()
         return f"{tag}\n{body}" if tag and not body.startswith(tag) else body
-    body = strip_sources(text, keep=own)
+    body = strip_sources(human.clean(text), keep=own)
     body, _ = translit.auto(body)
     body = clean_hashtags(body)
     body = strip_promo(body)
