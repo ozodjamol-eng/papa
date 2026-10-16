@@ -68,10 +68,28 @@ class TestDigest(unittest.TestCase):
         self.assertEqual(r["status"], "INVALID")
         self.assertFalse((self.dir / "evening-digest-2026-10-16" / "manifest.json").exists())
 
+    def test_ai_retry_after_overload(self):
+        calls = []
+
+        def flaky(s, u):
+            calls.append(1)
+            if len(calls) < 3:
+                raise RuntimeError("Gemini: ошибка 503")
+            return fake_gen(s, u)
+        got = digest.pick_news(self.db, [{"title": "Andijonda yangi ko'prik ochildi", "src": "Kun.uz",
+                                          "url": "https://kun.uz/news/1", "time": "10:00"}], flaky, sleep=lambda s: None)
+        self.assertEqual((len(calls), len(got)), (3, 1))
+
     def test_ai_down_still_ready_without_news(self):
         def broken(s, u):
             raise RuntimeError("лимит")
-        r = digest.build(self.db, self.dir, NOW, get=fake_get, gen=broken)
+        digest.time_sleep = None
+        import time as _t
+        orig, _t.sleep = _t.sleep, (lambda s: None)
+        try:
+            r = digest.build(self.db, self.dir, NOW, get=fake_get, gen=broken)
+        finally:
+            _t.sleep = orig
         self.assertEqual((r["status"], r["news"]), ("READY", 0))
 
     def test_long_caption_trimmed(self):

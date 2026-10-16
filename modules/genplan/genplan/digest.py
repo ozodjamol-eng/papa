@@ -130,14 +130,26 @@ NEWS_SYSTEM = """Сен Хўжаобод (Андижон вилояти) аҳо�
 Жавоб — фақат JSON: [{"t": "...", "src": "манба номи", "url": "ҳавола"}]"""
 
 
-def pick_news(db, items: list[dict], gen=None) -> list[dict]:
+def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
     """ИИ выбирает и пересказывает. Ссылки — только из ленты (что ИИ «придумал» — выбрасываем)."""
     if not items:
         return []
     from . import ai, translit
     gen = gen or (lambda s, u: ai.generate(db, s, u))
+    import time
+    sleep = sleep or (time.sleep if gen is not None else time.sleep)
     lst = "\n".join(f"- [{x['src']}] {x['title']} | {x['url']}" for x in items)
-    raw = gen(NEWS_SYSTEM, f"Бугунги сарлавҳалар:\n{lst}")
+    raw, last = "", None
+    for attempt in range(4):                       # Gemini бывает перегружен (503) — ждём и повторяем
+        try:
+            raw = gen(NEWS_SYSTEM, f"Бугунги сарлавҳалар:\n{lst}")
+            break
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if attempt < 3:
+                sleep(30 * (attempt + 1))
+    else:
+        raise last
     m = re.search(r"\[.*\]", raw, re.S)
     try:
         got = json.loads(m.group(0)) if m else []
