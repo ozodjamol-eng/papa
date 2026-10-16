@@ -126,7 +126,7 @@ class TestIntake(Base):
         self.tap(f"ur:1", at("12:00"))
         self.h(dm(51, "Пост ещё раз", photo_uid="same"))
         txt, _ = hub.card(self.db, CFG, 2, at("12:05"))
-        self.assertIn("⚠️ Повтор", txt)
+        self.assertIn("Повтор можно", txt)
 
     def test_album_one_material(self):
         self.assertEqual(self.h(dm(60, "Альбом", photo_uid="a1", gid="G")), "album")

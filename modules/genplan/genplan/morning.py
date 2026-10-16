@@ -37,7 +37,7 @@ TITLE = {"day": "Бугун — … куни", "greeting": "Хайрли тон�
 WEEKDAY = ("Душанба", "Сешанба", "Чоршанба", "Пайшанба", "Жума", "Шанба", "Якшанба")
 RETRY = dt.timedelta(minutes=10)
 MAX_TRIES = 3
-USED_DAYS = 60
+USED_DAYS = 28          # утреннее видео может повториться через ~месяц (решение владельца 16.10)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS fixed_posts (

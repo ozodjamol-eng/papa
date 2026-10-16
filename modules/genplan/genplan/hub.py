@@ -46,17 +46,22 @@ def fingerprint(text: str, media: list[dict]) -> str | None:
     return ("t:" + hashlib.sha1(norm[:500].encode()).hexdigest()[:20]) if len(norm) >= 20 else None
 
 
+REPEAT_DAYS = 7          # решение владельца 16.10: повторы раз в неделю–месяц — нормально, не блокируем
+
+
 def duplicate_note(db, m) -> str:
     if not m["fp"]:
         return ""
-    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=14)).isoformat()
+    # повтор — нормально (контент крутится раз в неделю–месяц); предупреждаем только если был меньше REPEAT_DAYS назад
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=REPEAT_DAYS)).isoformat()
     r = db.execute("SELECT channel, status, scheduled_at FROM materials WHERE fp=? AND id<>? AND hub_msg<>? "
                    "AND status IN ('queued','published') AND created_at>=? ORDER BY id DESC LIMIT 1",
                    (m["fp"], m["id"], m["hub_msg"], since)).fetchone()
     if not r:
         return ""
     where = NAMES.get(r["channel"], r["channel"] or "")
-    return f"⚠️ Повтор: такой пост уже {'опубликован' if r['status'] == 'published' else 'в очереди'} — {where}"
+    return (f"ℹ️ Такой пост {'уже выходил' if r['status'] == 'published' else 'уже в очереди'} на этой неделе — {where}. "
+            f"Повтор можно, но лучше через {REPEAT_DAYS} дн.")
 
 
 def rubrics(cfg: dict, channel: str) -> list[str]:
