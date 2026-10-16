@@ -32,7 +32,17 @@ async def main():
         except asyncio.TimeoutError:
             print("QR устарел — показываю новый")
         except SessionPasswordNeededError:
-            await c.sign_in(password=getpass.getpass("облачный пароль аккаунта PAPA (не отображается): "))
+            from telethon.errors import PasswordHashInvalidError
+            print("QR принят. Нужен ОБЛАЧНЫЙ пароль аккаунта PAPA (двухэтапная проверка).")
+            print("Раскладка клавиатуры — АНГЛИЙСКАЯ; символы на экране не отображаются — это нормально.")
+            for attempt in range(1, 4):
+                try:
+                    await c.sign_in(password=getpass.getpass(f"пароль (попытка {attempt} из 3): "))
+                    break
+                except PasswordHashInvalidError:
+                    print("❌ Пароль неверный.")
+            else:
+                raise SystemExit("PASSWORD_WRONG — проверьте пароль на телефоне PAPA: Настройки → Конфиденциальность → Облачный пароль")
             break
     else:
         raise SystemExit("QR_TIMEOUT — запустите заново")
