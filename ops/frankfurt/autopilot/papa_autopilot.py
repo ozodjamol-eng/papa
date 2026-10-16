@@ -211,6 +211,8 @@ def last_line(out: str) -> str:
 
 def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.sleep) -> str:
     tid, task, reason = t["id"], t.get("task", ""), (t.get("reason") or "").strip()
+    if runner is run:                       # свежий список задач и allow.json из GitHub до решения
+        subprocess.run([UPDATE], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
     pol = policy(task)
     if pol == "deny":
         set_status(tid, "failed", {"error": "denied", "summary": f"«{task}» автопилоту запрещена — только владелец в консоли"}, gw)
