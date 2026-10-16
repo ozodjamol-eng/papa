@@ -46,6 +46,7 @@ class TestFlow(unittest.TestCase):
         c.commit()
         c.close()
         self.sent = []
+        ap.in_window = lambda now: ""          # тесты не зависят от времени запуска
         ap.notify = lambda text, markup=None: self.sent.append((text, markup)) or [(1, 1)]
 
     def new(self, task):
@@ -101,6 +102,17 @@ class TestFlow(unittest.TestCase):
         ap.claim(self.gw)
         ap.recover(self.gw)
         self.assertEqual(self.store.get(tid)["status"], "failed")
+
+
+
+class TestWindow(unittest.TestCase):
+    def test_window(self):
+        import importlib
+        importlib.reload(ap)
+        from datetime import datetime, timezone
+        self.assertEqual(ap.in_window(datetime(2026, 10, 16, 1, 0, tzinfo=timezone.utc)), "05:30–07:30")   # 06:00 Ташкент
+        self.assertEqual(ap.in_window(datetime(2026, 10, 16, 15, 0, tzinfo=timezone.utc)), "19:00–22:00")  # 20:00
+        self.assertEqual(ap.in_window(datetime(2026, 10, 16, 8, 0, tzinfo=timezone.utc)), "")              # 13:00
 
 
 if __name__ == "__main__":

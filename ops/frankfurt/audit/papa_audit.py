@@ -234,11 +234,95 @@ class Audit:
         return "\n\n".join(parts)
 
 
+# ---------- протоколы «Охрана каналов» и «Тихий канал» (каждый час 07–23) ----------
+RIGHTS = ("can_change_info", "can_post_messages", "can_edit_messages", "can_delete_messages", "can_invite_users",
+          "can_restrict_members", "can_promote_members", "can_manage_chat", "can_pin_messages")
+SILENT_H = 3
+
+
+def admins_snapshot(token: str, chat: str) -> dict | None:
+    r = tg(token, "getChatAdministrators", chat_id=chat)
+    if not r.get("ok"):
+        return None
+    out = {}
+    for m in r["result"]:
+        u = m["user"]
+        name = ("@" + u["username"]) if u.get("username") else (u.get("first_name") or str(u["id"]))
+        out[str(u["id"])] = {"name": name, "status": m["status"], "rights": sorted(k for k in RIGHTS if m.get(k))}
+    return out
+
+
+def admin_changes(old: dict, new: dict) -> list[str]:
+    msgs = []
+    for uid, a in new.items():
+        if uid not in old:
+            msgs.append(f"новый админ {a['name']} ({', '.join(a['rights']) or 'без прав'})")
+        elif old[uid]["rights"] != a["rights"] or old[uid]["status"] != a["status"]:
+            added = set(a["rights"]) - set(old[uid]["rights"])
+            msgs.append(f"у {a['name']} изменились права" + (f": +{', '.join(sorted(added))}" if added else ""))
+    for uid, a in old.items():
+        if uid not in new:
+            msgs.append(f"снят админ {a['name']}")
+    return msgs
+
+
+def watch(cfg: dict, env: dict, now: dt.datetime, state: dict) -> list[str]:
+    alerts = []
+    tok = env.get("GENPLAN_BOT_TOKEN", "")
+    adm = state.setdefault("admins", {})
+    for code, ch in cfg["channels"].items():
+        chat = "@" + ch["username"]
+        snap = admins_snapshot(tok, chat)
+        if snap is None:
+            if not state.setdefault("admin_unreadable", {}).get(code):
+                state["admin_unreadable"][code] = 1
+                alerts.append(f"🛡 {ch['title']}: бот не видит список админов — охрана для него не работает")
+            continue
+        if code in adm:
+            for m in admin_changes(adm[code], snap):
+                alerts.append(f"🚨 {ch['title']}: {m}. Если это не вы — срочно проверьте админов канала!")
+        adm[code] = snap
+    if not (dt.time(9, 0) <= now.time() <= dt.time(22, 0)) or not GP_DB.exists():
+        return alerts
+    db = sqlite3.connect(f"file:{GP_DB}?mode=ro", uri=True, timeout=15)
+    sil = state.setdefault("silent", {})
+    for code, ch in cfg["channels"].items():
+        if ch.get("mode") != "live" or ch.get("publisher") != "bot":
+            continue
+        last = max([r[0] for r in db.execute("SELECT max(at) FROM publications WHERE channel=? AND status='done'", (code,))
+                    if r[0]] + [r[0] for r in db.execute("SELECT max(at) FROM fixed_posts WHERE channel=? AND status='done'", (code,))
+                                if r[0]] or [""])
+        if not last:
+            continue
+        gap = (now - dt.datetime.fromisoformat(last).astimezone(TZ)).total_seconds() / 3600
+        if gap >= SILENT_H and sil.get(code) != last:
+            sil[code] = last
+            alerts.append(f"🔇 {ch['title']}: тишина {gap:.0f} ч (последний пост {dt.datetime.fromisoformat(last).astimezone(TZ):%H:%M}). "
+                          "Загляните в пульт (📅 СЕГОДНЯ) или напишите мне «тишина» — разберу.")
+    db.close()
+    return alerts
+
+
 def main(mode: str = "full", send: bool = True) -> int:
     quick = mode == "quick"
     now = dt.datetime.now(TZ)
     cfg = tomllib.loads((REPO / "modules/genplan/config.toml").read_text(encoding="utf-8"))
     env = envf("/etc/papa-genplan/genplan.env", "/etc/papa-genplan/bots.env")
+    if mode == "watch":
+        OUT.mkdir(parents=True, exist_ok=True)
+        sp = OUT / "watch.json"
+        try:
+            state = json.loads(sp.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            state = {}
+        alerts = watch(cfg, env, now, state)
+        sp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        print("\n".join(alerts) or "watch: всё спокойно")
+        if send and alerts:
+            for o in env.get("OWNER_IDS", "").split(","):
+                if o.strip():
+                    tg(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text="\n\n".join(alerts)[:4000])
+        return 0
     a = Audit()
     steps = [a.services, lambda: a.bots(cfg, env), lambda: a.genplan(cfg, now, quick)]
     if not quick:

@@ -22,7 +22,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(os.environ.get("PAPA_REPO", "/opt/papa"))
@@ -214,6 +214,14 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
     if runner is run:                       # свежий список задач и allow.json из GitHub до решения
         subprocess.run([UPDATE], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
     pol = policy(task)
+    win = in_window(datetime.now(timezone.utc))
+    if pol == "auto" and task in WINDOW_TASKS and win:
+        if reason.upper().startswith("СРОЧНО"):
+            pol = "approve"                    # срочная починка в прайм-тайм — только с кнопкой владельца
+        else:
+            set_status(tid, "failed", {"error": "release_window", "summary": f"окно выкладки: сейчас главные посты ({win}) — "
+                                       "перезапуски и выкладки после; срочно — reason «СРОЧНО …» и кнопка владельца"}, gw)
+            return "window"
     if pol == "deny":
         set_status(tid, "failed", {"error": "denied", "summary": f"«{task}» автопилоту запрещена — только владелец в консоли"}, gw)
         return "denied"
@@ -246,6 +254,17 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
                {"task": task, "rc": rc, "minutes": mins, "summary": summary, "output": out}, gw)
     notify(f"{'✅' if rc == 0 else '❌'} Автопилот: {task} — {'готово' if rc == 0 else f'ошибка (код {rc})'} за {mins} мин\n{summary}")
     return "ok" if rc == 0 else "failed"
+
+
+# Протокол «Окно выкладки» (16.10): в главные часы постов не перезапускаем и не выкатываем
+WINDOWS = (("05:30", "07:30"), ("19:00", "22:00"))      # Ташкент
+WINDOW_TASKS = {"genplan-restart", "pult-deploy", "morning-deploy", "morning-refresh", "curator-install", "audit-install",
+                "folders-sort", "morning-hunt"}
+
+
+def in_window(now_utc: datetime) -> str:
+    t = (now_utc + timedelta(hours=5)).strftime("%H:%M")
+    return next((f"{a}–{b}" for a, b in WINDOWS if a <= t < b), "")
 
 
 def code_hash() -> str:

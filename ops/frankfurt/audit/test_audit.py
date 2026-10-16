@@ -39,5 +39,18 @@ class TestAudit(unittest.TestCase):
         self.assertIn("✅ Всё в порядке", a.text(False, self.now))
 
 
+
+class TestWatch(unittest.TestCase):
+    def test_admin_changes(self):
+        old = {"1": {"name": "@ozod", "status": "creator", "rights": []},
+               "2": {"name": "@bot", "status": "administrator", "rights": ["can_post_messages"]}}
+        new = {**old, "2": {"name": "@bot", "status": "administrator", "rights": ["can_post_messages", "can_promote_members"]},
+               "3": {"name": "@chuzhoy", "status": "administrator", "rights": ["can_change_info"]}}
+        msgs = pa.admin_changes(old, new)
+        self.assertTrue(any("новый админ @chuzhoy" in m for m in msgs))
+        self.assertTrue(any("@bot" in m and "can_promote_members" in m for m in msgs))
+        self.assertEqual(pa.admin_changes(new, new), [])
+
+
 if __name__ == "__main__":
     unittest.main()

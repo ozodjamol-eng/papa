@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA охрана каналов и «тихий канал» — каждый час 07:05–23:05 Ташкент
+
+[Timer]
+OnCalendar=*-*-* 02..18:05:00 UTC
+Persistent=false
+Unit=papa-audit@watch.service
+
+[Install]
+WantedBy=timers.target
