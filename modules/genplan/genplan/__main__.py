@@ -203,6 +203,10 @@ def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else "plan"
     if cmd == "run":
         asyncio.run(run())
+    elif cmd == "digest":                          # 🌙 свой Кечки дайжест (таймер papa-digest 19:50)
+        from . import bots, digest
+        reg = bots.setup(cfg(), dict(os.environ), make_bot)
+        digest.main(store.connect(DB), dict(os.environ), reg["main"])
     elif cmd == "fabrika":
         from . import bots, fabrika
         reg = bots.setup(cfg(), dict(os.environ), make_bot)

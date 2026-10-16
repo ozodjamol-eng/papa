@@ -18,7 +18,8 @@
     "curator-install",
     "curator-run",
     "audit-install",
-    "audit"
+    "audit",
+    "digest-now"
   ],
   "approve": [
     "morning-pool-clear",
@@ -37,7 +38,8 @@
     "fabrika-install",
     "razvedka-install",
     "anon-test",
-    "anon-test-account"
+    "anon-test-account",
+    "digest-install"
   ],
   "deny_patterns": [
     "-key$",

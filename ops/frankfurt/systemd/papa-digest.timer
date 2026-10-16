@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA — свой Кечки дайжест каждый день в 19:50 (Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 19:50:00 Asia/Tashkent
+Persistent=false
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
