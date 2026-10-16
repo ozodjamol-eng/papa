@@ -302,7 +302,7 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
 
 # Протокол «Окно выкладки» (16.10): в главные часы постов не перезапускаем и не выкатываем
 WINDOWS = (("05:30", "07:30"), ("19:00", "22:00"))      # Ташкент
-LONDON_READ_ONLY = {"status", "london-diagnose", "genplan-inventory", "evening-digest-trace", "evening-digest-trace2"}   # только чтение — можно и в главные часы
+LONDON_READ_ONLY = {"status", "london-diagnose", "genplan-inventory", "evening-digest-trace", "evening-digest-trace2", "evening-digest-trace3"}   # только чтение — можно и в главные часы
 WINDOW_TASKS = {"genplan-restart", "pult-deploy", "morning-deploy", "morning-refresh", "curator-install", "audit-install",
                 "folders-sort", "morning-hunt"}
 
