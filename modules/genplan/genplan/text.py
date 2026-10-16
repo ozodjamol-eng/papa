@@ -29,9 +29,20 @@ def _stem_hit(text: str, words) -> bool:
     return any(re.search(r"(?<![\w])" + re.escape(w.lower()), low) if w[0].isalnum() else w in low for w in words)
 
 
+def _topic_hit(text: str, t: dict) -> bool:
+    """Тема совпала: есть её слово или шаблон (pattern, regex) — и нет слов-исключений (not_words: «совуқчилик» ≠ погода)."""
+    low = (text or "").lower()
+    clean = low
+    for w in t.get("not_words", []):
+        clean = re.sub(r"(?<![\w])" + re.escape(w.lower()) + r"\w*", " ", clean)
+    if t.get("pattern") and re.search(t["pattern"], low, re.M):
+        return True
+    return _stem_hit(clean, t.get("words", []))
+
+
 def topic_of(text: str, topics: list[dict]) -> dict | None:
     """Первая подходящая тема по смыслу текста (по ключевым словам). Порядок в настройках = приоритет."""
-    return next((t for t in topics or [] if _stem_hit(text, t.get("words", []))), None)
+    return next((t for t in topics or [] if _topic_hit(text, t)), None)
 
 
 def pick_hook(ch: dict, rubric: str | None, n: int, body: str = "", topics: list[dict] | None = None) -> str:

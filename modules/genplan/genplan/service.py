@@ -54,12 +54,30 @@ def share_button(ch: dict) -> dict | None:
     return {"text": ch["share_button"], "url": f"https://t.me/share/url?url={quote(url)}&text={quote(ch.get('share_text', ''))}"}
 
 
+def tag_for(cfg: dict, ch: dict, m) -> str:
+    """Хэштег по смыслу (решение 17.10: «лучше без хэштега, чем неправильный»).
+    1) тема с собственным тегом (пост дня «Бугун — … куни», «Хайрли тонг») — её тег, в любом канале;
+    2) рубрику выбрал владелец — тег рубрики; 3) бот угадал по теме текста — тег рубрики;
+    4) бот не понял текст (рубрика по умолчанию) — без хэштега."""
+    if not ch.get("hashtags"):
+        return ""
+    body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
+    t = text.topic_of(body, cfg.get("topics", []))
+    if t and t.get("tag"):
+        return t["tag"]
+    rub = (ch.get("hashtags") or {}).get(m["rubric"] or "", "")
+    guessed = bool(m["guessed"]) if "guessed" in m.keys() else False
+    if guessed and not t:
+        return ""
+    return rub
+
+
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print,
                       now: dt.datetime | None = None) -> bool:
     ch = cfg["channels"][channel]
     own = tuple(c["username"] for c in cfg["channels"].values())
     is_ad = (m["rubric"] or "").lower().startswith("реклама")
-    tag = "#РЕКЛАМА" if is_ad else (ch.get("hashtags") or {}).get(m["rubric"] or "", "")
+    tag = "#РЕКЛАМА" if is_ad else tag_for(cfg, ch, m)
     body = text.finalize(m["text"], ch.get("signature", ""), is_ad=is_ad, own=own, hook=hook_for(cfg, ch, m), tag=tag,
                          limit=1024 if m["has_media"] else 4096)
     media = json.loads(m["media"] or "[]") if "media" in m.keys() else []
