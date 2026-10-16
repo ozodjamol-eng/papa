@@ -426,3 +426,38 @@ class TestPromo(unittest.TestCase):
     def test_body_kept_when_single_paragraph(self):
         from genplan import text as T
         self.assertIn("Бугун ҳаво илиқ", T.finalize("Бугун ҳаво илиқ бўлади.", "x"))
+
+
+class TestPoolEconomy(unittest.TestCase):
+    """Экономия Gemini: кадры проверяем, только пока запаса не хватает на 3 дня, и не больше лимита в сутки."""
+
+    def setUp(self):
+        self.db = store.connect(":memory:")
+        self.day = dt.date(2026, 10, 17)            # суббота
+        self.now = dt.datetime(2026, 10, 16, 14, 0, tzinfo=plan.TZ)
+
+    def add(self, key, status, weekday=None):
+        self.db.execute("INSERT INTO morning_pool(key,file,status,weekday) VALUES (?,?,?,?)", (key, key + ".mp4", status, weekday))
+        self.db.commit()
+
+    def test_checks_when_stock_is_low(self):
+        self.add("n1", "new")
+        self.assertTrue(morning.pool_checking(self.db, CFG, self.day, self.now))
+
+    def test_stops_when_enough_for_three_days(self):
+        self.add("n1", "new")
+        need = sum(1 for c in CFG["channels"].values() if morning.opts(c)) * morning.AHEAD_DAYS
+        for i in range(need):
+            self.add(f"ok{i}", "ok")
+        self.assertTrue(morning.pool_enough(self.db, CFG, self.day))
+        self.assertFalse(morning.pool_checking(self.db, CFG, self.day, self.now))
+
+    def test_far_weekday_waits(self):
+        wd = morning.WEEKDAY[(self.day + dt.timedelta(days=4)).weekday()]
+        self.add("far", "new", wd)                  # видео под день через 4 дня — пока не тратим Gemini
+        self.assertFalse(morning.pool_checking(self.db, CFG, self.day, self.now))
+
+    def test_daily_cap(self):
+        self.add("n1", "new")
+        store.kv_set(self.db, f"pool_checks_{self.now.date().isoformat()}", str(morning.DAILY_CAP))
+        self.assertFalse(morning.pool_checking(self.db, CFG, self.day, self.now))

@@ -483,8 +483,41 @@ def tg_fetch(bot, env: dict, r, dst: Path) -> None:
         shutil.copyfileobj(resp, out)
 
 
+AHEAD_DAYS = int(os.environ.get("POOL_AHEAD_DAYS", "3"))      # экономия Gemini: проверяем только под ближайшие дни
+DAILY_CAP = int(os.environ.get("POOL_DAILY_CAP", "40"))        # и не больше стольких проверок кадров в сутки
+
+
+def _ahead(day: dt.date, days: int) -> list[str]:
+    return [WEEKDAY[(day + dt.timedelta(days=i)).weekday()] for i in range(days)]
+
+
+def pool_enough(db, cfg: dict, day: dt.date, days: int = AHEAD_DAYS) -> bool:
+    """Годных неиспользованных видео хватает на ближайшие дни (по одному на канал с утром в день) — Gemini не тратим."""
+    need = sum(1 for c in cfg["channels"].values() if opts(c)) * days
+    wds = _ahead(day, days)
+    rows = db.execute(f"SELECT key FROM morning_pool WHERE status='ok' AND (weekday IS NULL OR weekday IN "
+                      f"({','.join('?' * len(wds))}))", wds).fetchall()
+    return sum(1 for r in rows if not used(db, "pool", r["key"])) >= need
+
+
+def pool_checking(db, cfg: dict, day: dt.date, now: dt.datetime | None = None) -> bool:
+    """Будем ли сейчас проверять пул: есть что проверять под ближайшие дни, запаса мало, нет паузы и не исчерпан дневной лимит."""
+    from . import store
+    now = now or dt.datetime.now(plan.TZ)
+    pause = store.kv_get(db, "pool_vision_pause")
+    if pause and pause > now.isoformat():
+        return False
+    if int(store.kv_get(db, f"pool_checks_{now.date().isoformat()}", "0") or 0) >= DAILY_CAP:
+        return False
+    if pool_enough(db, cfg, day):
+        return False
+    wds = _ahead(day, AHEAD_DAYS)
+    return db.execute(f"SELECT 1 FROM morning_pool WHERE status='new' AND (weekday IS NULL OR weekday IN "
+                      f"({','.join('?' * len(wds))})) LIMIT 1", wds).fetchone() is not None
+
+
 def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_foreign: bool = False,
-                   fetch_file=None) -> bool:
+                   fetch_file=None, ahead: int | None = None) -> bool:
     """Проверить одно новое видео (сначала — под ближайший день недели). False — проверять нечего или Gemini недоступен."""
     from . import ai, store
     root = root or pool_dir()
@@ -492,8 +525,14 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
     if pause and pause > dt.datetime.now(plan.TZ).isoformat():
         return False
     wd = WEEKDAY[day.weekday()]
-    r = db.execute("SELECT * FROM morning_pool WHERE status='new' ORDER BY (weekday=?) DESC, (weekday IS NULL) DESC, "
-                   "views DESC LIMIT 1", (wd,)).fetchone()
+    near = ""
+    args: list = [wd]
+    if ahead:                                                 # только видео под ближайшие дни недели или общие
+        wds = _ahead(day, ahead)
+        near = f" AND (weekday IS NULL OR weekday IN ({','.join('?' * len(wds))}))"
+        args = [*wds, wd]
+    r = db.execute(f"SELECT * FROM morning_pool WHERE status='new'{near} ORDER BY (weekday=?) DESC, (weekday IS NULL) DESC, "
+                   "views DESC LIMIT 1", args).fetchone()
     if not r:
         return False
     src = root / r["file"]
@@ -520,6 +559,8 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
     if wait > 0:                                             # бесплатный Gemini: не чаще ~8 кадров-проверок в минуту
         time.sleep(wait)
     _LAST_VISION = time.monotonic()
+    ck = f"pool_checks_{dt.datetime.now(plan.TZ).date().isoformat()}"
+    store.kv_set(db, ck, str(int(store.kv_get(db, ck, "0") or 0) + 1))
     try:
         v = ai.vision(db, VISION_PROMPT, frames(src, root / ".frames"), http)
     except ai.AIError as e:                                  # лимит — пауза на час; перегрузка Gemini (503) — на 3 минуты
@@ -791,15 +832,16 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
     if pend:
         return True
     tomorrow = now.date() + dt.timedelta(days=1) if now.hour >= 12 else now.date()
-    if any(opts(c) for c in cfg["channels"].values()) and pool_check_one(
+    checking = any(opts(c) for c in cfg["channels"].values()) and pool_checking(db, cfg, tomorrow, now)
+    if checking and pool_check_one(
             db, tomorrow, allow_foreign=bool(cfg.get("morning_allow_foreign")),
-            fetch_file=lambda row, dst: tg_fetch(bot, env, row, dst)):
+            fetch_file=lambda row, dst: tg_fetch(bot, env, row, dst), ahead=AHEAD_DAYS):
         return True                                           # сначала проверяем свежие видео, потом готовим посты
     work_root = work_root or Path(os.environ.get("PAPA_GENPLAN_STATE", "/var/lib/papa-genplan")) / "work"
     rows = to_prepare(db, cfg, now)
     # «Хайрли тонг» не собираем, пока в пуле ждут проверки видео под этот день (но не позже чем за 90 минут до выхода)
     def waiting(r) -> bool:
-        if r["key"] != "greeting" or dt.datetime.fromisoformat(r["at"]) - now < dt.timedelta(minutes=90):
+        if not checking or r["key"] != "greeting" or dt.datetime.fromisoformat(r["at"]) - now < dt.timedelta(minutes=90):
             return False
         wd = WEEKDAY[dt.date.fromisoformat(r["day"]).weekday()]
         return db.execute("SELECT 1 FROM morning_pool WHERE status='new' AND (weekday=? OR weekday IS NULL) LIMIT 1",
