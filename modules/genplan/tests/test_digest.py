@@ -23,7 +23,7 @@ RSS = """<rss><channel>
 </channel></rss>"""
 
 
-def fake_get(url, timeout=25):
+def fake_get(url, timeout=25, tries=3):
     if "air-quality" in url:
         return json.dumps(AIR).encode()
     if "open-meteo" in url:
@@ -36,8 +36,8 @@ def fake_get(url, timeout=25):
 
 
 def fake_gen(system, user):
-    return ('[{"t": "Andijonda yangi ko\'prik ochildi", "src": "x", "url": "https://kun.uz/news/1"},'
-            ' {"t": "Выдумка", "src": "x", "url": "https://fake.example/1"}]')
+    return ('```json\n[{"i": 1, "t": "Andijonda yangi ko\'prik ochildi"},'
+            ' {"i": 99, "t": "Выдумка"}, {"i": "1", "t": "дубль"}]\n```')
 
 
 class TestDigest(unittest.TestCase):
@@ -63,7 +63,7 @@ class TestDigest(unittest.TestCase):
         self.assertIn("лента Daryo.uz: RuntimeError", r["errors"])
 
     def test_no_weather_not_ready(self):
-        r = digest.build(self.db, self.dir, NOW, get=lambda u, timeout=25: (_ for _ in ()).throw(RuntimeError("нет сети")),
+        r = digest.build(self.db, self.dir, NOW, get=lambda u, timeout=25, tries=3: (_ for _ in ()).throw(RuntimeError("нет сети")),
                          gen=fake_gen)
         self.assertEqual(r["status"], "INVALID")
         self.assertFalse((self.dir / "evening-digest-2026-10-16" / "manifest.json").exists())

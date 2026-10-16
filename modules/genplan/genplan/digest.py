@@ -40,12 +40,19 @@ FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
 
 # ---------- данные ----------
-def _get(url: str, timeout: int = 25) -> bytes:
-    r = subprocess.run(["curl", "-sS", "-L", "--fail", "--max-time", str(timeout), "-A", "Mozilla/5.0 PAPA-digest", url],
-                       capture_output=True, timeout=timeout + 10)
-    if r.returncode != 0:
-        raise RuntimeError(f"{url.split('/')[2]}: {(r.stderr or b'').decode(errors='replace').strip()[:120]}")
-    return r.stdout
+def _get(url: str, timeout: int = 30, tries: int = 3) -> bytes:
+    """curl с повторами: сервисы погоды/курса иногда отвечают не с первого раза."""
+    import time
+    err = ""
+    for i in range(tries):
+        r = subprocess.run(["curl", "-sS", "-L", "--fail", "--max-time", str(timeout), "-A", "Mozilla/5.0 PAPA-digest", url],
+                           capture_output=True, timeout=timeout + 10)
+        if r.returncode == 0:
+            return r.stdout
+        err = (r.stderr or b"").decode(errors="replace").strip()[:120]
+        if i < tries - 1:
+            time.sleep(5 * (i + 1))
+    raise RuntimeError(f"{url.split('/')[2]}: {err}")
 
 
 WMO = [((0,), "очиқ", "☀️", "🌙"), ((1, 2), "қисман булутли", "⛅", "☁️"), ((3,), "булутли", "☁️", "☁️"),
@@ -127,7 +134,7 @@ NEWS_SYSTEM = """Сен Хўжаобод (Андижон вилояти) аҳо�
 (нарх-наво, коммунал, йўл, таълим, соғлиқ, ҳаво, қонун ўзгаришлари). Реклама, кўнгилочар, жиноят тафсилотлари — йўқ.
 Ҳар бирини ўзбек тилида КИРИЛЛ ёзувида бир қисқа гап (130 белгигача) қилиб ёз. ФАҚАТ сарлавҳада бор маълумот —
 ҳеч нарса қўшма, рақам ўйлаб топма. Агар муҳим янгилик бўлмаса — камроқ танла.
-Жавоб — фақат JSON: [{"t": "...", "src": "манба номи", "url": "ҳавола"}]"""
+Жавоб — фақат JSON: [{"i": сарлавҳа рақами, "t": "қисқа гап"}]"""
 
 
 def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
@@ -138,7 +145,7 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
     gen = gen or (lambda s, u: ai.generate(db, s, u))
     import time
     sleep = sleep or (time.sleep if gen is not None else time.sleep)
-    lst = "\n".join(f"- [{x['src']}] {x['title']} | {x['url']}" for x in items)
+    lst = "\n".join(f"{n}. [{x['src']}] {x['title']}" for n, x in enumerate(items, 1))
     raw, last = "", None
     for attempt in range(4):                       # Gemini бывает перегружен (503) — ждём и повторяем
         try:
@@ -155,13 +162,18 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
         got = json.loads(m.group(0)) if m else []
     except ValueError:
         got = []
-    urls = {x["url"]: x for x in items}
-    out = []
-    for g in got:
-        if not isinstance(g, dict) or g.get("url") not in urls or not (g.get("t") or "").strip():
+    out, seen = [], set()
+    for g in got:                                  # ссылка и источник — только из ленты, по номеру сарлавҳа
+        try:
+            n = int(g.get("i")) if isinstance(g, dict) else 0
+        except (TypeError, ValueError):
             continue
+        if not 1 <= n <= len(items) or n in seen or not (g.get("t") or "").strip():
+            continue
+        seen.add(n)
+        it = items[n - 1]
         t, _ = translit.auto(g["t"].strip())
-        out.append({"t": t[:160], "src": urls[g["url"]]["src"], "url": g["url"]})
+        out.append({"t": t[:160], "src": it["src"], "url": it["url"]})
     return out[:5]
 
 
