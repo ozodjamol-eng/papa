@@ -15,8 +15,9 @@ deploy(){
     rm -rf "$R.tmp"; echo "$name: TESTS_FAILED — остаёмся на $prev"; return 1; fi
   rm -rf "$R"; mv "$R.tmp" "$R"
   ln -sfn "releases/papa-$H" "$base/current.new" && mv -T "$base/current.new" "$base/current"
-  systemctl restart "$svc"; sleep 4
-  if health_$name; then echo "$name: OK → papa-$H (было $prev)"; else
+  systemctl restart "$svc"
+  local ok=0 i; for i in $(seq 1 15); do sleep 2; if health_$name; then ok=1; break; fi; done   # до 30 с на запуск
+  if [[ $ok == 1 ]]; then echo "$name: OK → papa-$H (было $prev)"; else
     ln -sfn "$prev" "$base/current.new" && mv -T "$base/current.new" "$base/current"
     systemctl restart "$svc"; echo "$name: HEALTH_FAILED — откат на $prev"; return 1; fi
 }
