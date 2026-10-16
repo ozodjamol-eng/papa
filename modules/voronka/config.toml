@@ -21,8 +21,8 @@ retention_days = 90        # личные данные удаляются чер
 
 page_url = "https://ozodjamol-eng.github.io/papa-site/"   # страница-визитка
 
-dm_text = """Ассалому алайкум! 😊
-Ўзбекистондаги энг долзарб янгиликлар, фойдали ва қизиқарли видеолар — Телеграм каналларимизда 🔥
+dm_text = """Assalomu alaykum! 😊
+O'zbekistondagi eng dolzarb yangiliklar, foydali va qiziqarli videolar — Telegram kanallarimizda 🔥
 👉 {page}"""
 
 # Каналы, в которых бот PAPA принимает заявки (ссылки-заявки с панели и директа) и приветствует.
