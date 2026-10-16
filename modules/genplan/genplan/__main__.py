@@ -119,41 +119,50 @@ async def run() -> None:
         except Exception as e:  # noqa: BLE001
             print(f"getUpdates {k}: {e}", flush=True)
             return k, b, None
-    while True:
+    state = {"next_tick": next_tick}
+
+    def handle_update(k, b, u):
         c = cfg()
-        failed = 0
-        for k, b, ups in await asyncio.gather(*(poll(k, b) for k, b in reg.items())):
+        try:
+            r = hub.handle(b, db, c, env, u)
+            msg = u.get("message") or {}
+            if r == "ur":
+                state["next_tick"] = 0.0                     # 🆘 — публикуем сразу, не ждём минуту
+            if r and r.startswith("panel:"):                 # панель пульта — про свой канал
+                chan = bots.channel_of(b) or c.get("default_channel") or "davra"
+                ans = menu.panel_reply(db, c, chan, r[6:])
+                if ans:
+                    b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
+            if r and r.startswith("cmd:"):
+                ans = menu.reply(db, c, msg.get("text", ""))
+                if ans:
+                    b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
+        except Exception as e:  # noqa: BLE001 — одно сообщение не должно ронять службу
+            print(f"hub: {type(e).__name__}: {e}", flush=True)
+        offsets[k] = u["update_id"] + 1
+        store.kv_set(db, "offset" if k == "main" else f"offset_{k}", offsets[k])
+
+    async def bot_loop(k, b):
+        """Каждый пульт слушает Telegram сам по себе: нажатие в одном боте не ждёт долгого опроса другого (было до 20 с)."""
+        while True:
+            _, _, ups = await poll(k, b)
             if ups is None:
-                failed += 1
+                await asyncio.sleep(10)
                 continue
             for u in ups:
-                try:
-                    r = hub.handle(b, db, c, env, u)
-                    if r == "ur":
-                        next_tick = 0.0                      # 🆘 — публикуем сразу, не ждём минуту
-                    msg = u.get("message") or {}
-                    if r and r.startswith("panel:"):            # панель пульта — про свой канал
-                        chan = bots.channel_of(b) or c.get("default_channel") or "davra"
-                        ans = menu.panel_reply(db, c, chan, r[6:])
-                        if ans:
-                            b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
-                    if r == "ur":
-                        next_tick = 0.0
-                    if r and r.startswith("cmd:"):
-                        ans = menu.reply(db, c, msg.get("text", ""))
-                        if ans:
-                            b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
-                except Exception as e:  # noqa: BLE001 — одно сообщение не должно ронять службу
-                    print(f"hub: {type(e).__name__}: {e}", flush=True)
-                offsets[k] = u["update_id"] + 1
-                store.kv_set(db, "offset" if k == "main" else f"offset_{k}", offsets[k])
-        if failed == len(reg):
-            await asyncio.sleep(10)
-        try:
-            hub.flush_albums(bot, db, c, env)
-        except Exception as e:  # noqa: BLE001
-            print(f"albums: {e}", flush=True)
-        if time.time() >= next_tick:
+                handle_update(k, b, u)
+
+    async def tick_loop():
+        nonlocal next_health, last_health
+        while True:
+            c = cfg()
+            try:
+                hub.flush_albums(bot, db, c, env)
+            except Exception as e:  # noqa: BLE001
+                print(f"albums: {e}", flush=True)
+            if time.time() < state["next_tick"]:
+                await asyncio.sleep(0.5)
+                continue
             try:
                 if not acc.is_connected():
                     await acc.connect()
@@ -185,7 +194,9 @@ async def run() -> None:
                         bot("sendMessage", chat_id=o, text=err)
             except Exception as e:  # noqa: BLE001
                 print(f"tick: {type(e).__name__}: {e}", flush=True)
-            next_tick = time.time() + 60
+            state["next_tick"] = time.time() + 60
+
+    await asyncio.gather(tick_loop(), *(bot_loop(k, b) for k, b in reg.items()))
 
 
 def main(argv: list[str]) -> None:
