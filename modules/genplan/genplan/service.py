@@ -58,8 +58,9 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
                       now: dt.datetime | None = None) -> bool:
     ch = cfg["channels"][channel]
     own = tuple(c["username"] for c in cfg["channels"].values())
-    tag = "#РЕКЛАМА" if (m["rubric"] or "").lower().startswith("реклама") else (ch.get("hashtags") or {}).get(m["rubric"] or "", "")
-    body = text.finalize(m["text"], ch.get("signature", ""), own=own, hook=hook_for(cfg, ch, m), tag=tag,
+    is_ad = (m["rubric"] or "").lower().startswith("реклама")
+    tag = "#РЕКЛАМА" if is_ad else (ch.get("hashtags") or {}).get(m["rubric"] or "", "")
+    body = text.finalize(m["text"], ch.get("signature", ""), is_ad=is_ad, own=own, hook=hook_for(cfg, ch, m), tag=tag,
                          limit=1024 if m["has_media"] else 4096)
     media = json.loads(m["media"] or "[]") if "media" in m.keys() else []
     hub_ids = json.loads(m["hub_msgs"] or "[]") if "hub_msgs" in m.keys() else []

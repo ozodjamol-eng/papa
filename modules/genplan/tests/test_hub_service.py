@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import json  # noqa: E402
-from genplan import hub, plan, service, smart, store  # noqa: E402
+from genplan import hub, menu, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
 CFG["auto_place"] = False          # эти тесты проверяют ручной выбор рубрики
@@ -368,3 +368,32 @@ class TestNoHub(Base):
         m = store.get(self.db, 1)
         self.assertEqual(str(m["hub_chat"]), ENV["HUB_CHAT_ID"])               # для группы — скопирован в хаб
         self.assertEqual(m["channel"], "xojaobod")
+
+
+class TestPanel(Base):
+    """Панель пульта как в GENPLAN 5: ➕ ПОСТ / 🚨 СРОЧНО / 📅 СЕГОДНЯ / 📣 РЕКЛАМА / 📁 КОНТЕНТ / ⚙️ НАСТРОЙКИ."""
+
+    def test_every_button_answers_about_own_channel(self):
+        now = at("09:00")
+        for b in menu.PANEL_BUTTONS:
+            for chan in ("davra", "paparazzi"):
+                ans = menu.panel_reply(self.db, CFG, chan, b, now)
+                self.assertTrue(ans, (b, chan))
+                if b != menu.P_TODAY:
+                    self.assertIn(CFG["channels"][chan]["title"], ans)
+
+    def test_button_is_command_not_post(self):
+        self.assertEqual(self.h(dm(70, menu.P_CONTENT)), "panel:" + menu.P_CONTENT)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 0)
+
+    def test_urgent_publishes_now(self):
+        self.h(dm(71, menu.P_URGENT))
+        self.assertEqual(self.h(dm(72, "Шошилинч янгилик", photo_uid="u1")), "ur")
+        m = store.get(self.db, 1)
+        self.assertEqual((m["status"], m["urgent"]), ("queued", 1))
+        self.assertEqual(self.h(dm(73, "Оддий янгилик", photo_uid="u2")) == "ur", False)   # режим одноразовый
+
+    def test_ad_gets_rubric_and_tag(self):
+        self.h(dm(74, menu.P_ADS))
+        self.assertEqual(self.h(dm(75, "Скидка 50%! Тел +998901234567", photo_uid="a1")), "ad")
+        self.assertEqual(store.get(self.db, 1)["rubric"], "Реклама")

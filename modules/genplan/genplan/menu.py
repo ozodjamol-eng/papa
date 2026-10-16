@@ -43,6 +43,55 @@ HELP = """Как работать:
 📅 План — все каналы сразу"""
 
 
+# ---------- панель пульта канала — как в GENPLAN 5 (решение владельца 16.10) ----------
+P_ADD, P_URGENT, P_TODAY, P_ADS, P_CONTENT, P_SETTINGS = "➕ ПОСТ", "🚨 СРОЧНО", "📅 СЕГОДНЯ", "📣 РЕКЛАМА", "📁 КОНТЕНТ", "⚙️ НАСТРОЙКИ"
+PANEL_BUTTONS = (P_ADD, P_URGENT, P_TODAY, P_ADS, P_CONTENT, P_SETTINGS)
+PANEL = {"keyboard": [[{"text": P_ADD}, {"text": P_URGENT}],
+                      [{"text": P_TODAY}, {"text": P_ADS}],
+                      [{"text": P_CONTENT}, {"text": P_SETTINGS}]],
+         "resize_keyboard": True, "is_persistent": False, "input_field_placeholder": "Бросьте пост сюда"}
+
+
+def panel_reply(db, cfg: dict, channel: str, button: str, now: dt.datetime | None = None) -> str | None:
+    """Кнопки панели пульта — только про свой канал."""
+    now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
+    ch = cfg["channels"][channel]
+    name = ch["title"]
+    if button == P_ADD:
+        return (f"➕ Пост в {name}\n\nОтправьте текст, фото, видео, альбом или ссылку Instagram / TikTok / YouTube Shorts.\n"
+                "Бот уберёт чужие @ и рекламу, поставит хэштег рубрики и нашу подпись, предложит рубрику (✓) — "
+                "одно нажатие, и умное время он поставит сам.")
+    if button == P_URGENT:
+        return (f"🚨 Срочный пост в {name}\n\nОтправьте текст, фото или видео — выйдет СРАЗУ, без очереди "
+                "(соседние посты сдвинутся сами).")
+    if button == P_ADS:
+        return (f"📣 Реклама в {name}\n\nОтправьте рекламный пост как есть — текст рекламодателя не трогаю "
+                "(контакты остаются), сверху ставлю #РЕКЛАМА. Потом выберите время.")
+    if button == P_TODAY:
+        return plan_one(db, cfg, channel, now)
+    if button == P_CONTENT:
+        rows = store.scheduled(db, channel)
+        st = store.stock(db, channel)
+        lines = [f"{'🆘' if r['urgent'] else '⏳'} {smart.fmt(dt.datetime.fromisoformat(r['scheduled_at']), now)} · "
+                 f"{r['rubric'] or '—'}: {smart.short(r['text'], 40)}" for r in rows[:20]]
+        by: dict[str, int] = {}
+        for m in st:
+            by[m["rubric"]] = by.get(m["rubric"], 0) + 1
+        return (f"📁 Контент — {name}\n\n⏳ В очереди: {len(rows)}\n" + ("\n".join(lines) if lines else "пусто")
+                + ("\n\n📦 В запасе: " + ", ".join(f"{r} {n}" for r, n in by.items()) if by else "\n\n📦 Запас пуст"))
+    if button == P_SETTINGS:
+        r = smart.rules(ch)
+        tags = "включены" if ch.get("hashtags") else "нет"
+        return (f"⚙️ Настройки — {name}\n\n"
+                f"Режим: {_mode(cfg, channel)}\n"
+                f"Публикации: {r['window'][0]}–{r['window'][1]}, между постами ≥ {r['gap']} мин\n"
+                f"Мест в сетке дня: {sum(1 for s in ch['slots'] if s['kind'] in ('content', 'music'))}\n"
+                f"Хэштеги рубрик: {tags} · подпись: {ch.get('signature', '—')}\n"
+                f"Утро: {(ch.get('morning') or {}).get('greeting', '—')} / {(ch.get('morning') or {}).get('day_post', '—')}\n\n"
+                "Изменить что-то — напишите мне (ассистенту), поменяю в настройках.")
+    return None
+
+
 def _mode(cfg, ch):
     return "🟢 работа" if service.channel_mode(cfg, ch) == "live" else "🧪 тест"
 

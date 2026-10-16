@@ -265,6 +265,31 @@ def _album(msg: dict, dm: bool, channel: str | None = None) -> bool:
 HUB_ID: int | None = None
 
 
+def special_mode(bot, db, cfg: dict, key: str, chat: int) -> str | None:
+    """После 🚨 СРОЧНО / 📣 РЕКЛАМА на панели: последний принятый пост — срочно сейчас / реклама с выбором времени."""
+    mode = store.kv_get(db, f"mode_{key}", "")
+    if not mode:
+        return None
+    store.kv_set(db, f"mode_{key}", "")
+    m = db.execute("SELECT * FROM materials WHERE via=? ORDER BY id DESC LIMIT 1", (key,)).fetchone()
+    if not m:
+        return None
+    now = _now()
+    if mode == "urgent":
+        store.update(db, m["id"], status="queued", urgent=1, scheduled_at=now.isoformat(), stock=0,
+                     rubric=m["rubric"] or "Срочно")
+        t, kb = card(db, cfg, m["id"], now)
+        bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text="🚨 Срочно — выходит сейчас\n\n" + t, reply_markup=kb)
+        return "ur"
+    if mode == "ad":
+        store.update(db, m["id"], rubric="Реклама", guessed=0)
+        t, _ = card(db, cfg, m["id"], now)
+        bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text="📣 Реклама — выберите время:\n\n" + t,
+            reply_markup=kb_times(db, cfg, m["id"], now))
+        return "ad"
+    return None
+
+
 def to_hub(bot, db, mid: int) -> None:
     """Материал из чата с ботом → копия в хаб (нужно только для группы: аккаунт PAPA видит лишь хаб)."""
     m = store.get(db, mid)
@@ -306,11 +331,16 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
 
     msg = upd.get("message")
     if msg and int(msg["from"]["id"]) in owners and msg["chat"].get("type") == "private":
-        from .menu import BY_BUTTON, B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ
+        from .menu import BY_BUTTON, B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ, PANEL_BUTTONS, P_URGENT, P_ADS
         txt = (msg.get("text") or "").strip()
         cap = (msg.get("caption") or "").strip()
         if cap.lower().startswith("/logo") and ("document" in msg or "photo" in msg):
             return save_logo(bot, db, cfg, env, msg, cap)
+        key = bots.key_of(bot)
+        if txt in PANEL_BUTTONS:                      # панель пульта: 🚨/📣 — следующий пост особый
+            store.kv_set(db, "await_text", "")
+            store.kv_set(db, f"mode_{key}", "urgent" if txt == P_URGENT else "ad" if txt == P_ADS else "")
+            return "panel:" + txt
         if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ):
             store.kv_set(db, "await_text", "")
             return "cmd:" + txt.split()[0]
@@ -338,7 +368,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
             return "link"
         if _album(msg, dm=True, channel=own):
             return "album"
-        return direct(bot, db, cfg, owners, hub, [msg], channel=own)
+        r = direct(bot, db, cfg, owners, hub, [msg], channel=own)
+        return special_mode(bot, db, cfg, key, msg["chat"]["id"]) or r
     return None
 
 

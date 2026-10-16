@@ -88,26 +88,28 @@ async def run() -> None:
     next_tick = 0.0
     next_health, last_health = 0.0, None
     print(f"GENPLAN PAPA запущен, режим: {cfg()['mode']}", flush=True)
-    if store.kv_get(db, "menu_v") != "4":          # один раз: показать владельцу постоянную панель
+    if store.kv_get(db, "menu_v") != "5":          # один раз: панель пульта как в GENPLAN 5
         for o in str(env.get("OWNER_IDS", "")).split(","):
             try:
-                bot("sendMessage", chat_id=int(o), text="Панель PAPA готова 👇\n\n" + menu.HELP, reply_markup=menu.KEYBOARD)
+                bot("sendMessage", chat_id=int(o), reply_markup=menu.PANEL,
+                    text="🎉 Пульт КАТТА ДАВРА — новая панель 👇\n➕ ПОСТ · 🚨 СРОЧНО · 📅 СЕГОДНЯ · 📣 РЕКЛАМА · 📁 КОНТЕНТ · ⚙️ НАСТРОЙКИ")
             except Exception as e:  # noqa: BLE001
                 print(f"menu: {e}", flush=True)
-        store.kv_set(db, "menu_v", "4")
+        store.kv_set(db, "menu_v", "5")
     for k, b in reg.items():                          # новый бот-пульт: один раз показать панель и что он делает
-        if k != "main" and store.kv_get(db, f"menu_v_{k}") != "1":
+        if k != "main" and store.kv_get(db, f"menu_v_{k}") != "2":
             title = c0["channels"][k]["title"] if (c0 := cfg())["channels"].get(k) else k
             sent = False
             for o in str(env.get("OWNER_IDS", "")).split(","):
                 try:
-                    b("sendMessage", chat_id=int(o), reply_markup=menu.KEYBOARD,
-                      text=f"Пульт «{title}» готов 👇\nВсё, что бросите сюда, пойдёт в {title}: рубрику и время бот поставит сам.")
+                    b("sendMessage", chat_id=int(o), reply_markup=menu.PANEL,
+                      text=f"Пульт «{title}» 👇\nВсё, что бросите сюда, пойдёт в {title}.\n"
+                           "➕ ПОСТ · 🚨 СРОЧНО · 📅 СЕГОДНЯ · 📣 РЕКЛАМА · 📁 КОНТЕНТ · ⚙️ НАСТРОЙКИ")
                     sent = True
                 except Exception as e:  # noqa: BLE001 — владелец ещё не нажал «Старт» в этом боте
                     print(f"menu {k}: {e}", flush=True)
             if sent:
-                store.kv_set(db, f"menu_v_{k}", "1")
+                store.kv_set(db, f"menu_v_{k}", "2")
 
     async def poll(k, b):
         try:
@@ -130,10 +132,17 @@ async def run() -> None:
                     if r == "ur":
                         next_tick = 0.0                      # 🆘 — публикуем сразу, не ждём минуту
                     msg = u.get("message") or {}
+                    if r and r.startswith("panel:"):            # панель пульта — про свой канал
+                        chan = bots.channel_of(b) or c.get("default_channel") or "davra"
+                        ans = menu.panel_reply(db, c, chan, r[6:])
+                        if ans:
+                            b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
+                    if r == "ur":
+                        next_tick = 0.0
                     if r and r.startswith("cmd:"):
                         ans = menu.reply(db, c, msg.get("text", ""))
                         if ans:
-                            b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.KEYBOARD)
+                            b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
                 except Exception as e:  # noqa: BLE001 — одно сообщение не должно ронять службу
                     print(f"hub: {type(e).__name__}: {e}", flush=True)
                 offsets[k] = u["update_id"] + 1
