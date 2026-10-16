@@ -176,9 +176,10 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     mid = store.add_material(db, hub, hub_ids[0], text, bool(media), media=media, hub_msgs=hub_ids, fp=fp)
     if mid is None:
         return "dup"
-    channel = cfg.get("default_channel") or next(iter(cfg["channels"]))
     from .text import strip_sources
-    rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=any(md["type"] == "audio" for md in media))
+    has_audio = any(md["type"] == "audio" for md in media)
+    channel = smart.guess_channel(cfg, text, has_audio)
+    rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=has_audio)
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft")
     placed = auto_place(db, cfg, mid)
     if placed:

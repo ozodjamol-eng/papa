@@ -91,7 +91,7 @@ class TestIntake(Base):
         self.tap(music["callback_data"], now)                                  # одно нажатие: рубрика + умное время
         m = store.get(self.db, 1)
         self.assertEqual(m["status"], "queued")
-        self.assertEqual(dt.datetime.fromisoformat(m["scheduled_at"]), at("13:30"))   # музыка не раньше 10:00, слот «Мусиқа»
+        self.assertEqual(dt.datetime.fromisoformat(m["scheduled_at"]), at("19:45"))   # музыка не раньше 10:00, слот «Мусиқа»
         self.assertIn("✅", self.last_card()["text"])
 
     def test_gap_and_next_slot(self):
@@ -101,7 +101,7 @@ class TestIntake(Base):
             st = smart.smart_time(self.db, CFG, "davra", "Мусиқа", now, exclude=i)
             self.tap(f"sm:{i}:{int(st[0].timestamp())}", now)
         t = [dt.datetime.fromisoformat(store.get(self.db, i)["scheduled_at"]) for i in (1, 2)]
-        self.assertEqual(t, [at("13:30"), at("19:30")])                       # второй — в следующий слот рубрики
+        self.assertEqual(t, [at("19:45"), at("21:30")])                       # второй — в слот, где «Мусиқа» запасная
 
     def test_stale_time_refreshes(self):
         now = at("08:00")
@@ -115,7 +115,7 @@ class TestIntake(Base):
     def test_tomorrow_when_today_full(self):
         self.h(dm(40, "Ҳажвия 😂 кулги", photo_uid="h1"))
         st = smart.smart_time(self.db, CFG, "davra", "Ҳажвия", at("21:00"))
-        self.assertEqual(st[0], at("12:00", MON + dt.timedelta(days=1)))      # хороший пост — на завтра, не пропадает
+        self.assertEqual(st[0], at("09:45", MON + dt.timedelta(days=1)))      # хороший пост — на завтра, не пропадает
 
     def test_window_and_other_times(self):
         ts = smart.other_times(self.db, CFG, "davra", "Видео", at("21:59"), n=3)
@@ -165,23 +165,23 @@ class TestStock(Base):
     def test_stock_fills_empty_slot(self):
         self.h(dm(90, "Кулги видео 😂", photo_uid="k1"))
         i = hub.rubrics(CFG, "davra").index("Ҳажвия")
-        self.tap("sr:1", at("09:00"))
-        self.tap(f"sk:1:{i}", at("09:00"))
+        self.tap("sr:1", at("07:00"))
+        self.tap(f"sk:1:{i}", at("07:00"))
         m = store.get(self.db, 1)
         self.assertEqual((m["stock"], m["status"], m["scheduled_at"]), (1, "draft", None))
-        self.assertIn("📦 В запасе", hub.card(self.db, CFG, 1, at("09:00"))[0])
-        self.assertIn("📦 В запасе: Ҳажвия 1", smart.day_view(self.db, CFG, "davra", at("09:00")))
-        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("09:00")), [])      # 12:00 ещё далеко
-        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("10:45")), [1])     # слот «Ҳажвия» 12:00 пуст
+        self.assertIn("📦 В запасе", hub.card(self.db, CFG, 1, at("07:00"))[0])
+        self.assertIn("📦 В запасе: Ҳажвия 1", smart.day_view(self.db, CFG, "davra", at("07:00")))
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("07:00")), [])      # 09:45 ещё далеко
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("08:30")), [1])     # слот «Ҳажвия» 09:45 пуст
         m = store.get(self.db, 1)
-        self.assertEqual((m["status"], dt.datetime.fromisoformat(m["scheduled_at"])), ("queued", at("12:00")))
+        self.assertEqual((m["status"], dt.datetime.fromisoformat(m["scheduled_at"])), ("queued", at("09:45")))
 
     def test_stock_not_used_when_slot_busy(self):
         self.h(dm(91, "Ҳажвия 1", photo_uid="k2")); self.h(dm(92, "Ҳажвия 2", photo_uid="k3"))
         i = hub.rubrics(CFG, "davra").index("Ҳажвия")
-        self.tap(f"rq:1:{i}", at("10:45"))                       # первый — в план на 12:00
-        self.tap(f"sk:2:{i}", at("10:45"))                       # второй — в запас
-        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("10:45")), [])
+        self.tap(f"rq:1:{i}", at("08:30"))                       # первый — в план на 09:45
+        self.tap(f"sk:2:{i}", at("08:30"))                       # второй — в запас
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("08:30")), [])
 
 
 class FakeAcc:
@@ -308,3 +308,13 @@ class TestAutoPlace(unittest.TestCase):
         self.assertEqual(m["status"], "queued")
         self.assertIsNotNone(m["scheduled_at"])
         self.assertIn("🤖 Поставил сам", calls[-1][1]["text"])
+
+
+class TestGuessChannel(unittest.TestCase):
+    def test_routes_by_meaning(self):
+        cfg = {**CFG, "auto_channels": ["davra", "paparazzi", "xojaobod"]}
+        self.assertEqual(smart.guess_channel(cfg, "Хўжаобод туманида янги йўл очилди"), "xojaobod")
+        self.assertEqual(smart.guess_channel(cfg, "Юлдуз хонанданинг янги клипи премьераси"), "paparazzi")
+        self.assertEqual(smart.guess_channel(cfg, "Валюта курси ўзгарди"), "davra")
+        self.assertEqual(smart.guess_channel(cfg, "Ҳар қандай", has_audio=True), "paparazzi")
+        self.assertEqual(smart.guess_channel(CFG, "Янги клип премьераси"), "davra")      # пока в работе только Давра

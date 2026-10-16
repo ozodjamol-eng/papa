@@ -118,6 +118,27 @@ def guess_rubric(cfg: dict, channel: str, body: str, has_audio: bool = False) ->
     return ch.get("guess_default") or _first_rubric(ch)
 
 
+LOCAL = ("хўжаобод", "хужаобод", "хожаобод", "xo'jaobod", "xojaobod", "андижон", "andijon", "андижан")
+SHOWBIZ = ("клип", "премьера", "хонанда", "қўшиқчи", "концерт", "юлдуз", "актёр", "актриса", "шоу-бизнес", "шоу бизнес",
+           "qo'shiq", "klip", "xonanda", "premyera")
+
+
+def guess_channel(cfg: dict, body: str, has_audio: bool = False) -> str:
+    """Бросил пост — бот сам выбирает канал (только из auto_channels; остальные — пока тест)."""
+    from . import text as T
+    default = cfg.get("default_channel") or next(iter(cfg["channels"]))
+    allowed = [c for c in (cfg.get("auto_channels") or [default]) if c in cfg["channels"]]
+    low, _ = T.translit.auto(T.strip_sources(body or ""))
+    low = low.lower()
+    if "xojaobod" in allowed and any(w in low for w in LOCAL):
+        return "xojaobod"
+    if "paparazzi" in allowed:
+        t = T.topic_of(low, cfg.get("topics", []))
+        if has_audio or any(w in low for w in SHOWBIZ) or (t and t.get("name") == "Мусиқа"):
+            return "paparazzi"
+    return default if default in allowed or not allowed else allowed[0]
+
+
 def _first_rubric(ch: dict) -> str:
     return next(s["rubric"] for s in ch["slots"] if s["kind"] == "content")
 

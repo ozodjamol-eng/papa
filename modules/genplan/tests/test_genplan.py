@@ -27,7 +27,7 @@ class TestGrid(unittest.TestCase):
             self.assertEqual(len(times), len(set(times)), name)
             for s in ch["slots"]:
                 self.assertIn(s["kind"], ("anchor", "content", "ad", "music"))
-        self.assertEqual(sum(1 for s in P["slots"] if s["kind"] == "content"), 10)  # решение владельца: 10 в день
+        self.assertEqual(sum(1 for s in P["slots"] if s["kind"] == "content"), 18)  # 20 всего = 2 утренних + 18 (16.10)
         self.assertEqual([s["t"] for s in X["slots"] if s["kind"] == "ad"],
                          ["07:30", "09:40", "11:50", "15:10", "17:40", "20:10"])
 
@@ -67,14 +67,14 @@ class TestPlan(unittest.TestCase):
 
     def test_due_and_ready(self):
         mats = [M(1, "Шоу-бизнес янгилик")]
-        now = plan.slot_time(MON, "08:20")
+        now = plan.slot_time(MON, "07:20")
         p = plan.build("paparazzi", P, MON, mats, ads={}, now=now)
         self.assertEqual(p[0].status, plan.READY)
-        self.assertEqual([e.at.strftime("%H:%M") for e in plan.due(p, plan.slot_time(MON, "08:31"))], ["08:30"])
-        self.assertEqual(plan.due(p, plan.slot_time(MON, "09:30")), [])  # опоздали больше чем на 20 мин — не публикуем
+        self.assertEqual([e.at.strftime("%H:%M") for e in plan.due(p, plan.slot_time(MON, "07:31"))], ["07:30"])
+        self.assertEqual(plan.due(p, plan.slot_time(MON, "08:00")), [])  # опоздали больше чем на 20 мин — не публикуем
 
     def test_published_kept(self):
-        p = plan.build("paparazzi", P, MON, [M(1, "Видео")], ads={}, published={"08:30": plan.DONE})
+        p = plan.build("paparazzi", P, MON, [M(1, "Видео")], ads={}, published={"07:30": plan.DONE})
         self.assertEqual(p[0].status, plan.DONE)
 
     def test_render(self):
@@ -85,12 +85,12 @@ class TestPlan(unittest.TestCase):
 
 class TestPast(unittest.TestCase):
     def test_past_slot_does_not_eat_material(self):
-        now = plan.slot_time(MON, "17:00")
+        now = plan.slot_time(MON, "16:30")
         e = plan.build("paparazzi", P, MON, [M(1, "Юлдузлар ҳаёти")], ads={}, now=now)
         got = [x for x in e if x.material_id == 1]
         self.assertEqual(len(got), 1)
-        self.assertGreater(got[0].at, now)                      # 20:30, а не прошедшие 12:30
-        self.assertEqual(next(x for x in e if x.at.strftime("%H:%M") == "08:30").status, plan.PAST)
+        self.assertGreater(got[0].at, now)                      # не прошедшие 09:00 / 17:00
+        self.assertEqual(next(x for x in e if x.at.strftime("%H:%M") == "07:30").status, plan.PAST)
 
 
 class TestText(unittest.TestCase):
