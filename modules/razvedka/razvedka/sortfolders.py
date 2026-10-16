@@ -163,6 +163,46 @@ async def create_folders(client, layout: dict[str, list[dict]], log=print) -> di
     return done
 
 
+SERVICE_TITLES = ("papa hub", "papa склад", "nexus morning pool", "papa test")
+SERVICE_USERS = ("PapaGenplanBot",)
+
+
+async def add_service_to_papa(client, log=print) -> int:
+    """В папку владельца «PAPA» (⭐) добавить служебные чаты: HUB, СКЛАД, MORNING POOL, тест-группу, бота (разрешение 16.10)."""
+    from telethon import utils
+    from telethon.tl.functions.messages import GetDialogFiltersRequest, UpdateDialogFilterRequest
+    res = await client(GetDialogFiltersRequest())
+    papa = None
+    for f in getattr(res, "filters", res):
+        t = getattr(f, "title", "")
+        if str(getattr(t, "text", t)).strip().lower() == "papa" and hasattr(f, "include_peers"):
+            papa = f
+    if papa is None:
+        log("папка «PAPA» не найдена — пропускаю")
+        return 0
+    have = {utils.get_peer_id(p) for p in papa.include_peers}
+    add = []
+    async for d in client.iter_dialogs():
+        if (d.title or "").lower().startswith(SERVICE_TITLES):
+            add.append(d.entity)
+    for u in SERVICE_USERS:
+        try:
+            add.append(await client.get_entity(u))
+        except Exception:  # noqa: BLE001
+            pass
+    n = 0
+    for e in add:
+        ip = await client.get_input_entity(e)
+        if utils.get_peer_id(ip) not in have:
+            papa.include_peers.append(ip)
+            have.add(utils.get_peer_id(ip))
+            n += 1
+    if n:
+        await client(UpdateDialogFilterRequest(id=papa.id, filter=papa))
+    log(f"папка «PAPA»: добавлено служебных чатов {n}")
+    return n
+
+
 async def run(client, out_dir: Path, log=print) -> dict:
     chans = await collect(client, log)
     cats = classify(chans, log=log)
@@ -175,6 +215,10 @@ async def run(client, out_dir: Path, log=print) -> dict:
     (out_dir / "folders.json").write_text(json.dumps({"folders": report, "skipped": unsorted,
                                                       "cats": cats}, ensure_ascii=False), encoding="utf-8")
     done = await create_folders(client, layout, log)
+    try:
+        await add_service_to_papa(client, log)
+    except Exception as e:  # noqa: BLE001
+        log(f"папка «PAPA»: не получилось ({type(e).__name__}: {e})")
     lines = ["📁 PAPA: каналы разложены по папкам-назначениям (проверьте и поправьте вручную):"]
     for f, cs in report.items():
         lines.append(f"\n{f} — {len(cs)}:")
