@@ -20,7 +20,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROUTES = {"davra": ("PAPA·Давра", "PAPA·Спорт"), "paparazzi": ("PAPA·Музыка",)}
+# Папки владельца (16.10: «я уже создал и собрал там нужные каналы»); PAPA·… — старые папки, на случай если появятся снова.
+ROUTES = {"davra": ("KATTA DAVRA", "PAPA·Давра", "PAPA·Спорт"), "paparazzi": ("Paparazzi UZ", "PAPA·Музыка")}
 BOTS = dict(x.split("=", 1) for x in os.environ.get(
     "CURATOR_BOTS", "davra=PapaGenplanBot,paparazzi=PaparazziUZ_PultBot").split(",") if "=" in x)
 PER_RUN = {k: int(v) for k, v in (x.split("=", 1) for x in os.environ.get(
@@ -130,6 +131,16 @@ async def folder_peers(client) -> dict[str, list]:
     return out
 
 
+def _t(name: str) -> str:
+    return re.sub(r"\s+", " ", str(name or "")).strip().casefold()
+
+
+def peers_in(folders: dict[str, list], names) -> list:
+    """Каналы из папок с этими названиями; регистр и лишние пробелы не важны."""
+    by = {_t(k): v for k, v in folders.items()}
+    return [p for n in names for p in by.get(_t(n), [])]
+
+
 def kind(m) -> str | None:
     if m.video and not getattr(m.video, "round_message", False):
         return "video"
@@ -201,9 +212,9 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     for channel, names in ROUTES.items():
         since = dt.datetime.fromisoformat(st.get(f"last_{channel}", (now - dt.timedelta(hours=8)).isoformat()))
         since = max(since, now - dt.timedelta(hours=MAX_HOURS))
-        peers = [p for n in names for p in folders.get(n, [])]
+        peers = peers_in(folders, names)
         if not peers:
-            report[channel] = "нет папки " + " / ".join(names)
+            report[channel] = "нет папки " + " / ".join(names) + " · есть: " + ", ".join(sorted(folders)) [:200]
             continue
         cands = []
         for p in peers:

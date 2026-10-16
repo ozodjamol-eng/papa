@@ -31,8 +31,14 @@ class TestCurate(unittest.TestCase):
 
     def test_routes_and_bots(self):
         self.assertEqual(curate.BOTS["davra"], "PapaGenplanBot")
-        self.assertIn("PAPA·Спорт", curate.ROUTES["davra"])
-        self.assertEqual(curate.ROUTES["paparazzi"], ("PAPA·Музыка",))
+        self.assertIn("KATTA DAVRA", curate.ROUTES["davra"])
+        self.assertIn("Paparazzi UZ", curate.ROUTES["paparazzi"])
+
+    def test_peers_in_ignores_case_and_spaces(self):
+        folders = {"KATTA DAVRA": [1, 2], "Paparazzi  UZ": [3], "Новости": [9]}
+        self.assertEqual(curate.peers_in(folders, curate.ROUTES["davra"]), [1, 2])
+        self.assertEqual(curate.peers_in(folders, ["paparazzi uz"]), [3])
+        self.assertEqual(curate.peers_in(folders, ["нет такой"]), [])
 
 
 if __name__ == "__main__":

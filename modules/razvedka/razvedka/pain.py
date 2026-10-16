@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-from .curate import ROUTES, URL, folder_peers
+from .curate import ROUTES, URL, folder_peers, peers_in
 
 RETENTION_DAYS = 30
 POSTS_PER_CHANNEL, COMMENTS_PER_POST, MIN_REPLIES, POST_AGE_DAYS = 8, 60, 3, 3
@@ -128,7 +128,7 @@ async def run(client, db, now: dt.datetime | None = None, log=print) -> dict:
     names = sorted({n for ns in ROUTES.values() for n in ns})
     stat = {"channels": 0, "with_comments": 0, "comments_off": 0, "posts": 0, "new": 0, "errors": 0}
     for name in names:
-        for p in folders.get(name, []):
+        for p in peers_in(folders, [name]):
             try:
                 ent = await client.get_entity(p)
             except Exception as e:  # noqa: BLE001 — один канал не роняет сбор
