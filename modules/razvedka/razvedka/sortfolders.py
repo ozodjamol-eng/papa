@@ -38,6 +38,33 @@ politics_official — пресс-службы, министерства.
 Ответ — ТОЛЬКО JSON: {"<id>": ["тема", "тема"], ...}"""
 
 
+KEYWORDS = {
+    "music": ("қўшиқ", "qo'shiq", "qoshiq", "musiqa", "мусиқа", "music", "песн", "клип", "klip", "mp3", "🎵", "🎶", "xonanda", "хонанда"),
+    "showbiz": ("шоу", "show", "юлдуз", "yulduz", "звезд", "артист", "artist", "сериал", "kino", "кино"),
+    "live_music": ("жонли", "jonli", "ретро", "retro", "концерт", "konsert", "ижро", "ijro"),
+    "news": ("янгилик", "yangilik", "новост", "xabar", "хабар", "tezkor", "тезкор", "news", "daryo", "kun.uz", "dunyo"),
+    "sport": ("футбол", "futbol", "спорт", "sport", "матч", "лига", "liga", "gol ", " гол"),
+    "humor": ("кулги", "kulgi", "ҳажвия", "hajviya", "юмор", "prikol", "прикол", "😂", "🤣", "latifa", "латифа", "comedy"),
+    "useful": ("фойдали", "foydali", "маслаҳат", "maslahat", "полезн", "лайфхак", "layfxak", "bilasizmi", "биласизми"),
+    "health": ("соғлиқ", "sog'liq", "salomatlik", "саломатлик", "врач", "шифо", "shifo", "tibbiyot", "тиббиёт", "dori", "дори"),
+    "home_business": ("бизнес", "biznes", "daromad", "даромад", "заработ", "uyda ", "уйда ", "pul ishlash", "пул ишлаш"),
+    "recipes": ("таом", "taom", "рецепт", "retsept", "ошхона", "oshxona", "кулинар", "pishir", "пишир"),
+    "local": ("андижон", "andijon", "хўжаобод", "xo'jaobod", "xojaobod", "хожаобод"),
+    "religion": ("намоз", "ислом", "islom", "дуо", "duo", "муфтий", "шайх", "shayx", "қуръон", "qur'on", "ҳадис", "hadis"),
+    "ads_market": ("бозор", "bozor", "сотилади", "sotiladi", "сотамиз", "нархи", "narxi", "купл", "продаж", "savdo", "доставка"),
+    "politics_official": ("пресс", "press", "вазирлиги", "vazirligi", "агентлиги", "agentligi", "департамент", "ҳокимлиги", "hokimligi"),
+}
+
+
+def keyword_cats(ch: dict) -> list[str]:
+    """Запасной способ без ИИ: темы по словам в названии (×3) и последних постах."""
+    title = (ch.get("title") or "").lower()
+    body = " ".join(ch.get("texts") or []).lower()
+    score = {c: 3 * sum(w in title for w in ws) + sum(body.count(w) for w in ws) for c, ws in KEYWORDS.items()}
+    top = [c for c, v in sorted(score.items(), key=lambda x: -x[1]) if v >= 2][:2]
+    return top or ["other"]
+
+
 def folders_for(cats: list[str]) -> list[str]:
     return [f for f, want in FOLDERS.items() if any(c in want for c in cats)]
 
@@ -62,7 +89,7 @@ def gemini(system: str, user: str) -> str:
     errs = []
     key = os.environ["GEMINI_API_KEY"].strip().strip('"').strip("'")
     first = os.environ.get("GEMINI_MODEL", "").strip().strip('"').strip("'").removeprefix("models/")
-    for model in dict.fromkeys([m for m in (first, "gemini-flash-latest", "gemini-2.5-flash") if m]):
+    for model in dict.fromkeys([m for m in (first, "gemini-flash-latest") if m]):
         for b in (body, {**body, "generationConfig": {k: v for k, v in body["generationConfig"].items()
                                                        if k != "responseMimeType"}}):
             req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -76,8 +103,7 @@ def gemini(system: str, user: str) -> str:
                 detail = (e.read() or b"")[:160].decode(errors="replace").replace("\n", " ")
                 errs.append(f"{model}: {e.code} {detail}")
                 if e.code == 429:
-                    import time
-                    time.sleep(20)
+                    raise RuntimeError(f"лимит Gemini на сегодня исчерпан ({model})") from None
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{model}: {type(e).__name__}")
     raise RuntimeError("; ".join(errs[-3:]) or "Gemini: нет ответа")
@@ -123,15 +149,22 @@ async def collect(client, log=print) -> list[dict]:
 
 
 def classify(channels: list[dict], batch: int = 10, log=print) -> dict[str, list[str]]:
+    """ИИ (Gemini) по пачкам; если ИИ недоступен или исчерпан лимит — темы по ключевым словам (без ИИ)."""
     cats: dict[str, list[str]] = {}
+    ai_ok = bool(os.environ.get("GEMINI_API_KEY"))
     for i in range(0, len(channels), batch):
         part = channels[i:i + batch]
-        user = "\n\n".join(f"id={c['id']} · «{c['title']}»\n" + "\n".join(f"- {t}" for t in c["texts"]) for c in part)
-        try:
-            got = parse_json(gemini(SYSTEM, user))
-            cats.update({str(k): v if isinstance(v, list) else [v] for k, v in got.items()})
-        except Exception as e:  # noqa: BLE001
-            log(f"  ИИ: пачка {i // batch + 1} не разобрана ({e})")
+        if ai_ok:
+            user = "\n\n".join(f"id={c['id']} · «{c['title']}»\n" + "\n".join(f"- {t}" for t in c["texts"]) for c in part)
+            try:
+                got = parse_json(gemini(SYSTEM, user))
+                cats.update({str(k): v if isinstance(v, list) else [v] for k, v in got.items()})
+                continue
+            except Exception as e:  # noqa: BLE001
+                log(f"  ИИ недоступен ({str(e)[:90]}) — дальше сортирую по ключевым словам")
+                ai_ok = False
+        for c in part:
+            cats.setdefault(str(c["id"]), keyword_cats(c))
     return cats
 
 

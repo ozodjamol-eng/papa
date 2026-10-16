@@ -22,6 +22,11 @@ class TestSort(unittest.TestCase):
         self.assertEqual(names["PAPA·Шаҳар"], ["Andijon", "Kulgu"])
         self.assertNotIn("Bozor", sum(names.values(), []))
 
+    def test_keywords_without_ai(self):
+        self.assertEqual(S.keyword_cats({"title": "Futbol yangiliklari", "texts": ["Real Madrid matchda gol urdi"]})[0], "sport")
+        self.assertIn("music", S.keyword_cats({"title": "Yangi qo'shiqlar 🎵", "texts": ["Yangi klip"]}))
+        self.assertEqual(S.keyword_cats({"title": "Abc", "texts": []}), ["other"])
+
     def test_parse_json(self):
         self.assertEqual(S.parse_json('```json\n{"1": ["music"]}\n```'), {"1": ["music"]})
         self.assertEqual(S.parse_json('ok: {"2": ["news"]} end'), {"2": ["news"]})

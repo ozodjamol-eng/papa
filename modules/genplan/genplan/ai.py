@@ -54,7 +54,7 @@ def _gemini(system: str, user: str, http=None) -> str:
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.6}}
-    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest", "gemini-2.5-flash"]))
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
     for i, model in enumerate(models):          # перегрузка (503) — следующая бесплатная модель Gemini
         req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(),
@@ -140,7 +140,7 @@ def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
     body = {"contents": [{"role": "user", "parts": parts + [{"text": prompt}]}],
             "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.1, "responseMimeType": "application/json"}}
     # основная модель перегружена (503) — пробуем запасные модели Gemini (тоже бесплатные)
-    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest", "gemini-2.5-flash"]))
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
     data, err = None, None
     for model in models:
         req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
