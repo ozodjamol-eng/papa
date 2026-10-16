@@ -362,3 +362,26 @@ class TestMorning(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAccountHealth(unittest.TestCase):
+    def run_check(self, acc):
+        from genplan.__main__ import account_health
+        return asyncio.run(account_health(acc, CFG, ENV))
+
+    def test_states(self):
+        class P:
+            def __init__(self, admin): self.is_admin, self.is_creator = admin, False
+
+        class Acc:
+            def __init__(self, auth=True, admin=True, exc=None): self.auth, self.admin, self.exc = auth, admin, exc
+            async def is_user_authorized(self):
+                if self.exc: raise self.exc
+                return self.auth
+            async def get_permissions(self, to, who): return P(self.admin)
+
+        class AuthKeyUnregisteredError(Exception): pass
+        self.assertIsNone(self.run_check(Acc()))
+        self.assertIn("отключён", self.run_check(Acc(auth=False)))
+        self.assertIn("нет прав админа", self.run_check(Acc(admin=False)))
+        self.assertIn("отключён", self.run_check(Acc(exc=AuthKeyUnregisteredError("x"))))

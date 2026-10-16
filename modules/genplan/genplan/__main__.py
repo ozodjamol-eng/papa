@@ -47,6 +47,29 @@ def make_bot(token: str):
     return call
 
 
+async def account_health(acc, c: dict, env: dict) -> str | None:
+    """Аккаунт PAPA (публикует в группу): не разлогинен ли Telegram'ом, есть ли права публиковать. None — всё в порядке."""
+    chans = [k for k, ch in c["channels"].items() if ch.get("publisher") == "account"]
+    if not chans:
+        return None
+    try:
+        if not await acc.is_user_authorized():
+            return ("🔴 Аккаунт PAPA отключён Telegram'ом — посты в группу не выйдут.\n"
+                    "Франкфурт: papa-update tg-account-qr (вход по QR), затем papa-update genplan-restart")
+        for k in chans:
+            to = service.target(c, env, k)
+            p = await acc.get_permissions(to, "me")
+            if not (getattr(p, "is_admin", False) or getattr(p, "is_creator", False)):
+                return f"🔴 У аккаунта PAPA нет прав админа в «{c['channels'][k]['title']}» ({to}) — добавьте админом."
+    except Exception as e:  # noqa: BLE001
+        name = type(e).__name__
+        if "AuthKey" in name or "Unauthorized" in name or "SessionRevoked" in name:
+            return ("🔴 Аккаунт PAPA отключён Telegram'ом — посты в группу не выйдут.\n"
+                    "Франкфурт: papa-update tg-account-qr, затем papa-update genplan-restart")
+        return f"⚠️ Проверка аккаунта PAPA: {name}: {str(e)[:120]}"
+    return None
+
+
 async def run() -> None:
     from telethon import TelegramClient
     from telethon.sessions import StringSession
@@ -58,6 +81,7 @@ async def run() -> None:
     pubs = {"account": AccountPublisher(acc), "bot": BotPublisher(env["GENPLAN_BOT_TOKEN"])}
     offset = int(store.kv_get(db, "offset", "0"))
     next_tick = 0.0
+    next_health, last_health = 0.0, None
     print(f"GENPLAN PAPA запущен, режим: {cfg()['mode']}", flush=True)
     if store.kv_get(db, "menu_v") != "4":          # один раз: показать владельцу постоянную панель
         for o in str(env.get("OWNER_IDS", "")).split(","):
@@ -96,6 +120,12 @@ async def run() -> None:
             try:
                 if not acc.is_connected():
                     await acc.connect()
+                if time.time() >= next_health:                # аккаунт PAPA жив и с правами? — раз в 30 минут
+                    next_health = time.time() + 1800
+                    msg = await account_health(acc, c, env)
+                    if msg and msg != last_health:
+                        service.ERRORS.append(msg)
+                    last_health = msg
                 res = await service.tick(db, c, env, pubs, log=lambda s: print(s, flush=True))
                 owners = [int(o) for o in str(env.get("OWNER_IDS", "")).split(",") if o.strip()]
                 for mid in res["ids"]:                       # карточка у владельца: «опубликовано»
