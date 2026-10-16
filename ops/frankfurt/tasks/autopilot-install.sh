@@ -7,8 +7,8 @@
 set -Eeuo pipefail
 A=/opt/papa/ops/frankfurt/autopilot
 echo "1/5 тесты автопилота:"
-( cd "$A" && python3 -I -m unittest -q test_autopilot 2>&1 | tail -1 )
-( cd "$A" && python3 -I -m unittest -q test_autopilot >/dev/null 2>&1 ) || { echo "ТЕСТЫ НЕ ПРОШЛИ — ничего не меняю"; exit 1; }
+out=$(python3 -I "$A/test_autopilot.py" 2>&1) || { echo "$out" | tail -15; echo "ТЕСТЫ НЕ ПРОШЛИ — ничего не меняю"; exit 1; }
+echo "$out" | tail -1
 echo "2/5 где база шлюза:"
 GWDB=""
 for f in $(systemctl show -p EnvironmentFiles --value nexus-private-control-v2 | tr ' ' '\n' | grep '^/' | sed 's/^-//'); do
