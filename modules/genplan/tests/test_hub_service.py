@@ -12,6 +12,7 @@ from genplan import hub, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
 CFG["auto_place"] = False          # эти тесты проверяют ручной выбор рубрики
+CFG["auto_channels"] = ["davra"]   # и канал по умолчанию
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "TEST_GROUP_ID": "-100111", "TEST_CHANNEL_ID": "-100222"}
 
 
@@ -264,7 +265,7 @@ class TestService(Base):
 
     def test_targets(self):
         self.assertEqual(service.target(CFG, ENV, "davra"), "@kattadavrauz")
-        self.assertEqual(service.target(CFG, ENV, "paparazzi"), -100222)
+        self.assertEqual(service.target(CFG, ENV, "paparazzi"), "@ozodjamoll")   # в работе с 16.10
         self.assertEqual(service.target(CFG, ENV, "xojaobod"), -100111)
 
     def test_today_text(self):
@@ -317,4 +318,4 @@ class TestGuessChannel(unittest.TestCase):
         self.assertEqual(smart.guess_channel(cfg, "Юлдуз хонанданинг янги клипи премьераси"), "paparazzi")
         self.assertEqual(smart.guess_channel(cfg, "Валюта курси ўзгарди"), "davra")
         self.assertEqual(smart.guess_channel(cfg, "Ҳар қандай", has_audio=True), "paparazzi")
-        self.assertEqual(smart.guess_channel(CFG, "Янги клип премьераси"), "davra")      # пока в работе только Давра
+        self.assertEqual(smart.guess_channel({**CFG, "auto_channels": ["davra"]}, "Янги клип премьераси"), "davra")
