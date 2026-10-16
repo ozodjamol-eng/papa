@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -157,13 +158,20 @@ def classify(channels: list[dict], batch: int = 10, log=print) -> dict[str, list
         part = channels[i:i + batch]
         if ai_ok:
             user = "\n\n".join(f"id={c['id']} · «{c['title']}»\n" + "\n".join(f"- {t}" for t in c["texts"]) for c in part)
-            try:
-                got = parse_json(gemini(SYSTEM, user))
+            got = None
+            for attempt in range(3):                 # 503 «перегружена» — пауза и повтор; лимит (429) — сразу на слова
+                try:
+                    got = parse_json(gemini(SYSTEM, user))
+                    break
+                except Exception as e:  # noqa: BLE001
+                    if "лимит" in str(e) or attempt == 2:
+                        log(f"  ИИ недоступен ({str(e)[:90]}) — дальше сортирую по ключевым словам")
+                        ai_ok = False
+                        break
+                    time.sleep(30 * (attempt + 1))
+            if got is not None:
                 cats.update({str(k): v if isinstance(v, list) else [v] for k, v in got.items()})
                 continue
-            except Exception as e:  # noqa: BLE001
-                log(f"  ИИ недоступен ({str(e)[:90]}) — дальше сортирую по ключевым словам")
-                ai_ok = False
         for c in part:
             cats.setdefault(str(c["id"]), keyword_cats(c))
     return cats

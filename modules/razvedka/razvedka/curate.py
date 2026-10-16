@@ -15,6 +15,7 @@ import json
 import os
 import re
 import statistics
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -76,21 +77,25 @@ def vision(jpeg: bytes) -> dict:
     model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest").strip().strip('"').removeprefix("models/") or "gemini-flash-latest"
     body = {"contents": [{"role": "user", "parts": [{"text": VISION},
                                                      {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}}]}],
-            "generationConfig": {"temperature": 0, "maxOutputTokens": 200, "responseMimeType": "application/json"}}
-    for m in dict.fromkeys([model, "gemini-flash-latest"]):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
-                                     data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
-        try:
-            data = json.loads(urllib.request.urlopen(req, timeout=60).read())
-            parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-            raw = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-            return json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                raise RuntimeError("лимит Gemini") from None
-        except Exception:  # noqa: BLE001
-            continue
-    raise RuntimeError("Gemini недоступен")
+            "generationConfig": {"temperature": 0, "maxOutputTokens": 2048, "responseMimeType": "application/json"}}
+    errs = []
+    for attempt in range(3):                     # 503 «модель перегружена» — подождать и повторить
+        for m in dict.fromkeys([model, "gemini-flash-latest"]):
+            req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                                         data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
+            try:
+                data = json.loads(urllib.request.urlopen(req, timeout=60).read())
+                parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+                raw = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+                return json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    raise RuntimeError("лимит Gemini") from None
+                errs.append(f"{m}: HTTP {e.code}")
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"{m}: {type(e).__name__}")
+        time.sleep(20 * (attempt + 1))
+    raise RuntimeError("Gemini недоступен: " + "; ".join(errs[-2:]))
 
 
 # ---------- Telegram ----------
