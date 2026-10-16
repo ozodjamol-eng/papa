@@ -7,7 +7,11 @@ from pathlib import Path
 SAFE_SERVER = frozenset({'gateway_health','policy_verify','policy_repair','genplan_probe','urgent_prepare','host_health'})
 SAFE_AGENT = frozenset({'device_health','startup_audit','process_snapshot','genplan_status'})
 RESTRICTED = frozenset({'deploy_request','restart_service_request','os_repair_request','telegram_publish_request','delete_data_request','rotate_secret_request'})
-OPERATIONS = SAFE_SERVER | SAFE_AGENT | RESTRICTED
+# Автопилот PAPA: задачу ops/frankfurt/tasks/<имя>.sh выполняет root-исполнитель papa-autopilot на Франкфурте.
+# Шлюз проверяет только форму; что можно сразу, что — по кнопке владельца в Telegram, что запрещено —
+# решает исполнитель по ops/frankfurt/autopilot/allow.json (граница безопасности — там).
+RUNNER = frozenset({'papa_task'})
+OPERATIONS = SAFE_SERVER | SAFE_AGENT | RESTRICTED | RUNNER
 MAX_ATTEMPTS=3
 TASK_TTL_SECONDS=3600
 QUEUE_LIMIT=200
@@ -79,12 +83,23 @@ class Store:
         if operation=='urgent_prepare' and (type(payload.get('post_id')) is not int or payload['post_id']<=0):
             raise ValueError('explicit_post_id_required')
         if operation in RESTRICTED and not payload.get('reason'): raise ValueError('reason_required')
+        if operation in RUNNER:
+            import re
+            if target!='frankfurt': raise ValueError('runner_target_frankfurt')
+            if set(payload)-{'task','reason'} or not isinstance(payload.get('task'),str) \
+                    or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}',payload['task']):
+                raise ValueError('invalid_task_name')
+            if not isinstance(payload.get('reason',''),str) or len(payload.get('reason',''))>300: raise ValueError('invalid_reason')
         key=idempotency or secrets.token_hex(16)
         if not isinstance(key,str) or not (4<=len(key)<=120): raise ValueError('invalid_idempotency')
         fingerprint=sha(j({'operation':operation,'target':target,'payload':payload}))
         status='awaiting_approval' if operation in RESTRICTED else 'queued'
         task_id=secrets.token_hex(12)
         priority=100 if operation=='urgent_prepare' else 20 if operation in SAFE_SERVER else 10
+        if operation in RUNNER:
+            with self.conn() as d:
+                busy=d.execute("SELECT COUNT(*) FROM tasks WHERE operation IN ('papa_task') AND status IN ('queued','running','awaiting_owner')").fetchone()[0]
+            if busy>=5: raise ValueError('runner_queue_full')
         with self.conn() as d:
             d.execute('BEGIN IMMEDIATE')
             old=d.execute('SELECT id,status,fingerprint FROM tasks WHERE idempotency=?',(key,)).fetchone()

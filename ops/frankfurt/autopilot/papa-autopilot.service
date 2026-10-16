@@ -1,0 +1,16 @@
+[Unit]
+Description=PAPA автопилот — выполняет задачи papa-update, поставленные ИИ через шлюз NEXUS (белый список + кнопка владельца)
+After=network-online.target nexus-private-control-v2.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/papa-autopilot/autopilot.env
+ExecStart=/usr/bin/python3 -I /opt/papa/ops/frankfurt/autopilot/papa_autopilot.py
+Restart=always
+RestartSec=10
+# задачи ведут себя как при запуске из консоли владельца; одна за раз
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

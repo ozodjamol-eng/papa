@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from .core import Store, SAFE_AGENT, SAFE_SERVER, RESTRICTED, POLICY, safe_server_execute
+from .core import Store, SAFE_AGENT, SAFE_SERVER, RESTRICTED, RUNNER, POLICY, safe_server_execute
 
 ROOT=Path(__file__).resolve().parent.parent
 
@@ -183,7 +183,7 @@ def create_app(config:Settings|None=None):
                 'devices':[{'id':x['id'],'platform':x['platform'],'hostname':x['hostname'],
                             'online':x['online'],'last_seen':x['last_seen']} for x in store.devices()],
                 'production_connected':cfg.probes_enabled,
-                'publisher_connected':False,'capabilities':{'cloud':sorted(SAFE_SERVER),'agent':sorted(SAFE_AGENT)}}
+                'publisher_connected':False,'capabilities':{'cloud':sorted(SAFE_SERVER),'agent':sorted(SAFE_AGENT),'frankfurt':sorted(RUNNER)}}
     @app.get('/api/tasks')
     def tasks(request:Request):
         context(request,allow_ai=True)
@@ -194,6 +194,13 @@ def create_app(config:Settings|None=None):
         if actor=='ai' and body.operation in RESTRICTED:raise HTTPException(403,'ai_cannot_request_critical_actions')
         try:return store.create(actor,body.operation,body.payload,body.target,body.idempotency_key)
         except ValueError as e:raise HTTPException(422,str(e))
+    @app.get('/api/tasks/{task_id}')
+    def task_one(task_id:str,request:Request):
+        context(request,allow_ai=True)
+        if not task_id.isalnum() or len(task_id)>40:raise HTTPException(422,'bad_id')
+        row=store.get(task_id)
+        if not row:raise HTTPException(404,'task_not_found')
+        return {k:row[k] for k in ('id','operation','target','status','payload','result','requested_by','created_at','updated_at')}
     @app.post('/api/tasks/{task_id}/approve')
     def approve(task_id:str,body:Approve,request:Request):
         if context(request,mutation=True)!='owner':raise HTTPException(403,'owner_only')

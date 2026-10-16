@@ -1,0 +1,13 @@
+{
+  "_": "Автопилот PAPA. auto — ИИ выполняет сразу; approve — только после кнопки владельца в Telegram; deny — никогда (секреты, вход в аккаунты, сам автопилот). Любая задача, которой нет в списках, = approve.",
+  "auto": [
+    "status", "genplan-restart", "morning-refresh", "morning-deploy", "morning-hunt", "morning-use-pool", "morning-sklad",
+    "folders-sort", "razvedka-report", "razvedka-collect", "voronka-status", "voronka-check", "pult-diff", "pult-deploy"
+  ],
+  "approve": [
+    "morning-pool-clear", "genplan-live-davra", "genplan-live-paparazzi", "xojaobod-admin", "davra-setup", "test-setup",
+    "tg-folder", "papa-bot", "razvedka-auto", "monitoring", "voronka-install", "voronka-invite", "genplan-install",
+    "fabrika-install", "razvedka-install", "anon-test", "anon-test-account"
+  ],
+  "deny_patterns": ["-key$", "-token$", "-login$", "-qr$", "^tg-account-", "^autopilot-"]
+}

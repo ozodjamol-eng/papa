@@ -397,3 +397,17 @@ class TestPanel(Base):
         self.h(dm(74, menu.P_ADS))
         self.assertEqual(self.h(dm(75, "Скидка 50%! Тел +998901234567", photo_uid="a1")), "ad")
         self.assertEqual(store.get(self.db, 1)["rubric"], "Реклама")
+
+
+class TestAutopilotButton(Base):
+    def test_owner_allows_once(self):
+        q = cb("ap:abc123def:y")["callback_query"]
+        q["message"]["text"] = "🤖 Автопилот просит разрешения"
+        self.assertEqual(hub.callback(self.bot, self.db, CFG, {42}, q), "ap_y")
+        self.assertEqual(store.kv_get(self.db, "autopilot_abc123def"), "yes")
+        self.assertEqual(hub.callback(self.bot, self.db, CFG, {42}, q), "dup")      # второй раз не меняет
+
+    def test_stranger_denied(self):
+        q = cb("ap:abc123def:y", uid=7)["callback_query"]
+        self.assertEqual(hub.callback(self.bot, self.db, CFG, {42}, q), "denied")
+        self.assertIsNone(store.kv_get(self.db, "autopilot_abc123def"))

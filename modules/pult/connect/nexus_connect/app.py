@@ -2,7 +2,7 @@
 Exposes ONLY safe NEXUS operations by calling the NEXUS V2 gateway with its scoped AI role.
 No shell, no file access, no critical actions."""
 from __future__ import annotations
-import base64, hashlib, hmac, html, json, os, secrets, sqlite3, time
+import base64, re, hashlib, hmac, html, json, os, secrets, sqlite3, time
 from collections import deque
 from pathlib import Path
 from urllib.parse import urlencode, urlparse, parse_qsl
@@ -286,6 +286,20 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
         {'name': 'nexus_voronka', 'title': 'Воронка Instagram', 'description': 'Состояние Voronka PAPA: режим (работа/проверка), сколько комментариев под постами @paparazzi.uz обработано и сколько директов со ссылкой отправлено за час/сутки/всего, пропуски (спам, дубли), ошибки и паузы Meta, заявки в Telegram, посты под наблюдением. Обновляется каждые 2 минуты. Без личных данных. Только чтение.',
          'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
          'annotations': {'readOnlyHint': True, 'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': False}, 'scope': 'nexus.read'},
+        {'name': 'nexus_papa_task', 'title': 'Автопилот PAPA (Франкфурт)',
+         'description': 'Выполнить задачу PAPA на сервере Франкфурт — то же, что владелец делает командой papa-update <задача>. '
+                        'Исполнитель сам решает по списку ops/frankfurt/autopilot/allow.json: безопасные задачи (статус, перезапуск GENPLAN, '
+                        'утро, папки, выкладка с тестами и откатом) — сразу; остальные — только после кнопки «✅ Разрешить» владельца в Telegram; '
+                        'задачи с секретами и входом в аккаунты — запрещены. Ждёт до 40 с; дальше результат — nexus_papa_result.',
+         'inputSchema': {'type': 'object', 'properties': {
+             'task': {'type': 'string', 'pattern': '^[a-z0-9][a-z0-9-]{1,48}$', 'description': 'имя задачи из ops/frankfurt/tasks без .sh'},
+             'reason': {'type': 'string', 'maxLength': 300, 'description': 'зачем — коротко по-русски, владелец видит это в Telegram'}},
+             'required': ['task', 'reason'], 'additionalProperties': False},
+         'annotations': {'readOnlyHint': False, 'destructiveHint': True, 'idempotentHint': False, 'openWorldHint': False}, 'scope': 'nexus.checks'},
+        {'name': 'nexus_papa_result', 'title': 'Результат задачи автопилота', 'description': 'Статус и вывод задачи автопилота PAPA по её task_id. Только чтение.',
+         'inputSchema': {'type': 'object', 'properties': {'task_id': {'type': 'string', 'pattern': '^[a-f0-9]{8,40}$'}},
+                         'required': ['task_id'], 'additionalProperties': False},
+         'annotations': {'readOnlyHint': True}, 'scope': 'nexus.read'},
     ]
     TOOL_BY = {t['name']: t for t in TOOLS}
 
@@ -329,7 +343,29 @@ label.ck{{display:flex;gap:8px;align-items:center;margin:6px 0}}</style></head><
                 return {'task_id': tid, 'status': row['status'] if row else 'unknown', 'london_agent_online': online,
                         'note': 'агент Лондона не ответил за 25 с; результат появится в nexus_tasks' if online else 'агент Лондона офлайн'}
             return {'task_id': tid, 'status': row['status'], 'source': 'london_agent', 'verified_result': json.loads(row['result'] or '{}')}
+        if name == 'nexus_papa_task':
+            task, reason = args.get('task'), args.get('reason', '')
+            if not isinstance(task, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,48}', task): raise ValueError('bad_task')
+            if not isinstance(reason, str) or len(reason) > 300: raise ValueError('bad_reason')
+            created = g('POST', '/api/tasks', json={'operation': 'papa_task', 'target': 'frankfurt', 'payload': {'task': task, 'reason': reason},
+                                                     'idempotency_key': f'mcp-{who}-{secrets.token_hex(8)}'})
+            tid = created['id']; t0 = time.time(); row = None
+            while time.time() - t0 < 40:
+                row = g('GET', f'/api/tasks/{tid}')
+                if row['status'] in ('succeeded', 'failed', 'expired'): break
+                time.sleep(1)
+            return papa_view(row or {'id': tid, 'status': 'unknown'})
+        if name == 'nexus_papa_result':
+            tid = args.get('task_id')
+            if not isinstance(tid, str) or not re.fullmatch(r'[a-f0-9]{8,40}', tid): raise ValueError('bad_task_id')
+            return papa_view(g('GET', f'/api/tasks/{tid}'))
         raise ValueError('unknown_tool')
+
+    def papa_view(row):
+        res = json.loads(row.get('result') or '{}') if isinstance(row.get('result'), str) else (row.get('result') or {})
+        hint = {'queued': 'в очереди у исполнителя', 'running': 'выполняется',
+                'awaiting_owner': 'ждёт кнопку владельца в Telegram'}.get(row.get('status'), '')
+        return {'task_id': row.get('id'), 'status': row.get('status'), 'hint': hint, **res}
 
     def rpc_result(i, result): return {'jsonrpc': '2.0', 'id': i, 'result': result}
     def rpc_error(i, code, msg): return {'jsonrpc': '2.0', 'id': i, 'error': {'code': code, 'message': msg}}

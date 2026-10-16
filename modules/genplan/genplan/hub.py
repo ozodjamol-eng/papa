@@ -422,6 +422,25 @@ def save_logo(bot, db, cfg: dict, env: dict, msg: dict, cap: str) -> str:
     return "logo"
 
 
+def autopilot_answer(bot, db, cq: dict) -> str:
+    """✅ / ❌ владельца на задачу автопилота: ответ пишется в kv, исполнитель papa-autopilot его читает."""
+    try:
+        _, tid, ans = cq["data"].split(":")
+    except ValueError:
+        return "bad"
+    if not tid.isalnum() or ans not in ("y", "n"):
+        return "bad"
+    k = f"autopilot_{tid}"
+    if store.kv_get(db, k):
+        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Ответ уже принят")
+        return "dup"
+    store.kv_set(db, k, "yes" if ans == "y" else "no")
+    text = (cq["message"].get("text") or "") + ("\n\n✅ РАЗРЕШЕНО — выполняю" if ans == "y" else "\n\n❌ ОТКАЗАНО")
+    bot("editMessageText", chat_id=cq["message"]["chat"]["id"], message_id=cq["message"]["message_id"], text=text[:4096])
+    bot("answerCallbackQuery", callback_query_id=cq["id"], text="✅ Разрешено" if ans == "y" else "❌ Отказано", show_alert=True)
+    return "ap_" + ans
+
+
 def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | None = None) -> str:
     now = now or _now()
     if int(cq["from"]["id"]) not in owners:
@@ -430,6 +449,8 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     if cq["data"].startswith("mo:"):                      # предпросмотр утреннего блока
         from . import morning
         return morning.callback(bot, db, cq)
+    if cq["data"].startswith("ap:"):                      # автопилот просит разрешения на задачу (Франкфурт)
+        return autopilot_answer(bot, db, cq)
     chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
     kind, mid_s, *arg = cq["data"].split(":")
     mid = int(mid_s)
