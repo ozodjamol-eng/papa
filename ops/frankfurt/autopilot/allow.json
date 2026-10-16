@@ -19,7 +19,8 @@
     "curator-run",
     "audit-install",
     "audit",
-    "digest-now"
+    "digest-now",
+    "razvedka-qr-check"
   ],
   "approve": [
     "morning-pool-clear",
