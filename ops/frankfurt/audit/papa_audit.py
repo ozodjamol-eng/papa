@@ -272,10 +272,10 @@ def watch(cfg: dict, env: dict, now: dt.datetime, state: dict) -> list[str]:
     adm = state.setdefault("admins", {})
     for code, ch in cfg["channels"].items():
         chat = "@" + ch["username"]
-        snap = admins_snapshot(tok, chat)
+        snap = admins_snapshot(env.get(ch.get("bot_token_env", ""), "") or tok, chat)   # свой бот канала видит своих админов
         if snap is None:
-            if not state.setdefault("admin_unreadable", {}).get(code):
-                state["admin_unreadable"][code] = 1
+            if not state.setdefault("admin_unreadable", {}).get(code + "2"):
+                state["admin_unreadable"][code + "2"] = 1
                 alerts.append(f"🛡 {ch['title']}: бот не видит список админов — охрана для него не работает")
             continue
         if code in adm:
