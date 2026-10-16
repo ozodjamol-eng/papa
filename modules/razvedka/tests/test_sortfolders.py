@@ -17,9 +17,9 @@ class TestSort(unittest.TestCase):
         cats = {"1": ["music"], "2": ["sport"], "3": ["humor"], "4": ["ads_market"], "5": ["local", "news"]}
         p = S.plan(chans, cats)
         names = {f: [c["title"] for c in cs] for f, cs in p.items()}
-        self.assertEqual(names["P→Paparazzi"], ["Musiqa", "Kulgu"])
-        self.assertEqual(names["P→Давра"], ["Futbol", "Andijon", "Kulgu"])
-        self.assertEqual(names["P→Хўжаобод"], ["Andijon", "Kulgu"])
+        self.assertEqual(names["PAPA·Музыка"], ["Musiqa", "Kulgu"])
+        self.assertEqual(names["PAPA·Давра"], ["Futbol", "Andijon", "Kulgu"])
+        self.assertEqual(names["PAPA·Шаҳар"], ["Andijon", "Kulgu"])
         self.assertNotIn("Bozor", sum(names.values(), []))
 
     def test_parse_json(self):

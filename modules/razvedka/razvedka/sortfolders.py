@@ -21,9 +21,9 @@ CAT_RU = {"news": "новости", "sport": "спорт", "humor": "юмор", 
           "politics_official": "официальное", "ads_market": "купля-продажа/реклама", "other": "другое"}
 # папка (до 12 знаков — ограничение Telegram) → темы
 FOLDERS = {
-    "P→Давра": ("news", "sport", "humor", "useful", "home_business", "interesting", "recipes", "politics_official"),
-    "P→Paparazzi": ("music", "showbiz", "live_music", "humor"),
-    "P→Хўжаобод": ("local", "useful", "health", "humor", "religion", "recipes"),
+    "PAPA·Давра": ("news", "sport", "humor", "useful", "home_business", "interesting", "recipes", "politics_official"),
+    "PAPA·Музыка": ("music", "showbiz", "live_music", "humor"),
+    "PAPA·Шаҳар": ("local", "useful", "health", "humor", "religion", "recipes"),
 }
 MAX_IN_FOLDER = 100          # лимит Telegram на папку (без Premium)
 SKIP_TITLES = ("papa ", "nexus", "papa hub", "papa склад", "papa test")
