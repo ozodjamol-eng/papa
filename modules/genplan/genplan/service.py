@@ -13,6 +13,17 @@ ERRORS: list[str] = []             # ошибки публикации — сл�
 LATE = dt.timedelta(hours=3)        # служба долго стояла: такие посты не публикуем пачкой, а переносим на новое время
 
 
+def pub_for(pubs: dict, ch: dict, channel: str, via: str | None = None):
+    """Публикатор канала: свой бот-пульт канала («bot:<канал>»), иначе общий. Альбом публикует тот бот, через который
+    он пришёл (file_id у каждого бота свои)."""
+    kind = ch["publisher"]
+    if via and via != "main" and f"{kind}:{via}" in pubs:
+        return pubs[f"{kind}:{via}"]
+    if via == "main":
+        return pubs[kind]
+    return pubs.get(f"{kind}:{channel}") or pubs[kind]
+
+
 def to_materials(rows) -> list[plan.Material]:
     return [plan.Material(r["id"], r["rubric"], dt.datetime.fromisoformat(r["created_at"]), r["channel"], r["text"])
             for r in rows]
@@ -53,7 +64,8 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
                          limit=1024 if m["has_media"] else 4096)
     media = json.loads(m["media"] or "[]") if "media" in m.keys() else []
     hub_ids = json.loads(m["hub_msgs"] or "[]") if "hub_msgs" in m.keys() else []
-    p = pubs[ch["publisher"]]
+    via = m["via"] if "via" in m.keys() else None
+    p = pub_for(pubs, ch, channel, via if len(hub_ids) > 1 else None)
     to = target(cfg, env, channel)
     try:
         if len(hub_ids) > 1:                               # альбом — одним постом
@@ -137,7 +149,7 @@ async def tick_namaz(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log
         for d in (now.date(), now.date() + dt.timedelta(days=1)):
             namaz.ensure_day(db, cfg, channel, d, now)
         for r in namaz.due(db, channel, now, o["grace"]):
-            p = pubs[ch["publisher"]]
+            p = pub_for(pubs, ch, channel)
             to = target(cfg, env, channel)
             try:
                 if ch["publisher"] == "account":
@@ -172,7 +184,7 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
             if r["error"] in ("не успели подготовить", "не одобрен"):
                 ERRORS.append(f"⚠️ {ch['title']}: {morning.TITLE[r['key']]} не вышел — {r['error']}")
         for r in ready:
-            p = pubs[ch["publisher"]]
+            p = pub_for(pubs, ch, channel)
             to = morning.target(cfg, env, channel)
             hub_chat = int(env["HUB_CHAT_ID"]) if r["hub_msg"] else None
             try:

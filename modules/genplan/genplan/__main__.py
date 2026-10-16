@@ -75,11 +75,16 @@ async def run() -> None:
     from telethon.sessions import StringSession
     env = dict(os.environ)
     db = store.connect(DB)
-    bot = make_bot(env["GENPLAN_BOT_TOKEN"])
+    from . import bots
+    reg = bots.setup(cfg(), env, make_bot)               # главный бот + боты-пульты каналов
+    bot = reg["main"]
     acc = TelegramClient(StringSession(env["PAPA_TG_SESSION"]), int(env["PAPA_TG_API_ID"]), env["PAPA_TG_API_HASH"])
     await acc.connect()
     pubs = {"account": AccountPublisher(acc), "bot": BotPublisher(env["GENPLAN_BOT_TOKEN"])}
-    offset = int(store.kv_get(db, "offset", "0"))
+    for k, tok in bots.TOKENS.items():
+        if k != "main":
+            pubs[f"bot:{k}"] = BotPublisher(tok)
+    offsets = {k: int(store.kv_get(db, "offset" if k == "main" else f"offset_{k}", "0")) for k in reg}
     next_tick = 0.0
     next_health, last_health = 0.0, None
     print(f"GENPLAN PAPA запущен, режим: {cfg()['mode']}", flush=True)
@@ -90,27 +95,50 @@ async def run() -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"menu: {e}", flush=True)
         store.kv_set(db, "menu_v", "4")
+    for k, b in reg.items():                          # новый бот-пульт: один раз показать панель и что он делает
+        if k != "main" and store.kv_get(db, f"menu_v_{k}") != "1":
+            title = c0["channels"][k]["title"] if (c0 := cfg())["channels"].get(k) else k
+            sent = False
+            for o in str(env.get("OWNER_IDS", "")).split(","):
+                try:
+                    b("sendMessage", chat_id=int(o), reply_markup=menu.KEYBOARD,
+                      text=f"Пульт «{title}» готов 👇\nВсё, что бросите сюда, пойдёт в {title}: рубрику и время бот поставит сам.")
+                    sent = True
+                except Exception as e:  # noqa: BLE001 — владелец ещё не нажал «Старт» в этом боте
+                    print(f"menu {k}: {e}", flush=True)
+            if sent:
+                store.kv_set(db, f"menu_v_{k}", "1")
+
+    async def poll(k, b):
+        try:
+            ups = await asyncio.to_thread(b, "getUpdates", offset=offsets[k], timeout=1 if hub.ALBUMS else 20,
+                                          allowed_updates=["channel_post", "callback_query", "message"])
+            return k, b, ups
+        except Exception as e:  # noqa: BLE001
+            print(f"getUpdates {k}: {e}", flush=True)
+            return k, b, None
     while True:
         c = cfg()
-        try:
-            ups = await asyncio.to_thread(bot, "getUpdates", offset=offset, timeout=1 if hub.ALBUMS else 20,
-                                          allowed_updates=["channel_post", "callback_query", "message"])
+        failed = 0
+        for k, b, ups in await asyncio.gather(*(poll(k, b) for k, b in reg.items())):
+            if ups is None:
+                failed += 1
+                continue
             for u in ups:
                 try:
-                    r = hub.handle(bot, db, c, env, u)
+                    r = hub.handle(b, db, c, env, u)
                     if r == "ur":
                         next_tick = 0.0                      # 🆘 — публикуем сразу, не ждём минуту
                     msg = u.get("message") or {}
                     if r and r.startswith("cmd:"):
                         ans = menu.reply(db, c, msg.get("text", ""))
                         if ans:
-                            bot("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.KEYBOARD)
+                            b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.KEYBOARD)
                 except Exception as e:  # noqa: BLE001 — одно сообщение не должно ронять службу
                     print(f"hub: {type(e).__name__}: {e}", flush=True)
-                offset = u["update_id"] + 1
-                store.kv_set(db, "offset", offset)
-        except Exception as e:  # noqa: BLE001
-            print(f"getUpdates: {e}", flush=True)
+                offsets[k] = u["update_id"] + 1
+                store.kv_set(db, "offset" if k == "main" else f"offset_{k}", offsets[k])
+        if failed == len(reg):
             await asyncio.sleep(10)
         try:
             hub.flush_albums(bot, db, c, env)
@@ -132,9 +160,10 @@ async def run() -> None:
                     m = store.get(db, mid)
                     if m and m["owner_msg"]:
                         t, kb = hub.card(db, c, mid)
+                        cb = reg.get(m["via"] or "main") or bot           # карточку правит тот бот, что её прислал
                         for o in owners:
                             try:
-                                bot("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t, reply_markup=kb)
+                                cb("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t, reply_markup=kb)
                             except Exception:  # noqa: BLE001 — карточка могла быть в другом чате
                                 pass
                 from . import namaz
@@ -155,8 +184,9 @@ def main(argv: list[str]) -> None:
     if cmd == "run":
         asyncio.run(run())
     elif cmd == "fabrika":
-        from . import fabrika
-        fabrika.loop(make_bot(os.environ["GENPLAN_BOT_TOKEN"]), store.connect(DB), cfg, dict(os.environ))
+        from . import bots, fabrika
+        reg = bots.setup(cfg(), dict(os.environ), make_bot)
+        fabrika.loop(reg["main"], store.connect(DB), cfg, dict(os.environ))
     else:
         print(service.today_text(store.connect(DB), cfg()))
 

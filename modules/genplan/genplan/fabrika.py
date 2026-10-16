@@ -96,7 +96,8 @@ def process_link(bot, db, cfg: dict, env: dict, p: dict, work_root: Path = STATE
         shown = bot("copyMessage", chat_id=owner, from_chat_id=hub_chat, message_id=res["message_id"])
         msg = {"message_id": shown["message_id"], "caption": text,
                "video": {"file_id": v.get("file_id"), "file_unique_id": v.get("file_unique_id")}}
-        hub.intake(bot, db, cfg, {owner}, hub_chat, [res["message_id"]], [msg], reply_chat=owner, notes=notes)
+        hub.intake(bot, db, cfg, {owner}, hub_chat, [res["message_id"]], [msg], reply_chat=owner, notes=notes,
+                   channel=p.get("channel"))
         return "ok"
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -118,6 +119,12 @@ def run_once(bot, db, cfg: dict, env: dict) -> bool:
     if not j:
         return False
     p = json.loads(j["payload"])
+    from . import bots
+    if j["kind"] == "link":
+        bot = bots.for_channel(p.get("channel"), bot)          # ссылка из бота-пульта канала — ответ тем же ботом
+    else:
+        m = store.get(db, int(p["mid"]))
+        bot = bots.REG.get((m["via"] if m else None) or "main") or bot
     try:
         (process_link(bot, db, cfg, env, p) if j["kind"] == "link" else process_ai(bot, db, cfg, p))
         store.job_done(db, j["id"])

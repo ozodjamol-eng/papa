@@ -168,7 +168,7 @@ def auto_place(db, cfg: dict, mid: int) -> str | None:
 
 
 def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], msgs: list[dict],
-           reply_chat: int | None = None, notes: list[str] | None = None) -> str:
+           reply_chat: int | None = None, notes: list[str] | None = None, channel: str | None = None) -> str:
     """Новый материал (одиночный пост или альбом) → черновик с угаданными каналом и рубрикой → карточка владельцу."""
     text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
     media = [md for x in msgs for md in media_of(x)]
@@ -178,9 +178,10 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         return "dup"
     from .text import strip_sources
     has_audio = any(md["type"] == "audio" for md in media)
-    channel = smart.guess_channel(cfg, text, has_audio)
+    from . import bots
+    channel = channel if channel in cfg["channels"] else smart.guess_channel(cfg, text, has_audio)
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=has_audio)
-    store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft")
+    store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot))
     placed = auto_place(db, cfg, mid)
     if placed:
         notes = (notes or []) + [placed]
@@ -196,7 +197,7 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     return "material"
 
 
-def direct(bot, db, cfg, owners, hub: int, msgs: list[dict]) -> str:
+def direct(bot, db, cfg, owners, hub: int, msgs: list[dict], channel: str | None = None) -> str:
     """Пост прямо в чат с ботом: копия (или весь альбом) — в PAPA HUB, карточка — ответом владельцу."""
     msgs = sorted(msgs, key=lambda x: x["message_id"])
     if not any(k in msgs[0] for k in MEDIA_KEYS) and not (msgs[0].get("text") or "").strip() and len(msgs) == 1:
@@ -207,7 +208,7 @@ def direct(bot, db, cfg, owners, hub: int, msgs: list[dict]) -> str:
         ids = [x["message_id"] for x in r]
     else:
         ids = [bot("copyMessage", chat_id=hub, from_chat_id=chat, message_id=msgs[0]["message_id"])["message_id"]]
-    return intake(bot, db, cfg, owners, hub, ids, msgs, reply_chat=chat)
+    return intake(bot, db, cfg, owners, hub, ids, msgs, reply_chat=chat, channel=channel)
 
 
 def flush_albums(bot, db, cfg: dict, env: dict, now_ts: float | None = None) -> int:
@@ -220,7 +221,8 @@ def flush_albums(bot, db, cfg: dict, env: dict, now_ts: float | None = None) -> 
         a = ALBUMS.pop(gid)
         try:
             if a["dm"]:
-                direct(bot, db, cfg, owners, hub, a["msgs"])
+                from . import bots
+                direct(bots.for_channel(a.get("channel"), bot), db, cfg, owners, hub, a["msgs"], channel=a.get("channel"))
             else:
                 msgs = sorted(a["msgs"], key=lambda x: x["message_id"])
                 intake(bot, db, cfg, owners, hub, [x["message_id"] for x in msgs], msgs)
@@ -230,11 +232,11 @@ def flush_albums(bot, db, cfg: dict, env: dict, now_ts: float | None = None) -> 
     return n
 
 
-def _album(msg: dict, dm: bool) -> bool:
+def _album(msg: dict, dm: bool, channel: str | None = None) -> bool:
     gid = msg.get("media_group_id")
     if not gid:
         return False
-    a = ALBUMS.setdefault(gid, {"msgs": [], "last": 0.0, "dm": dm})
+    a = ALBUMS.setdefault(gid, {"msgs": [], "last": 0.0, "dm": dm, "channel": channel})
     a["msgs"].append(msg)
     a["last"] = time.time()
     return True
@@ -243,11 +245,15 @@ def _album(msg: dict, dm: bool) -> bool:
 # ---------- обработчик обновлений ----------
 
 def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
+    from . import bots
     owners = {int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()}
     hub = int(env["HUB_CHAT_ID"])
+    own = bots.channel_of(bot)                       # бот-пульт канала → всё, что брошено в него, идёт в этот канал
     post = upd.get("channel_post")
     if post:
         if int(post["chat"]["id"]) == hub:
+            if own:                                  # пост в хабе видят все боты — принимает только главный
+                return None
             if _album(post, dm=False):
                 return "album"
             return intake(bot, db, cfg, owners, hub, [post["message_id"]], [post])
@@ -290,13 +296,13 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         from .fabrika import find_link
         link = find_link(txt) if txt and not any(k in msg for k in MEDIA_KEYS) else None
         if link:                                                      # ссылка Instagram/TikTok/Shorts → Fabrika
-            store.job_add(db, "link", {"url": link, "owner_chat": msg["chat"]["id"]})
+            store.job_add(db, "link", {"url": link, "owner_chat": msg["chat"]["id"], **({"channel": own} if own else {})})
             bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],
                 text="⏳ Скачиваю видео, ставлю логотип, готовлю текст — 1–3 минуты…")
             return "link"
-        if _album(msg, dm=True):
+        if _album(msg, dm=True, channel=own):
             return "album"
-        return direct(bot, db, cfg, owners, hub, [msg])
+        return direct(bot, db, cfg, owners, hub, [msg], channel=own)
     return None
 
 
@@ -340,7 +346,8 @@ def save_logo(bot, db, cfg: dict, env: dict, msg: dict, cap: str) -> str:
     f = msg["document"] if "document" in msg else msg["photo"][-1]
     info = bot("getFile", file_id=f["file_id"])
     raw = fabrika.STATE / f"logo-{channel}.src"
-    with urllib.request.urlopen(f"https://api.telegram.org/file/bot{env['GENPLAN_BOT_TOKEN']}/{info['file_path']}", timeout=60) as r:
+    from . import bots
+    with urllib.request.urlopen(f"https://api.telegram.org/file/bot{bots.token_of(bot, env)}/{info['file_path']}", timeout=60) as r:
         raw.write_bytes(r.read())
     M.prepare_logo(raw, fabrika.logo_path(channel))
     bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],

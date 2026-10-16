@@ -9,6 +9,7 @@ User=papa-genplan
 Group=papa-genplan
 EnvironmentFile=/etc/papa-genplan/genplan.env
 EnvironmentFile=-/etc/papa-genplan/ai.env
+EnvironmentFile=-/etc/papa-genplan/bots.env
 Environment=PAPA_GENPLAN_DB=/var/lib/papa-genplan/genplan.sqlite3 PYTHONUNBUFFERED=1
 Environment=PATH=/opt/papa-venv/razvedka/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HOME=/var/lib/papa-genplan XDG_CACHE_HOME=/var/lib/papa-genplan/cache

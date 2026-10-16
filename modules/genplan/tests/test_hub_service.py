@@ -319,3 +319,40 @@ class TestGuessChannel(unittest.TestCase):
         self.assertEqual(smart.guess_channel(cfg, "Валюта курси ўзгарди"), "davra")
         self.assertEqual(smart.guess_channel(cfg, "Ҳар қандай", has_audio=True), "paparazzi")
         self.assertEqual(smart.guess_channel({**CFG, "auto_channels": ["davra"]}, "Янги клип премьераси"), "davra")
+
+
+class TestMultiBot(unittest.TestCase):
+    def setUp(self):
+        from genplan import bots
+        self.bots = bots
+        self.main, self.pap = [], []
+        mk = lambda log: (lambda m, **p: log.append((m, p)) or {"message_id": len(log) + 100})
+        self.cfg = {**CFG, "auto_place": True, "auto_channels": ["davra"],
+                    "channels": {**CFG["channels"], "paparazzi": {**CFG["channels"]["paparazzi"], "bot_token_env": "PAP_TOK"}}}
+        toks = iter([self.main, self.pap])
+        bots.setup(self.cfg, {"GENPLAN_BOT_TOKEN": "m", "PAP_TOK": "p"}, lambda tok: mk(next(toks)))
+        self.db = store.connect(":memory:")
+        self.env = {**ENV, "HUB_CHAT_ID": "-100777", "OWNER_IDS": "42"}
+
+    def tearDown(self):
+        self.bots.REG.clear(); self.bots.TOKENS.clear()
+
+    def test_post_into_channel_bot_goes_to_that_channel(self):
+        b = self.bots.REG["paparazzi"]
+        msg = {"message_id": 7, "from": {"id": 42}, "chat": {"id": 42, "type": "private"}, "text": "Янгилик: валюта курси ўзгарди"}
+        hub.handle(b, self.db, self.cfg, self.env, {"message": msg})
+        m = self.db.execute("SELECT * FROM materials").fetchone()
+        self.assertEqual((m["channel"], m["via"]), ("paparazzi", "paparazzi"))   # не угадывание — бот канала решает
+        self.assertTrue(self.pap and not self.main)                               # ответил бот-пульт канала
+
+    def test_hub_post_taken_only_by_main_bot(self):
+        post = {"message_id": 9, "chat": {"id": -100777}, "text": "Хабдаги пост"}
+        self.assertIsNone(hub.handle(self.bots.REG["paparazzi"], self.db, self.cfg, self.env, {"channel_post": post}))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 0)
+
+    def test_publisher_choice(self):
+        pubs = {"bot": "MAIN", "bot:paparazzi": "PAP", "account": "ACC"}
+        ch = self.cfg["channels"]["paparazzi"]
+        self.assertEqual(service.pub_for(pubs, ch, "paparazzi"), "PAP")
+        self.assertEqual(service.pub_for(pubs, ch, "paparazzi", via="main"), "MAIN")   # альбом пришёл через главный бот
+        self.assertEqual(service.pub_for(pubs, self.cfg["channels"]["davra"], "davra"), "MAIN")

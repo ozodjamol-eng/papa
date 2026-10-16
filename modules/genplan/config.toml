@@ -172,6 +172,7 @@ slots = [
 title = "PaparazziUZ"
 username = "ozodjamoll"
 mode = "live"                    # РАБОТА — решение владельца 2026-10-16 09:58 («Paparazzi включаем»). Откат: "shadow"
+bot_token_env = "PAPARAZZI_BOT_TOKEN"   # свой бот-пульт «⭐ PaparazziUZ Пульт» (токен — /etc/papa-genplan/bots.env). Нет токена — главный бот
 publisher = "bot"                # канал: бот публикует от имени канала, автора не видно
 signature = "⭐ @ozodjamoll"
 # 🌅 Утренний блок — сразу в канал (live = true), остальной контент PaparazziUZ пока в тесте. Откат: live = false
