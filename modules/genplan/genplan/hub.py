@@ -108,12 +108,8 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     if m["status"] == "queued" and m["scheduled_at"]:
         t = dt.datetime.fromisoformat(m["scheduled_at"])
         when = "сейчас (🆘)" if m["urgent"] else smart.fmt(t, now)
-        txt = f"{base}\n\n✅ {name} · {m['rubric']} — {when}{' 🔒' if m['locked'] else ''}{dup}"
-        kb = [[{"text": "🕐 Изменить время", "callback_data": f"ot:{mid}"}, {"text": "🆘 Сейчас", "callback_data": f"ur:{mid}"}],
-              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}],
-              [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
-              [{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}]]
-        return txt, {"inline_keyboard": kb}
+        txt = f"{base}\n\n{summary(db, cfg, m['channel'], now)}\n✅ {name} · {m['rubric']} — {when}{' 🔒' if m['locked'] else ''}{dup}"
+        return txt, {"inline_keyboard": kb_queued(db, cfg, m, now)}
     # черновик — как в GENPLAN 5: сразу сетка рубрик; одно нажатие = рубрика + умное время
     rs = rubrics(cfg, m["channel"])
     icons = cfg["channels"][m["channel"]].get("icons") or {}
@@ -124,13 +120,57 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — выйдет сам, когда у рубрики будет пустой слот{dup}",
                 {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
+    other = ([{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}] if len(movable(cfg, m)) > 1 else [])
     kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}, {"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
-           [{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}, {"text": "🕐 Своё время", "callback_data": f"ot:{mid}"}],
+           other + [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
            [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
            [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
     hint = f"\n✓ — бот думает, что это «{m['rubric']}»" if m["guessed"] else ""
     return (f"📍 Канал: {name}\n\n{base}\n\nВыберите рубрику — время GENPLAN определит сам.{hint}{dup}",
             {"inline_keyboard": kb})
+
+
+def summary(db, cfg: dict, channel: str, now: dt.datetime) -> str:
+    """Сводка над кнопками, как в GENPLAN 5: последний пост и ближайший обязательный."""
+    last = smart.last_post(db, channel, now)
+    nxt = smart.next_mandatory(db, cfg, channel, now)
+    a = f"🕓 Последний пост: {last:%d.%m %H:%M}" if last else "🕓 Последний пост: нет данных"
+    b = f"📌 Следующий обязательный: {smart.fmt(nxt[0], now)} — {nxt[1]}" if nxt else "📌 Следующий обязательный: нет"
+    return f"{a}\n{b}"
+
+
+def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
+    """Кнопки поста в плане — раскладка пульта Хўжаобода (GENPLAN 5): Сегодня / Завтра / Сейчас / Другие варианты."""
+    mid, ch = m["id"], m["channel"]
+    cur = dt.datetime.fromisoformat(m["scheduled_at"]) if m["scheduled_at"] else None
+    rows = []
+    for icon, label, d in (("📅", "Сегодня", 0), ("🌅", "Завтра", 1)):
+        day = now.date() + dt.timedelta(days=d)
+        if cur and not m["urgent"] and cur.date() == day:
+            continue                                        # уже стоит на этот день — кнопка не нужна
+        t = smart.day_time(db, cfg, ch, m["rubric"], now, day, exclude=mid)
+        if t:
+            rows.append([{"text": f"{icon} {label} · {t:%H:%M}", "callback_data": f"tm:{mid}:{int(t.timestamp())}"}])
+    rows += [[{"text": "🚀 Сейчас", "callback_data": f"ur:{mid}"}],
+             [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
+             [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
+             [{"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
+    if len(movable(cfg, m)) > 1:                            # только главный бот; в пульте канала — «какой пульт, такой канал»
+        rows.append([{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}])
+    return rows
+
+
+def options_screen(db, cfg: dict, mid: int, now: dt.datetime) -> tuple[str, dict]:
+    """«🗓 Другие варианты» как в GENPLAN 5: причины — текстом, на кнопках — только время, по два в ряд."""
+    m = store.get(db, mid)
+    opts = smart.options(db, cfg, m["channel"], m["rubric"], now, exclude=mid)
+    head = f"🗓 Подходящие варианты для «{m['rubric']}»"
+    if not opts:
+        return head + "\n\n(Пока свободного времени не найдено.)", {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]}
+    lines = [head, ""] + [f"{smart.fmt(t, now)} — {lbl}" for t, lbl in opts]
+    btn = [{"text": smart.fmt(t, now), "callback_data": f"tm:{mid}:{int(t.timestamp())}"} for t, _ in opts]
+    rows = [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]
+    return "\n".join(lines), {"inline_keyboard": rows}
 
 
 def kb_times(db, cfg, mid: int, now: dt.datetime) -> dict:
@@ -520,11 +560,22 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             t, _ = card(db, cfg, mid, now)
             show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
     elif kind == "ur":
-        store.update(db, mid, status="queued", urgent=1, scheduled_at=now.isoformat(), rubric=m["rubric"] or "Срочно", stock=0)
-        show()
+        last = smart.last_post(db, m["channel"], now)        # GENPLAN 5: прошлый пост был недавно — спросить
+        gap = (now - last).total_seconds() / 60 if last else None
+        if gap is not None and 0 <= gap < smart.NOW_WARNING_GAP and not arg:
+            show({"inline_keyboard": [[{"text": "✅ Да", "callback_data": f"ur:{mid}:y"}],
+                                      [{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]},
+                 f"⚠️ Последний пост вышел {int(gap)} мин назад.\n\nВсё равно опубликовать сейчас?")
+        else:
+            store.update(db, mid, status="queued", urgent=1, scheduled_at=now.isoformat(), rubric=m["rubric"] or "Срочно", stock=0)
+            show()
     elif kind == "ot":
-        t, _ = card(db, cfg, mid, now)
-        show(kb_times(db, cfg, mid, now), t + "\n\n🕐 Выберите время:")
+        if m["status"] == "queued" or m["rubric"]:
+            t, kb = options_screen(db, cfg, mid, now)
+            show(kb, t)
+        else:
+            t, _ = card(db, cfg, mid, now)
+            show(kb_times(db, cfg, mid, now), t + "\n\n🕐 Выберите время:")
     elif kind == "rs":
         t, _ = card(db, cfg, mid, now)
         show(kb_rubric(cfg, mid, m["channel"]), t + "\n\n📂 Выберите рубрику:")

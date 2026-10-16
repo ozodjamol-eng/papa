@@ -273,3 +273,91 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
     if later:
         tail.append(f"📦 Запланировано на следующие дни: {later}")
     return "\n".join([head] + [i[1] for i in items] + ([""] + tail if tail else []))
+
+
+# ---------- карточка поста как в GENPLAN 5 (решение 17.10: пульты Давры и PaparazziUZ = пульт Хўжаобода) ----------
+
+NOW_WARNING_GAP = 15            # GENPLAN 5: «🚀 Сейчас» спрашивает подтверждение, если прошлый пост был < 15 мин назад
+OPTIONS_SPACING = 45            # GENPLAN 5: «Другие варианты» — не ближе 45 минут друг к другу
+
+
+def last_post(db, channel: str, now: dt.datetime) -> dt.datetime | None:
+    """Последний реальный пост канала (наш и ручной — «пульс»)."""
+    r = db.execute("SELECT MAX(at) FROM pulse WHERE channel=? AND at<=?", (channel, now.isoformat())).fetchone()
+    return dt.datetime.fromisoformat(r[0]).astimezone(plan.TZ) if r and r[0] else None
+
+
+def next_mandatory(db, cfg: dict, channel: str, now: dt.datetime) -> tuple[dt.datetime, str] | None:
+    """Ближайший обязательный пост впереди: намоз, утренний блок («Хайрли тонг», «Бугун — … куни»)."""
+    from . import morning, namaz
+    out: list[tuple[dt.datetime, str]] = []
+    for r in db.execute("SELECT at, key FROM namaz_posts WHERE channel=? AND status='pending' AND at>?",
+                        (channel, now.isoformat())).fetchall():
+        out.append((dt.datetime.fromisoformat(r[0]), "намоз " + namaz.LABEL.get(r[1], r[1])))
+    for r in db.execute("SELECT at, key FROM fixed_posts WHERE channel=? AND status='pending' AND at>?",
+                        (channel, now.isoformat())).fetchall():
+        out.append((dt.datetime.fromisoformat(r[0]), morning.TITLE.get(r[1], r[1])))
+    mo = cfg["channels"][channel].get("morning") or {}
+    for key, title in (("greeting", "Хайрли тонг"), ("day_post", "Бугун — … куни")):
+        if mo.get(key):                                     # утро ещё не подготовлено — берём время из настроек
+            for d in (0, 1):
+                t = plan.slot_time(now.date() + dt.timedelta(days=d), mo[key])
+                if t > now and not any(abs((x - t).total_seconds()) < 60 for x, _ in out):
+                    out.append((t, title))
+                    break
+    out = [(t.astimezone(plan.TZ), lbl) for t, lbl in out]
+    return min(out, key=lambda x: x[0]) if out else None
+
+
+def _part(t: dt.datetime) -> str:
+    h = t.hour
+    return "утреннее" if 5 <= h < 11 else "дневное" if h < 17 else "вечернее" if h < 22 else "ночное"
+
+
+def context_label(db, cfg: dict, channel: str, t: dt.datetime, exclude: int | None = None) -> str:
+    """Как в GENPLAN 5: почему это время — между какими постами оно стоит."""
+    busy = sorted(b.astimezone(plan.TZ) for b in occupied(db, channel, t - dt.timedelta(hours=12), exclude))
+    prev = [b for b in busy if b < t and t - b <= dt.timedelta(hours=3)]
+    nxt = [b for b in busy if b > t and b - t <= dt.timedelta(hours=3)]
+    if prev and nxt:
+        return f"между постами {prev[-1]:%H:%M} и {nxt[0]:%H:%M}"
+    if nxt:
+        return f"до поста {nxt[0]:%H:%M}"
+    if prev:
+        return f"после поста {prev[-1]:%H:%M}"
+    return f"свободное {_part(t)} окно"
+
+
+def day_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime, day: dt.date,
+             exclude: int | None = None) -> dt.datetime | None:
+    """Лучшее время именно в этот день (кнопки «📅 Сегодня» / «🌅 Завтра»): слот своей рубрики →
+    слот, где рубрика запасная → ближайшее свободное. Окно, промежуток, музыка, Жума — соблюдаются."""
+    ch = cfg["channels"][channel]
+    busy = occupied(db, channel, now, exclude)
+    ok = lambda t: (t >= now + LEAD and allowed(ch, t, rubric) and is_free(ch, t, busy)  # noqa: E731
+                    and not blocked(db, channel, t))
+    slots = [(t, s) for t, s in grid(ch, day) if s["kind"] != "ad" and ok(t)]
+    for t, s in slots:
+        if s.get("rubric") == rubric:
+            return t
+    for t, s in slots:
+        if rubric in s.get("fallback", []):
+            return t
+    for h in range(0, 24):
+        for mnt in (0, 30):
+            t = plan.slot_time(day, f"{h:02d}:{mnt:02d}")
+            if ok(t):
+                return t
+    return None
+
+
+def options(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime, n: int = 4,
+            exclude: int | None = None) -> list[tuple[dt.datetime, str]]:
+    """«🗓 Другие варианты» как в GENPLAN 5: несколько разных времён (не ближе 45 мин), у каждого — причина."""
+    out: list[dt.datetime] = []
+    for t in other_times(db, cfg, channel, rubric, now, n=40, exclude=exclude):
+        if all(abs(t - x) >= dt.timedelta(minutes=OPTIONS_SPACING) for x in out):
+            out.append(t)
+            if len(out) >= n:
+                break
+    return [(t, context_label(db, cfg, channel, t, exclude)) for t in out]
