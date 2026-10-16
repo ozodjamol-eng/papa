@@ -60,7 +60,9 @@ def publish_stats(db, c: dict, media: list | None = None, pub_dir: str | None = 
 
 def cfg() -> dict:
     c = tomllib.loads(CONFIG.read_text(encoding="utf-8"))
-    c["dm_text"] = c["dm_text"].replace("{page}", c.get("page_url", ""))
+    for k in ("dm_text", "dm_text_ru", "dm_text_both"):
+        if c.get(k):
+            c[k] = c[k].replace("{page}", c.get("page_url", ""))
     return c
 
 

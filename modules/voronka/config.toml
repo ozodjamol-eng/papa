@@ -21,8 +21,18 @@ retention_days = 90        # личные данные удаляются чер
 
 page_url = "https://ozodjamol-eng.github.io/papa-site/"   # страница-визитка
 
+# Директ на языке комментария: латиница/узбекская кириллица — dm_text; русский — dm_text_ru; язык неясен — оба сразу.
 dm_text = """Assalomu alaykum! 😊
 O'zbekistondagi eng dolzarb yangiliklar, foydali va qiziqarli videolar — Telegram kanallarimizda 🔥
+👉 {page}"""
+
+dm_text_ru = """Здравствуйте! 😊
+Самые актуальные новости Узбекистана, полезные и интересные видео — в наших Telegram-каналах 🔥
+👉 {page}"""
+
+dm_text_both = """Assalomu alaykum! 😊
+O'zbekistondagi eng dolzarb yangiliklar, foydali va qiziqarli videolar — Telegram kanallarimizda 🔥
+Здравствуйте! Самые актуальные новости Узбекистана и полезные видео — в наших Telegram-каналах 🔥
 👉 {page}"""
 
 # Каналы, в которых бот PAPA принимает заявки (ссылки-заявки с панели и директа) и приветствует.

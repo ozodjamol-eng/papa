@@ -191,5 +191,24 @@ class TestJoins(unittest.TestCase):
         self.assertEqual(tuple(db.execute("SELECT welcomed, approved FROM joins").fetchone()), (0, 1))
 
 
+class TestLang(unittest.TestCase):
+    def test_detect(self):
+        d = engine.detect_lang
+        self.assertEqual(d("Зўр видео!"), "uz")
+        self.assertEqual(d("Qanday zo'r video"), "uz")
+        self.assertEqual(d("Спасибо, очень интересно"), "ru")
+        self.assertEqual(d("Привет всем!"), "ru")
+        self.assertEqual(d("Какое красивое место"), "ru")
+        for amb in ("🔥", "Супер", "+", "", "👏👏", "नमस्ते"):
+            self.assertEqual(d(amb), "both", amb)
+
+    def test_dm_for_picks_text_and_falls_back(self):
+        cfg = {"dm_text": "UZ", "dm_text_ru": "RU", "dm_text_both": "BOTH"}
+        self.assertEqual(engine.dm_for("Zo'r", cfg), "UZ")
+        self.assertEqual(engine.dm_for("Спасибо большое", cfg), "RU")
+        self.assertEqual(engine.dm_for("🔥", cfg), "BOTH")
+        self.assertEqual(engine.dm_for("Спасибо большое", {"dm_text": "ONE"}), "ONE")   # старые настройки работают
+
+
 if __name__ == "__main__":
     unittest.main()

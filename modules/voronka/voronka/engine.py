@@ -62,6 +62,32 @@ def target_media(ig, cfg: dict, now: dt.datetime) -> list[dict]:
     return out
 
 
+_UZ_CYR = set("ўқғҳЎҚҒҲ")                      # только узбекская кириллица
+_RU_CYR = set("ыЫщЩьЬ")                       # этих букв в узбекской кириллице нет
+_RU_WORDS = ("привет", "спасибо", "здравствуйте", "пожалуйста", "хорошо", "классно", "интересно", "красиво", "молодц",
+             "ссылк", "подписал", "нравится", "очень", "когда", "где ", "как ", "что ", "это ", "для ", "можно", "есть ")
+
+
+def detect_lang(text: str) -> str:
+    """uz — узбекский (латиница или узбекская кириллица), ru — русский, both — не понять («🔥», «Супер», «+»)."""
+    t = (text or "").lower()
+    if any(ch in _UZ_CYR for ch in t):
+        return "uz"
+    if any(ch in _RU_CYR for ch in t) or any(w in t + " " for w in _RU_WORDS):
+        return "ru"
+    lat = sum(ch.isascii() and ch.isalpha() for ch in t)
+    cyr = sum("а" <= ch <= "я" or ch == "ё" for ch in t)
+    if lat > cyr and lat >= 3:
+        return "uz"
+    return "both"
+
+
+def dm_for(comment_text: str, cfg: dict) -> str:
+    """Директ на языке комментария; если язык неясен — на двух сразу. Без *_ru / *_both в настройках — один текст."""
+    lang = detect_lang(comment_text)
+    return cfg.get({"uz": "dm_text", "ru": "dm_text_ru", "both": "dm_text_both"}[lang]) or cfg["dm_text"]
+
+
 def run_once(ig, db, cfg: dict, now: dt.datetime | None = None, log=print) -> dict:
     store.purge(db, ((now or utcnow()) - dt.timedelta(days=int(cfg.get("retention_days", 90)))).isoformat())
     s = _run_once(ig, db, cfg, now or utcnow(), log)
@@ -80,7 +106,6 @@ def _run_once(ig, db, cfg: dict, now: dt.datetime, log=print) -> dict:
     dry = bool(cfg.get("dry_run", True))
     hour_cap = int(cfg.get("max_per_hour", 30))
     sent_hour = store.sent_since(db, (now - dt.timedelta(hours=1)).isoformat())
-    text_tpl = cfg["dm_text"]
     for m in target_media(ig, cfg, now):
         stats["media"] += 1
         started_key = f"media_started:{m['id']}"
@@ -119,7 +144,7 @@ def _run_once(ig, db, cfg: dict, now: dt.datetime, log=print) -> dict:
             if sent_hour >= hour_cap:
                 log(f"достигнут предел {hour_cap}/час — остальные в следующий цикл")
                 return stats
-            text = text_tpl.replace("{source}", f"ig-{m['id']}")
+            text = dm_for(c.get("text", ""), cfg).replace("{source}", f"ig-{m['id']}")
             if dry:
                 store.mark(db, c, m["id"], at, "dry")
                 stats["dry"] += 1
