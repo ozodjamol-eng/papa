@@ -5,7 +5,8 @@
     "london-diagnose",
     "genplan-inventory",
     "genplan5-prayer-find",
-    "evening-digest-trace"
+    "evening-digest-trace",
+    "evening-digest-trace2"
   ],
   "approve": [
     "genplan5-overdue-skip",
