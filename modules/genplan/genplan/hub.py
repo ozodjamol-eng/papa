@@ -206,6 +206,9 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot), source=src)
     if src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
+    pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
+    if pol:
+        notes = (notes or []) + [pol]
     placed = auto_place(db, cfg, mid)
     if placed:
         notes = (notes or []) + [placed]

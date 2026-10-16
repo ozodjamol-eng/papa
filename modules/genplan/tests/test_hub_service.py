@@ -433,3 +433,27 @@ class TestCurator(Base):
         self.assertIn("найдено 2, взято 1", rep)
         self.assertIn("@a_src 1/1", rep)
         self.assertIsNone(service.curator_report(self.db, CFG, plan.slot_time(day, "21:50")))   # раз в день
+
+
+class TestChannelPolicy(unittest.TestCase):
+    """Политика каналов (docs/CHANNELS.md): предупреждение, не перенос."""
+    import tomllib as _t
+    REAL = _t.load(open(Path(__file__).resolve().parents[1] / "config.toml", "rb"))
+
+    def test_main_bot_keeps_davra(self):
+        self.assertEqual(smart.guess_channel(self.REAL, "Юлдуз хонанданинг янги клипи премьераси"), "davra")
+        self.assertEqual(smart.guess_channel(self.REAL, "Ҳар қандай", has_audio=True), "davra")
+
+    def test_davra_warnings(self):
+        n = smart.policy_note(self.REAL, "davra", "Президент парламентда нутқ сўзлади")
+        self.assertIn("политика", n)
+        self.assertIn("Хўжаобод", n)
+        n = smart.policy_note(self.REAL, "davra", "Xonanda yangi klip premyerasini taqdim etdi")   # латиница
+        self.assertIn("PaparazziUZ", n)
+        self.assertEqual(smart.policy_note(self.REAL, "davra", "Уйда тез тайёрланадиган фойдали таом рецепти"), "")
+        self.assertEqual(smart.policy_note(self.REAL, "davra", "OpenAI янги сунъий интеллект моделини чиқарди"), "")
+
+    def test_paparazzi_and_xojaobod(self):
+        self.assertEqual(smart.policy_note(self.REAL, "paparazzi", "Хонанданинг янги клипи"), "")
+        self.assertIn("политика", smart.policy_note(self.REAL, "paparazzi", "Депутатлар сайлови бўлиб ўтди"))
+        self.assertEqual(smart.policy_note(self.REAL, "xojaobod", "Президент парламентда нутқ сўзлади"), "")

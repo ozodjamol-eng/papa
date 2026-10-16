@@ -37,3 +37,13 @@ class TestCurate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPolicy(unittest.TestCase):
+    def test_off_policy(self):
+        self.assertEqual(curate.off_policy("Президент парламентда нутқ сўзлади", "davra"), "politics")
+        self.assertEqual(curate.off_policy("Xonanda yangi klip taqdim etdi", "davra"), "showbiz")
+        self.assertEqual(curate.off_policy("Xonanda yangi klip taqdim etdi", "paparazzi"), "")
+        self.assertEqual(curate.off_policy("Saylov natijalari", "paparazzi"), "politics")
+        self.assertEqual(curate.off_policy("Уйда фойдали маслаҳат: тез тозалаш", "davra"), "")
+        self.assertEqual(curate.off_policy("OpenAI yangi model chiqardi", "davra"), "")

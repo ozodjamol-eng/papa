@@ -139,6 +139,41 @@ def guess_channel(cfg: dict, body: str, has_audio: bool = False) -> str:
     return default if default in allowed or not allowed else allowed[0]
 
 
+def policy_hits(cfg: dict, body: str) -> list[str]:
+    """Какие группы политики каналов (docs/CHANNELS.md) есть в тексте: politics / crime / showbiz."""
+    import re
+    from . import text as T
+    groups = (cfg.get("policy") or {}).get("groups") or {}
+    low, _ = T.translit.auto(T.strip_sources(body or ""))
+    low = low.lower()
+    words = re.findall(r"[\wʼ'‘’-]+", low)
+    hits = []
+    for g, kws in groups.items():
+        for kw in kws:
+            kw = kw.lower()
+            if (" " in kw and kw in low) or (" " not in kw and any(w.startswith(kw) for w in words)):
+                hits.append(g)
+                break
+    return hits
+
+
+def policy_note(cfg: dict, channel: str, body: str) -> str:
+    """Предупреждение в карточку, если пост похож на запрещённое для канала. Не запрет — решает владелец."""
+    rules = (cfg.get("channels", {}).get(channel) or {}).get("policy") or {}
+    if not rules:
+        return ""
+    labels = (cfg.get("policy") or {}).get("labels") or {}
+    names = {c: (ch.get("title") or c) for c, ch in cfg.get("channels", {}).items()}
+    out = []
+    for g in policy_hits(cfg, body):
+        if g not in rules:
+            continue
+        to = rules[g]
+        tip = f" Подходит: {names.get(to, to)} — «📺 Другой канал»." if to else " Лучше не публиковать."
+        out.append(f"⚠️ Похоже на «{labels.get(g, g)}» — по политике это не для {names.get(channel, channel)}.{tip}")
+    return "\n".join(out)
+
+
 def _first_rubric(ch: dict) -> str:
     return next(s["rubric"] for s in ch["slots"] if s["kind"] == "content")
 

@@ -29,6 +29,23 @@ MAX_HOURS, MIN_AGE_MIN, MIN_VIEWS = 12, 40, 300
 AD = re.compile(r"#?реклама|#?reklama|ҳамкорлик|hamkorlik|sotiladi|сотилади|нархи|narxi|скидк|chegirma|"
                 r"чегирма|буюртма|buyurtma|доставка|yetkazib|📞|☎️|\+998[\s\d-]{9,}|t\.me/\+|joinchat|aksiya|акция", re.I)
 URL = re.compile(r"https?://|t\.me/", re.I)
+# Политика каналов (docs/CHANNELS.md, 16.10): политика и криминал — ни в КАТТА ДАВРА, ни в PaparazziUZ;
+# шоу-бизнес и клипы — только в PaparazziUZ. Признаки — начало слова, кириллица и латиница.
+_P = {
+    "politics": r"сиёс|siyos|президент|prezident|парламент|parlament|депутат|deputat|сенатор|senator|сайлов|saylov|"
+                r"мирзиёев|mirziyoyev|путин|putin|трамп|tramp|trump|зеленск|zelensk|уруш|urush|санкци|sanksiya|политик|выбор|войн",
+    "crime": r"жиноят|jinoyat|қотил|qotil|ўлдир|o'ldir|ўғирла|o'g'irla|қамоқ|qamoq|ҳибсга|hibsga|зўрла|zo'rla|пичоқла|"
+             r"pichoqla|убий|преступ|арестован|мурда|murda",
+    "showbiz": r"клип|klip|премьер|premyer|premer|хонанда|xonanda|қўшиқчи|qo'shiqchi|концерт|konsert|актёр|aktyor|актрис|"
+               r"aktris|шоу.?бизнес|shou.?biznes",
+}
+POLICY = {g: re.compile(r"(?<![\w'])(?:" + rx + ")", re.I) for g, rx in _P.items()}
+FORBID = {"davra": ("politics", "crime", "showbiz"), "paparazzi": ("politics", "crime")}
+
+
+def off_policy(text: str, channel: str) -> str:
+    """Имя нарушенной группы политики канала или ''."""
+    return next((g for g in FORBID.get(channel, ()) if POLICY[g].search(text or "")), "")
 WORD = re.compile(r"[^\W\d_]{4,}")
 VISION = """Это кадр из поста Telegram-канала. Ответь ТОЛЬКО JSON:
 {"foreign_logo": true/false — на кадре есть логотип/водяной знак/@имя/название чужого канала или СМИ,
@@ -146,7 +163,7 @@ async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel:
         if k == "video" and not (5 <= (part[0].file.duration or 0) <= 600):
             continue
         v = max(x.views or 0 for x in part)
-        if v < MIN_VIEWS or is_ad(text, bool(getattr(part[0], "reply_markup", None))):
+        if v < MIN_VIEWS or is_ad(text, bool(getattr(part[0], "reply_markup", None))) or off_policy(text, channel):
             continue
         age = (now - m.date).total_seconds() / 3600
         out.append({"key": f"{ent.id}_{part[0].id}", "ent": ent, "ids": [x.id for x in part], "msg": part[0],
