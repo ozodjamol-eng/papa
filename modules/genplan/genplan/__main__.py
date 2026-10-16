@@ -6,14 +6,15 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import datetime as dt
+import http.client
 import json
 import os
 import sys
+import threading
 import time
 import tomllib
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from . import hub, menu, plan, service, store
@@ -30,17 +31,39 @@ def cfg() -> dict:
     return c
 
 
+_TL = threading.local()
+
+
 def make_bot(token: str):
-    base = f"https://api.telegram.org/bot{token}"
+    """Вызов Bot API. Соединение с api.telegram.org держится открытым (keep-alive, своё в каждом потоке):
+    раньше каждый вызов заново делал TCP+TLS — лишние доли секунды на каждую кнопку и карточку."""
+    path = f"/bot{token}/"
+
+    def conn(fresh: bool = False) -> http.client.HTTPSConnection:
+        pool = getattr(_TL, "pool", None)
+        if pool is None:
+            pool = _TL.pool = {}
+        c = pool.get(token)
+        if c is None or fresh:
+            if c is not None:
+                c.close()
+            c = pool[token] = http.client.HTTPSConnection("api.telegram.org", timeout=45)
+        return c
 
     def call(method: str, **p):
-        req = urllib.request.Request(f"{base}/{method}", data=json.dumps(p).encode(),
-                                     headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=40) as r:
-                data = json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            data = json.loads(e.read() or b"{}")
+        body = json.dumps(p).encode()
+        for attempt in (0, 1):
+            c = conn(fresh=attempt > 0)
+            try:
+                c.request("POST", path + method, body=body, headers={"Content-Type": "application/json"})
+                r = c.getresponse()
+                raw = r.read()
+                break
+            except (http.client.HTTPException, OSError):
+                c.close()
+                if attempt:
+                    raise
+        data = json.loads(raw or b"{}")
         if not data.get("ok"):
             raise RuntimeError(f"{method}: {data.get('description')}")
         return data["result"]
@@ -120,9 +143,20 @@ async def run() -> None:
             print(f"getUpdates {k}: {e}", flush=True)
             return k, b, None
     state = {"next_tick": next_tick}
+    # Пульты отвечают в своём потоке со своим подключением к базе: публикация видео и минутный проход по сетке
+    # больше не задерживают ответ на брошенный пост или нажатую кнопку.
+    work = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="pult")
+    hdb_box: dict = {}
+
+    def hdb():
+        if "db" not in hdb_box:
+            hdb_box["db"] = store.connect(DB)
+        return hdb_box["db"]
 
     def handle_update(k, b, u):
         c = cfg()
+        db = hdb()
+        t0 = time.monotonic()
         try:
             r = hub.handle(b, db, c, env, u)
             msg = u.get("message") or {}
@@ -139,6 +173,9 @@ async def run() -> None:
                     b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
         except Exception as e:  # noqa: BLE001 — одно сообщение не должно ронять службу
             print(f"hub: {type(e).__name__}: {e}", flush=True)
+        took = time.monotonic() - t0
+        if took > 1.5:
+            print(f"slow {k}: {took:.1f} с ({next((x for x in u if x != 'update_id'), '?')})", flush=True)
         offsets[k] = u["update_id"] + 1
         store.kv_set(db, "offset" if k == "main" else f"offset_{k}", offsets[k])
 
@@ -149,17 +186,27 @@ async def run() -> None:
             if ups is None:
                 await asyncio.sleep(10)
                 continue
+            loop = asyncio.get_running_loop()
             for u in ups:
-                handle_update(k, b, u)
+                await loop.run_in_executor(work, handle_update, k, b, u)
+
+    def flush_albums():
+        hub.flush_albums(bot, hdb(), cfg(), env)
+
+    async def album_loop():
+        """Альбомы собирает тот же поток, что и пульты, — и не ждёт минутный проход по сетке."""
+        while True:
+            await asyncio.sleep(0.5)
+            if hub.ALBUMS:
+                try:
+                    await asyncio.get_running_loop().run_in_executor(work, flush_albums)
+                except Exception as e:  # noqa: BLE001
+                    print(f"albums: {e}", flush=True)
 
     async def tick_loop():
         nonlocal next_health, last_health
         while True:
             c = cfg()
-            try:
-                hub.flush_albums(bot, db, c, env)
-            except Exception as e:  # noqa: BLE001
-                print(f"albums: {e}", flush=True)
             if time.time() < state["next_tick"]:
                 await asyncio.sleep(0.5)
                 continue
@@ -196,7 +243,7 @@ async def run() -> None:
                 print(f"tick: {type(e).__name__}: {e}", flush=True)
             state["next_tick"] = time.time() + 60
 
-    await asyncio.gather(tick_loop(), *(bot_loop(k, b) for k, b in reg.items()))
+    await asyncio.gather(tick_loop(), album_loop(), *(bot_loop(k, b) for k, b in reg.items()))
 
 
 def main(argv: list[str]) -> None:
