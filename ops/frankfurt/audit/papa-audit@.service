@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA аудит (%i) — протокол docs/AUDIT.md, отчёт в КАТТА ДАВРА Пульт
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/papa-autopilot/autopilot.env
+ExecStart=/opt/papa-venv/razvedka/bin/python -I /opt/papa/ops/frankfurt/audit/papa_audit.py %i
+TimeoutStartSec=15min
+Nice=10

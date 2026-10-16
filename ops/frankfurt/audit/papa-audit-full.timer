@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA полный аудит — 02:00 Ташкент (решение владельца 16.10)
+
+[Timer]
+OnCalendar=*-*-* 21:00:00 UTC
+Persistent=true
+Unit=papa-audit@full.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA утренняя проверка — 05:30 Ташкент, пишет только при поломке
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=false
+Unit=papa-audit@quick.service
+
+[Install]
+WantedBy=timers.target

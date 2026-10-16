@@ -16,7 +16,9 @@
     "pult-diff",
     "pult-deploy",
     "curator-install",
-    "curator-run"
+    "curator-run",
+    "audit-install",
+    "audit"
   ],
   "approve": [
     "morning-pool-clear",
