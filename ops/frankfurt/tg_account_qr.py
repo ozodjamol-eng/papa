@@ -11,13 +11,15 @@ from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 
 SRC = Path("/etc/papa-razvedka/telegram.env")
-OUT = Path("/etc/papa-tg/publisher.env")
+import sys
+OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "/etc/papa-tg/publisher.env")
+DEVICE = sys.argv[2] if len(sys.argv) > 2 else "PAPA Server"
 
 
 async def main():
     env = dict(l.split("=", 1) for l in SRC.read_text().splitlines() if "=" in l)
     api_id, api_hash = int(env["PAPA_TG_API_ID"]), env["PAPA_TG_API_HASH"]
-    c = TelegramClient(StringSession(), api_id, api_hash, device_model="PAPA Server", app_version="1.0",
+    c = TelegramClient(StringSession(), api_id, api_hash, device_model=DEVICE, app_version="1.0",
                        system_version="Linux")
     await c.connect()
     for attempt in range(4):

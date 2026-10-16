@@ -7,7 +7,8 @@
     "genplan5-prayer-find",
     "evening-digest-trace",
     "evening-digest-trace2",
-    "evening-digest-trace3"
+    "evening-digest-trace3",
+    "evening-digest-find"
   ],
   "approve": [
     "genplan5-overdue-skip",
