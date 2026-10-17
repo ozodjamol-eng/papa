@@ -388,12 +388,12 @@ class TestPanel(Base):
         self.assertEqual(self.h(dm(70, menu.P_CONTENT)), "panel:" + menu.P_CONTENT)
         self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 0)
 
-    def test_urgent_publishes_now(self):
+    def test_urgent_button_never_publishes_blind(self):
+        # 17.10 владелец: брошенный пост ВСЕГДА с карточкой выбора; срочно — только кнопкой на карточке
         self.h(dm(71, menu.P_URGENT))
-        self.assertEqual(self.h(dm(72, "Шошилинч янгилик", photo_uid="u1")), "ur")
+        self.assertEqual(self.h(dm(72, "Шошилинч янгилик", photo_uid="u1")), "material")
         m = store.get(self.db, 1)
-        self.assertEqual((m["status"], m["urgent"]), ("queued", 1))
-        self.assertEqual(self.h(dm(73, "Оддий янгилик", photo_uid="u2")) == "ur", False)   # режим одноразовый
+        self.assertEqual((m["status"], m["urgent"]), ("draft", 0))
 
     def test_ad_gets_rubric_and_tag(self):
         self.h(dm(74, menu.P_ADS))
