@@ -4,14 +4,15 @@ own_username = "goldwaterandijon"
 mode = "all"
 keywords = []
 spam_words = ["vpn", "впн", "заработ", "zarabot", "крипт", "crypto", "invest", "инвест", "казино", "casino", "ставк", "bonus", "бонус", "промокод", "pul ishlash", "пул ишлаш"]
-dry_run = true            # ПРОВЕРКА: ничего не отправляет. Включение — задача goldwater-voronka-live (после паузы ChatPlace)
+dry_run = false           # РАБОТА сразу после установки: ChatPlace владелец отключил первым (17.10)
 
 posts = []
 only_users = []
 all_recent = true         # все посты за max_age_days
 scan_recent = 1
 max_age_days = 7          # Meta: личный ответ — только 7 дней
-backlog = false           # старые комментарии (до включения) не трогаем — их уже обработал ChatPlace
+backlog = false           # старые комментарии не трогаем — их обработал ChatPlace
+backlog_since = "2026-10-17T11:05:00+00:00"   # 16:05 Ташкент: ChatPlace отключён — комментарии после этого момента отвечаем (Meta: до 7 дней)
 comments_per_poll = 50
 poll_seconds = 120
 max_per_hour = 30

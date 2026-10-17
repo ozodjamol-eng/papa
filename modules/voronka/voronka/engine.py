@@ -39,6 +39,20 @@ def wants_link(text: str, cfg: dict) -> bool:
 URL_RE = re.compile(r"https?://|www\.|t\.me/|\.(com|ru|uz|net|org|io)\b", re.I)
 
 
+def after_since(c: dict, cfg: dict) -> bool:
+    """backlog_since (ISO, UTC): комментарии новее этого момента отвечаем даже при первом включении поста.
+    17.10: GOLD WATER — ChatPlace поставлен на паузу раньше, чем включилась Воронка; промежуток не теряем."""
+    since = cfg.get("backlog_since")
+    ts = c.get("timestamp")
+    if not since or not ts:
+        return False
+    try:
+        t = dt.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S%z")
+        return t >= dt.datetime.fromisoformat(since)
+    except ValueError:
+        return False
+
+
 def is_spam(text: str, cfg: dict) -> bool:
     """Спам-боты: ссылки, либо упоминание чужого аккаунта вместе с рекламным словом."""
     t = norm(text)
@@ -121,7 +135,7 @@ def _run_once(ig, db, cfg: dict, now: dt.datetime, log=print) -> dict:
             if only and not is_tester:
                 continue  # тестовый режим: чужие комментарии не трогаем и не помечаем
             stats["new"] += 1
-            if first_time and not cfg.get("backlog", False) and not is_tester:
+            if first_time and not cfg.get("backlog", False) and not is_tester and not after_since(c, cfg):
                 store.mark(db, c, m["id"], at, "skip", "до включения")
                 stats["skip"] += 1
                 continue
