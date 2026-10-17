@@ -348,6 +348,35 @@ GREET_FALLBACK = {
 }
 
 
+# ---------- постоянный шаблон «Хайрли тонг» (решение владельца 17.10: его текст, все три канала) ----------
+MONTHS_UZ = ("январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь")
+DREAM_LINES = (                                            # чередуется по дню, чтобы текст не был одинаковым каждый день
+    "✨ Қанчадан бери амалга ошмаётган орзуларингиз рўёбга чиқсин!",
+    "✨ Кўнглингиздаги эзгу ниятларингиз ушалсин!",
+    "✨ Бугун сизни фақат хушхабарлар кутиб турсин!",
+    "✨ Ҳар бир ишингизда омад ва барака ёр бўлсин!",
+)
+GREETING_TEMPLATE = """🌅 Ассалому алайкум ва раҳматуллоҳи ва барокатуҳ!
+
+📅 Бугун, {date}
+☀️ {wd} тонги муборак бўлсин, {address}!
+
+🤲 Бошлаётган кунингиз хайрли-баракали ўтсин!
+
+{dream}
+
+💫 Ризқингиз кенг, ҳар бир босган қадамингиз тавфиқли, тавбаларингиз қабул, дуоларингиз ижобат бўлсин!
+
+🕊 Аллоҳ паноҳида бўлинг!"""
+
+
+def template_body(ch: dict, day: dt.date) -> str:
+    m = ch.get("morning") or {}
+    return GREETING_TEMPLATE.format(date=f"{day.day} {MONTHS_UZ[day.month - 1]}", wd=WEEKDAY[day.weekday()],
+                                    address=m.get("address", "азизларим"),
+                                    dream=DREAM_LINES[day.toordinal() % len(DREAM_LINES)])
+
+
 def _clean_example(t: str) -> str:
     t = re.sub(r"(https?://\S+|t\.me/\S+|@\w+|#\w+)", "", t or "")
     return "\n".join(ln.rstrip() for ln in t.splitlines() if ln.strip())[:700]
@@ -367,6 +396,8 @@ def examples(weekday: str, root: Path | None = None, n: int = 3) -> list[str]:
 def greeting_body(db, ch: dict, day: dt.date, fresh: bool = False, http=None, root: Path | None = None,
                   source_text: str | None = None) -> tuple[str, str]:
     from . import ai
+    if not (ch.get("morning") or {}).get("ai_greeting"):       # 17.10: постоянный шаблон владельца, ИИ не нужен
+        return template_body(ch, day), "шаблон владельца"
     wd = WEEKDAY[day.weekday()]
     s = season(day)
     system = GREET_SYSTEM.format(title=ch["title"], wd_up=wd.upper(), season=SEASON_UZ[s],
@@ -393,11 +424,17 @@ def greeting_body(db, ch: dict, day: dt.date, fresh: bool = False, http=None, ro
 
 
 def greeting_caption(ch: dict, o: dict, day: dt.date, body: str | None = None) -> str:
+    m = ch.get("morning") or {}
     if body is None:
-        t = GREET_FALLBACK.get(WEEKDAY[day.weekday()], GREET_FALLBACK["default"])
-        body = "\n\n".join(x.format(wd=WEEKDAY[day.weekday()]) for x in t)
+        if m.get("ai_greeting"):
+            t = GREET_FALLBACK.get(WEEKDAY[day.weekday()], GREET_FALLBACK["default"])
+            body = "\n\n".join(x.format(wd=WEEKDAY[day.weekday()]) for x in t)
+        else:
+            body = template_body(ch, day)
     tag = o.get("tag") or ""
     sig = ch.get("signature", "")
+    if not m.get("ai_greeting"):                              # 17.10: наш юзернейм НАД хуком, хук — последней строкой
+        sig = (sig + "\n" if sig else "") + m.get("hook", "❤️ Дўстларга ҳам улашинг")
     out = (f"{tag}\n" if tag else "") + body.strip() + (f"\n\n{sig}" if sig else "")
     if len(out) > 1024:                                   # подпись к видео — не длиннее 1024
         keep = 1024 - len(tag) - len(sig) - 6

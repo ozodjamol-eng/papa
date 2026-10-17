@@ -128,10 +128,17 @@ class TestMorning(unittest.TestCase):
     def test_season_and_caption(self):
         self.assertEqual(morning.season(dt.date(2026, 11, 30)), "autumn")
         self.assertEqual(morning.season(dt.date(2026, 12, 1)), "winter")
-        cap = morning.greeting_caption(CFG["channels"]["davra"], morning.opts(CFG["channels"]["davra"]), FRI)
+        ch = CFG["channels"]["davra"]
+        cap = morning.greeting_caption(ch, morning.opts(ch), FRI)
+        # 17.10: постоянный шаблон владельца; юзернейм НАД хуком
+        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🌅 Ассалому алайкум ва раҳматуллоҳи ва барокатуҳ!"))
+        self.assertIn(f"📅 Бугун, {FRI.day} {morning.MONTHS_UZ[FRI.month - 1]}", cap)
+        self.assertIn("☀️ Жума тонги муборак бўлсин, азизларим!", cap)
+        self.assertTrue(cap.endswith("🎉 @kattadavrauz\n❤️ Дўстларга ҳам улашинг"))
+        self.assertLessEqual(len(cap), 1024)
+        ai_ch = {**ch, "morning": {**ch["morning"], "ai_greeting": True}}      # старый путь (ИИ) — по флагу
+        cap = morning.greeting_caption(ai_ch, morning.opts(ai_ch), FRI)
         self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
-        self.assertGreater(len(cap), 350)                          # не сухо: несколько тёплых абзацев
-        self.assertIn("🤲", cap)
         self.assertTrue(cap.endswith("🎉 @kattadavrauz"))
 
     def test_prepare_waits_until_evening(self):
@@ -228,6 +235,8 @@ class TestMorning(unittest.TestCase):
             def upload(token, chat, path, caption):
                 uploads.append((path.stat().st_size, caption)); return {"message_id": 900}
             morning.ensure_all(self.db, CFG, at("22:40"))
+            CFG["channels"]["davra"]["morning"]["ai_greeting"] = True        # этот тест проверяет путь с ИИ
+            self.addCleanup(CFG["channels"]["davra"]["morning"].pop, "ai_greeting", None)
             with mock.patch.object(ai, "generate", side_effect=gen):
                 r = self.rows("davra")["greeting"]
                 note = morning.prepare_one(Bot(), self.db, CFG, ENV, r, at("22:40"), Path(tmp) / "w", upload=upload)
