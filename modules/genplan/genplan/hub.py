@@ -120,7 +120,7 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — выйдет сам, когда у рубрики будет пустой слот{dup}",
                 {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
-    other = ([{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}] if len(movable(cfg, m)) > 1 else [])
+    other = []                                              # 17.10 владелец: «Другой канал» не нужен — какой пульт, такой канал
     kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}, {"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            other + [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
            [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
@@ -155,8 +155,6 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
              [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
              [{"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
-    if len(movable(cfg, m)) > 1:                            # только главный бот; в пульте канала — «какой пульт, такой канал»
-        rows.append([{"text": "📺 Другой канал", "callback_data": f"cs:{mid}"}])
     return rows
 
 

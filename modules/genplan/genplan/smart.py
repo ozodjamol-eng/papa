@@ -169,7 +169,7 @@ def policy_note(cfg: dict, channel: str, body: str) -> str:
         if g not in rules:
             continue
         to = rules[g]
-        tip = f" Подходит: {names.get(to, to)} — «📺 Другой канал»." if to else " Лучше не публиковать."
+        tip = f" Подходит: {names.get(to, to)} — бросьте в его пульт." if to else " Лучше не публиковать."
         out.append(f"⚠️ Похоже на «{labels.get(g, g)}» — по политике это не для {names.get(channel, channel)}.{tip}")
     return "\n".join(out)
 
