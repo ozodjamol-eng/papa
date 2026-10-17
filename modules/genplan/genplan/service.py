@@ -45,7 +45,22 @@ def hook_for(cfg: dict, ch: dict, m, db=None) -> str:
     body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
     topics = [] if ch.get("topics") is False else cfg.get("topics", [])
     base = text.pick_hook(ch, m["rubric"], int(m["id"]), body, topics)
-    if not base or db is None or ch.get("ai_hooks") is False:
+    if not base:                                              # печальная тема / свой призыв в тексте
+        return ""
+    # Схема владельца 17.10: новости — без хука; музыка — наша реклама; полезное — короткий хук ИИ; остальное — готовые
+    pol = ch.get("hook_policy") or {}
+    rub = m["rubric"] or ""
+    t = text.topic_of(body, topics)
+    tname = (t or {}).get("name", "")
+    if tname in ("Дуо", "Дин"):                               # религиозное — только готовый уважительный хук
+        return base
+    if rub in pol.get("none", []):
+        return ""
+    if rub in pol.get("promo", []) or (tname == "Мусиқа" and ch.get("promo_hooks")):
+        promo = ch.get("promo_hooks") or []
+        return promo[int(m["id"]) % len(promo)] if promo else base
+    smart_ai = rub in pol.get("ai", []) or tname in ("Соғлиқ", "Таом", "Маслаҳат")
+    if not smart_ai or db is None or ch.get("ai_hooks") is False:
         return base
     keys = m.keys() if hasattr(m, "keys") else []
     if "hook_ai" in keys and m["hook_ai"] is not None:          # уже придуман для этого поста — не платим второй раз

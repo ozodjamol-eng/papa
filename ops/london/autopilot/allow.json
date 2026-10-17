@@ -24,7 +24,8 @@
     "nexus-old-stop",
     "nexus-old-restore",
     "genplan5-ai-hook",
-    "genplan5-ai-tokens"
+    "genplan5-ai-tokens",
+    "genplan5-hook-scheme"
   ],
   "deny_patterns": [
     "-key$",
