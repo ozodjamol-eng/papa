@@ -73,7 +73,7 @@ class TestMorning(unittest.TestCase):
         now = at("22:40")
         morning.ensure_all(self.db, CFG, now)
         d = self.rows("davra")
-        self.assertEqual(dt.datetime.fromisoformat(d["greeting"]["at"]), at("06:00", FRI))   # день начинается с «Хайрли тонг»
+        self.assertEqual(dt.datetime.fromisoformat(d["greeting"]["at"]), at("05:00", FRI))   # 17.10: день начинается в 05:00 с «Хайрли тонг»
         self.assertEqual(dt.datetime.fromisoformat(d["day"]["at"]), at("06:30", FRI))
         x = self.rows("xojaobod")                                  # без времени намаза — запасное
         self.assertEqual(dt.datetime.fromisoformat(x["day"]["at"]), at("06:10", FRI))
@@ -186,8 +186,8 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(len(vids), 3)                             # разные видео в разных каналах
         # утро: публикация
         pb, acc = Pub(), Acc()
-        res = asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:00", FRI) + dt.timedelta(seconds=30), log=lambda s: None))
-        self.assertEqual(res["morning"], 2)                        # Давра и Paparazzi — 06:00
+        res = asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("05:00", FRI) + dt.timedelta(seconds=30), log=lambda s: None))
+        self.assertEqual(res["morning"], 2)                        # Давра и Paparazzi — 05:00
         self.assertEqual({c for c, _, _ in pb.sent}, {"@kattadavrauz", "@ozodjamoll"})   # Paparazzi: утро в канале
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:11", FRI), log=lambda s: None))
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:31", FRI), log=lambda s: None))

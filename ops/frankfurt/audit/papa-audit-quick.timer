@@ -1,8 +1,8 @@
 [Unit]
-Description=PAPA утренняя проверка — 05:30 Ташкент, пишет только при поломке
+Description=PAPA утренняя проверка — 04:30 Ташкент (до «Хайрли тонг» 05:00), пишет только при поломке
 
 [Timer]
-OnCalendar=*-*-* 00:30:00 UTC
+OnCalendar=*-*-* 23:30:00 UTC
 Persistent=false
 Unit=papa-audit@quick.service
 

@@ -218,7 +218,7 @@ class TestWindow(unittest.TestCase):
         import importlib
         importlib.reload(ap)
         from datetime import datetime, timezone
-        self.assertEqual(ap.in_window(datetime(2026, 10, 16, 1, 0, tzinfo=timezone.utc)), "05:30–07:30")   # 06:00 Ташкент
+        self.assertEqual(ap.in_window(datetime(2026, 10, 16, 1, 0, tzinfo=timezone.utc)), "04:30–07:30")   # 06:00 Ташкент
         self.assertEqual(ap.in_window(datetime(2026, 10, 16, 15, 0, tzinfo=timezone.utc)), "19:00–22:00")  # 20:00
         self.assertEqual(ap.in_window(datetime(2026, 10, 16, 8, 0, tzinfo=timezone.utc)), "")              # 13:00
 

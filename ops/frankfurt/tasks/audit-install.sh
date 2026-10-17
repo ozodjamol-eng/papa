@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 🩺 Ежедневный аудит PAPA: полный в 02:00, утренняя проверка в 05:30 (только при поломке). Протокол — docs/AUDIT.md.
+# 🩺 Ежедневный аудит PAPA: полный в 02:00, утренняя проверка в 04:30 (только при поломке). Протокол — docs/AUDIT.md.
 # Откат: systemctl disable --now papa-audit-full.timer papa-audit-quick.timer
 set -Eeuo pipefail
 A=/opt/papa/ops/frankfurt/audit
