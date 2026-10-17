@@ -233,7 +233,7 @@ class TestService(Base):
         chat, body, button = self.pubs["bot"].sent[0]
         self.assertEqual(chat, "@kattadavrauz")                               # Давра — рабочий канал
         self.assertNotIn("bugungi", body)
-        self.assertTrue(body.split("\n\n")[-1].startswith("🎉 @kattadavrauz"))   # текст → @юзернейм → призыв
+        self.assertIn("@kattadavrauz", body.split("\n\n")[-1].splitlines()[0])   # текст → подпись с @юзернеймом → призыв
         self.assertEqual(button["text"], "📲 Дўстларга улашиш")
         self.assertEqual(self.tick(at("17:05"))["published"], 0)              # второй раз не публикует
 
