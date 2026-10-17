@@ -1,0 +1,35 @@
+# PAPA Voronka — GOLD WATER (@goldwaterandijon). Замена ChatPlace «Любой комментарий» (решение владельца 17.10).
+# Секретов нет (токен: /etc/papa-voronka/goldwater.env). Каналов Telegram нет — ссылка ведёт в бот @GoldWaterAndijonBot.
+own_username = "goldwaterandijon"
+mode = "all"
+keywords = []
+spam_words = ["vpn", "впн", "заработ", "zarabot", "крипт", "crypto", "invest", "инвест", "казино", "casino", "ставк", "bonus", "бонус", "промокод", "pul ishlash", "пул ишлаш"]
+dry_run = true            # ПРОВЕРКА: ничего не отправляет. Включение — задача goldwater-voronka-live (после паузы ChatPlace)
+
+posts = []
+only_users = []
+all_recent = true         # все посты за max_age_days
+scan_recent = 1
+max_age_days = 7          # Meta: личный ответ — только 7 дней
+backlog = false           # старые комментарии (до включения) не трогаем — их уже обработал ChatPlace
+comments_per_poll = 50
+poll_seconds = 120
+max_per_hour = 30
+pause_minutes = 60
+retention_days = 90
+
+# Ссылка в бот с меткой instagram — учёт заявок в боте GOLD WATER сохраняется
+page_url = "https://t.me/GoldWaterAndijonBot?start=instagram"
+
+dm_text = """Assalomu alaykum! 😊
+GOLD WATER — toza suv apparatlari: narxlar, apparat haqida ma'lumot va BYD aksiyasi 👇
+{page}"""
+
+dm_text_ru = """Здравствуйте! 😊
+GOLD WATER — аппараты чистой воды: цены, описание аппарата и акция BYD 👇
+{page}"""
+
+dm_text_both = """Assalomu alaykum! 😊
+GOLD WATER — toza suv apparatlari: narxlar va BYD aksiyasi 👇
+Здравствуйте! Цены, описание аппарата и акция BYD — по ссылке 👇
+{page}"""

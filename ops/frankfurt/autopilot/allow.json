@@ -42,7 +42,9 @@
     "razvedka-install",
     "anon-test",
     "anon-test-account",
-    "digest-install"
+    "digest-install",
+    "goldwater-voronka-install",
+    "goldwater-voronka-restart"
   ],
   "deny_patterns": [
     "-key$",

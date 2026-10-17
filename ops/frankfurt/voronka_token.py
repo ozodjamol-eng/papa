@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ENV = Path("/etc/papa-voronka/instagram.env")
+ENV = Path(os.environ.get("PAPA_VORONKA_IG_ENV", "/etc/papa-voronka/instagram.env"))   # GOLD WATER — свой файл
 API = "https://graph.instagram.com/v24.0"
 
 
