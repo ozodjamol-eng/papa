@@ -23,7 +23,8 @@
     "digest-now",
     "razvedka-qr-check",
     "ai-compare",
-    "hear"
+    "hear",
+    "deliver"
   ],
   "approve": [
     "morning-pool-clear",
