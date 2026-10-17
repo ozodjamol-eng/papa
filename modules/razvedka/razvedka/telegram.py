@@ -114,8 +114,48 @@ async def report_target(client: TelegramClient):
     return None
 
 
+REPORTS_CHANNEL = "papa отчёты"      # 17.10 владелец: все отчёты — в отдельный канал «PAPA ОТЧЁТЫ», шлёт бот, не профиль
+
+
+def bot_send(token: str, chat_id: int, text: str, urlopen=None) -> bool:
+    """Отправить текст ботом (Bot API) кусками по 3900. True — всё ушло."""
+    import json
+    import urllib.parse
+    import urllib.request
+    urlopen = urlopen or urllib.request.urlopen
+    for i in range(0, len(text), 3900):
+        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text[i:i + 3900],
+                                       "disable_web_page_preview": "true"}).encode()
+        try:
+            with urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=30) as r:
+                if not json.loads(r.read()).get("ok"):
+                    return False
+        except Exception as e:                  # токен в тексте ошибки не печатаем
+            print(f"BOT_SEND_FAIL: {type(e).__name__}", flush=True)
+            return False
+    return True
+
+
+async def reports_channel_id(client: TelegramClient) -> int | None:
+    """id канала «PAPA ОТЧЁТЫ» (ищем по названию среди чатов аккаунта) или PAPA_REPORTS_CHANNEL_ID."""
+    import os
+    if os.environ.get("PAPA_REPORTS_CHANNEL_ID"):
+        return int(os.environ["PAPA_REPORTS_CHANNEL_ID"])
+    async for d in client.iter_dialogs():
+        if d.is_channel and not d.is_group and REPORTS_CHANNEL in (d.title or "").lower().replace("ë", "ё"):
+            return int(f"-100{d.entity.id}")
+    return None
+
+
 async def send_report(client: TelegramClient, text: str) -> bool:
-    """Отправить отчёт в PAPA TEST GROUP. Не нашли группу — не отправляем никуда (в «Избранное» — нет)."""
+    """Отчёт → канал «PAPA ОТЧЁТЫ» ботом. Нет канала/бота — в PAPA TEST GROUP. В «Избранное» — НИКОГДА."""
+    import os
+    token = os.environ.get("PAPA_TEST_BOT_TOKEN", "")
+    if token:
+        ch = await reports_channel_id(client)
+        if ch is not None and bot_send(token, ch, text):
+            return True
+        print("REPORTS_CHANNEL_FAIL: канал «PAPA ОТЧЁТЫ» не найден или бот не админ — шлю в PAPA TEST GROUP", flush=True)
     to = await report_target(client)
     if to is None:
         print("REPORT_NOT_SENT: PAPA TEST GROUP не найдена среди чатов аккаунта Разведки", flush=True)

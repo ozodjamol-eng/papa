@@ -63,3 +63,23 @@ class TestTrend(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBotSend(unittest.TestCase):
+    def test_chunks_and_fail(self):
+        import io
+        try:
+            from razvedka import telegram
+        except ImportError:
+            self.skipTest("нет telethon")
+        sent = []
+
+        def ok(url, data=None, timeout=30):
+            sent.append(data)
+            return io.BytesIO(b'{"ok": true}')
+        self.assertTrue(telegram.bot_send("T", -1001, "x" * 8000, urlopen=ok))
+        self.assertEqual(len(sent), 3)
+
+        def bad(url, data=None, timeout=30):
+            raise OSError("boom")
+        self.assertFalse(telegram.bot_send("T", -1001, "hi", urlopen=bad))
