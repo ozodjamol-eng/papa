@@ -145,13 +145,14 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
     mid, ch = m["id"], m["channel"]
     cur = dt.datetime.fromisoformat(m["scheduled_at"]) if m["scheduled_at"] else None
     rows = []
-    for icon, label, d in (("📅", "Сегодня", 0), ("🌅", "Завтра", 1)):
-        day = now.date() + dt.timedelta(days=d)
-        if cur and not m["urgent"] and cur.date() == day:
-            continue                                        # уже стоит на этот день — кнопка не нужна
-        t = smart.day_time(db, cfg, ch, m["rubric"], now, day, exclude=mid)
-        if t:
-            rows.append([{"text": f"{icon} {label} · {t:%H:%M}", "callback_data": f"tm:{mid}:{int(t.timestamp())}"}])
+    btn = []                                                # 17.10: Утро / День / Вечер вместо Сегодня / Завтра
+    for icon, label, lo, hi in smart.PARTS:
+        r = smart.part_time(db, cfg, ch, m["rubric"], now, lo, hi, exclude=mid)
+        if r and not (cur and not m["urgent"] and r[0] == cur):
+            t, n = r
+            when = f"{t:%H:%M}" if t.date() == now.date() else ("завтра " if t.date() == now.date() + dt.timedelta(days=1) else f"{t:%d.%m} ") + f"{t:%H:%M}"
+            btn.append({"text": f"{icon} {label} · {when}" + (f" ({n})" if n else ""), "callback_data": f"tm:{mid}:{int(t.timestamp())}"})
+    rows.extend([b] for b in btn)
     rows += [[{"text": "🚀 Сейчас", "callback_data": f"ur:{mid}"}],
              [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],

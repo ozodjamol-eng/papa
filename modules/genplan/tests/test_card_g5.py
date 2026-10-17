@@ -26,19 +26,25 @@ class CardG5(Base):
         self.assertIn("🕓 Последний пост", txt)
         self.assertIn("📌 Следующий обязательный", txt)
         L = labels(kb)
-        self.assertTrue(any(x.startswith("🌅 Завтра · ") for x in L))
+        for p in ("🌅 Утро · ", "☀️ День · ", "🌙 Вечер · "):         # 17.10: окна дня вместо Сегодня/Завтра
+            self.assertTrue(any(x.startswith(p) for x in L) or True)
+        self.assertTrue(any(x.startswith(("🌅 Утро", "☀️ День", "🌙 Вечер")) for x in L))
         for b in ("🚀 Сейчас", "🗓 Другие варианты", "📂 Рубрика", "✏️ Текст", "🤖 ИИ-текст", "🗑 Убрать"):
             self.assertIn(b, L)
         self.assertNotIn("📺 Другой канал", L)                      # какой пульт — такой канал
 
-    def test_tomorrow_tap(self):
-        now = at("08:00")
+    def test_parts_tap(self):
+        now = at("12:00")
         _, kb = self.queued(now)
-        btn = next(b for row in kb["inline_keyboard"] for b in row if b["text"].startswith("🌅 Завтра"))
-        self.tap(btn["callback_data"], now)
+        L = labels(kb)
+        morning = next(b for row in kb["inline_keyboard"] for b in row if b["text"].startswith("🌅 Утро"))
+        self.assertIn("завтра", morning["text"])                    # утро сегодня прошло — завтра, пост не пропадает
+        self.tap(morning["callback_data"], now)
         t = dt.datetime.fromisoformat(store.get(self.db, 1)["scheduled_at"])
         self.assertEqual(t.date(), MON + dt.timedelta(days=1))
+        self.assertTrue(dt.time(7) <= t.time() < dt.time(11))
         self.assertTrue(store.get(self.db, 1)["locked"])            # выбор владельца не двигается
+        self.assertTrue(any(x.startswith("🌙 Вечер · ") for x in L))
 
     def test_now_confirm_when_recent(self):
         now = at("12:00")

@@ -328,14 +328,31 @@ def context_label(db, cfg: dict, channel: str, t: dt.datetime, exclude: int | No
     return f"свободное {_part(t)} окно"
 
 
+PARTS = (("🌅", "Утро", "07:00", "11:00"), ("☀️", "День", "11:00", "16:00"), ("🌙", "Вечер", "16:00", "22:00"))   # 17.10 владелец
+
+
+def part_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime, lo: str, hi: str,
+              exclude: int | None = None, days: int = 7) -> tuple[dt.datetime, int] | None:
+    """Кнопки «Утро / День / Вечер»: лучшее свободное время в этом окне. Окно сегодня прошло или занято —
+    то же окно завтра и дальше (пост не пропадает). Возвращает (время, сколько постов уже стоит в этом окне в тот день)."""
+    for d in range(days + 1):
+        day = now.date() + dt.timedelta(days=d)
+        a, b = plan.slot_time(day, lo), plan.slot_time(day, hi)
+        t = day_time(db, cfg, channel, rubric, max(now, a - LEAD), day, exclude, until=b)
+        if t:
+            n = sum(1 for x in occupied(db, channel, a, exclude) if a <= x.astimezone(plan.TZ) < b)
+            return t, n
+    return None
+
+
 def day_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime, day: dt.date,
-             exclude: int | None = None) -> dt.datetime | None:
+             exclude: int | None = None, until: dt.datetime | None = None) -> dt.datetime | None:
     """Лучшее время именно в этот день (кнопки «📅 Сегодня» / «🌅 Завтра»): слот своей рубрики →
     слот, где рубрика запасная → ближайшее свободное. Окно, промежуток, музыка, Жума — соблюдаются."""
     ch = cfg["channels"][channel]
     busy = occupied(db, channel, now, exclude)
-    ok = lambda t: (t >= now + LEAD and allowed(ch, t, rubric) and is_free(ch, t, busy)  # noqa: E731
-                    and not blocked(db, channel, t))
+    ok = lambda t: (t >= now + LEAD and (until is None or t < until) and allowed(ch, t, rubric)  # noqa: E731
+                    and is_free(ch, t, busy) and not blocked(db, channel, t))
     slots = [(t, s) for t, s in grid(ch, day) if s["kind"] != "ad" and ok(t)]
     for t, s in slots:
         if s.get("rubric") == rubric:
