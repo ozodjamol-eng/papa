@@ -1,6 +1,6 @@
 """ИИ-редактор (Fabrika): переводит и переписывает подпись к посту так, как владелец делал вручную через ChatGPT.
-Основной — Google Gemini (бесплатный тариф, GEMINI_API_KEY + GEMINI_MODEL). Запасной — Anthropic Claude (ANTHROPIC_API_KEY, платный):
-если Gemini недоступен или исчерпан лимит — пробуем Claude (если ключ есть), иначе остаётся оригинал + кнопка ✏️.
+Основной (с 17.10, AI_PRIMARY=claude) — Anthropic Claude (ANTHROPIC_API_KEY); запасной — Google Gemini (GEMINI_API_KEY).
+Если основной недоступен — пробуем запасной, иначе остаётся оригинал + кнопка ✏️.
 Ключи — в /etc/papa-genplan/ai.env (вводит владелец на сервере). Дневной лимит вызовов — AI_DAILY_LIMIT."""
 from __future__ import annotations
 
@@ -78,6 +78,13 @@ def _claude(system: str, user: str, http=None) -> str:
     return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
 
 
+def _order():
+    """Порядок ИИ для текста. Решение владельца 17.10: основной — Anthropic Claude (AI_PRIMARY=claude),
+    Gemini — запасной. Без AI_PRIMARY — как раньше (Gemini → Claude). Просмотр кадров (vision) — только Gemini."""
+    g, c = ("Gemini", _gemini, "GEMINI_API_KEY"), ("Claude", _claude, "ANTHROPIC_API_KEY")
+    return (c, g) if os.environ.get("AI_PRIMARY", "").strip().lower() == "claude" else (g, c)
+
+
 def _count(db) -> int:
     from . import store
     k = "ai_calls_" + dt.date.today().isoformat()
@@ -95,13 +102,12 @@ def rewrite(db, text: str, title: str, http=None) -> str:
 
 
 def generate(db, system: str, user: str, http=None) -> str:
-    """Общий вызов: Gemini → (если не вышло) Claude. Для рерайта и утреннего блока."""
+    """Общий вызов: основной ИИ → (если не вышло) запасной. Для рерайта и утреннего блока."""
     if not available():
         raise AIError("нет ключа ИИ")
     if _count(db) > LIMIT:
         raise AIError(f"дневной лимит ИИ ({LIMIT}) исчерпан")
-    providers = [(n, f) for n, f, k in (("Gemini", _gemini, "GEMINI_API_KEY"), ("Claude", _claude, "ANTHROPIC_API_KEY"))
-                 if os.environ.get(k)]
+    providers = [(n, f) for n, f, k in _order() if os.environ.get(k)]
     out, errs = "", []
     for name, fn in providers:
         try:
