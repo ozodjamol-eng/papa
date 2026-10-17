@@ -22,7 +22,8 @@
     "audit",
     "digest-now",
     "razvedka-qr-check",
-    "ai-compare"
+    "ai-compare",
+    "hear"
   ],
   "approve": [
     "morning-pool-clear",
