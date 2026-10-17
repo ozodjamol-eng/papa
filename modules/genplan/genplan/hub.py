@@ -323,10 +323,14 @@ HUB_ID: int | None = None
 
 def special_mode(bot, db, cfg: dict, key: str, chat: int) -> str | None:
     """После 🚨 СРОЧНО / 📣 РЕКЛАМА на панели: последний принятый пост — срочно сейчас / реклама с выбором времени."""
-    mode = store.kv_get(db, f"mode_{key}", "")
-    if not mode:
+    raw = store.kv_get(db, f"mode_{key}", "")
+    if not raw:
         return None
     store.kv_set(db, f"mode_{key}", "")
+    mode, _, at = raw.partition("|")
+    # 17.10: 🚨 СРОЧНО действует 10 минут — иначе забытое нажатие выпускает следующий пост без карточки
+    if not at or _now() - dt.datetime.fromisoformat(at) > dt.timedelta(minutes=10):
+        return None
     m = db.execute("SELECT * FROM materials WHERE via=? ORDER BY id DESC LIMIT 1", (key,)).fetchone()
     if not m:
         return None
@@ -395,7 +399,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         key = bots.key_of(bot)
         if txt in PANEL_BUTTONS:                      # панель пульта: 🚨/📣 — следующий пост особый
             store.kv_set(db, "await_text", "")
-            store.kv_set(db, f"mode_{key}", "urgent" if txt == P_URGENT else "ad" if txt == P_ADS else "")
+            mode = "urgent" if txt == P_URGENT else "ad" if txt == P_ADS else ""
+            store.kv_set(db, f"mode_{key}", f"{mode}|{_now().isoformat()}" if mode else "")
             return "panel:" + txt
         if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ):
             store.kv_set(db, "await_text", "")
