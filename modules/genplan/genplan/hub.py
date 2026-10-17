@@ -399,7 +399,7 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         key = bots.key_of(bot)
         if txt in PANEL_BUTTONS:                      # панель пульта: 🚨/📣 — следующий пост особый
             store.kv_set(db, "await_text", "")
-            mode = "urgent" if txt == P_URGENT else "ad" if txt == P_ADS else ""
+            mode = "ad" if txt == P_ADS else ""          # 17.10: 🚨 СРОЧНО больше не выпускает пост вслепую — выбор всегда на карточке
             store.kv_set(db, f"mode_{key}", f"{mode}|{_now().isoformat()}" if mode else "")
             return "panel:" + txt
         if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ):
