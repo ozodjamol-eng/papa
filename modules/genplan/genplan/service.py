@@ -39,10 +39,30 @@ def target(cfg: dict, env: dict, channel: str) -> str | int:
     return int(env["TEST_GROUP_ID"]) if cfg["channels"][channel]["publisher"] == "account" else int(env["TEST_CHANNEL_ID"])
 
 
-def hook_for(cfg: dict, ch: dict, m) -> str:
+def hook_for(cfg: dict, ch: dict, m, db=None) -> str:
+    """Нижний хук (под юзернеймом). Решение владельца 17.10: по смыслу текста — ИИ (Anthropic).
+    Печальная тема или свой призыв в конце текста — без нашего хука (как раньше). ИИ недоступен — хук рубрики из config."""
     body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
     topics = [] if ch.get("topics") is False else cfg.get("topics", [])
-    return text.pick_hook(ch, m["rubric"], int(m["id"]), body, topics)
+    base = text.pick_hook(ch, m["rubric"], int(m["id"]), body, topics)
+    if not base or db is None or ch.get("ai_hooks") is False:
+        return base
+    keys = m.keys() if hasattr(m, "keys") else []
+    if "hook_ai" in keys and m["hook_ai"] is not None:          # уже придуман для этого поста — не платим второй раз
+        return m["hook_ai"]
+    from . import ai
+    if not ai.available():
+        return base
+    try:
+        h = ai.hook(db, text.drop_lines(body, json.loads(m["junk"] or "[]") if "junk" in keys else []), ch.get("title", ""))
+    except Exception:  # noqa: BLE001 — ИИ не ответил: хук рубрики
+        return base
+    try:
+        from . import store
+        store.update(db, int(m["id"]), hook_ai=h)
+    except Exception:  # noqa: BLE001
+        pass
+    return h
 
 
 def share_button(ch: dict) -> dict | None:
@@ -86,7 +106,7 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
     junk = json.loads(m["junk"] or "[]") if "junk" in m.keys() else []
     sigs = tuple(ch.get("signatures") or ())
     sig = sigs[int(m["id"]) % len(sigs)] if sigs else ch.get("signature", "")
-    body = text.finalize(m["text"], sig, is_ad=is_ad, own=own, hook=hook_for(cfg, ch, m), tag=tag,
+    body = text.finalize(m["text"], sig, is_ad=is_ad, own=own, hook=hook_for(cfg, ch, m, db) if not is_ad else "", tag=tag,
                          junk=junk, signatures=sigs + ((ch.get("signature"),) if ch.get("signature") else ()),
                          limit=1024 if m["has_media"] else 4096)
     media = json.loads(m["media"] or "[]") if "media" in m.keys() else []
