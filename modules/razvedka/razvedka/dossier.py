@@ -27,9 +27,10 @@ def _mins(t: dt.datetime) -> int:
     return t.hour * 60 + t.minute
 
 
-def profile(ps: list[dict], days: int) -> dict | None:
+def profile(ps: list[dict], days: int, own: bool = False) -> dict | None:
     """Режим дня, сильное и слабое одного канала."""
-    ps = [p for p in ps if not p["ad"]]                  # реклама — не их контент
+    if not own:                                          # реклама — не их контент (у нас подпись @ и ссылки — не реклама)
+        ps = [p for p in ps if not p["ad"]]
     if len(ps) < 10:
         return None
     by_day = defaultdict(list)
@@ -82,9 +83,9 @@ def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None) -> d
         by_ch[p["channel_id"]].append(p)
     rows = []
     for cid, ps in by_ch.items():
-        pr = profile(ps, days)
+        ch = chans.get(cid, {})
+        pr = profile(ps, days, own=bool(ch.get("is_own")))
         if pr:
-            ch = chans.get(cid, {})
             rows.append({"id": cid, "title": ch.get("title", str(cid)), "username": ch.get("username"),
                          "own": bool(ch.get("is_own")), "subs": ch.get("subscribers") or 0, **pr})
     leaders = sorted((r for r in rows if not r["own"]), key=lambda r: r["subs"], reverse=True)[:big]
@@ -139,8 +140,9 @@ def render(d: dict) -> str:
         if r["media"] and r["media"][0][1] >= 1.1:
             k, s, _ = r["media"][0]
             L.append(f"   💪 Сильный формат: {MEDIA_UZ.get(k, k)} ×{s}")
-        if r["tags"]:
-            L.append("   🏷 Рубрики-хэштеги сильнее обычного: " + ", ".join(f"{t} ×{s}" for t, s, _ in r["tags"][:3] if s >= 1))
+        strong_tags = [f"{t} ×{s}" for t, s, _ in r["tags"][:3] if s >= 1]
+        if strong_tags:
+            L.append("   🏷 Рубрики-хэштеги сильнее обычного: " + ", ".join(strong_tags))
         if r["length"]:
             L.append(f"   ✍️ Лучше заходит текст: {r['length'][0][0]}")
         weak = []
