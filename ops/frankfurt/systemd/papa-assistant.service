@@ -1,0 +1,38 @@
+[Unit]
+Description=PAPA ИИ-ассистент личного Telegram (Telegram Business): реклама — прайс, личное — «передал»
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-assistant
+Group=papa-assistant
+EnvironmentFile=/etc/papa-assistant/bot.env
+Environment=PAPA_ASSISTANT_DB=/var/lib/papa-assistant/assistant.sqlite3 PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/reklama
+ExecStart=/usr/bin/python3 -m assistant
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-assistant
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0077
+MemoryHigh=40M
+MemoryMax=80M
+CPUQuota=10%
+TasksMax=8
+
+[Install]
+WantedBy=multi-user.target
