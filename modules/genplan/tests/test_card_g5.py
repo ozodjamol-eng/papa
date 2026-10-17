@@ -62,5 +62,32 @@ class CardG5(Base):
         self.assertTrue(all(b - a >= 45 * 60 for a, b in zip(ts, ts[1:])))
 
 
+class PickerG5(Base):
+    def test_root_like_xojaobod(self):
+        self.h(dm(10, "Шифокор маслаҳати", photo_uid="h1"))
+        _, kb = hub.card(self.db, CFG, 1, at("08:00"))
+        L = labels(kb)
+        for b in ("📰 Новости", "🎬 Видео", "😂 Юмор", "🎵 Музыка", "🎭 Культура / просвещение", "💬 Интерактив",
+                  "💡 Фойдали", "❤️ Соғлиқ / саломатлик", "🚨 Срочный пост", "🌙 Якуний пост"):
+            self.assertIn(b, L)
+        self.assertNotIn("📺 Другой канал", L)
+
+    def test_health_one_tap_one_tag(self):
+        now = at("08:00")
+        self.h(dm(10, "Шифокор маслаҳати", photo_uid="h1"))
+        self.tap("pi:1:health:0", now)
+        m = store.get(self.db, 1)
+        self.assertEqual((m["status"], m["rubric"], m["tag"]), ("queued", "Фойдали видео", "#САЛОМАТЛИК"))
+        from genplan import service
+        self.assertEqual(service.tag_for(CFG, CFG["channels"]["davra"], m), "#САЛОМАТЛИК")
+
+    def test_video_paging(self):
+        self.h(dm(10, "Видео", photo_uid="v1"))
+        self.tap("pg:1:video:1", at("08:00"))
+        rows = self.last_card()["reply_markup"]["inline_keyboard"]
+        self.assertIn("КЕЙИНГИ ➡️", labels({"inline_keyboard": rows}))
+        self.assertEqual(sum(1 for r in rows if r[0]["callback_data"].startswith("pi:")), 10)
+
+
 if __name__ == "__main__":
     unittest.main()

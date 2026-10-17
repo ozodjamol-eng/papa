@@ -87,11 +87,13 @@ class TestIntake(Base):
         txt, kb = hub.card(self.db, CFG, 1, now)
         self.assertIn("Выберите рубрику", txt)
         flat = [b for row in kb["inline_keyboard"] for b in row]
-        music = next(b for b in flat if "Мусиқа" in b["text"])
-        self.assertTrue(music["text"].endswith("✓"))                          # угаданная рубрика отмечена
-        self.tap(music["callback_data"], now)                                  # одно нажатие: рубрика + умное время
+        music = next(b for b in flat if b["text"] == "🎵 Музыка")              # экран групп как в Хўжаободе
+        self.tap(music["callback_data"], now)
+        sub = [b for row in self.last_card()["reply_markup"]["inline_keyboard"] for b in row]
+        uz = next(b for b in sub if "ЎЗБЕК МУСИҚАСИ" in b["text"])
+        self.tap(uz["callback_data"], now)                                     # одно нажатие: рубрика + хэштег + умное время
         m = store.get(self.db, 1)
-        self.assertEqual(m["status"], "queued")
+        self.assertEqual((m["status"], m["rubric"], m["tag"]), ("queued", "Мусиқа", "#ЎЗБЕК_МУСИҚАСИ"))
         self.assertEqual(dt.datetime.fromisoformat(m["scheduled_at"]), at("19:45"))   # музыка не раньше 10:00, слот «Мусиқа»
         self.assertIn("✅", self.last_card()["text"])
 

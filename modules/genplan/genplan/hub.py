@@ -108,25 +108,22 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     if m["status"] == "queued" and m["scheduled_at"]:
         t = dt.datetime.fromisoformat(m["scheduled_at"])
         when = "сейчас (🆘)" if m["urgent"] else smart.fmt(t, now)
-        txt = f"{base}\n\n{summary(db, cfg, m['channel'], now)}\n✅ {name} · {m['rubric']} — {when}{' 🔒' if m['locked'] else ''}{dup}"
+        what = m["topic"] if "topic" in m.keys() and m["topic"] else m["rubric"]
+        tg = f" {m['tag']}" if "tag" in m.keys() and m["tag"] else ""
+        txt = f"{base}\n\n{summary(db, cfg, m['channel'], now)}\n✅ {name} · {what}{tg} — {when}{' 🔒' if m['locked'] else ''}{dup}"
         return txt, {"inline_keyboard": kb_queued(db, cfg, m, now)}
-    # черновик — как в GENPLAN 5: сразу сетка рубрик; одно нажатие = рубрика + умное время
+    # черновик — экран «➕ ПОСТ» пульта Хўжаобода (GENPLAN 5): группы → подрубрика (= смысл и один хэштег) → умное время
+    from . import picker
     rs = rubrics(cfg, m["channel"])
-    icons = cfg["channels"][m["channel"]].get("icons") or {}
-    btn = [{"text": f"{icons.get(r, '•')} {r}{' ✓' if r == m['rubric'] and m['guessed'] else ''}",
-            "callback_data": f"rq:{mid}:{i}"} for i, r in enumerate(rs)]
-    kb = [btn[i:i + 2] for i in range(0, len(btn), 2)]
     if m["stock"]:
         return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — выйдет сам, когда у рубрики будет пустой слот{dup}",
                 {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
-    other = []                                              # 17.10 владелец: «Другой канал» не нужен — какой пульт, такой канал
-    kb += [[{"text": "🚨 Срочный пост", "callback_data": f"ur:{mid}"}, {"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
-           other + [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
+    kb = picker.root_kb(mid, "Якуний пост" in rs)
+    kb += [[{"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
            [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
-    hint = f"\n✓ — бот думает, что это «{m['rubric']}»" if m["guessed"] else ""
-    return (f"📍 Канал: {name}\n\n{base}\n\nВыберите рубрику — время GENPLAN определит сам.{hint}{dup}",
+    return (f"📍 Канал: {name}\n\n{base}\n\nВыберите рубрику — время GENPLAN определит сам.{dup}",
             {"inline_keyboard": kb})
 
 
@@ -533,6 +530,40 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             note = "Это время уже занято — показываю новое"
         show()
+    elif kind in ("pg", "pr", "pi", "pf"):                # выбор рубрики как в пульте Хўжаобода
+        from . import picker
+        rs = rubrics(cfg, m["channel"])
+        t, _ = card(db, cfg, mid, now)
+        if kind == "pr":
+            show({"inline_keyboard": picker.root_kb(mid, "Якуний пост" in rs) + [[{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]}
+                 if m["status"] == "queued" else None)
+        elif kind == "pg":
+            title, rows = picker.group_kb(mid, arg[0], int(arg[1]) if len(arg) > 1 else 1)
+            show({"inline_keyboard": rows}, t + "\n\n" + title)
+        else:
+            if kind == "pf":
+                r, tag, topic = "Якуний пост", (cfg["channels"][m["channel"]].get("hashtags") or {}).get("Якуний пост", ""), "🌙 Якуний пост"
+            else:
+                it = picker.item(arg[0], int(arg[1]))
+                if it is None:
+                    bot("answerCallbackQuery", callback_query_id=cq["id"], text="Рубрика не найдена")
+                    return kind
+                _code, emoji, label, tag, k = it
+                r, topic = picker.rubric_for(cfg, m["channel"], k, rs), f"{emoji} {label}"
+            upd = {"rubric": r, "guessed": 0, "stock": 0, "tag": tag, "topic": topic}
+            if m["status"] == "queued" and (m["locked"] or m["urgent"]):
+                store.update(db, mid, **upd)                  # время владельца не трогаем
+                show()
+            else:
+                st = smart.smart_time(db, cfg, m["channel"], r, now, exclude=mid)
+                if st:
+                    store.update(db, mid, status="queued", scheduled_at=st[0].isoformat(), urgent=0, locked=0, **upd)
+                    note = f"🧠 {smart.fmt(st[0], now)} — {st[1]}"
+                    show()
+                else:
+                    store.update(db, mid, **upd)
+                    t, _ = card(db, cfg, mid, now)
+                    show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
     elif kind == "sr":                                  # 📦 В запас: выбрать рубрику
         rs = rubrics(cfg, m["channel"])
         icons = cfg["channels"][m["channel"]].get("icons") or {}
@@ -576,8 +607,10 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             t, _ = card(db, cfg, mid, now)
             show(kb_times(db, cfg, mid, now), t + "\n\n🕐 Выберите время:")
     elif kind == "rs":
+        from . import picker
         t, _ = card(db, cfg, mid, now)
-        show(kb_rubric(cfg, mid, m["channel"]), t + "\n\n📂 Выберите рубрику:")
+        rows = picker.root_kb(mid, "Якуний пост" in rubrics(cfg, m["channel"])) + [[{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]
+        show({"inline_keyboard": rows}, t + "\n\n📂 Выберите рубрику:")
     elif kind == "cs":
         t, _ = card(db, cfg, mid, now)
         allowed = movable(cfg, m)

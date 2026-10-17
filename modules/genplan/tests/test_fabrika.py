@@ -137,7 +137,7 @@ class TestMediaAndPipeline(unittest.TestCase):
         m = store.get(db, 1)
         self.assertEqual((m["hub_msg"], m["channel"], m["status"]), (77, "davra", "draft"))
         self.assertEqual(m["hub_chat"], 42)                                      # 16.10: видео — прямо владельцу, без хаба
-        self.assertIn("Мусиқа", bot.calls[0][1]["text"])                          # карточка: рубрика угадана по тексту
+        self.assertIn("Выберите рубрику", bot.calls[0][1]["text"])                 # карточка: экран рубрик как в Хўжаободе
         self.assertFalse((self.tmp / "w").exists() and any((self.tmp / "w").iterdir()))   # рабочие файлы убраны
 
 

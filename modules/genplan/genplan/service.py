@@ -62,6 +62,8 @@ def tag_for(cfg: dict, ch: dict, m) -> str:
     4) иначе — без хэштега."""
     if not ch.get("hashtags"):
         return ""
+    if "tag" in m.keys() and m["tag"] is not None:          # 17.10: владелец выбрал подрубрику — её хэштег (один)
+        return m["tag"]
     body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
     t = text.topic_of(body, cfg.get("topics", []))
     if t:
