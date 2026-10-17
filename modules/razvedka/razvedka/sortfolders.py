@@ -277,6 +277,6 @@ async def run(client, out_dir: Path, log=print) -> dict:
         lines += [f"• {c['title']} ({', '.join(c['cats'])})" for c in cs]
     lines.append(f"\nНе вошли (реклама/другое): {len(unsorted)}")
     text = "\n".join(lines)
-    for i in range(0, len(text), 3900):
-        await client.send_message("me", text[i:i + 3900], link_preview=False)
+    from .telegram import send_report
+    await send_report(client, text)
     return {"channels": len(chans), "classified": len(cats), "folders": done, "skipped": len(unsorted)}

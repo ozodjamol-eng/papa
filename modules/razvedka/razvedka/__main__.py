@@ -1,8 +1,9 @@
 """PAPA Razvedka.
   python -m razvedka login            — вход в Telegram (интерактивно, на сервере)
   python -m razvedka collect          — собрать посты
-  python -m razvedka report [--send]  — отчёт в консоль (и в «Избранное» аккаунта с --send)
-  python -m razvedka send             — отчёт в консоль и в «Избранное» аккаунта
+  python -m razvedka report [--send]  — отчёт в консоль (и в PAPA TEST GROUP с --send)
+  python -m razvedka send             — отчёт в консоль и в PAPA TEST GROUP
+  python -m razvedka dossier [--send] — досье больших каналов + сравнение с нашими (по понедельникам — само в run)
   python -m razvedka run              — collect + send (для ежедневного таймера)
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
   python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
@@ -23,6 +24,12 @@ from . import analyze, report, store
 CONFIG = Path(os.environ.get("PAPA_RAZVEDKA_CONFIG", Path(__file__).resolve().parent.parent / "config.toml"))
 DB = os.environ.get("PAPA_RAZVEDKA_DB", "/var/lib/papa-razvedka/razvedka.sqlite3")
 PUB = os.environ.get("PAPA_RAZVEDKA_PUB", "/var/lib/papa-razvedka-pub")
+
+
+def dossier_text() -> str:
+    from . import dossier
+    c = cfg()
+    return dossier.render(dossier.build(store.connect(DB), int(c.get("dossier_days", 14)), int(c.get("dossier_big", 6))))
 
 
 def build() -> tuple[str, dict]:
@@ -266,6 +273,16 @@ def main(argv: list[str]) -> None:
             print("PUBLISHED", publish(text, a))
             asyncio.run(_send(text))
             print("REPORT_SENT")
+            import datetime as _dt
+            if _dt.datetime.now(analyze.TZ).weekday() == 0:          # досье — раз в неделю, по понедельникам
+                asyncio.run(_send(dossier_text()))
+                print("DOSSIER_SENT")
+    elif cmd == "dossier":
+        text = dossier_text()
+        print(text)
+        if "--send" in argv:
+            asyncio.run(_send(text))
+            print("DOSSIER_SENT")
     elif cmd == "publish":
         text, a = build()
         print("PUBLISHED", publish(text, a))

@@ -1,6 +1,6 @@
 """Адаптер к Telegram через официальный клиентский API (Telethon).
 Только чтение: папки, информация о каналах, история сообщений. Единственная запись —
-необязательная отправка отчёта в «Избранное» самого аккаунта (send_report)."""
+необязательная отправка отчёта в PAPA TEST GROUP (send_report)."""
 from __future__ import annotations
 
 import asyncio
@@ -100,7 +100,26 @@ class TelethonSource:
             }
 
 
-async def send_report(client: TelegramClient, text: str) -> None:
-    """Отправить отчёт в «Избранное» этого же аккаунта (никому другому)."""
+REPORT_TITLE = "papa test group"     # 17.10 владелец: отчёты — в PAPA TEST GROUP, не в «Избранное»
+
+
+async def report_target(client: TelegramClient):
+    """Куда слать отчёты: PAPA TEST GROUP (ищем по названию среди чатов аккаунта) или PAPA_REPORT_CHAT."""
+    import os
+    if os.environ.get("PAPA_REPORT_CHAT"):
+        return int(os.environ["PAPA_REPORT_CHAT"])
+    async for d in client.iter_dialogs():
+        if (d.is_group or d.is_channel) and REPORT_TITLE in (d.title or "").lower():
+            return d.entity
+    return None
+
+
+async def send_report(client: TelegramClient, text: str) -> bool:
+    """Отправить отчёт в PAPA TEST GROUP. Не нашли группу — не отправляем никуда (в «Избранное» — нет)."""
+    to = await report_target(client)
+    if to is None:
+        print("REPORT_NOT_SENT: PAPA TEST GROUP не найдена среди чатов аккаунта Разведки", flush=True)
+        return False
     for i in range(0, len(text), 3900):
-        await client.send_message("me", text[i:i + 3900], link_preview=False)
+        await client.send_message(to, text[i:i + 3900], link_preview=False)
+    return True

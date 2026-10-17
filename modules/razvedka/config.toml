@@ -6,9 +6,11 @@ slug = "YBPSRBlZyvI2NWJi"
 topic = "XOJAOBODCITY (38)"
 
 # Свои каналы — для сравнения с лидерами
-own_channels = ["xojaobodcity24", "ozodjamoll"]
+own_channels = ["xojaobodcity24", "ozodjamoll", "kattadavrauz"]
 
 first_days = 7        # глубина первого сбора нового канала
 refresh_days = 3      # сколько дней назад обновлять просмотры при повторном сборе
 pause_seconds = 3     # пауза между каналами (бережное чтение)
 report_days = 7       # период отчёта
+dossier_days = 14     # досье больших каналов: период (17.10)
+dossier_big = 6        # сколько больших каналов разбирать
