@@ -20,7 +20,8 @@
     "genplan5-one-hashtag",
     "cleanup",
     "nexus-old-stop",
-    "nexus-old-restore"
+    "nexus-old-restore",
+    "genplan5-ai-hook"
   ],
   "deny_patterns": [
     "-key$",
