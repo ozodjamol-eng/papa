@@ -550,7 +550,8 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         show()
     elif kind == "rq":
         r = rubrics(cfg, m["channel"])[int(arg[0])]
-        store.update(db, mid, rubric=r, guessed=0, stock=0)
+        # нажал подсказку бота (✓) — это подтверждение места в сетке, а не смысл: хэштег рубрики не ставим
+        store.update(db, mid, rubric=r, guessed=int(bool(m["guessed"]) and r == m["rubric"]), stock=0)
         st = smart.smart_time(db, cfg, m["channel"], r, now, exclude=mid)
         if st:
             store.update(db, mid, status="queued", scheduled_at=st[0].isoformat(), urgent=0, locked=0)

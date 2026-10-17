@@ -29,6 +29,17 @@ class HashtagRule(unittest.TestCase):
         self.assertTrue(t is None or t["name"] != "Об-ҳаво")
         self.assertEqual(T.topic_of("Эртага совуқ бўлади", CFG["topics"])["name"], "Об-ҳаво")
 
+    def test_dua_is_dua_not_qiziqarli(self):
+        dua = ("🤲Гўзал дуо\n\n\"Аллоҳим, фарзандларимни келажакларини гўзал қил. Ризқларини кенг, умрларини баракали қил.\"")
+        for g in (0, 1):
+            self.assertEqual(service.tag_for(CFG, CFG["channels"]["davra"], row(dua, "Қизиқарли", g)), "#ДУО")
+
+    def test_vague_rubric_no_tag(self):
+        self.assertEqual(service.tag_for(CFG, CFG["channels"]["davra"], row("Ажойиб лаҳза", "Қизиқарли", 0)), "")
+
+    def test_meaning_tag(self):
+        self.assertEqual(service.tag_for(CFG, CFG["channels"]["davra"], row("Терма жамоа чемпион бўлди", "Видео", 1)), "#СПОРТ")
+
     def test_unknown_text_no_tag(self):
         self.assertEqual(service.tag_for(CFG, CFG["channels"]["davra"], row("Ажойиб лаҳза", "Видео", 1)), "")
 

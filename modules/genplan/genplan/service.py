@@ -55,21 +55,24 @@ def share_button(ch: dict) -> dict | None:
 
 
 def tag_for(cfg: dict, ch: dict, m) -> str:
-    """Хэштег по смыслу (решение 17.10: «лучше без хэштега, чем неправильный»).
-    1) тема с собственным тегом (пост дня «Бугун — … куни», «Хайрли тонг») — её тег, в любом канале;
-    2) рубрику выбрал владелец — тег рубрики; 3) бот угадал по теме текста — тег рубрики;
-    4) бот не понял текст (рубрика по умолчанию) — без хэштега."""
+    """Хэштег по СМЫСЛУ текста (решения 17.10: «либо правильный, либо никакого»).
+    1) смысл текста с тегом (пост дня, Хайрли тонг, дуо; у канала — topic_tags: юмор, спорт, полезное…) — этот тег;
+    2) расплывчатая рубрика (Қизиқарли, Видео…) — без хэштега: рубрика — это место в сетке, а не смысл;
+    3) рубрику выбрал сам владелец (не подтвердил подсказку бота) — тег рубрики;
+    4) иначе — без хэштега."""
     if not ch.get("hashtags"):
         return ""
     body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
     t = text.topic_of(body, cfg.get("topics", []))
-    if t and t.get("tag"):
-        return t["tag"]
-    rub = (ch.get("hashtags") or {}).get(m["rubric"] or "", "")
-    guessed = bool(m["guessed"]) if "guessed" in m.keys() else False
-    if guessed and not t:
+    if t:
+        tag = t.get("tag") or (ch.get("topic_tags") or {}).get(t["name"], "")
+        if tag:
+            return tag
+    rubric = m["rubric"] or ""
+    if rubric in (ch.get("vague_rubrics") or []):
         return ""
-    return rub
+    guessed = bool(m["guessed"]) if "guessed" in m.keys() else False
+    return "" if guessed else (ch.get("hashtags") or {}).get(rubric, "")
 
 
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print,
