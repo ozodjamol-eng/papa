@@ -15,6 +15,7 @@
   "approve": [
     "genplan5-overdue-skip",
     "genplan5-prayer-time-fix",
+    "genplan5-one-hashtag",
     "cleanup",
     "nexus-old-stop",
     "nexus-old-restore"
