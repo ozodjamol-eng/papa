@@ -205,7 +205,7 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
             continue
         for d in (now.date(), now.date() + dt.timedelta(days=1)):
             morning.ensure_day(db, cfg, channel, d, now)
-        ready, missed = morning.due(db, channel, now, o["grace"], approval=bool(o.get("approval")))
+        ready, missed = morning.due(db, channel, now, o["grace"], approval=o.get("approval"))
         for r in missed:
             if r["error"] in ("не успели подготовить", "не одобрен"):
                 ERRORS.append(f"⚠️ {ch['title']}: {morning.TITLE[r['key']]} не вышел — {r['error']}")

@@ -30,7 +30,7 @@ from pathlib import Path
 
 from . import plan
 
-DEFAULTS = {"approval": True, "day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
+DEFAULTS = {"approval": ["day"], "day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
             "tag": "#ХАЙРЛИ_ТОНГ", "day_tag": "#БУГУН", "live": False, "max_seconds": 20}
 KEYS = ("day", "greeting")
 TITLE = {"day": "Бугун — … куни", "greeting": "Хайрли тонг"}
@@ -142,14 +142,23 @@ def update(db, rid: int, **kw) -> None:
     db.commit()
 
 
-def due(db, channel: str, now: dt.datetime, grace: int = 15, approval: bool = False) -> tuple[list, list]:
+def needs_ok(approval, key: str) -> bool:
+    """Нужно ли ✅ владельца. 17.10 (владелец): обязательный цикл работает сам, как в Хўжаободе.
+    «Хайрли тонг» (его текст + видео из пула) — автопилот с вето 🗑; «Бугун — … куни» пишет агент — нужен ✅.
+    approval: True — все, False/None — никто, список ключей — только эти."""
+    if isinstance(approval, (list, tuple)):
+        return key in approval
+    return bool(approval)
+
+
+def due(db, channel: str, now: dt.datetime, grace: int = 15, approval=False) -> tuple[list, list]:
     """(готовые к публикации, пропущенные сейчас). Не готовый к сроку пост ждёт grace минут, потом пропуск.
-    approval=True — выходит только то, что владелец одобрил кнопкой ✅ (решение владельца 15.10)."""
+    approval — см. needs_ok: такие посты выходят только после ✅ владельца."""
     ready, missed = [], []
     for r in db.execute("SELECT * FROM fixed_posts WHERE channel=? AND status='pending' AND at<=? ORDER BY at",
                         (channel, now.isoformat())).fetchall():
         late = now - dt.datetime.fromisoformat(r["at"]) > dt.timedelta(minutes=grace)
-        ok = r["prepared"] and (r["approved"] or not approval)
+        ok = r["prepared"] and (r["approved"] or not needs_ok(approval, r["key"]))
         if late:
             why = "не успели подготовить" if not r["prepared"] else ("не одобрен" if not ok else "опоздание")
             update(db, r["id"], status="skipped", error=why)
@@ -170,7 +179,8 @@ def approval_reminder(db, cfg: dict, now: dt.datetime, at: str = "22:00") -> str
     tomorrow = (now.date() + dt.timedelta(days=1)).isoformat()
     rows = db.execute("SELECT channel, key FROM fixed_posts WHERE day=? AND status='pending' AND prepared=1 AND approved=0",
                       (tomorrow,)).fetchall()
-    rows = [r for r in rows if r["channel"] in cfg["channels"] and (opts(cfg["channels"][r["channel"]]) or {}).get("approval")]
+    rows = [r for r in rows if r["channel"] in cfg["channels"]
+            and needs_ok((opts(cfg["channels"][r["channel"]]) or {}).get("approval"), r["key"])]
     if not rows:
         return None
     store.kv_set(db, k, "1")
@@ -881,7 +891,13 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
     what = "Готовый пост из PAPA СКЛАД" if (r["source"] or "").startswith("sklad") else (
         "Ваш пост из NEXUS MORNING POOL" if (r["source"] or "").startswith("manual") else TITLE[r["key"]])
     head = f"👁 {ch['title']} · {what} · {smart.fmt(at, dt.datetime.now(plan.TZ))} ({where})" + (f"\n{note}" if note else "")
-    kb = buttons(rid, "new")
+    o_ = opts(ch) or DEFAULTS
+    if needs_ok(o_.get("approval"), r["key"]):
+        kb = buttons(rid, "new")
+    else:                                                      # автопилот с вето: выйдет сам, если не нажать 🗑
+        update(db, rid, approved=1)
+        kb = buttons(rid, "auto")
+        head += "\n🤖 Выйдет сам — 🗑, если не нужно"
     owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
     from . import bots
     bot = bots.REG.get("main", bot)                            # утро лежит в хабе — показывает главный бот
@@ -950,6 +966,7 @@ def buttons(rid: int, state: str) -> dict:
     """Кнопки под предпросмотром: что нажато — видно сразу (решение владельца 16.10: ✅ и 🗑)."""
     rows = {"new": [("✅ Одобрить", "a"), ("🗑 Не публиковать", "x")],
             "approved": [("✅ ОДОБРЕНО", "n"), ("🗑 Не публиковать", "x")],
+            "auto": [("🤖 Выйдет сам", "n"), ("🗑 Не публиковать", "x")],
             "cancelled": [("🗑 НЕ ВЫЙДЕТ", "n"), ("↩️ Вернуть", "u")]}[state]
     return {"inline_keyboard": [[{"text": t, "callback_data": f"mo:{a}:{rid}"} for t, a in rows]]}
 
@@ -979,7 +996,8 @@ def callback(bot, db, cq: dict) -> str:
                 pass
     if act == "n":
         bot("answerCallbackQuery", callback_query_id=cq["id"],
-            text="Уже одобрено ✅" if r["approved"] else "Не будет опубликован 🗑")
+            text=("Выйдет сам 🤖" if not needs_ok(DEFAULTS["approval"], r["key"]) else "Уже одобрено ✅")
+            if r["approved"] else "Не будет опубликован 🗑")
         return "mo:n"
     if act == "a":
         update(db, r["id"], approved=1, status="pending")
@@ -994,9 +1012,14 @@ def callback(bot, db, cq: dict) -> str:
             text="🗑 НЕ БУДЕТ ОПУБЛИКОВАН\nПередумали — «↩️ Вернуть».")
         return "mo:x"
     if act == "u":
-        update(db, r["id"], status="pending", approved=0)
-        mark("new", "↩️ Вернул — нажмите ✅, чтобы вышел")
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text="↩️ Вернул — нажмите ✅, чтобы вышел")
+        if needs_ok(DEFAULTS["approval"], r["key"]):
+            update(db, r["id"], status="pending", approved=0)
+            mark("new", "↩️ Вернул — нажмите ✅, чтобы вышел")
+            bot("answerCallbackQuery", callback_query_id=cq["id"], text="↩️ Вернул — нажмите ✅, чтобы вышел")
+        else:                                                   # автопилот с вето: вернул — снова выйдет сам
+            update(db, r["id"], status="pending", approved=1)
+            mark("auto", f"↩️ Вернул — выйдет сам {at:%d.%m в %H:%M}")
+            bot("answerCallbackQuery", callback_query_id=cq["id"], text=f"↩️ Вернул — выйдет сам {at:%d.%m в %H:%M}")
         return "mo:u"
     # «🔄 Заменить» со старых предпросмотров — новый вариант поста
     update(db, r["id"], status="pending", prepared=0, redo=1, tries=0, next_try=None, hub_msg=None, preview_sent=0,
