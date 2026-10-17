@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 🎬 Тренд-разведка — AI-видео тренды каждый день, рынок «панелей» по понедельникам (09:00 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+RandomizedDelaySec=3min
+Persistent=false
+Unit=papa-razvedka@trend-auto.service
+
+[Install]
+WantedBy=timers.target

@@ -8,6 +8,7 @@
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
   python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
+  python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
 from __future__ import annotations
@@ -59,6 +60,11 @@ def publish(text: str, a: dict, pub_dir: str | None = None) -> str | None:
     os.chmod(tmp, 0o640)
     os.replace(tmp, d / "latest.json")
     return str(d / "latest.json")
+
+
+def dt_now():
+    import datetime as _dt
+    return _dt.datetime.now(analyze.TZ)
 
 
 def cfg() -> dict:
@@ -245,6 +251,27 @@ def main(argv: list[str]) -> None:
             for x in pain.samples(db, k, 5):
                 print(f"  [{t}] {x}")
         print("PAIN_REPORT_DONE")
+        return
+    if cmd in ("trend-auto", "trend-now"):     # для systemd (без пробелов в имени экземпляра)
+        argv = ["trend", "auto"] if cmd == "trend-auto" else ["trend", "daily", "market", "--send"]
+        cmd = "trend"
+    if cmd == "trend":                         # только веб-поиск через Anthropic; Telegram — лишь для отправки отчёта
+        from . import trend
+        modes = [a for a in argv[1:] if a in ("daily", "market", "auto")] or ["daily"]
+        if modes == ["auto"]:                  # таймер: каждый день daily, по понедельникам ещё и market
+            modes = ["daily"] + (["market"] if dt_now().weekday() == 0 else [])
+        out = Path(PUB) / "trend"
+        out.mkdir(parents=True, exist_ok=True)
+        for m in modes:
+            try:
+                text = trend.run(m, out)
+            except trend.TrendError as e:
+                text = f"🎬 Тренд-разведка ({m}): ошибка — {e}"
+            print(text, flush=True)
+            if "--send" in argv or argv[1:2] == ["auto"]:
+                asyncio.run(_send(text))
+                print("TREND_SENT", m)
+        print("TREND_DONE")
         return
     if cmd == "pain":
         print("PAIN_DONE", asyncio.run(_pain()))
