@@ -22,15 +22,18 @@ retention_days = 90
 # Ссылка в бот с меткой instagram — учёт заявок в боте GOLD WATER сохраняется
 page_url = "https://t.me/GoldWaterAndijonBot?start=instagram"
 
-dm_text = """Assalomu alaykum! 😊
-GOLD WATER — toza suv apparatlari: narxlar, apparat haqida ma'lumot va BYD aksiyasi 👇
+# 17.10: текст из ChatPlace (проверен, конверсия 40%) — дословно; у ChatPlace ссылка была кнопкой «💧 МАЪЛУМОТНИ ОЛИШ», у нас — последней строкой
+dm_text = """Ассалому алайкум 👋
+GOLD WATER сув аппарати ва бизнес имконияти ҳақида маълумот тайёр.
+Давом этиш учун пастдаги ҳаволани босинг 👇
 {page}"""
 
-dm_text_ru = """Здравствуйте! 😊
-GOLD WATER — аппараты чистой воды: цены, описание аппарата и акция BYD 👇
+dm_text_ru = """Здравствуйте 👋
+Информация об аппарате GOLD WATER и бизнес-возможности готова.
+Чтобы продолжить, нажмите на ссылку ниже 👇
 {page}"""
 
-dm_text_both = """Assalomu alaykum! 😊
-GOLD WATER — toza suv apparatlari: narxlar va BYD aksiyasi 👇
-Здравствуйте! Цены, описание аппарата и акция BYD — по ссылке 👇
+dm_text_both = """Ассалому алайкум 👋
+GOLD WATER сув аппарати ва бизнес имконияти ҳақида маълумот тайёр.
+Давом этиш учун пастдаги ҳаволани босинг 👇
 {page}"""
