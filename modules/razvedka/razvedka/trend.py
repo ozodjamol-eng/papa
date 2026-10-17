@@ -88,7 +88,8 @@ def ask(prompt: str, model: str, max_searches: int, key: str | None = None, post
     messages = [{"role": "user", "content": prompt}]
     usage = {"input_tokens": 0, "output_tokens": 0, "searches": 0}
     for _ in range(4):
-        d = post({"model": model, "max_tokens": 4000, "system": CONTEXT, "messages": messages,
+        # 17.10: модель сначала «думает» (thinking) — при 4000 весь лимит уходил на размышления, ответ был пустым
+        d = post({"model": model, "max_tokens": 16000, "system": CONTEXT, "messages": messages,
                   "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": max_searches}]}, key)
         u = d.get("usage") or {}
         usage["input_tokens"] += int(u.get("input_tokens", 0))
@@ -99,7 +100,7 @@ def ask(prompt: str, model: str, max_searches: int, key: str | None = None, post
             continue
         text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
         if not text:
-            raise TrendError(f"пустой ответ ИИ: {str(d)[:200]}")
+            raise TrendError(f"пустой ответ ИИ (stop={d.get('stop_reason')}, вывод={u.get('output_tokens')})")
         return text, usage
     raise TrendError("ИИ не закончил ответ за 4 шага")
 
