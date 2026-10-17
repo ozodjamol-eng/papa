@@ -29,7 +29,8 @@ PUB = os.environ.get("PAPA_RAZVEDKA_PUB", "/var/lib/papa-razvedka-pub")
 def dossier_text() -> str:
     from . import dossier
     c = cfg()
-    return dossier.render(dossier.build(store.connect(DB), int(c.get("dossier_days", 14)), int(c.get("dossier_big", 6))))
+    return dossier.render(dossier.build(store.connect(DB), int(c.get("dossier_days", 14)), int(c.get("dossier_big", 6)),
+                                        own_usernames=c.get("own_channels", [])))
 
 
 def build() -> tuple[str, dict]:

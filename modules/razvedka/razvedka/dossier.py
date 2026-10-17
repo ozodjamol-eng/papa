@@ -76,8 +76,12 @@ def profile(ps: list[dict], days: int, own: bool = False) -> dict | None:
     }
 
 
-def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None) -> dict:
+def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None, own_usernames=()) -> dict:
     posts, chans = load(db, days, now)
+    mine = {u.lower().lstrip("@") for u in own_usernames}
+    for ch in chans.values():                          # наш канал мог попасть в базу из папки источников (is_own=0)
+        if (ch.get("username") or "").lower() in mine:
+            ch["is_own"] = 1
     by_ch = defaultdict(list)
     for p in posts:
         by_ch[p["channel_id"]].append(p)
