@@ -246,6 +246,12 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=has_audio)
     src = source_of(msgs[0])
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot), source=src)
+    from .text import link_junk
+    ents = next((x.get("entities") or x.get("caption_entities") for x in msgs if x.get("text") or x.get("caption")), None)
+    own = tuple(c.get("username", "") for c in cfg["channels"].values())
+    junk = link_junk(text, ents, own)
+    if junk:
+        store.update(db, mid, junk=json.dumps(junk, ensure_ascii=False))
     if src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)

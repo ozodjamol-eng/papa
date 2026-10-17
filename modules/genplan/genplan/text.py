@@ -9,6 +9,55 @@ from . import human, translit
 MENTION = re.compile(r"(?<![\w.])@[A-Za-z][A-Za-z0-9_]{3,31}\b")
 TME = re.compile(r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/[^\s)]+", re.I)
 EMPTY_LABEL = re.compile(r"^[\s👉➡️🔗📢✅❗️|:—–-]*$")
+# 17.10: строки-«хвосты» источника без @: «Батафсил 👉 Тезкор24», «Подробнее: …»
+MORE_LINE = re.compile(r"^\W*(батафсил|batafsil|подробнее|тўлиқ|to['ʻ’]?liq)\b", re.I)
+LINK_WORDS = re.compile(r"(батафсил|batafsil|подробнее|бот\b|bot\b|instagram|инстаграм|youtube|ютуб|tiktok|тикток|facebook|сайт|"
+                        r"sayt|канал|kanal|обуна|obuna|қўшил|qo['ʻ’]?shil|подпис|юклаб|yuklab|топувчи|topuvchi)", re.I)
+
+
+def _u16(text: str, off: int, length: int) -> tuple[int, int]:
+    """Смещения Telegram (UTF-16) → индексы строки Python."""
+    b = (text or "").encode("utf-16-le")
+    start = len(b[:off * 2].decode("utf-16-le", "ignore"))
+    return start, start + len(b[off * 2:(off + length) * 2].decode("utf-16-le", "ignore"))
+
+
+def link_junk(text: str, entities: list | None, own: tuple[str, ...] = ()) -> list[str]:
+    """Решение 17.10 (А): чужие ссылки, спрятанные в слово («Тезкор24», «Инстаграм», «Yuklovchibot»), регулярка не видит —
+    смотрим ссылки Telegram (entities). Строка с чужой ссылкой уходит целиком, если это «хвост»: короткая, рекламная
+    или ссылка занимает её большую часть. Ссылка внутри обычной фразы — слово остаётся (ссылка всё равно пропадёт)."""
+    own_l = {o.lower().lstrip("@") for o in own}
+    lines = (text or "").split("\n")
+    starts, pos = [], 0
+    for ln in lines:
+        starts.append(pos)
+        pos += len(ln) + 1
+    junk = []
+    for e in entities or []:
+        typ = e.get("type")
+        if typ not in ("text_link", "url", "mention", "text_mention"):
+            continue
+        a, b = _u16(text, int(e.get("offset", 0)), int(e.get("length", 0)))
+        word = text[a:b]
+        target = (e.get("url") or word).strip().lower().split("?")[0].rstrip("/")
+        name = target.rsplit("/", 1)[-1].lstrip("@")
+        if name in own_l:                                   # наш канал — ссылку оставляем
+            continue
+        i = max(k for k, st in enumerate(starts) if st <= a)
+        line = lines[i]
+        rest = re.sub(r"[\W_]+", " ", line.replace(word, " ")).strip()
+        if len(rest) <= 40 or LINK_WORDS.search(line) or len(word.strip()) >= 0.5 * len(line.strip()):
+            if line.strip() and line not in junk:
+                junk.append(line)
+    return junk
+
+
+def drop_lines(text: str, junk) -> str:
+    if not junk:
+        return text or ""
+    bad = {j.strip() for j in junk if j.strip()}
+    out = [ln for ln in (text or "").split("\n") if ln.strip() not in bad]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
 def strip_sources(text: str, keep: tuple[str, ...] = ()) -> str:
@@ -16,7 +65,7 @@ def strip_sources(text: str, keep: tuple[str, ...] = ()) -> str:
     t = TME.sub(lambda m: m.group(0) if m.group(0).rsplit("/", 1)[-1].lower() in keep_l else "", text or "")
     t = MENTION.sub(lambda m: m.group(0) if m.group(0)[1:].lower() in keep_l else "", t)
     lines = [ln.rstrip() for ln in t.splitlines()]
-    lines = [ln for ln in lines if not (ln.strip() and EMPTY_LABEL.match(ln))]
+    lines = [ln for ln in lines if not (ln.strip() and (EMPTY_LABEL.match(ln) or (MORE_LINE.match(ln) and len(ln) <= 60)))]
     out = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     return re.sub(r"[ \t]{2,}", " ", out)
 
@@ -124,13 +173,13 @@ def clean_hashtags(text: str) -> str:
 
 
 def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...] = (),
-             hook: str = "", limit: int | None = None, tag: str = "") -> str:
+             hook: str = "", limit: int | None = None, tag: str = "", junk=(), signatures=()) -> str:
     """Текст поста: чужие подписи и хэштеги убраны, первой строкой — наш хэштег рубрики, внизу — хук и наша подпись.
     При лимите (подпись к медиа — 1024) сокращается текст, а не подпись."""
     if is_ad:
         body = (text or "").strip()
         return f"{tag}\n{body}" if tag and not body.startswith(tag) else body
-    body = strip_sources(human.clean(text), keep=own)
+    body = strip_sources(human.clean(drop_lines(text, junk)), keep=own)
     body, _ = translit.auto(body)
     body = clean_hashtags(body)
     body = strip_promo(body)
@@ -140,7 +189,7 @@ def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...
         lines = body.rstrip().splitlines()
         if lines and len(lines[-1]) <= 90 and CTA.search(lines[-1]):
             hook, body = lines[-1].strip(), "\n".join(lines[:-1]).rstrip()
-    for line in (signature, hook):
+    for line in (signature, hook, *signatures):          # наша подпись (любой из вариантов) не дублируется
         if line:
             body = "\n".join(ln for ln in body.splitlines() if ln.strip() != line.strip()).strip()
     footer = "\n".join(x for x in (signature, hook) if x)      # как в GENPLAN 5: текст → @юзернейм → призыв

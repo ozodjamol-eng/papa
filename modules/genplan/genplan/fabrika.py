@@ -110,7 +110,9 @@ def process_link(bot, db, cfg: dict, env: dict, p: dict, work_root: Path = STATE
 
 def process_ai(bot, db, cfg: dict, p: dict) -> str:
     m = store.get(db, int(p["mid"]))
-    text = ai.rewrite(db, m["text"], cfg["channels"][m["channel"]]["title"])
+    from .text import drop_lines
+    junk = json.loads(m["junk"] or "[]") if "junk" in m.keys() else []
+    text = ai.rewrite(db, drop_lines(m["text"], junk), cfg["channels"][m["channel"]]["title"])
     store.update(db, m["id"], text=text)
     t, kb = hub.card(db, cfg, m["id"])
     r = bot("sendMessage", chat_id=int(p["owner_chat"]), text="🤖 Текст переписан ИИ — проверьте:\n\n" + t,
