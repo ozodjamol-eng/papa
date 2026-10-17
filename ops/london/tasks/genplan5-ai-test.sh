@@ -20,7 +20,7 @@ for name, body in samples.items():
     try:
         d = json.loads(urllib.request.urlopen(req, timeout=30).read())
         raw = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
-        print(f"{name}: ответ ИИ → {raw!r}")
+        print(f"{name}: ответ ИИ → {raw!r} | stop={d.get('stop_reason')} | блоки={[b.get('type') for b in d.get('content', [])]} | usage={d.get('usage')}")
         print(f"   итог хука → {h._papa_hook(body) or '(без хука)'}")
     except urllib.error.HTTPError as e:
         print(f"{name}: ОШИБКА {e.code} {e.read()[:200]!r}")
