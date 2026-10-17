@@ -67,10 +67,23 @@ class PickerG5(Base):
         self.h(dm(10, "Шифокор маслаҳати", photo_uid="h1"))
         _, kb = hub.card(self.db, CFG, 1, at("08:00"))
         L = labels(kb)
-        for b in ("📰 Новости", "🎬 Видео", "😂 Юмор", "🎵 Музыка", "🎭 Культура / просвещение", "💬 Интерактив",
+        for b in ("📰 Новости", "🎬 Видео", "😂 Юмор", "🎵 Музыка", "🎭 Культура / просвещение",
                   "💡 Фойдали", "❤️ Соғлиқ / саломатлик", "🚨 Срочный пост", "🌙 Якуний пост"):
             self.assertIn(b, L)
+        self.assertNotIn("💬 Интерактив", L)                        # 17.10: на его месте — умное время
+        self.assertTrue(any(x.startswith("🧠 Умное время") for x in L))
         self.assertNotIn("📺 Другой канал", L)
+
+    def test_smart_one_tap(self):
+        now = at("08:00")
+        self.h(dm(10, "Терма жамоа чемпион бўлди", photo_uid="s1"))
+        _, kb = hub.card(self.db, CFG, 1, now)
+        btn = next(b for row in kb["inline_keyboard"] for b in row if b["text"].startswith("🧠 Умное время"))
+        self.tap(btn["callback_data"], now)
+        m = store.get(self.db, 1)
+        self.assertEqual(m["status"], "queued")
+        from genplan import service
+        self.assertEqual(service.tag_for(CFG, CFG["channels"]["davra"], m), "#СПОРТ")   # хэштег — по смыслу
 
     def test_health_one_tap_one_tag(self):
         now = at("08:00")

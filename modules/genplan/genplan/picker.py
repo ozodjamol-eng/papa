@@ -189,9 +189,15 @@ def item(group: str, idx: int):
     return lst[idx] if 0 <= idx < len(lst) else None
 
 
-def root_kb(mid: int, has_final: bool) -> list:
-    """Экран 1 — как «➕ ПОСТ» в пульте Хўжаобода."""
-    cells = [{"text": label, "callback_data": f"pg:{mid}:{code}:1"} for code, label, _ in GROUPS]
+ROOT_HIDDEN = {"community"}       # 17.10 владелец: «Интерактив» не работает — на его месте «🧠 Умное время»
+
+
+def root_kb(mid: int, has_final: bool, smart_btn: dict | None = None) -> list:
+    """Экран 1 — как «➕ ПОСТ» в пульте Хўжаобода; вместо «Интерактив» — «🧠 Умное время» (одно нажатие:
+    рубрику и время бот ставит сам, хэштег — по смыслу текста)."""
+    cells = [{"text": label, "callback_data": f"pg:{mid}:{code}:1"} for code, label, _ in GROUPS if code not in ROOT_HIDDEN]
+    if smart_btn:
+        cells.append(smart_btn)
     rows = [cells[i:i + 2] for i in range(0, len(cells), 2)]
     rows.append([{"text": "💡 Фойдали", "callback_data": f"pg:{mid}:useful:1"},
                  {"text": "❤️ Соғлиқ / саломатлик", "callback_data": f"pi:{mid}:health:0"}])

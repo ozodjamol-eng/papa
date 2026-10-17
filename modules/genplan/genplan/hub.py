@@ -119,7 +119,11 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — выйдет сам, когда у рубрики будет пустой слот{dup}",
                 {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
-    kb = picker.root_kb(mid, "Якуний пост" in rs)
+    st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid) if m["rubric"] else None
+    sbtn = {"text": f"🧠 Умное время · {st[0]:%H:%M}" if st and st[0].date() == now.date()
+            else (f"🧠 Умное время · {st[0]:%d.%m %H:%M}" if st else "🧠 Умное время"),
+            "callback_data": f"sm:{mid}:{int(st[0].timestamp())}" if st else f"sm:{mid}"}
+    kb = picker.root_kb(mid, "Якуний пост" in rs, sbtn)
     kb += [[{"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
            [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
@@ -518,7 +522,7 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             disable_web_page_preview=True)
 
     if kind in ("sm", "tm", "nx"):
-        t = dt.datetime.fromtimestamp(int(arg[0]), plan.TZ) if arg else None
+        t = dt.datetime.fromtimestamp(int(arg[0]), plan.TZ) if arg and arg[0] else None
         if t is None:                                   # старая кнопка «⏰ Ближайший слот»
             st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid)
             t = st[0] if st else None
