@@ -10,7 +10,8 @@
     "evening-digest-trace",
     "evening-digest-trace2",
     "evening-digest-trace3",
-    "evening-digest-find"
+    "evening-digest-find",
+    "genplan5-period-find"
   ],
   "approve": [
     "genplan5-overdue-skip",
