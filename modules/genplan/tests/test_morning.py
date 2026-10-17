@@ -130,12 +130,19 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(morning.season(dt.date(2026, 12, 1)), "winter")
         ch = CFG["channels"]["davra"]
         cap = morning.greeting_caption(ch, morning.opts(ch), FRI)
-        # 17.10: постоянный шаблон владельца; юзернейм НАД хуком
-        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🌅 Ассалому алайкум ва раҳматуллоҳи ва барокатуҳ!"))
-        self.assertIn(f"📅 Бугун, {FRI.day} {morning.MONTHS_UZ[FRI.month - 1]}", cap)
-        self.assertIn("☀️ Жума тонги муборак бўлсин, азизларим!", cap)
-        self.assertTrue(cap.endswith("🎉 @kattadavrauz\n❤️ Дўстларга ҳам улашинг"))
+        # 17.10: шаблоны владельца (12 вариантов, у каналов разные в один день); юзернейм НАД хуком
+        body, hook = morning.template_pick(ch, FRI)
+        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n" + body.split("\n")[0]))
+        self.assertTrue(cap.endswith("🎉 @kattadavrauz\n" + hook))
+        self.assertNotIn("{", cap)
         self.assertLessEqual(len(cap), 1024)
+        for k in range(12):                                         # три канала в один день — три разных текста
+            d = FRI + dt.timedelta(days=k)
+            firsts = {morning.template_pick(CFG["channels"][c], d)[0] for c in ("davra", "xojaobod", "paparazzi")}
+            self.assertEqual(len(firsts), 3)
+        day0 = next(FRI + dt.timedelta(days=k) for k in range(12)
+                    if morning.template_pick(ch, FRI + dt.timedelta(days=k))[0].startswith("🌅 Ассалому"))
+        self.assertIn(f"📅 Бугун, {day0.day} {morning.MONTHS_UZ[day0.month - 1]}", morning.template_pick(ch, day0)[0])
         ai_ch = {**ch, "morning": {**ch["morning"], "ai_greeting": True}}      # старый путь (ИИ) — по флагу
         cap = morning.greeting_caption(ai_ch, morning.opts(ai_ch), FRI)
         self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
