@@ -21,7 +21,8 @@
     "audit-install",
     "audit",
     "digest-now",
-    "razvedka-qr-check"
+    "razvedka-qr-check",
+    "ai-compare"
   ],
   "approve": [
     "morning-pool-clear",
