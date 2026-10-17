@@ -70,7 +70,7 @@ def _gemini(system: str, user: str, http=None) -> str:
 
 
 def _claude(system: str, user: str, http=None) -> str:
-    body = {"model": MODEL, "max_tokens": 800, "system": system, "messages": [{"role": "user", "content": user}]}
+    body = {"model": MODEL, "max_tokens": 2500,  # 17.10: модель сначала «думает» — запас, иначе ответ пустой "system": system, "messages": [{"role": "user", "content": user}]}
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
                                  headers={"content-type": "application/json", "anthropic-version": "2023-06-01",
                                           "x-api-key": os.environ["ANTHROPIC_API_KEY"]})

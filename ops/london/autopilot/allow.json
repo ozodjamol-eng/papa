@@ -23,7 +23,8 @@
     "cleanup",
     "nexus-old-stop",
     "nexus-old-restore",
-    "genplan5-ai-hook"
+    "genplan5-ai-hook",
+    "genplan5-ai-tokens"
   ],
   "deny_patterns": [
     "-key$",
