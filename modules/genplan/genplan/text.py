@@ -15,7 +15,8 @@ MORE_LINE = re.compile(r"^\W*(батафсил|batafsil|подробнее|тў�
 SOURCE_LINE = re.compile(r"^\W*(manba|манба|источник|source|manbaa)\b|(izohlarda|изоҳларда|изохларда|в комментариях|"
                          r"комментарийда|izohda|изоҳда)", re.I)
 SOCIAL = {"instagram", "инстаграм", "insta", "youtube", "ютуб", "tiktok", "тикток", "telegram", "телеграм", "facebook",
-          "фейсбук", "vk", "вк", "twitter", "x", "threads", "ok", "одноклассники", "rutube", "likee", "va", "и", "ва"}
+          "фейсбук", "vk", "вк", "veb", "веб", "web", "sayt", "сайт", "site", "website", "mediabank", "медиабанк",
+          "ok.ru", "whatsapp", "ватсап", "tg", "twitter", "x", "threads", "ok", "одноклассники", "rutube", "likee", "va", "и", "ва"}
 
 
 def source_tail(line: str) -> bool:

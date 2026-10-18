@@ -218,3 +218,15 @@ class SourceTailTest(unittest.TestCase):
         self.assertFalse(T.source_tail("YouTube янги функцияни ишга туширди"))
         self.assertTrue(T.source_tail("Instagram | YouTube | Tiktok"))
         self.assertTrue(T.source_tail("Манба: изоҳларда 👇"))
+
+
+class SocialRowTest(unittest.TestCase):
+    """18.10: «Telegram|Instagram|Facebook|Veb-sayt| / YouTube|Mediabank» (MAQOM MARKAZI) — хвост, уходит."""
+    def test_pipe_row(self):
+        from genplan import text as T
+        t = ("Tarixga sayohat qiling. Sohibqironning buyuk taqdiri sari ilk qadamlariga guvoh bo‘ling!\n\n"
+             "Telegram|Instagram|Facebook|Veb-sayt|\nYouTube|Mediabank")
+        out = T.finalize(t, "@kattadavrauz", own=("kattadavrauz",))
+        self.assertIn("Тарихга", out)
+        for bad in ("Телеграм", "Инстаграм", "Веб", "YouTube", "Медиабанк", "Telegram"):
+            self.assertNotIn(bad, out)
