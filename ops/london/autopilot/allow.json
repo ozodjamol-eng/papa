@@ -15,7 +15,8 @@
     "genplan5-period-find2",
     "genplan5-ai-check",
     "genplan5-ai-test",
-    "xotira-find"
+    "xotira-find",
+    "xotira-inspect"
   ],
   "approve": [
     "genplan5-overdue-skip",
