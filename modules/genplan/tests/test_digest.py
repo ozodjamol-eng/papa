@@ -57,8 +57,10 @@ class TestDigest(unittest.TestCase):
         self.assertLessEqual(len(m["photo_caption"]), 1024)
         self.assertEqual([s["url"] for s in m["news_sources"]], ["https://kun.uz/news/1"])     # выдуманная ссылка выброшена
         txt = (out / "digest.txt").read_text(encoding="utf-8")
-        for part in ("КЕЧКИ ДАЙЖЕСТ | 16 октябрь 2026", "Андижонда янги кўприк очилди", "Хўжаобод: +18°", "AQI 63",
-                     "Эртага Хўжаободда: +10…+23°", "1 USD = 12 650,43 сўм (▼ 12,40)", "@xojaobodcity24"):
+        for part in ("КЕЧКИ ДАЙЖЕСТ", "📅 16 октябрь 2026, жума", "1️⃣ Андижонда янги кўприк очилди", "🔗 Манбалар: Kun.uz",
+                     "• Хўжаобод — +18°", "🫁 Ҳаво сифати: ўртача (AQI 63)", "+10…+23°",
+                     "🇺🇸 USD — 12 650,43 сўм 📉 −12,40", "RUB — 156,12 сўм ➖ ўзгармади",
+                     "📢 Реклама учун: @Ozodjamol", "👉 @xojaobodcity24", "━━━━━━━━━━━━"):
             self.assertIn(part, txt)
         self.assertIn("лента Daryo.uz: RuntimeError", r["errors"])
 
@@ -100,6 +102,12 @@ class TestDigest(unittest.TestCase):
         short, full = digest.compose(NOW.date(), w, digest.rates(fake_get), news * 3)
         self.assertLessEqual(len(short), 1024)
         self.assertIn("@xojaobodcity24", short)
+
+    def test_aqi_once_and_ad_off(self):
+        w = digest.weather(fake_get)
+        short, full = digest.compose(NOW.date(), w, {}, [], ad="")
+        self.assertEqual(full.count("AQI"), 1)
+        self.assertNotIn("Реклама", full)
 
 
 class TestFallback(unittest.TestCase):

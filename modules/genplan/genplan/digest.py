@@ -222,25 +222,43 @@ def _signed(t: int) -> str:
     return f"+{t}" if t > 0 else str(t)
 
 
-def compose(day: dt.date, w: dict, r: dict, news: list[dict]) -> tuple[str, str]:
-    """(подпись к баннеру ≤1024, полный текст)."""
-    head = f"🌙 КЕЧКИ ДАЙЖЕСТ | {date_uz(day)}\nХўжаобод • Андижон • Ўзбекистон"
+WEEKDAYS = ("душанба", "сешанба", "чоршанба", "пайшанба", "жума", "шанба", "якшанба")
+SEP = "━━━━━━━━━━━━"
+AD_DEFAULT = "📢 Реклама учун: @Ozodjamol"
+
+
+def compose(day: dt.date, w: dict, r: dict, news: list[dict], ad: str | None = None) -> tuple[str, str]:
+    """(подпись к баннеру ≤1024, полный текст). Формат 18.10: блоки через разделитель, нумерация новостей,
+    источники одной строкой, AQI один раз, курс со стрелкой 📈/📉, строка рекламы перед прощанием."""
+    head = (f"🌙 КЕЧКИ ДАЙЖЕСТ\n📅 {date_uz(day)}, {WEEKDAYS[day.weekday()]}\n📍 Хўжаобод • Андижон")
+    nums = ("1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣")
+
+    def news_block(lst):
+        lines = [f"{nums[i] if i < len(nums) else str(i + 1) + '.'} {n['t']}" for i, n in enumerate(lst)]
+        srcs = ", ".join(dict.fromkeys(n["src"] for n in lst))
+        return "📰 КУН ЯНГИЛИКЛАРИ\n\n" + "\n".join(lines) + f"\n\n🔗 Манбалар: {srcs}"
+
     parts_full, parts_short = [head], [head]
     if news:
-        lines = [f"• {n['t']} ({n['src']})" for n in news]
-        parts_full.append("📰 КУН ЯНГИЛИКЛАРИ\n" + "\n".join(lines))
-        parts_short.append("📰 КУН ЯНГИЛИКЛАРИ\n" + "\n".join(lines[:3]))
+        parts_full.append(news_block(news))
+        parts_short.append(news_block(news[:3]))
     if w:
-        wl = []
+        wl = ["Ҳозир:"]
         for city, x in w.items():
             word, icon = sky(x["code"], x["night"])
-            aq = f" · ҳаво сифати: {aqi_word(x['aqi'])} (AQI {int(x['aqi'])})" if x.get("aqi") is not None else ""
-            wl.append(f"{city}: {_signed(x['t'])}°, {word} {icon}{aq}")
+            wl.append(f"• {city} — {_signed(x['t'])}°, {word} {icon}")
+        aqis = {city: int(x["aqi"]) for city, x in w.items() if x.get("aqi") is not None}
+        if aqis:
+            if len(set(aqis.values())) == 1:
+                v = next(iter(aqis.values()))
+                wl.append(f"🫁 Ҳаво сифати: {aqi_word(v)} (AQI {v})")
+            else:
+                wl.append("🫁 Ҳаво сифати: " + " · ".join(f"{c} — {aqi_word(v)} (AQI {v})" for c, v in aqis.items()))
         t = w.get("Хўжаобод") or next(iter(w.values()))
         tw, ti = sky(t["tmr"]["code"])
         rain = f", ёғин эҳтимоли {t['tmr']['rain']}%" if t["tmr"].get("rain") is not None else ""
-        wl.append(f"🔜 Эртага Хўжаободда: {_signed(t['tmr']['min'])}…{_signed(t['tmr']['max'])}°, {tw} {ti}{rain}")
-        block = "🌤 ОБ-ҲАВО\n" + "\n".join(wl)
+        wl += ["", "🔜 Эртага, Хўжаобод:", f"{ti} {_signed(t['tmr']['min'])}…{_signed(t['tmr']['max'])}°, {tw}{rain}"]
+        block = "🌤 ОБ-ҲАВО\n\n" + "\n".join(wl)
         parts_full.append(block)
         parts_short.append(block)
     if r:
@@ -248,17 +266,22 @@ def compose(day: dt.date, w: dict, r: dict, news: list[dict]) -> tuple[str, str]
         since = next(iter(r.values())).get("date", "")
         rl = []
         for c, x in r.items():
-            arrow = "▲" if x["diff"] > 0 else "▼" if x["diff"] < 0 else "＝"
-            rl.append(f"{flags.get(c, '')} 1 {c} = {_num(x['rate'])} сўм ({arrow} {_num(abs(x['diff']))})")
-        block = f"💱 МАРКАЗИЙ БАНК КУРСИ{f' ({since} дан)' if since else ''}\n" + "\n".join(rl)
+            d = x["diff"]
+            ch = f"📈 +{_num(d)}" if d > 0 else f"📉 −{_num(abs(d))}" if d < 0 else "➖ ўзгармади"
+            rl.append(f"{flags.get(c, '')} {c} — {_num(x['rate'])} сўм {ch}")
+        block = f"💱 МБ КУРСИ{f' ({since} дан)' if since else ''}\n\n" + "\n".join(rl)
         parts_full.append(block)
         parts_short.append(block)
-    tail = f"Хайрли тун, азиз хўжаободликлар! 🌙\n@{USERNAME}"
-    full = "\n\n".join(parts_full + ([("🔗 Манбалар:\n" + "\n".join(n["url"] for n in news))] if news else []) + [tail])
-    short = "\n\n".join(parts_short + [tail])
+    ad = AD_DEFAULT if ad is None else ad.strip()
+    tail = (f"{ad}\n\n" if ad else "") + f"Хайрли тун, азиз хўжаободликлар! 🌙\n👉 @{USERNAME}"
+    j = lambda ps: f"\n\n{SEP}\n".join(ps + [tail])
+    full = j(parts_full)
+    if news:
+        full += "\n\n🔗 Ҳаволалар:\n" + "\n".join(n["url"] for n in news)
+    short = j(parts_short)
     while len(short) > 1024 and len(parts_short) > 2:          # подпись к фото — максимум 1024
         parts_short.pop(1)
-        short = "\n\n".join(parts_short + [tail])
+        short = j(parts_short)
     return short[:1024], full
 
 
@@ -363,7 +386,7 @@ def build(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) ->
         report["status"] = "INVALID"
         (out / "build-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
         return report
-    caption, full = compose(day, w, r, news)
+    caption, full = compose(day, w, r, news, os.environ.get("DIGEST_AD_TEXT"))
     png = banner(day, w, r, out / "digest.png")
     (out / "digest.txt").write_text(full, encoding="utf-8")
     x = w.get("Хўжаобод") or next(iter(w.values()))
