@@ -480,3 +480,47 @@ class TestPoolEconomy(unittest.TestCase):
         self.add("n1", "new")
         store.kv_set(self.db, f"pool_checks_{self.now.date().isoformat()}", str(morning.DAILY_CAP))
         self.assertFalse(morning.pool_checking(self.db, CFG, self.day, self.now))
+
+
+class OwnBotMorning(unittest.TestCase):
+    """18.10 (владелец): каждый бот — свой сектор. У PaparazziUZ свой бот-пульт — утро публикует он, не главный."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env = mock.patch.dict(os.environ, {"PAPA_GENPLAN_STATE": tmp.name})
+        env.start()
+        self.addCleanup(env.stop)
+        self.db = store.connect(":memory:")
+        service.ERRORS.clear()
+
+    def test_own_bot_uploads_greeting(self):
+        from genplan import bots, fabrika
+        now = at("05:00", FRI) + dt.timedelta(seconds=30)
+        morning.ensure_day(self.db, CFG, "paparazzi", FRI, now)
+        rid = self.db.execute("SELECT id FROM fixed_posts WHERE channel='paparazzi' AND key='greeting'").fetchone()["id"]
+        morning.update(self.db, rid, prepared=1, approved=1, hub_msg=5, text="#ХАЙРЛИ_ТОНГ\nсалом")
+        f = morning.own_file(rid)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"mp4")
+        main, own = Pub(), Pub()
+        calls = []
+        with mock.patch.dict(bots.TOKENS, {"paparazzi": "own-token"}), \
+                mock.patch.object(fabrika, "upload_video", lambda tok, chat, p, cap, kb=None: calls.append((tok, chat, cap)) or {"message_id": 9}):
+            n = asyncio.run(service.tick_morning(self.db, CFG, ENV, {"bot": main, "account": Pub(), "bot:paparazzi": own},
+                                                 now, log=lambda s: None))
+        self.assertEqual(n, 1)
+        self.assertEqual(calls, [("own-token", "@ozodjamoll", "#ХАЙРЛИ_ТОНГ\nсалом")])
+        self.assertEqual(main.sent, [])                         # главный бот в PaparazziUZ не публикует
+        self.assertFalse(f.exists())
+        self.assertEqual(morning.get(self.db, rid)["status"], "done")
+
+    def test_own_bot_without_file_fails_loudly(self):
+        now = at("05:00", FRI) + dt.timedelta(seconds=30)
+        morning.ensure_day(self.db, CFG, "paparazzi", FRI, now)
+        rid = self.db.execute("SELECT id FROM fixed_posts WHERE channel='paparazzi' AND key='greeting'").fetchone()["id"]
+        morning.update(self.db, rid, prepared=1, approved=1, hub_msg=5, text="x")
+        asyncio.run(service.tick_morning(self.db, CFG, ENV, {"bot": Pub(), "account": Pub(), "bot:paparazzi": Pub()},
+                                         now, log=lambda s: None))
+        self.assertEqual(morning.get(self.db, rid)["status"], "failed")
+        self.assertTrue(any("PaparazziUZ" in e for e in service.ERRORS))

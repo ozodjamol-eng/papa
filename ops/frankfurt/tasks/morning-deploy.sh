@@ -21,19 +21,20 @@ except sqlite3.OperationalError:
 PY
 systemctl restart papa-genplan; systemctl restart papa-fabrika; sleep 6
 echo "genplan: $(systemctl is-active papa-genplan) · fabrika: $(systemctl is-active papa-fabrika)"
-set -a; . /etc/papa-genplan/genplan.env; [ -f /etc/papa-genplan/ai.env ] && . /etc/papa-genplan/ai.env; set +a
+set -a; . /etc/papa-genplan/genplan.env; [ -f /etc/papa-genplan/ai.env ] && . /etc/papa-genplan/ai.env; [ -f /etc/papa-genplan/bots.env ] && . /etc/papa-genplan/bots.env; set +a
 $PY - <<'PY'
 import json, os, urllib.request, urllib.parse
-tok = os.environ["GENPLAN_BOT_TOKEN"]
-def tg(m, **p):
+def tg(m, tok=os.environ["GENPLAN_BOT_TOKEN"], **p):
     try:
         with urllib.request.urlopen(f"https://api.telegram.org/bot{tok}/{m}?" + urllib.parse.urlencode(p), timeout=20) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
         return json.loads(e.read() or b"{}")
-me = tg("getMe")["result"]
-for ch in ("@kattadavrauz", "@ozodjamoll"):
-    r = tg("getChatMember", chat_id=ch, user_id=me["id"])
+# 18.10: каждый бот — свой сектор. КАТТА ДАВРА — главный бот, PaparazziUZ — его собственный бот-пульт
+for ch, tok in (("@kattadavrauz", os.environ["GENPLAN_BOT_TOKEN"]),
+                ("@ozodjamoll", os.environ.get("PAPARAZZI_BOT_TOKEN") or os.environ["GENPLAN_BOT_TOKEN"])):
+    me = tg("getMe", tok=tok)["result"]
+    r = tg("getChatMember", tok=tok, chat_id=ch, user_id=me["id"])
     st = (r.get("result") or {})
     ok = st.get("status") == "administrator" and st.get("can_post_messages")
     print(f"{'✅' if ok else '❌'} бот @{me['username']} в {ch}: {st.get('status', r.get('description'))}"

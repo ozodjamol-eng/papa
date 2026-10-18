@@ -249,11 +249,29 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
             if r["error"] in ("не успели подготовить", "не одобрен"):
                 ERRORS.append(f"⚠️ {ch['title']}: {morning.TITLE[r['key']]} не вышел — {r['error']}")
         for r in ready:
-            p = pubs[ch["publisher"]]                    # утро — из хаба, публикует главный бот
+            p = pubs[ch["publisher"]]                    # утро — из хаба; канал со своим ботом — свой бот
             to = morning.target(cfg, env, channel)
             hub_chat = int(env["HUB_CHAT_ID"]) if r["hub_msg"] else None
+            own = pubs.get(f"bot:{channel}")              # 18.10: у канала свой бот-пульт — утро публикует он
+            f = morning.own_file(r["id"])
             try:
-                if ch["publisher"] == "account":
+                if ch["publisher"] == "bot" and own is not None:
+                    if r["hub_msg"]:
+                        if not f.exists():
+                            raise PublishError("нет готового файла видео для бота канала (пересоберите утро: morning-refresh)")
+                        from .fabrika import upload_video
+                        btn = share_button(ch)
+                        try:
+                            from . import bots as _bots
+                            res = upload_video(_bots.TOKENS[channel], to, f, r["text"] or "",
+                                               {"inline_keyboard": [[btn]]} if btn else None)
+                        except Exception as e:  # noqa: BLE001
+                            raise PublishError(str(e)) from e
+                        mid = int(res["message_id"])
+                    else:
+                        mid = own.publish(to, r["text"], button=share_button(ch))
+                    f.unlink(missing_ok=True)
+                elif ch["publisher"] == "account":
                     mid = await p.publish(to, r["text"], hub_chat, r["hub_msg"], bool(r["hub_msg"]))
                 else:
                     mid = p.publish(to, r["text"], hub_chat, r["hub_msg"], bool(r["hub_msg"]), button=share_button(ch))

@@ -875,11 +875,21 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
             src_note = f"🎬 Pixabay #{v['id']} («{v['query']}», {v['duration']} с) — под этот день готового видео нет"
             source = f"pixabay:{v['id']}"
         res = upload(env["GENPLAN_BOT_TOKEN"], int(env["HUB_CHAT_ID"]), out, caption)
+        if ch.get("bot_token_env"):                      # «пульт = канал»: свой бот канала публикует этот файл сам
+            keep = own_file(r["id"])
+            keep.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(out, keep)
         update(db, r["id"], text=caption, hub_msg=int(res["message_id"]), source=source, prepared=1, redo=0,
                error=None, preview_sent=0)
         return f"{src_note}\n{note}"
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def own_file(rid: int) -> Path:
+    """Готовое утреннее видео для канала со своим ботом-пультом (решение владельца 18.10: каждый бот — свой сектор).
+    Файл главного бота другой бот отправить не может, поэтому свой бот канала загружает видео сам."""
+    return Path(os.environ.get("PAPA_GENPLAN_STATE", "/var/lib/papa-genplan")) / "morning-own" / f"{rid}.mp4"
 
 
 def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:

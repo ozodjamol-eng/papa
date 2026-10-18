@@ -51,10 +51,13 @@ def download(url: str, work: Path) -> tuple[Path, str]:
     return vids[0], (info.get("description") or info.get("title") or "").strip()
 
 
-def upload_video(token: str, chat: int, path: Path, caption: str) -> dict:
+def upload_video(token: str, chat, path: Path, caption: str, reply_markup: dict | None = None) -> dict:
     boundary = uuid.uuid4().hex
     parts = []
-    for k, v in (("chat_id", str(chat)), ("caption", caption[:1024]), ("supports_streaming", "true")):
+    fields = [("chat_id", str(chat)), ("caption", caption[:1024]), ("supports_streaming", "true")]
+    if reply_markup:
+        fields.append(("reply_markup", json.dumps(reply_markup, ensure_ascii=False)))
+    for k, v in fields:
         parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
     parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="video"; filename="video.mp4"\r\n'
                  f"Content-Type: video/mp4\r\n\r\n".encode() + path.read_bytes() + b"\r\n")
