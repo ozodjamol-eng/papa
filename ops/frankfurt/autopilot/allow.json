@@ -25,7 +25,8 @@
     "ai-compare",
     "hear",
     "deliver",
-    "xotira-restart"
+    "xotira-restart",
+    "xotira-scan"
   ],
   "approve": [
     "morning-pool-clear",

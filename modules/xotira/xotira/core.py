@@ -78,3 +78,51 @@ def parse(text: str, today: dt.date | None = None) -> list[dict]:
 def caption(people: list[dict], footer: str) -> str:
     lines = [f"{p['name']} {p['born']}-{p['died']}-{p['age']} ёш" for p in people]
     return "\n\n".join(lines + [footer])
+
+
+# ---------- повторы (18.10, решение владельца) ----------
+import difflib  # noqa: E402
+
+_FOLD = str.maketrans({"ў": "у", "қ": "к", "ғ": "г", "ҳ": "х", "ё": "е", "э": "е", "ъ": "", "ь": "", "й": "и"})
+OLD = re.compile(r"Марҳум:\s*(?P<n>.+?)\s*\n.*?Туғилган сана:\s*(?P<b>.+?)\s*\n.*?Вафот этган сана:\s*(?P<d>.+?)(?:\n|$)", re.S)
+
+
+def key(name: str) -> str:
+    """Ключ имени для сравнения: кириллица, без регистра и знаков, ў/у қ/к ғ/г ҳ/х — одно и то же."""
+    n = _cyr(name or "").lower().translate(_FOLD)
+    return " ".join(re.sub(r"[^a-zа-я ]+", " ", n).split())
+
+
+def extract(caption_text: str) -> list[dict]:
+    """Люди из поста канала (новый формат «ФИО 1942-2005-63 ёш» и старый «Марҳум: … Туғилган сана: …»).
+    Ничего не бросает: непонятное просто пропускается."""
+    out = []
+    t = caption_text or ""
+    for m in OLD.finditer(t):
+        b, d = re.search(r"\d{4}", m["b"]), re.search(r"\d{4}", m["d"])
+        if b and d:
+            out.append({"name": m["n"].strip(), "born": int(b[0]), "died": int(d[0])})
+    if out:
+        return out
+    for line in t.splitlines():
+        m = YEARS.search(line)
+        if not m:
+            continue
+        name = re.sub(r"[^\w\s'ʻ‘’-]+", " ", line[:m.start()]).strip()
+        if len(key(name)) >= 3:
+            out.append({"name": name, "born": int(m.group(2)), "died": int(m.group(4))})
+    return out
+
+
+def compare(person: dict, rec: dict) -> str | None:
+    """'same' — то же имя и те же годы; 'similar' — имя похоже (или то же) — проверить глазами; None — другой человек."""
+    a, b = key(person["name"]), key(rec["name"])
+    same_years = person["born"] == rec["born"] and person["died"] == rec["died"]
+    if a == b and same_years:
+        return "same"
+    ratio = difflib.SequenceMatcher(None, a, b).ratio()
+    if same_years and ratio >= 0.85:
+        return "same" if ratio >= 0.93 else "similar"
+    if a == b or (ratio >= 0.9 and abs(person["died"] - rec["died"]) <= 1):
+        return "similar"
+    return None

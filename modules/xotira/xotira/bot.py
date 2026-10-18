@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS subs (
     id INTEGER PRIMARY KEY, uid INTEGER NOT NULL, who TEXT, photo TEXT NOT NULL, caption TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending', created TEXT NOT NULL, decided TEXT, channel_msg INTEGER, owner_msgs TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+-- 18.10: база канала для проверки повторов (история — профилем Разведки, новые посты — сам бот)
+CREATE TABLE IF NOT EXISTS posts (msg_id INTEGER NOT NULL, name TEXT NOT NULL, key TEXT NOT NULL, born INTEGER,
+    died INTEGER, date TEXT, PRIMARY KEY (msg_id, key));
+CREATE INDEX IF NOT EXISTS idx_posts_died ON posts(died);
 """
 DAY_LIMIT = 5
 
@@ -38,6 +42,8 @@ T_DONE = "🕊 №{n} хотира пости {ch} каналига жойлан
 T_REJECT = "№{n} аризангиз жойланмади. Маълумотни текшириб, қайта юборишингиз мумкин: /start"
 T_LIMIT = "Бугун учун ариза чегараси тўлди. Эртага қайта юборинг ёки админга ёзинг: @Ozodjamol"
 T_CANCEL = "❌ Бекор қилинди. Янгидан бошлаш учун: /start"
+T_EXISTS = ("🕊 Бу хотира {ch} каналида аввал жойланган:\n{links}\n\nАгар бу бошқа инсон бўлса — админ кўриб чиқади, "
+            "сизга хабар келади.")
 
 KB_FLOW = {"inline_keyboard": [[{"text": "⬅️ Орқага", "callback_data": "u:back"},
                                 {"text": "❌ Бекор қилиш", "callback_data": "u:cancel"}]]}
@@ -59,7 +65,19 @@ def connect(path: str) -> sqlite3.Connection:
     db = sqlite3.connect(path, timeout=15)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    if "report" not in {r[1] for r in db.execute("PRAGMA table_info(subs)")}:
+        db.execute("ALTER TABLE subs ADD COLUMN report TEXT")
     return db
+
+
+def index_post(db, msg_id: int, text: str, date: str | None = None) -> int:
+    """Пост канала → в базу повторов. Возвращает, сколько людей нашлось в подписи."""
+    people = core.extract(text)
+    for p in people:
+        db.execute("INSERT OR REPLACE INTO posts VALUES (?,?,?,?,?,?)",
+                   (msg_id, p["name"], core.key(p["name"]), p["born"], p["died"], date or now()))
+    db.commit()
+    return len(people)
 
 
 class Api:
@@ -167,27 +185,74 @@ class Bot:
         if n_today >= DAY_LIMIT and chat not in self.owners:
             self.api("sendMessage", chat_id=chat, text=T_LIMIT)
             return "limit"
-        cap = core.caption(json.loads(u["people"]), self.channel)
-        cur = self.db.execute("INSERT INTO subs(uid, who, photo, caption, created) VALUES (?,?,?,?,?)",
-                              (chat, who, u["photo"], cap, now()))
+        people = json.loads(u["people"])
+        cap = core.caption(people, self.channel)
+        dup, lines, links = self.check(people)
+        status = "duplicate" if dup and links else "pending"
+        cur = self.db.execute("INSERT INTO subs(uid, who, photo, caption, created, status, report) VALUES (?,?,?,?,?,?,?)",
+                              (chat, who, u["photo"], cap, now(), status, "\n".join(lines)))
         n = cur.lastrowid
         self.db.commit()
         self.reset(chat)
         self.notify_owners(n)
+        if status == "duplicate":
+            self.api("sendMessage", chat_id=chat, text=T_EXISTS.format(ch=self.channel, links="\n".join(dict.fromkeys(links))))
+            return "duplicate"
         self.api("sendMessage", chat_id=chat, text=T_SENT.format(n=n, ch=self.channel))
         return "sent"
 
+    # ---------- проверка повторов ----------
+    def link(self, msg_id: int) -> str:
+        return f"https://t.me/{self.channel.lstrip('@')}/{msg_id}"
+
+    def check(self, people: list[dict]) -> tuple[bool, list[str], list[str]]:
+        """→ (все люди — точный повтор?, строки отчёта владельцу, ссылки на найденные посты)."""
+        n_posts = self.db.execute("SELECT COUNT(DISTINCT msg_id) FROM posts").fetchone()[0]
+        lines, links, all_same = [], [], True
+        for p in people:
+            found_same, found_sim = [], []
+            for r in self.db.execute("SELECT * FROM posts WHERE died BETWEEN ? AND ?", (p["died"] - 1, p["died"] + 1)):
+                c = core.compare(p, dict(r))
+                (found_same if c == "same" else found_sim if c == "similar" else []).append(r)
+            if not found_same:                                   # то же имя, но годы другие — тоже показать
+                k = core.key(p["name"])
+                found_sim += [r for r in self.db.execute("SELECT * FROM posts WHERE key=?", (k,))
+                              if r["msg_id"] not in {x["msg_id"] for x in found_sim}]
+            for s in self.db.execute("SELECT id, caption FROM subs WHERE status IN ('pending','working')"):
+                if any(core.compare(p, q) == "same" for q in core.extract(s["caption"])):
+                    found_same.append({"msg_id": None, "sub": s["id"], "name": p["name"], "born": p["born"], "died": p["died"]})
+            who = f"{p['name']} {p['born']}-{p['died']}"
+            if found_same:
+                r = found_same[0]
+                if r["msg_id"]:
+                    links.append(self.link(r["msg_id"]))
+                    lines.append(f"⚠️ ПОВТОР: {who} — уже в канале 👉 {self.link(r['msg_id'])}")
+                else:
+                    lines.append(f"⚠️ ПОВТОР: {who} — уже ждёт одобрения (№{r['sub']})")
+            else:
+                all_same = False
+                for r in found_sim[:2]:
+                    lines.append(f"🔎 Похоже: {r['name']} {r['born']}-{r['died']} 👉 {self.link(r['msg_id'])}")
+        head = f"📋 Проверено постов канала: {n_posts}" if n_posts else "📋 База канала ещё не загружена — проверить повторы нельзя"
+        if not any(x.startswith(("⚠️", "🔎")) for x in lines) and n_posts:
+            lines.append("✅ Повторов нет")
+        return all_same and bool(people), [head] + lines, links
+
     # ---------- владелец ----------
     def owner_card(self, s) -> str:
-        return f"🕊 №{s['id']} · ариза: {s['who']}\n\n{s['caption']}"
+        rep = s["report"] if "report" in s.keys() and s["report"] else ""
+        tail = "⏳ Ждёт вашего одобрения" if s["status"] == "pending" else (
+            "🚫 Человеку ответили «уже есть». Если это другой человек — «Всё равно жойлаш»" if s["status"] == "duplicate" else "")
+        return f"🕊 №{s['id']} · ариза: {s['who']}\n\n{s['caption']}\n\n{rep}\n{tail}".strip()
 
     def notify_owners(self, n: int) -> None:
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
         sent = {}
         for o in self.owners:
             try:
-                r = self.api("sendPhoto", chat_id=o, photo=s["photo"], caption=self.owner_card(s)[:1024],
-                             reply_markup=kb_owner(n))
+                kb = kb_owner(n) if s["status"] == "pending" else {"inline_keyboard": [[
+                    {"text": "✅ Всё равно жойлаш", "callback_data": f"o:ok:{n}"}]]}
+                r = self.api("sendPhoto", chat_id=o, photo=s["photo"], caption=self.owner_card(s)[:1024], reply_markup=kb)
                 sent[str(o)] = r["message_id"]
             except Exception as e:  # noqa: BLE001 — владелец не нажал «Старт» в боте
                 print(f"owner {o}: {e}", flush=True)
@@ -204,11 +269,11 @@ class Bot:
 
     def decide(self, cq: dict, ok: bool, n: int) -> str:
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
-        if s is None or s["status"] != "pending":
+        if s is None or s["status"] not in ("pending", "duplicate"):
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Аввал кўриб чиқилган")
             return "dup"
         # сначала отмечаем — двойное нажатие не опубликует дважды
-        self.db.execute("UPDATE subs SET status=?, decided=? WHERE id=? AND status='pending'",
+        self.db.execute("UPDATE subs SET status=?, decided=? WHERE id=? AND status IN ('pending','duplicate')",
                         ("working" if ok else "rejected", now(), n))
         self.db.commit()
         mark = "❌ РАД ЭТИЛДИ"
@@ -216,13 +281,14 @@ class Bot:
             try:
                 r = self.api("sendPhoto", chat_id=self.channel, photo=s["photo"], caption=s["caption"])
             except Exception as e:  # noqa: BLE001
-                self.db.execute("UPDATE subs SET status='pending' WHERE id=?", (n,))
+                self.db.execute("UPDATE subs SET status=? WHERE id=?", (s["status"], n))
                 self.db.commit()
                 self.api("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True,
                          text=f"Каналга юбориб бўлмади: бот {self.channel} да админми? ({e})"[:190])
                 return "fail"
             self.db.execute("UPDATE subs SET status='published', channel_msg=? WHERE id=?", (r["message_id"], n))
             self.db.commit()
+            index_post(self.db, r["message_id"], s["caption"])
             link = f"https://t.me/{self.channel.lstrip('@')}/{r['message_id']}"
             mark = f"✅ ЖОЙЛАНДИ\n{link}"
             self.tell(s["uid"], T_DONE.format(n=n, ch=self.channel, link=link))
@@ -270,7 +336,17 @@ class Bot:
         self.start(chat)                                   # «Орқага» и кнопки старого бота — начать заново
         return "start"
 
+    def on_channel_post(self, post: dict) -> str | None:
+        """Пост в канале Хотира (через бота или вручную владельцем) → в базу повторов."""
+        if (post.get("chat", {}).get("username") or "").lower() != self.channel.lstrip("@").lower():
+            return None
+        text = post.get("caption") or post.get("text") or ""
+        return f"indexed:{index_post(self.db, post['message_id'], text)}"
+
     def handle(self, upd: dict) -> str | None:
+        for k in ("channel_post", "edited_channel_post"):
+            if k in upd:
+                return self.on_channel_post(upd[k])
         if "message" in upd:
             return self.on_message(upd["message"])
         if "callback_query" in upd:
@@ -292,7 +368,7 @@ def run() -> None:
     off = int((db.execute("SELECT v FROM kv WHERE k='offset'").fetchone() or [0])[0])
     while True:
         try:
-            ups = api("getUpdates", offset=off, timeout=30, allowed_updates=["message", "callback_query"])
+            ups = api("getUpdates", offset=off, timeout=30, allowed_updates=["message", "callback_query", "channel_post", "edited_channel_post"])
         except Exception as e:  # noqa: BLE001
             print(f"getUpdates: {e}", flush=True)
             time.sleep(10)

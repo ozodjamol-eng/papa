@@ -113,3 +113,50 @@ class Flow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Duplicates(unittest.TestCase):
+    def setUp(self):
+        self.api = Api()
+        self.db = B.connect(":memory:")
+        self.bot = B.Bot(self.api, self.db, {42}, "@XOTIRAXOJAOBOD", today=TODAY)
+        B.index_post(self.db, 77, "Қосимов Қўчқарвой 1942-2005-63 ёш\n\nҚосимова Мўътабархон 1942-2026-84 ёш\n\n@XOTIRAXOJAOBOD")
+
+    def go(self, text, uid=7):
+        h = self.bot.handle
+        h(msg(uid=uid, photo="P"))
+        h(msg(uid=uid, text=text))
+        return h(cb("u:send", uid=uid))
+
+    def owner_caps(self):
+        return [p["caption"] for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42]
+
+    def test_exact_repeat_answers_person_and_reports_owner(self):
+        self.assertEqual(self.go("Kosimov Qo'chqarvoy 1942-2005"), "duplicate")
+        user = [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7][-1]
+        self.assertIn("t.me/XOTIRAXOJAOBOD/77", user)
+        cap = self.owner_caps()[-1]
+        self.assertIn("ПОВТОР", cap)
+        kb = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][-1]["reply_markup"]
+        self.assertIn("Всё равно", kb["inline_keyboard"][0][0]["text"])
+        self.assertEqual(self.bot.handle(cb("o:ok:1", uid=42)), "published")      # владелец решил — можно
+
+    def test_clean_report(self):
+        self.assertEqual(self.go("Ахмедов Али 1950-2020"), "sent")
+        cap = self.owner_caps()[-1]
+        self.assertIn("Проверено постов канала: 1", cap)
+        self.assertIn("✅ Повторов нет", cap)
+        self.assertIn("Ждёт вашего одобрения", cap)
+
+    def test_namesake_other_years_only_flagged(self):
+        self.assertEqual(self.go("Қосимов Қўчқарвой 1950-2019"), "sent")
+        self.assertIn("🔎 Похоже", self.owner_caps()[-1])
+
+    def test_pending_repeat_and_channel_index(self):
+        self.go("Ахмедов Али 1950-2020")
+        self.assertEqual(self.go("Ахмедов Али 1950-2020", uid=8), "sent")       # нет ссылки на канал — не «уже есть»
+        self.assertIn("уже ждёт одобрения", self.owner_caps()[-1])
+        r = self.bot.handle({"channel_post": {"message_id": 90, "chat": {"username": "XOTIRAXOJAOBOD"},
+                                              "caption": "🕊 ХОТИРА\n\nМарҳум: Каримов Бобур\nТуғилган сана: 1960\nВафот этган сана: 2021\n"}})
+        self.assertEqual(r, "indexed:1")
+        self.assertEqual(self.go("Каримов Бобур 1960-2021", uid=9), "duplicate")
