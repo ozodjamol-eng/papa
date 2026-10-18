@@ -32,7 +32,7 @@ def dossier_text() -> str:
     from . import dossier
     c = cfg()
     return dossier.render(dossier.build(store.connect(DB), int(c.get("dossier_days", 14)), int(c.get("dossier_big", 6)),
-                                        own_usernames=c.get("own_channels", []), watch=c.get("dossier_watch", [])))
+                                        own_usernames=c.get("own_channels", []), watch=c.get("dossier_watch", dossier.WATCH)))
 
 
 def build() -> tuple[str, dict]:

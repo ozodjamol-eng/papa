@@ -12,6 +12,7 @@ from statistics import median
 
 from .analyze import TZ, load
 
+WATCH = ["водий бозор", "vodiybozor", "andijon bugun"]   # 18.10 владелец: главные соперники — в досье всегда
 DAY_FROM, DAY_TO = 7, 22                       # дневное окно для поиска «пустых часов»
 TAG = re.compile(r"#[\wЀ-ӿ]+")
 MEDIA_UZ = {"text": "текст", "photo": "фото", "video": "видео", "album": "альбом", "poll": "опрос",
