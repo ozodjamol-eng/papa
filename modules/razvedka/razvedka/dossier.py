@@ -27,7 +27,8 @@ _LOOK = str.maketrans({"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "�
 
 def _norm(s: str) -> str:
     """Название без регистра, эмодзи и «похожих» букв: «ANDIJON BUGUN» = «АНДИЖОН БУГУН»."""
-    t = (s or "").lower().translate(_LOOK)
+    import unicodedata
+    t = unicodedata.normalize("NFKC", s or "").lower().translate(_LOOK)
     return re.sub(r"[^a-z0-9]", "", t)
 
 
@@ -118,6 +119,12 @@ def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None, own_
                 and not any(r["id"] == ch.get("id") for r in leaders)]
         if miss:
             print("WATCH_SKIPPED (мало постов за период):", miss, flush=True)
+        found = {r["id"] for r in leaders}
+        if not any(any(x and x in _norm(f"{ch.get('title')} {ch.get('username') or ''}") for x in w)
+                   for ch in chans.values() if ch.get("id") in found):
+            print("WATCH_NOT_FOUND, похожие:", [(ch.get("title"), ch.get("username")) for ch in chans.values()
+                                                 if "bug" in _norm(ch.get("title") or "") or
+                                                 "andij" in _norm(ch.get("title") or "")][:10], flush=True)
     own = [r for r in rows if r["own"]]
     return {"days": days, "leaders": leaders, "own": own,
             "advice": advice(leaders, own),
