@@ -84,3 +84,12 @@ class Assistant(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StartTextTest(unittest.TestCase):
+    def test_owner_vs_stranger(self):
+        import assistant as A
+        db = A.connect(":memory:")
+        db.execute("INSERT INTO conn VALUES ('c1', 7, 7, 1)")
+        self.assertIn("уведомления", A.start_text(db, {"from": {"id": 7}}))
+        self.assertIn("@Ozodjamol", A.start_text(db, {"from": {"id": 99}}))

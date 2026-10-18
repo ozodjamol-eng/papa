@@ -112,6 +112,19 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None) -> str:
     return kind
 
 
+STRANGER_START = """Ассалому алайкум!
+Бу — Озоджамолнинг ИИ-ёрдамчиси 🤖
+Реклама ва бошқа масалалар бўйича тўғридан-тўғри @Ozodjamol га ёзинг — ёрдамчи дарҳол жавоб беради."""
+
+
+def start_text(db, msg: dict) -> str:
+    """18.10: бот только для владельца. Владелец — уведомления; посторонний — короткая подсказка написать @Ozodjamol."""
+    owners = {r[0] for r in db.execute("SELECT owner FROM conn")}
+    if (msg.get("from") or {}).get("id") in owners:
+        return "🤖 ИИ-ассистент Озоджамола. Сюда приходят уведомления о новых обращениях."
+    return STRANGER_START
+
+
 def api_for(token: str):
     def api(method: str, **p):
         data = urllib.parse.urlencode({k: (json.dumps(v) if isinstance(v, (list, dict)) else v) for k, v in p.items()}).encode()
@@ -145,8 +158,7 @@ def loop() -> None:
             off = u["update_id"] + 1
             try:
                 if u.get("message", {}).get("text", "").startswith("/start"):
-                    api("sendMessage", chat_id=u["message"]["chat"]["id"],
-                        text="🤖 ИИ-ассистент Озоджамола. Сюда приходят уведомления о новых обращениях.")
+                    api("sendMessage", chat_id=u["message"]["chat"]["id"], text=start_text(db, u["message"]))
                 else:
                     res = handle(db, u, api)
                     if res not in ("skip", "quiet", "owner"):
