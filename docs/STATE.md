@@ -67,3 +67,5 @@
 
 ## 2026-10-18 — Резерв баз
 - Франкфурт: `nexus-v2-backup` каждую ночь (02:17 UTC) копирует базы control, razvedka, genplan → AES-256 → 3 копии в /var/backups/nexus-v2 → копия в закрытый канал «PAPA РЕЗЕРВ» (id в /etc/papa-backup.env, шлёт @papa_test_88fb84_bot). Первая копия 18.10 11:53: control 100K, razvedka 1.8M, genplan 48K — все три в Telegram.
+- 2026-10-18 17:37: **ИИ-ассистент** личного Telegram в РАБОТЕ — служба `papa-assistant` (Франкфурт), бот @ozodjamol_ai_bot («Озоджамол ИИ-ЁРДАМЧИСИ»), Business (Secretary) Mode включён, токен `/etc/papa-assistant/bot.env`. Осталось: подключить в Telegram (Telegram для бизнеса → Чат-боты, исключить «Контакты»).
+- 2026-10-18 17:15: ключ шифрования копий заменён (`backup-rotate-key`): новые копии проверены расшифровкой, старый ключ и старые копии на сервере удалены.
