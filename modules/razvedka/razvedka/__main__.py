@@ -2,7 +2,8 @@
   python -m razvedka login            — вход в Telegram (интерактивно, на сервере)
   python -m razvedka collect          — собрать посты
   python -m razvedka report [--send]  — отчёт в консоль (и в PAPA TEST GROUP с --send)
-  python -m razvedka send             — отчёт в консоль и в PAPA TEST GROUP
+  python -m razvedka send             — отчёт в консоль и в «PAPA ОТЧЁТЫ» (картинками, 18.10)
+  python -m razvedka cards            — только нарисовать картинки отчёта (проверка, без Telegram)
   python -m razvedka dossier [--send] — досье больших каналов + сравнение с нашими (по понедельникам — само в run)
   python -m razvedka run              — collect + send (для ежедневного таймера)
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
@@ -111,6 +112,27 @@ async def _collect() -> dict:
         raise SystemExit("NOT_AUTHORIZED: выполните login")
     try:
         return await collect(TelethonSource(c), db, cfg())
+    finally:
+        await c.disconnect()
+
+
+async def _send_daily(a: dict, text: str) -> None:
+    """18.10, владелец: отчёт картинками «как в Excel». Не вышло (нет Pillow и т.п.) — прежний текст."""
+    try:
+        if cfg().get("report_format", "cards") != "cards":
+            raise RuntimeError("text format")
+        from .cards import caption, render_cards
+        images, cap = render_cards(a), caption(a)
+    except Exception as e:
+        print(f"CARDS_SKIP: {type(e).__name__}: {e}", flush=True)
+        await _send(text)
+        return
+    from .telegram import client_from_env, send_report_cards
+    c = client_from_env()
+    await c.connect()
+    try:
+        ok = await send_report_cards(c, images, cap)
+        print(f"CARDS_SENT {len(images)}" if ok else "CARDS_NOT_SENT", flush=True)
     finally:
         await c.disconnect()
 
@@ -299,7 +321,7 @@ def main(argv: list[str]) -> None:
         if cmd == "run":
             text, a = build()
             print("PUBLISHED", publish(text, a))
-            asyncio.run(_send(text))
+            asyncio.run(_send_daily(a, text))
             print("REPORT_SENT")
             import datetime as _dt
             if _dt.datetime.now(analyze.TZ).weekday() == 0:          # досье — раз в неделю, по понедельникам
@@ -322,8 +344,14 @@ def main(argv: list[str]) -> None:
         print(text)
         print("PUBLISHED", publish(text, a))
         if "--send" in argv:
-            asyncio.run(_send(text))
+            asyncio.run(_send_daily(a, text))
             print("REPORT_SENT")
+    elif cmd == "cards":                       # только нарисовать (проверка, без Telegram)
+        from .cards import caption, render_cards
+        _, a = build()
+        imgs = render_cards(a)
+        print(caption(a))
+        print("CARDS_OK", [len(x) for x in imgs])
     else:
         print(__doc__)
         sys.exit(2)

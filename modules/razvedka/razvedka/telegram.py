@@ -163,3 +163,65 @@ async def send_report(client: TelegramClient, text: str) -> bool:
     for i in range(0, len(text), 3900):
         await client.send_message(to, text[i:i + 3900], link_preview=False)
     return True
+
+
+def bot_send_album(token: str, chat_id: int, images: list[bytes], caption: str = "", urlopen=None) -> bool:
+    """18.10: отчёт картинками — одним альбомом (sendMediaGroup), подпись у первой картинки."""
+    import json
+    import urllib.request
+    import uuid
+    urlopen = urlopen or urllib.request.urlopen
+    b = uuid.uuid4().hex
+    media, parts = [], []
+    for i, img in enumerate(images[:10]):
+        m = {"type": "photo", "media": f"attach://p{i}"}
+        if i == 0 and caption:
+            m["caption"] = caption[:1024]
+        media.append(m)
+        parts.append((f"p{i}", f"p{i}.png", "image/png", img))
+    body = bytearray()
+
+    def field(name: str, value: bytes, filename: str | None = None, ctype: str | None = None):
+        body.extend(f"--{b}\r\n".encode())
+        disp = f'form-data; name="{name}"' + (f'; filename="{filename}"' if filename else "")
+        body.extend(f"Content-Disposition: {disp}\r\n".encode())
+        if ctype:
+            body.extend(f"Content-Type: {ctype}\r\n".encode())
+        body.extend(b"\r\n" + value + b"\r\n")
+
+    field("chat_id", str(chat_id).encode())
+    field("media", json.dumps(media, ensure_ascii=False).encode())
+    for name, fn, ct, data in parts:
+        field(name, data, fn, ct)
+    body.extend(f"--{b}--\r\n".encode())
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMediaGroup", data=bytes(body),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+    try:
+        with urlopen(req, timeout=60) as r:
+            return bool(json.loads(r.read()).get("ok"))
+    except Exception as e:                      # токен в тексте ошибки не печатаем
+        print(f"BOT_ALBUM_FAIL: {type(e).__name__}", flush=True)
+        return False
+
+
+async def send_report_cards(client: TelegramClient, images: list[bytes], caption: str) -> bool:
+    """Картинки → «PAPA ОТЧЁТЫ» ботом; нет канала/бота — в PAPA TEST GROUP. В «Избранное» — НИКОГДА."""
+    import io
+    import os
+    token = os.environ.get("PAPA_TEST_BOT_TOKEN", "")
+    if token:
+        ch = await reports_channel_id(client)
+        if ch is not None and bot_send_album(token, ch, images, caption):
+            return True
+        print("REPORTS_CHANNEL_FAIL: альбом в «PAPA ОТЧЁТЫ» не ушёл — шлю в PAPA TEST GROUP", flush=True)
+    to = await report_target(client)
+    if to is None:
+        print("REPORT_NOT_SENT: PAPA TEST GROUP не найдена среди чатов аккаунта Разведки", flush=True)
+        return False
+    files = []
+    for i, img in enumerate(images):
+        f = io.BytesIO(img)
+        f.name = f"razvedka_{i + 1}.png"
+        files.append(f)
+    await client.send_file(to, files, caption=caption[:1024])
+    return True
