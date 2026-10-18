@@ -447,3 +447,48 @@ def main(db, env: dict, bot) -> dict:
     print(json.dumps(report, ensure_ascii=False), flush=True)
     preview(env, report, bot)
     return report
+
+
+# ---------- выпуск в группу Хўжаобод (решение владельца 18.10: «с сегодняшнего») ----------
+def live_opts(cfg: dict) -> dict:
+    """config: [channels.xojaobod] digest = { live = true, at = "20:30", until = "22:00" }. Нет — выпуска нет."""
+    return (cfg.get("channels", {}).get("xojaobod") or {}).get("digest") or {}
+
+
+async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = None, root: Path | None = None) -> str | None:
+    """Один раз в день: готовый пакет (manifest READY) → баннер с подписью в группу от аккаунта PAPA (анонимный админ).
+    Только в окне at…until (ночью — никогда). Пакета нет / не READY — молчим (владелец видел предпросмотр с ошибками)."""
+    o = live_opts(cfg)
+    if not o.get("live"):
+        return None
+    now = (now or dt.datetime.now(TZ)).astimezone(TZ)
+    hm = now.strftime("%H:%M")
+    if not (o.get("at", "20:30") <= hm < o.get("until", "22:00")):
+        return None
+    day = now.date().isoformat()
+    flag = f"digest_pub_{day}"
+    if store_get(db, flag):
+        return None
+    out = (root or Path(os.environ.get("PAPA_DIGEST_DIR", "/var/lib/papa-genplan/digest"))) / f"evening-digest-{day}"
+    try:
+        m = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if m.get("status") != "READY" or m.get("date") != day or sha(out / "digest.png") != m.get("image_sha256"):
+        return None
+    from . import morning
+    to = morning.target(cfg, env, "xojaobod")
+    store_set(db, flag, "sending")                      # сначала флаг: ни при каком сбое — не дважды
+    msg = await acc.send_file(to, str(out / "digest.png"), caption=m["photo_caption"][:1024])
+    store_set(db, flag, str(getattr(msg, "id", "ok")))
+    return f"🌙 Кечки дайжест опубликован в «Хўжаобод Сити 24» ({to}) в {hm}."
+
+
+def store_get(db, k):
+    from . import store
+    return store.kv_get(db, k)
+
+
+def store_set(db, k, v):
+    from . import store
+    store.kv_set(db, k, v)

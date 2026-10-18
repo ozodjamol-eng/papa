@@ -232,6 +232,13 @@ async def run() -> None:
                                 cb("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t, reply_markup=kb)
                             except Exception:  # noqa: BLE001 — карточка могла быть в другом чате
                                 pass
+                try:                                          # 🌙 Кечки дайжест → группа Хўжаобод (20:30)
+                    from . import digest as _dg
+                    pub = await _dg.publish_live(db, c, env, acc)
+                    if pub:
+                        service.ERRORS.append(pub)
+                except Exception as e:  # noqa: BLE001
+                    service.ERRORS.append(f"⚠️ Кечки дайжест не вышел в группу: {type(e).__name__}: {str(e)[:150]}")
                 from . import namaz
                 rem = namaz.reminder(db, c, dt.datetime.now(plan.TZ))
                 if rem:

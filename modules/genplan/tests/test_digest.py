@@ -119,3 +119,24 @@ class TestFallback(unittest.TestCase):
         got = digest.fallback_news(items)
         self.assertEqual([x["url"] for x in got], ["u2", "u1"])
         self.assertTrue(got[0]["t"].startswith("Андижонда"))
+
+
+class TestLive(unittest.TestCase):
+    def test_publish_once_in_window(self):
+        import asyncio
+        d = Path(tempfile.mkdtemp()); db = store.connect(d / "g.db")
+        now = dt.datetime(2026, 10, 16, 20, 31, tzinfo=plan.TZ)
+        digest.build(db, d, now.replace(hour=19, minute=50), get=fake_get, gen=fake_gen)
+        sent = []
+
+        class Acc:
+            async def send_file(self, to, path, caption=""):
+                sent.append((to, caption)); return type("M", (), {"id": 7})()
+        cfg = {"channels": {"xojaobod": {"username": "xojaobodcity24", "publisher": "account", "mode": "shadow",
+                                         "morning": {"live": True}, "digest": {"live": True}}}}
+        run = lambda t: asyncio.run(digest.publish_live(db, cfg, {"TEST_GROUP_ID": "1"}, Acc(), t, d))
+        self.assertIsNone(run(now.replace(minute=10)))          # рано
+        self.assertIn("опубликован", run(now))
+        self.assertIsNone(run(now.replace(minute=40)))          # второй раз — нет
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], "@xojaobodcity24")

@@ -167,6 +167,7 @@ slots = [  # режим дня — утверждён владельцем 16.10
 ]
 
 [channels.xojaobod]
+digest = { live = true, at = "20:30", until = "22:00" }   # 18.10 владелец: Кечки дайжест PAPA — в рабочую группу с сегодняшнего. Откат: live = false
 title = "Хўжаобод Сити 24"
 username = "xojaobodcity24"
 publisher = "account"            # группа: новый аккаунт как анонимный админ — пост от имени группы
