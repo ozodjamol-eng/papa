@@ -1,0 +1,36 @@
+[Unit]
+Description=PAPA XOTIRA — @XotiraMarkaziBot: бесплатные посты памяти → ХОТИРА КАНАЛИ ХЎЖАОБОД (с одобрением владельца)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-xotira
+Group=papa-xotira
+EnvironmentFile=/etc/papa-xotira/xotira.env
+Environment=XOTIRA_DB=/var/lib/papa-xotira/xotira.sqlite3 PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/xotira
+ExecStart=/usr/bin/python3 -m xotira
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-xotira
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0077
+MemoryMax=60M
+CPUQuota=10%
+TasksMax=8
+
+[Install]
+WantedBy=multi-user.target

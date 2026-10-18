@@ -24,7 +24,8 @@
     "razvedka-qr-check",
     "ai-compare",
     "hear",
-    "deliver"
+    "deliver",
+    "xotira-restart"
   ],
   "approve": [
     "morning-pool-clear",
