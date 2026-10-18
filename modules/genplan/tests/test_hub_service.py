@@ -459,3 +459,60 @@ class TestChannelPolicy(unittest.TestCase):
         self.assertEqual(smart.policy_note(self.REAL, "paparazzi", "Хонанданинг янги клипи"), "")
         self.assertIn("политика", smart.policy_note(self.REAL, "paparazzi", "Депутатлар сайлови бўлиб ўтди"))
         self.assertEqual(smart.policy_note(self.REAL, "xojaobod", "Президент парламентда нутқ сўзлади"), "")
+
+
+def hub_post(mid, title, chat=-100555, text="Янги клип чиқди! Тинглаб кўринг", gid=None):
+    p = {"message_id": mid, "chat": {"id": chat, "type": "channel", "title": title}, "date": 1,
+         "caption": text, "photo": [{"file_id": f"f{mid}", "file_unique_id": f"u{mid}"}]}
+    if gid:
+        p["media_group_id"] = gid
+    return {"channel_post": p}
+
+
+class TestChannelHub(Base):
+    """18.10: свой ХАБ у каждого канала — пост оттуда сразу в 📦 запас своего канала, через своего бота."""
+
+    def test_davra_hub_goes_to_stock(self):
+        self.assertEqual(self.h(hub_post(7, "КАТТА ДАВРА · ХАБ")), "material")
+        m = store.get(self.db, 1)
+        self.assertEqual((m["channel"], m["stock"], m["status"], m["hub_chat"]), ("davra", 1, "draft", -100555))
+        self.assertIn("Из ХАБа", self.last_card()["text"])
+        self.assertEqual(store.kv_get(self.db, "hub_davra"), "-100555")
+        # дальше узнаём по id, даже если хаб переименовали
+        self.assertEqual(self.h(hub_post(8, "Другое имя", text="Бошқа янги клип")), "material")
+
+    def test_foreign_hub_ignored_by_main_bot(self):
+        self.assertIsNone(self.h(hub_post(7, "PAPARAZZI · ХАБ", chat=-100666)))   # чужой хаб — не мой сектор
+        self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 0)
+
+    def test_paparazzi_bot_takes_its_hub(self):
+        from genplan import bots
+        pb = FakeBot()
+        bots.REG.clear(); bots.REG.update({"main": self.bot, "paparazzi": pb})
+        self.addCleanup(bots.REG.clear)
+        r = hub.handle(pb, self.db, CFG, ENV, hub_post(9, "PAPARAZZI · ХАБ", chat=-100666))
+        self.assertEqual(r, "material")
+        m = store.get(self.db, 1)
+        self.assertEqual((m["channel"], m["stock"], m["via"]), ("paparazzi", 1, "paparazzi"))
+        self.assertEqual(self.bot.calls, [])                                   # главный бот молчит
+        self.assertIsNone(hub.handle(pb, self.db, CFG, ENV, hub_post(10, "КАТТА ДАВРА · ХАБ")))
+
+    def test_hub_album_one_material(self):
+        self.assertEqual(self.h(hub_post(11, "КАТТА ДАВРА · ХАБ", gid="g1")), "album")
+        self.assertEqual(self.h(hub_post(12, "КАТТА ДАВРА · ХАБ", text="", gid="g1")), "album")
+        hub.flush_albums(self.bot, self.db, CFG, ENV, now_ts=10 ** 10)
+        m = store.get(self.db, 1)
+        self.assertEqual((m["channel"], m["stock"], json.loads(m["hub_msgs"])), ("davra", 1, [11, 12]))
+
+    def test_stock_from_hub_fills_slot(self):
+        self.h(hub_post(7, "КАТТА ДАВРА · ХАБ"))
+        m = store.get(self.db, 1)
+        now = at("08:00")
+        ids = []
+        for h in range(8, 23):
+            ids += smart.fill_from_stock(self.db, CFG, "davra", plan.slot_time(now.date(), f"{h:02d}:00"))
+            if ids:
+                break
+        self.assertEqual(ids, [1])
+        self.assertEqual(store.get(self.db, 1)["status"], "queued")
+        self.assertTrue(m["rubric"])

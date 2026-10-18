@@ -209,6 +209,27 @@ def kb_channel(mid: int, cfg: dict | None = None, allowed: list[str] | None = No
 
 # ---------- приём ----------
 
+def _norm(t: str | None) -> str:
+    return re.sub(r"[^0-9a-zа-яёўқғҳ]+", "", (t or "").lower())
+
+
+def channel_hub(db, cfg: dict, post: dict, own: str | None) -> str | None:
+    """18.10 (владелец): у каждого канала свой ХАБ — частный канал, куда он бросает собранное. Бот канала берёт
+    оттуда материал сам. Каждый бот — только свой хаб: главный — КАТТА ДАВРА, пульт PaparazziUZ — PaparazziUZ.
+    Хаб узнаётся по названию (hub_title в config.toml), потом запоминается по id."""
+    me = own or cfg.get("default_channel") or "davra"
+    ch = cfg["channels"].get(me) or {}
+    if not ch.get("hub_title"):
+        return None
+    cid = int(post["chat"]["id"])
+    known = store.kv_get(db, f"hub_{me}", "")
+    if (known and int(known) == cid) or _norm(post["chat"].get("title")) == _norm(ch["hub_title"]):
+        if str(known) != str(cid):
+            store.kv_set(db, f"hub_{me}", str(cid))
+        return me
+    return None
+
+
 def auto_place(db, cfg: dict, mid: int) -> str | None:
     """Решение 15.10: бросил пост — бот сам ставит рубрику (угаданную) и умное время. Возвращает пометку для карточки."""
     if not cfg.get("auto_place"):
@@ -231,7 +252,8 @@ def source_of(msg: dict) -> str | None:
 
 
 def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], msgs: list[dict],
-           reply_chat: int | None = None, notes: list[str] | None = None, channel: str | None = None) -> str:
+           reply_chat: int | None = None, notes: list[str] | None = None, channel: str | None = None,
+           stock: bool = False) -> str:
     """Новый материал (одиночный пост или альбом) → черновик с угаданными каналом и рубрикой → карточка владельцу."""
     text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
     media = [md for x in msgs for md in media_of(x)]
@@ -257,7 +279,10 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
     if pol:
         notes = (notes or []) + [pol]
-    placed = auto_place(db, cfg, mid)
+    if stock:                                      # 18.10: пост из ХАБа канала — в 📦 запас, выйдет сам в пустой слот
+        store.update(db, mid, stock=1)
+        notes = ["📥 Из ХАБа канала — уже ваше одобрение"] + (notes or [])
+    placed = None if stock else auto_place(db, cfg, mid)
     if placed:
         notes = (notes or []) + [placed]
     txt, kb = card(db, cfg, mid)
@@ -304,6 +329,11 @@ def flush_albums(bot, db, cfg: dict, env: dict, now_ts: float | None = None) -> 
             if a["dm"]:
                 from . import bots
                 direct(bots.for_channel(a.get("channel"), bot), db, cfg, owners, hub, a["msgs"], channel=a.get("channel"))
+            elif a.get("hub"):                           # альбом из ХАБа канала → в запас, через бота канала
+                from . import bots
+                msgs = sorted(a["msgs"], key=lambda x: x["message_id"])
+                intake(bots.for_channel(a["channel"], bot), db, cfg, owners, a["hub"], [x["message_id"] for x in msgs],
+                       msgs, channel=a["channel"], stock=True)
             else:
                 msgs = sorted(a["msgs"], key=lambda x: x["message_id"])
                 intake(bot, db, cfg, owners, hub, [x["message_id"] for x in msgs], msgs)
@@ -385,6 +415,13 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
             if _album(post, dm=False):
                 return "album"
             return intake(bot, db, cfg, owners, hub, [post["message_id"]], [post])
+        hc = channel_hub(db, cfg, post, own)
+        if hc:
+            if _album(post, dm=False, channel=hc):
+                ALBUMS[post["media_group_id"]]["hub"] = int(post["chat"]["id"])
+                return "album"
+            return intake(bot, db, cfg, owners, int(post["chat"]["id"]), [post["message_id"]], [post],
+                          channel=hc, stock=True)
         uname = (post["chat"].get("username") or "").lower()
         for c, ch in cfg["channels"].items():
             if ch["username"].lower() == uname:           # ручной пост в нашем канале — учитываем в промежутках
