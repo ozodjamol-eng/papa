@@ -10,6 +10,7 @@
   python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
+  python -m razvedka github [--send] (github-auto — для таймера) — 🧭 GitHub-разведка: новые полезные инструменты (раз в неделю)
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
 from __future__ import annotations
@@ -294,6 +295,20 @@ def main(argv: list[str]) -> None:
                 asyncio.run(_send(text))
                 print("TREND_SENT", m)
         print("TREND_DONE")
+        return
+    if cmd in ("github", "github-auto"):       # 🧭 только GitHub API + Anthropic; Telegram — лишь для отправки отчёта
+        from . import github
+        out = Path(PUB) / "github"
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            text = github.run(out)
+        except Exception as e:                  # отчёт об ошибке тоже уходит владельцу, сервис не падает молча
+            text = f"🧭 GitHub-разведка: ошибка — {type(e).__name__}: {e}"
+        print(text, flush=True)
+        if cmd == "github-auto" or "--send" in argv:
+            asyncio.run(_send(text))
+            print("GITHUB_SENT")
+        print("GITHUB_DONE")
         return
     if cmd == "pain":
         print("PAIN_DONE", asyncio.run(_pain()))

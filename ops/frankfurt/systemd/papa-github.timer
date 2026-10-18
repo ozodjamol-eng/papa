@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 🧭 GitHub-разведка — новые полезные инструменты, раз в неделю (понедельник 10:00 Ташкент)
+
+[Timer]
+OnCalendar=Mon *-*-* 05:00:00 UTC
+RandomizedDelaySec=5min
+Persistent=false
+Unit=papa-razvedka@github-auto.service
+
+[Install]
+WantedBy=timers.target

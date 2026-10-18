@@ -27,7 +27,8 @@
     "deliver",
     "xotira-restart",
     "xotira-scan",
-    "xotira-sample"
+    "xotira-sample",
+    "github-now"
   ],
   "approve": [
     "morning-pool-clear",
