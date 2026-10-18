@@ -31,8 +31,9 @@ class BadInput(ValueError):
 def _cyr(s: str) -> str:
     if translit is None:
         return s
-    out, _ = translit.auto(s)
-    return out
+    if re.search(r"[A-Za-z]", s):                     # имена — всегда узбекские: латиницу переводим всегда
+        return translit.to_cyrillic(s)
+    return s
 
 
 def _name(raw: str) -> str:
@@ -87,15 +88,21 @@ _FOLD = str.maketrans({"ў": "у", "қ": "к", "ғ": "г", "ҳ": "х", "ё": "е
 OLD = re.compile(r"Марҳум:\s*(?P<n>.+?)\s*\n.*?Туғилган сана:\s*(?P<b>.+?)\s*\n.*?Вафот этган сана:\s*(?P<d>.+?)(?:\n|$)", re.S)
 
 
+TITLES = {"хожи", "ҳожи", "хожа", "дада", "она", "ота", "тога", "тоға", "ая", "буви", "бувим", "бобо", "бобом", "ака",
+          "опа", "домла", "марҳум", "мархум", "раҳматли", "рахматли"}
+
+
 def key(name: str) -> str:
-    """Ключ имени для сравнения: кириллица, без регистра и знаков, ў/у қ/к ғ/г ҳ/х — одно и то же."""
-    n = _cyr(name or "").lower().translate(_FOLD)
-    return " ".join(re.sub(r"[^a-zа-я ]+", " ", n).split())
+    """Ключ имени для сравнения: кириллица, без регистра, знаков и обращений (хожи, дада, она, тоға…);
+    ў/у қ/к ғ/г ҳ/х — одно и то же."""
+    n = _cyr(name or "").lower()
+    words = [w for w in re.sub(r"[^a-zа-яёўқғҳ ]+", " ", n).split() if w not in TITLES]
+    return " ".join(words).translate(_FOLD)
 
 
 def extract(caption_text: str) -> list[dict]:
-    """Люди из поста канала (новый формат «ФИО 1942-2005-63 ёш» и старый «Марҳум: … Туғилган сана: …»).
-    Ничего не бросает: непонятное просто пропускается."""
+    """Люди из поста канала. Форматы: «ФИО 1942-2005-63 ёш», «ФИО» ⏎ «1928/2011/83 ёш», «1932й - 1964й»,
+    старый «Марҳум: … Туғилган сана: …». Ничего не бросает: непонятное пропускается."""
     out = []
     t = caption_text or ""
     for m in OLD.finditer(t):
@@ -104,13 +111,23 @@ def extract(caption_text: str) -> list[dict]:
             out.append({"name": m["n"].strip(), "born": int(b[0]), "died": int(d[0])})
     if out:
         return out
+    pending: list[str] = []                       # строки имени без цифр — до строки с годами
     for line in t.splitlines():
+        line = line.strip()
+        if not line or line.startswith("@") or re.fullmatch(r"[\W_]+", line):
+            continue
         m = YEARS.search(line)
         if not m:
+            if re.search(r"\d", line):
+                pending = []
+            else:
+                pending = (pending + [line])[-2:]
             continue
-        name = re.sub(r"[^\w\s'ʻ‘’-]+", " ", line[:m.start()]).strip()
-        if len(key(name)) >= 3:
-            out.append({"name": name, "born": int(m.group(2)), "died": int(m.group(4))})
+        here = re.sub(r"[^\w\s'ʻ‘’-]+", " ", line[:m.start()]).strip()
+        name = here if len(key(here)) >= 3 else " ".join(pending)
+        if len(key(name)) >= 3 and 1880 <= int(m.group(2)) <= int(m.group(4)):
+            out.append({"name": re.sub(r"\s+", " ", name).strip(" .,"), "born": int(m.group(2)), "died": int(m.group(4))})
+        pending = []
     return out
 
 
@@ -120,7 +137,12 @@ def compare(person: dict, rec: dict) -> str | None:
     same_years = person["born"] == rec["born"] and person["died"] == rec["died"]
     if a == b and same_years:
         return "same"
+    wa, wb = a.split(), b.split()
+    if len(wa) >= 2 and len(wb) >= 2 and wa[:2] == wb[:2]:       # отчество/обращение есть только в одном варианте
+        return "same" if same_years else "similar"
     ratio = difflib.SequenceMatcher(None, a, b).ratio()
+    if len(wa) >= 2 and len(wb) >= 2:                              # фамилия+имя похожи (опечатка), отчество не мешает
+        ratio = max(ratio, difflib.SequenceMatcher(None, " ".join(wa[:2]), " ".join(wb[:2])).ratio())
     if same_years and ratio >= 0.85:
         return "same" if ratio >= 0.93 else "similar"
     if a == b or (ratio >= 0.9 and abs(person["died"] - rec["died"]) <= 1):
