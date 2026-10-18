@@ -11,6 +11,24 @@ TME = re.compile(r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/[^\s)]+", re.I
 EMPTY_LABEL = re.compile(r"^[\s👉➡️🔗📢✅❗️|:—–-]*$")
 # 17.10: строки-«хвосты» источника без @: «Батафсил 👉 Тезкор24», «Подробнее: …»
 MORE_LINE = re.compile(r"^\W*(батафсил|batafsil|подробнее|тўлиқ|to['ʻ’]?liq)\b", re.I)
+# 18.10 владелец: «MANBA — izohlarda 👇», «Источник: …» и строки из одних названий соцсетей — хвост источника
+SOURCE_LINE = re.compile(r"^\W*(manba|манба|источник|source|manbaa)\b|(izohlarda|изоҳларда|изохларда|в комментариях|"
+                         r"комментарийда|izohda|изоҳда)", re.I)
+SOCIAL = {"instagram", "инстаграм", "insta", "youtube", "ютуб", "tiktok", "тикток", "telegram", "телеграм", "facebook",
+          "фейсбук", "vk", "вк", "twitter", "x", "threads", "ok", "одноклассники", "rutube", "likee", "va", "и", "ва"}
+
+
+def source_tail(line: str) -> bool:
+    """Строка — хвост источника: «Манба — изоҳларда», «Instagram | YouTube | Tiktok»."""
+    t = line.strip()
+    if not t:
+        return False
+    words = re.findall(r"[^\W\d_]+", t.lower())
+    if words and all(w in SOCIAL for w in words) and any(w not in ("va", "и", "ва") for w in words):
+        return True
+    return len(t) <= 70 and bool(SOURCE_LINE.search(t))
+
+
 LINK_WORDS = re.compile(r"(батафсил|batafsil|подробнее|бот\b|bot\b|instagram|инстаграм|youtube|ютуб|tiktok|тикток|facebook|сайт|"
                         r"sayt|канал|kanal|обуна|obuna|қўшил|qo['ʻ’]?shil|подпис|юклаб|yuklab|топувчи|topuvchi)", re.I)
 
@@ -65,7 +83,8 @@ def strip_sources(text: str, keep: tuple[str, ...] = ()) -> str:
     t = TME.sub(lambda m: m.group(0) if m.group(0).rsplit("/", 1)[-1].lower() in keep_l else "", text or "")
     t = MENTION.sub(lambda m: m.group(0) if m.group(0)[1:].lower() in keep_l else "", t)
     lines = [ln.rstrip() for ln in t.splitlines()]
-    lines = [ln for ln in lines if not (ln.strip() and (EMPTY_LABEL.match(ln) or (MORE_LINE.match(ln) and len(ln) <= 60)))]
+    lines = [ln for ln in lines if not (ln.strip() and (EMPTY_LABEL.match(ln) or (MORE_LINE.match(ln) and len(ln) <= 60)
+                                                        or source_tail(ln)))]
     out = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     return re.sub(r"[ \t]{2,}", " ", out)
 

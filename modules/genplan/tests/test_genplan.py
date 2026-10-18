@@ -198,3 +198,23 @@ class TestPublish(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SourceTailTest(unittest.TestCase):
+    """18.10 владелец: «MANBA — izohlarda», строки соцсетей и @канал источника уходят, текст сверху остаётся."""
+    def test_manba_and_socials(self):
+        from genplan import text as T
+        t = ("Mirzo Ulug‘bek ot ustida quyosh o‘rnini hisoblardi! Fitnaning boshida esa o‘z qonidan bo‘lgan odam turardi!\n\n"
+             "🔖 MANBA — izohlarda👇\n\n📸 Instagram\n▶️ YouTube\n🎵 Tiktok\n\n@historyofuzb_tg")
+        out = T.finalize(t, "@kattadavrauz", own=("kattadavrauz",))
+        self.assertIn("Улуғбек", out)
+        for bad in ("МАНБА", "MANBA", "Инстаграм", "YouTube", "Тикток", "historyofuzb"):
+            self.assertNotIn(bad, out)
+        self.assertTrue(out.endswith("@kattadavrauz"))
+
+    def test_normal_text_kept(self):
+        from genplan import text as T
+        self.assertFalse(T.source_tail("Бугун Андижонда ёмғир ёғади, манбалар хабар беришича ҳаво совийди"))
+        self.assertFalse(T.source_tail("YouTube янги функцияни ишга туширди"))
+        self.assertTrue(T.source_tail("Instagram | YouTube | Tiktok"))
+        self.assertTrue(T.source_tail("Манба: изоҳларда 👇"))
