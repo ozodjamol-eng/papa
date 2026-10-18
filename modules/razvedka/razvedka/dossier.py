@@ -18,6 +18,19 @@ MEDIA_UZ = {"text": "текст", "photo": "фото", "video": "видео", "a
             "doc": "файл", "other": "другое"}
 
 
+_LOOK = str.maketrans({"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo", "ж": "j", "з": "z",
+                       "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+                       "с": "s", "т": "t", "у": "u", "ф": "f", "х": "x", "ц": "ts", "ч": "ch", "ш": "sh",
+                       "ъ": "", "ь": "", "ы": "i", "э": "e", "ю": "yu", "я": "ya", "ў": "o", "қ": "q", "ғ": "g",
+                       "ҳ": "h"})
+
+
+def _norm(s: str) -> str:
+    """Название без регистра, эмодзи и «похожих» букв: «ANDIJON BUGUN» = «АНДИЖОН БУГУН»."""
+    t = (s or "").lower().translate(_LOOK)
+    return re.sub(r"[^a-z0-9]", "", t)
+
+
 def _hm(minutes: float) -> str:
     m = int(round(minutes))
     return f"{m // 60:02d}:{m % 60:02d}"
@@ -94,11 +107,17 @@ def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None, own_
                          "own": bool(ch.get("is_own")), "subs": ch.get("subscribers") or 0, **pr})
     leaders = sorted((r for r in rows if not r["own"]), key=lambda r: r["subs"], reverse=True)[:big]
     # 18.10 владелец: главные соперники (Водий бозор, Андижон Бугун) — в досье всегда, даже вне топа
-    w = [x.lower() for x in watch]
+    w = [_norm(x) for x in watch]
     for r in rows:
-        name = f"{r['title']} {r.get('username') or ''}".lower()
-        if not r["own"] and r not in leaders and any(x in name for x in w):
+        name = _norm(f"{r['title']} {r.get('username') or ''}")
+        if not r["own"] and r not in leaders and any(x and x in name for x in w):
             leaders.append(r)
+    if w:
+        miss = [ch.get("title") for ch in chans.values()
+                if any(x and x in _norm(f"{ch.get('title')} {ch.get('username') or ''}") for x in w)
+                and not any(r["id"] == ch.get("id") for r in leaders)]
+        if miss:
+            print("WATCH_SKIPPED (мало постов за период):", miss, flush=True)
     own = [r for r in rows if r["own"]]
     return {"days": days, "leaders": leaders, "own": own,
             "advice": advice(leaders, own),
