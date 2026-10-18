@@ -137,7 +137,7 @@ async def run() -> None:
     async def poll(k, b):
         try:
             ups = await asyncio.to_thread(b, "getUpdates", offset=offsets[k], timeout=1 if hub.ALBUMS else 20,
-                                          allowed_updates=["channel_post", "callback_query", "message"])
+                                          allowed_updates=["channel_post", "edited_channel_post", "callback_query", "message"])
             return k, b, ups
         except Exception as e:  # noqa: BLE001
             print(f"getUpdates {k}: {e}", flush=True)

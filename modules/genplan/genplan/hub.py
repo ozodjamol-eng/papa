@@ -116,9 +116,13 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     from . import picker
     rs = rubrics(cfg, m["channel"])
     if m["stock"]:
-        return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — выйдет сам, когда у рубрики будет пустой слот{dup}",
+        hold = smart.waits_text(cfg, m)
+        when = ("⏸ Без текста не выйдет. Допишите текст прямо в посте ХАБа — бот подхватит правку сам "
+                "(или ✏️ Текст здесь)") if hold else "выйдет сам, когда у рубрики будет пустой слот"
+        return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — {when}{dup}",
                 {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
-                                     [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
+                                     [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
+                                     [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
     st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid) if m["rubric"] else None
     sbtn = {"text": f"🧠 Умное время · {st[0]:%H:%M}" if st and st[0].date() == now.date()
             else (f"🧠 Умное время · {st[0]:%d.%m %H:%M}" if st else "🧠 Умное время"),
@@ -429,6 +433,13 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
                 return "pulse"
         return None
 
+    ed = upd.get("edited_channel_post")
+    if ed:
+        cid = int(ed["chat"]["id"])
+        if (cid == hub and not own) or channel_hub(db, cfg, ed, own):
+            return hub_edit(bot, db, cfg, owners, ed)
+        return None
+
     cq = upd.get("callback_query")
     if cq:
         return callback(bot, db, cfg, owners, cq)
@@ -458,7 +469,7 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if wait and txt and not any(k in msg for k in MEDIA_KEYS):     # ✏️ новый текст для материала
             store.kv_set(db, "await_text", "")
             mid = int(wait)
-            store.update(db, mid, text=txt)
+            store.update(db, mid, text=txt, hook_ai=None)
             t, kb = card(db, cfg, mid)
             r = bot("sendMessage", chat_id=msg["chat"]["id"], text="✏️ Текст заменён:\n\n" + t, reply_markup=kb,
                     disable_web_page_preview=True)
@@ -476,6 +487,53 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         r = direct(bot, db, cfg, owners, hub, [msg], channel=own)
         return special_mode(bot, db, cfg, key, msg["chat"]["id"]) or r
     return None
+
+
+def find_by_hub(db, chat: int, msg_id: int):
+    """Материал, к которому относится сообщение хаба (одиночный пост или любая часть альбома)."""
+    rows = db.execute("SELECT * FROM materials WHERE hub_chat=? AND (hub_msg=? OR hub_msgs LIKE ?) ORDER BY id DESC",
+                      (chat, msg_id, f"%{msg_id}%")).fetchall()
+    for r in rows:
+        ids = json.loads(r["hub_msgs"] or "[]") or [r["hub_msg"]]
+        if r["hub_msg"] == msg_id or msg_id in ids:
+            return r
+    return None
+
+
+def hub_edit(bot, db, cfg: dict, owners: set[int], ed: dict) -> str:
+    """18.10 (владелец): правка поста в ХАБе (дописал/изменил текст) → тот же материал в очереди получает новый текст.
+    Авторский текст не переписывается: бот только чистит чужие подписи и добавляет нашу подпись при публикации."""
+    m = find_by_hub(db, int(ed["chat"]["id"]), int(ed["message_id"]))
+    if m is None:
+        return "edit_unknown"
+    new = (ed.get("caption") or ed.get("text") or "").strip()
+    if new == (m["text"] or "").strip() or m["status"] == "rejected":
+        return "edit_same"
+    if m["status"] == "published":
+        for o in owners:
+            try:
+                bot("sendMessage", chat_id=o, text="⚠️ Текст в ХАБе изменён, но этот пост уже вышел — в канале остался прежний.\n\n"
+                                                   + (new[:300] or "(без текста)"))
+            except Exception:  # noqa: BLE001
+                pass
+        return "edit_late"
+    from .text import link_junk
+    own = tuple(c.get("username", "") for c in cfg["channels"].values())
+    junk = link_junk(new, ed.get("caption_entities") or ed.get("entities"), own)
+    store.update(db, m["id"], text=new, hook_ai=None, junk=json.dumps(junk, ensure_ascii=False) if junk else None)
+    t, kb = card(db, cfg, m["id"])
+    t = "✏️ Текст обновлён из ХАБа — выйдет уже с ним\n\n" + t
+    for o in owners:
+        try:
+            if m["owner_msg"]:
+                bot("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t[:4096], reply_markup=kb,
+                    disable_web_page_preview=True)
+            else:
+                raise RuntimeError("no card")
+        except Exception:  # noqa: BLE001 — старая карточка недоступна: присылаем новую
+            r = bot("sendMessage", chat_id=o, text=t[:4096], reply_markup=kb, disable_web_page_preview=True)
+            store.update(db, m["id"], owner_msg=r["message_id"])
+    return "hub_edit"
 
 
 def save_namaz(bot, db, cfg: dict, msg: dict, txt: str) -> str:

@@ -220,6 +220,7 @@ slots = [
 title = "PaparazziUZ"
 hub_title = "PAPARAZZI · ХАБ"     # 18.10: свой ХАБ канала (частный, админ — только @PaparazziUZ_PultBot) → 📦 запас
 policy = { politics = "xojaobod", crime = "" }
+stock_needs_text = true         # 18.10: из ХАБа без текста — сам не выходит, ждёт текста (правка в ХАБе подхватывается)
 username = "ozodjamoll"
 mode = "live"                    # РАБОТА — решение владельца 2026-10-16 09:58 («Paparazzi включаем»). Откат: "shadow"
 bot_token_env = "PAPARAZZI_BOT_TOKEN"   # свой бот-пульт «⭐ PaparazziUZ Пульт» (токен — /etc/papa-genplan/bots.env). Нет токена — главный бот

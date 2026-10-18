@@ -198,11 +198,19 @@ STOCK_DAYS = 30
 STOCK_AHEAD = dt.timedelta(minutes=90)
 
 
+def waits_text(cfg: dict, m) -> bool:
+    """18.10 (владелец): в канале с stock_needs_text (PaparazziUZ — шоу-бизнес, чувствительные поводы) материал
+    из запаса без текста сам не выходит — ждёт текста владельца."""
+    ch = cfg["channels"].get(m["channel"]) or {}
+    return bool(ch.get("stock_needs_text")) and not (m["text"] or "").strip()
+
+
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
     pool = [m for m in store.stock(db, channel)
-            if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)]
+            if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
+            and not waits_text(cfg, m)]
     if not pool:
         return []
     used: list[int] = []
