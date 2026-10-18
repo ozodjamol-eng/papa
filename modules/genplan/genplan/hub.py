@@ -243,7 +243,9 @@ def channel_hub(db, cfg: dict, post: dict, own: str | None) -> str | None:
         return None
     cid = int(post["chat"]["id"])
     known = store.kv_get(db, f"hub_{me}", "")
-    if (known and int(known) == cid) or _norm(post["chat"].get("title")) == _norm(ch["hub_title"]):
+    if known:                                      # 18.10: хаб уже известен — только он (чужой канал с таким же названием — нет)
+        return me if int(known) == cid else None
+    if _norm(post["chat"].get("title")) == _norm(ch["hub_title"]):
         if str(known) != str(cid):
             store.kv_set(db, f"hub_{me}", str(cid))
         return me
@@ -431,6 +433,9 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
     hub = int(env["HUB_CHAT_ID"])
     HUB_ID = hub
     own = bots.channel_of(bot)                       # бот-пульт канала → всё, что брошено в него, идёт в этот канал
+    mcm = upd.get("my_chat_member")
+    if mcm:
+        return guard(bot, owners, mcm)
     post = upd.get("channel_post")
     if post:
         if int(post["chat"]["id"]) == hub:
@@ -507,6 +512,35 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         r = direct(bot, db, cfg, owners, hub, [msg], channel=own)
         return special_mode(bot, db, cfg, key, msg["chat"]["id"]) or r
     return None
+
+
+def guard(bot, owners: set[int], mcm: dict) -> str:
+    """18.10 владелец: бот только для него. Добавил кто-то другой в группу/канал — бот сразу выходит и сообщает.
+    Добавил сам владелец — остаётся (сообщение для контроля). Уже существующие места не трогаем."""
+    old = (mcm.get("old_chat_member") or {}).get("status")
+    new = (mcm.get("new_chat_member") or {}).get("status")
+    chat = mcm.get("chat") or {}
+    if old not in ("left", "kicked", None) or new not in ("member", "administrator"):
+        return "member_change"
+    who = mcm.get("from") or {}
+    title = chat.get("title") or chat.get("username") or str(chat.get("id"))
+    if int(who.get("id", 0)) in owners:
+        msg, res = f"✅ Вы добавили бота в «{title}».", "joined_by_owner"
+    else:
+        try:
+            bot("leaveChat", chat_id=chat["id"])
+        except Exception:  # noqa: BLE001
+            pass
+        name = " ".join(x for x in (who.get("first_name"), who.get("last_name")) if x) or "?"
+        un = f" @{who['username']}" if who.get("username") else ""
+        msg, res = (f"🚫 Посторонний ({name}{un}, id {who.get('id')}) добавил бота в «{title}». "
+                    "Бот сразу вышел — пользоваться им можете только вы."), "guard_left"
+    for o in owners:
+        try:
+            bot("sendMessage", chat_id=o, text=msg)
+        except Exception:  # noqa: BLE001
+            pass
+    return res
 
 
 def find_by_hub(db, chat: int, msg_id: int):

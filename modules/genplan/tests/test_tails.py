@@ -88,3 +88,49 @@ class ButtonFlowTest(unittest.TestCase):
         self.assertEqual(tails.junk_for(db, "@src", "X\nY\nOxirgi reklama qatori"), ["Oxirgi reklama qatori"])
         t, _ = hub.card(db, cfg, mid)
         self.assertNotIn("Oxirgi", t)
+
+
+class GuardTest(unittest.TestCase):
+    """18.10: бот только для владельца."""
+    def _bot(self):
+        calls = []
+
+        def bot(method, **kw):
+            calls.append((method, kw))
+            return {"message_id": 1}
+        return bot, calls
+
+    def test_stranger_add_leaves(self):
+        from genplan import hub
+        bot, calls = self._bot()
+        mcm = {"chat": {"id": -100555, "title": "Чужой канал"}, "from": {"id": 99, "first_name": "Ali"},
+               "old_chat_member": {"status": "left"}, "new_chat_member": {"status": "administrator"}}
+        self.assertEqual(hub.guard(bot, {7}, mcm), "guard_left")
+        self.assertIn(("leaveChat", {"chat_id": -100555}), calls)
+        self.assertTrue(any(m == "sendMessage" and kw["chat_id"] == 7 for m, kw in calls))
+
+    def test_owner_add_stays(self):
+        from genplan import hub
+        bot, calls = self._bot()
+        mcm = {"chat": {"id": -1001, "title": "Мой хаб"}, "from": {"id": 7},
+               "old_chat_member": {"status": "left"}, "new_chat_member": {"status": "administrator"}}
+        self.assertEqual(hub.guard(bot, {7}, mcm), "joined_by_owner")
+        self.assertFalse(any(m == "leaveChat" for m, _ in calls))
+
+    def test_existing_membership_untouched(self):
+        from genplan import hub
+        bot, calls = self._bot()
+        mcm = {"chat": {"id": -1001}, "from": {"id": 99},
+               "old_chat_member": {"status": "member"}, "new_chat_member": {"status": "administrator"}}
+        self.assertEqual(hub.guard(bot, {7}, mcm), "member_change")
+        self.assertEqual(calls, [])
+
+    def test_hub_title_spoof_rejected(self):
+        import tomllib
+        from genplan import hub
+        cfg = tomllib.loads((Path(__file__).resolve().parent.parent / "config.toml").read_text(encoding="utf-8"))
+        db = store.connect(":memory:")
+        me = cfg.get("default_channel") or "davra"
+        title = cfg["channels"][me]["hub_title"]
+        self.assertEqual(hub.channel_hub(db, cfg, {"chat": {"id": -1001, "title": title}}, None), me)
+        self.assertIsNone(hub.channel_hub(db, cfg, {"chat": {"id": -1002, "title": title}}, None))
