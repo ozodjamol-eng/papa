@@ -87,6 +87,19 @@ def preview(text: str, has_media: bool, n_media: int = 1) -> str:
     return f"📥 Новый материал{icon}\n\n{t or '(без текста)'}{note}"
 
 
+def clean_lines(db, m, limit: int = 10) -> list[tuple[int, str]]:
+    """Кандидаты для «🧹 Мусор»: строки, которые ещё выйдут в пост (кроме первой — заголовка), снизу вверх,
+    с номером строки в исходном тексте."""
+    from . import tails
+    from .text import source_tail, strip_sources
+    junk = set(tails.merged(db, m))
+    lines = (m["text"] or "").split("\n")
+    first = next((i for i, ln in enumerate(lines) if ln.strip()), 0)
+    out = [(i, ln.strip()) for i, ln in enumerate(lines)
+           if i > first and ln.strip() and ln not in junk and strip_sources(ln).strip() and not source_tail(ln)]
+    return out[-limit:]
+
+
 # ---------- карточка ----------
 
 def _now() -> dt.datetime:
@@ -97,7 +110,9 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     now = now or _now()
     m = store.get(db, mid)
     media = json.loads(m["media"] or "[]")
-    base = preview(m["text"], bool(m["has_media"]), len(media) or 1)
+    from . import tails
+    from .text import drop_lines
+    base = preview(drop_lines(m["text"], tails.merged(db, m)), bool(m["has_media"]), len(media) or 1)
     name = NAMES.get(m["channel"], m["channel"])
     dup = duplicate_note(db, m)
     dup = f"\n{dup}" if dup else ""
@@ -122,7 +137,7 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — {when}{dup}",
                 {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
-                                     [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
+                                     [{"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
     st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid) if m["rubric"] else None
     sbtn = {"text": f"🧠 Умное время · {st[0]:%H:%M}" if st and st[0].date() == now.date()
             else (f"🧠 Умное время · {st[0]:%d.%m %H:%M}" if st else "🧠 Умное время"),
@@ -130,7 +145,7 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     kb = picker.root_kb(mid, "Якуний пост" in rs, sbtn)
     kb += [[{"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
-           [{"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
+           [{"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}, {"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
     return (f"📍 Канал: {name}\n\n{base}\n\nВыберите рубрику — время GENPLAN определит сам.{dup}",
             {"inline_keyboard": kb})
 
@@ -160,7 +175,8 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
     rows += [[{"text": "🚀 Сейчас", "callback_data": f"ur:{mid}"}],
              [{"text": "🗓 Другие варианты", "callback_data": f"ot:{mid}"}],
              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
-             [{"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
+             [{"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}, {"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}],
+             [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
     return rows
 
 
@@ -276,8 +292,12 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     ents = next((x.get("entities") or x.get("caption_entities") for x in msgs if x.get("text") or x.get("caption")), None)
     own = tuple(c.get("username", "") for c in cfg["channels"].values())
     junk = link_junk(text, ents, own)
+    from . import tails                            # 18.10: бот сам учит подписи источника (3 повтора → хвост)
+    learned = tails.observe(db, src, text, own)
     if junk:
         store.update(db, mid, junk=json.dumps(junk, ensure_ascii=False))
+    if learned:
+        notes = (notes or []) + [f"🧹 Запомнил подпись {src}: " + " · ".join(x[:40] for x in learned[:3])]
     if src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
@@ -774,6 +794,33 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             store.job_add(db, "ai", {"mid": mid, "owner_chat": chat})
             note = "🤖 Переписываю… пришлю новую карточку"
+    elif kind == "cl":                                  # 🧹 Мусор: какие строки убрать (запомнится для источника)
+        lines = clean_lines(db, m)
+        t, _ = card(db, cfg, mid, now)
+        if not lines:
+            note = "Убирать нечего — текст уже чистый"
+        else:
+            rows = [[{"text": f"🧹 {ln[:48]}", "callback_data": f"cj:{mid}:{i}"}] for i, ln in lines]
+            src = m["source"] if "source" in m.keys() and m["source"] else "без источника"
+            show({"inline_keyboard": rows + [[{"text": "‹ Готово", "callback_data": f"bk:{mid}"}]]},
+                 t + f"\n\n🧹 Нажмите строку-мусор — уберу и запомню для {src} навсегда:")
+    elif kind == "cj":
+        from . import tails
+        lines = (m["text"] or "").split("\n")
+        i = int(arg[0])
+        if 0 < i < len(lines) and lines[i].strip():
+            src = m["source"] if "source" in m.keys() else None
+            tails.learn(db, src, lines[i])
+            junk = json.loads(m["junk"] or "[]") if m["junk"] else []
+            if lines[i] not in junk:
+                junk.append(lines[i])
+            store.update(db, mid, junk=json.dumps(junk, ensure_ascii=False))
+            note = "🧹 Убрал" + (f" и запомнил для {src}" if src else "")
+        left = clean_lines(db, store.get(db, mid))
+        t, _ = card(db, cfg, mid, now)
+        rows = [[{"text": f"🧹 {ln[:48]}", "callback_data": f"cj:{mid}:{k}"}] for k, ln in left]
+        show({"inline_keyboard": rows + [[{"text": "‹ Готово", "callback_data": f"bk:{mid}"}]]},
+             t + "\n\n🧹 Ещё что-то лишнее? Нажмите строку или «Готово».")
     elif kind == "bk":
         show()
     elif kind == "del":

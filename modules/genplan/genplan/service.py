@@ -69,7 +69,8 @@ def hook_for(cfg: dict, ch: dict, m, db=None) -> str:
     if not ai.available():
         return base
     try:
-        h = ai.hook(db, text.drop_lines(body, json.loads(m["junk"] or "[]") if "junk" in keys else []), ch.get("title", ""))
+        from . import tails
+        h = ai.hook(db, text.drop_lines(body, tails.merged(db, m)), ch.get("title", ""))
     except Exception:  # noqa: BLE001 — ИИ не ответил: хук рубрики
         return base
     try:
@@ -118,7 +119,8 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
     own = tuple(c["username"] for c in cfg["channels"].values())
     is_ad = (m["rubric"] or "").lower().startswith("реклама")
     tag = "#РЕКЛАМА" if is_ad else tag_for(cfg, ch, m)
-    junk = json.loads(m["junk"] or "[]") if "junk" in m.keys() else []
+    from . import tails
+    junk = tails.merged(db, m)                 # 18.10: + выученные хвосты источника (на момент выхода)
     sigs = tuple(ch.get("signatures") or ())
     sig = sigs[int(m["id"]) % len(sigs)] if sigs else ch.get("signature", "")
     body = text.finalize(m["text"], sig, is_ad=is_ad, own=own, hook=hook_for(cfg, ch, m, db) if not is_ad else "", tag=tag,
