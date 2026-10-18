@@ -76,7 +76,7 @@ def profile(ps: list[dict], days: int, own: bool = False) -> dict | None:
     }
 
 
-def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None, own_usernames=()) -> dict:
+def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None, own_usernames=(), watch=()) -> dict:
     posts, chans = load(db, days, now)
     mine = {u.lower().lstrip("@") for u in own_usernames}
     for ch in chans.values():                          # наш канал мог попасть в базу из папки источников (is_own=0)
@@ -93,6 +93,12 @@ def build(db, days: int = 14, big: int = 6, now: dt.datetime | None = None, own_
             rows.append({"id": cid, "title": ch.get("title", str(cid)), "username": ch.get("username"),
                          "own": bool(ch.get("is_own")), "subs": ch.get("subscribers") or 0, **pr})
     leaders = sorted((r for r in rows if not r["own"]), key=lambda r: r["subs"], reverse=True)[:big]
+    # 18.10 владелец: главные соперники (Водий бозор, Андижон Бугун) — в досье всегда, даже вне топа
+    w = [x.lower() for x in watch]
+    for r in rows:
+        name = f"{r['title']} {r.get('username') or ''}".lower()
+        if not r["own"] and r not in leaders and any(x in name for x in w):
+            leaders.append(r)
     own = [r for r in rows if r["own"]]
     return {"days": days, "leaders": leaders, "own": own,
             "advice": advice(leaders, own),
