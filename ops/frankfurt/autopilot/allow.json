@@ -26,7 +26,8 @@
     "hear",
     "deliver",
     "xotira-restart",
-    "xotira-scan"
+    "xotira-scan",
+    "xotira-sample"
   ],
   "approve": [
     "morning-pool-clear",
