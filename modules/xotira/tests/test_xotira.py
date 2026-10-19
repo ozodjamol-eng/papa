@@ -162,8 +162,12 @@ class Duplicates(unittest.TestCase):
         cap = self.owner_caps()[-1]
         self.assertIn("ПОВТОР", cap)
         kb = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][-1]["reply_markup"]
-        self.assertIn("Всё равно", kb["inline_keyboard"][0][0]["text"])
-        self.assertEqual(self.bot.handle(cb("o:ok:1", uid=42)), "published")      # владелец решил — можно
+        self.assertEqual(kb["inline_keyboard"], [[{"text": "❌ Рад этиш", "callback_data": "o:no:1"}]])
+        self.assertEqual(self.bot.handle(cb("o:ok:1", uid=42)), "blocked")        # старая кнопка — не публикует
+        n_user = len([1 for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7])
+        self.assertEqual(self.bot.handle(cb("o:no:1", uid=42)), "rejected")       # заявка закрыта
+        self.assertEqual(len([1 for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7]), n_user)
+        self.assertFalse(any(m == "sendPhoto" and p["chat_id"] == "@XOTIRAXOJAOBOD" for m, p in self.api.calls))
 
     def test_clean_report(self):
         self.assertEqual(self.go("Ахмедов Али 1950-2020"), "sent")

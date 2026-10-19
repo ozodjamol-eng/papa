@@ -58,9 +58,10 @@ KB_PREVIEW = {"inline_keyboard": [[{"text": "✅ Юбориш", "callback_data":
 
 
 def kb_owner(n: int, status: str = "pending") -> dict:
-    top = ([{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, {"text": "❌ Рад этиш", "callback_data": f"o:no:{n}"}]
-           if status == "pending" else [{"text": "✅ Всё равно жойлаш", "callback_data": f"o:ok:{n}"}])
-    rows = [top]
+    no = {"text": "❌ Рад этиш", "callback_data": f"o:no:{n}"}
+    if status == "duplicate":                     # точный повтор: публиковать нельзя, только закрыть заявку
+        return {"inline_keyboard": [[no]]}
+    rows = [[{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, no]]
     if ph.available():
         rows.append([{"text": "✂️ Авто-обрезка", "callback_data": f"o:crop:{n}"},
                      {"text": "👤 По лицу", "callback_data": f"o:face:{n}"}])
@@ -301,7 +302,7 @@ class Bot:
         if not all(core.name_ok(p["name"]) for p in core.extract(s["caption"]) or [{"name": ""}]):
             rep = (rep + "\n" if rep else "") + "⛔ НЕТ ИМЕНИ: в посте нет исм-фамилии — не жойлайте, ответьте человеку"
         tail = "⏳ Ждёт вашего одобрения" if s["status"] == "pending" else (
-            "🚫 Человеку ответили «уже есть». Если это другой человек — «Всё равно жойлаш»" if s["status"] == "duplicate" else "")
+            "🚫 Точный повтор — человеку уже ответили «уже есть». Нажмите «❌ Рад этиш», чтобы закрыть заявку" if s["status"] == "duplicate" else "")
         return f"🕊 №{s['id']} · ариза: {s['who']}\n\n{s['caption']}\n\n{rep}\n{tail}".strip()
 
     def notify_owners(self, n: int, data: bytes | None = None) -> None:
@@ -337,6 +338,10 @@ class Bot:
         if s is None or s["status"] not in ("pending", "duplicate"):
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Аввал кўриб чиқилган")
             return "dup"
+        if ok and s["status"] == "duplicate":               # старая кнопка «Всё равно жойлаш» — повтор не публикуем
+            self.api("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True,
+                     text="Бу аниқ такрор — каналда бор. Жойлаб бўлмайди, «❌ Рад этиш» босинг")
+            return "blocked"
         # сначала отмечаем — двойное нажатие не опубликует дважды
         self.db.execute("UPDATE subs SET status=?, decided=? WHERE id=? AND status IN ('pending','duplicate')",
                         ("working" if ok else "rejected", now(), n))
@@ -357,7 +362,7 @@ class Bot:
             link = f"https://t.me/{self.channel.lstrip('@')}/{r['message_id']}"
             mark = f"✅ ЖОЙЛАНДИ\n{link}"
             self.tell(s["uid"], T_DONE.format(n=n, ch=self.channel, link=link))
-        else:
+        elif s["status"] != "duplicate":                     # при повторе человеку уже ответили «бор»
             self.tell(s["uid"], T_REJECT.format(n=n))
         for o, mid in json.loads(s["owner_msgs"] or "{}").items():
             try:
