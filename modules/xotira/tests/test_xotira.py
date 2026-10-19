@@ -380,5 +380,8 @@ class QualityFlow(unittest.TestCase):
         kb = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][-1]["reply_markup"]
         self.assertEqual(kb["inline_keyboard"][1][0]["callback_data"], "o:bad:1")
         self.assertEqual(h(cb("o:bad:1", uid=42)), "bad_photo")
-        self.assertIn("расм аниқ эмас", [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7][-1])
+        txt = [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7][-1]
+        self.assertIn("катта раҳмат", txt)
+        self.assertIn("Фақат янги расмни", txt)
         self.assertEqual(h(cb("o:ok:1", uid=42)), "dup")
+        self.assertEqual(h(msg(photo="PH")), "preview")                 # ФИО и годы сохранены — сразу предпросмотр

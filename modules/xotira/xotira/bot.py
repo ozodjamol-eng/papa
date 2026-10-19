@@ -55,7 +55,12 @@ T_BAD = {
               "юборинг."),
     "noface": ("📷 Кечирасиз, бу расмда марҳумнинг юзи кўринмаяпти.\n\nЮзи аниқ кўринадиган расм юборинг."),
 }
-T_BAD_OWNER = ("📷 №{n} аризангиздаги расм аниқ эмас — юз яхши кўринмаяпти.\n\nТиниқроқ расм билан қайта юборинг: /start")
+T_BAD_OWNER = ("Ассалому алайкум! №{n} аризангиз учун катта раҳмат 🤲\n\n"
+               "Юборган расмингиз бироз хира ёки скриншот бўлиб чиқди — марҳумнинг юзи аниқ кўринмаяпти. "
+               "Хотира пости марҳумга муносиб ва чиройли чиқиши учун, илтимос, асл расмни юборинг: галереядаги "
+               "расмнинг ўзини ёки қоғоз расмни ёруғ жойда, яқиндан суратга олиб.\n\n{tail}\n\nАллоҳ раҳмат қилсин.")
+T_BAD_KEEP = "Маълумотлар сақланди ✅ Фақат янги расмни юборсангиз кифоя."
+T_BAD_NEW = "Қайта юбориш учун: /start"
 T_PHOTO_OK = "✅ Расмингиз қабул қилинди."
 N_BAD = {"blur": "размыто", "small": "лицо слишком мелкое", "noface": "лица не видно"}
 N_AUTO = "✂️ Скриншот: лишнее обрезано автоматически (↩️ Оригинал — вернуть)"
@@ -72,7 +77,7 @@ def kb_owner(n: int, status: str = "pending") -> dict:
     if status == "duplicate":                     # точный повтор: публиковать нельзя, только закрыть заявку
         return {"inline_keyboard": [[no]]}
     rows = [[{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, no],
-            [{"text": "📷 Расм ёмон — бошқасини сўраш", "callback_data": f"o:bad:{n}"}]]
+            [{"text": "🙏 Вежливо отказать — попросить другое фото", "callback_data": f"o:bad:{n}"}]]
     if ph.available():
         rows.append([{"text": "✂️ Авто-обрезка", "callback_data": f"o:crop:{n}"},
                      {"text": "👤 По лицу", "callback_data": f"o:face:{n}"}])
@@ -97,6 +102,8 @@ def connect(path: str) -> sqlite3.Connection:
         db.execute("ALTER TABLE subs ADD COLUMN report TEXT")
     if "photo_orig" not in {r[1] for r in db.execute("PRAGMA table_info(subs)")}:
         db.execute("ALTER TABLE subs ADD COLUMN photo_orig TEXT")      # 19.10: что прислал человек (для «↩️ Оригинал»)
+    if "people" not in {r[1] for r in db.execute("PRAGMA table_info(subs)")}:
+        db.execute("ALTER TABLE subs ADD COLUMN people TEXT")          # 19.10: ФИО и годы — при «🙏» просим только фото
     if "enh" not in {r[1] for r in db.execute("PRAGMA table_info(subs)")}:
         db.execute("ALTER TABLE subs ADD COLUMN enh TEXT")             # 19.10: file_id уже улучшенного фото (не улучшать дважды)
     return db
@@ -261,9 +268,9 @@ class Bot:
         cropped = self.try_photo(ph.auto, u["photo"])              # скриншот → лишнее срезаем сразу
         if cropped:
             lines.append(N_AUTO)
-        cur = self.db.execute("INSERT INTO subs(uid, who, photo, caption, created, status, report, photo_orig) "
-                              "VALUES (?,?,?,?,?,?,?,?)",
-                              (chat, who, u["photo"], cap, now(), status, "\n".join(lines), u["photo"]))
+        cur = self.db.execute("INSERT INTO subs(uid, who, photo, caption, created, status, report, photo_orig, people) "
+                              "VALUES (?,?,?,?,?,?,?,?,?)",
+                              (chat, who, u["photo"], cap, now(), status, "\n".join(lines), u["photo"], u["people"]))
         n = cur.lastrowid
         self.db.commit()
         self.reset(chat)
@@ -361,7 +368,7 @@ class Bot:
         self.db.execute("UPDATE subs SET status=?, decided=? WHERE id=? AND status IN ('pending','duplicate')",
                         ("working" if ok else "rejected", now(), n))
         self.db.commit()
-        mark = "📷 РАСМ ЁМОН — человека попросили прислать другое" if bad else "❌ РАД ЭТИЛДИ"
+        mark = "🙏 ВЕЖЛИВО ОТКАЗАНО — человека попросили прислать другое фото" if bad else "❌ РАД ЭТИЛДИ"
         if ok:
             try:
                 r = self.api("sendPhoto", chat_id=self.channel, photo=s["photo"], caption=s["caption"])
@@ -378,7 +385,17 @@ class Bot:
             mark = f"✅ ЖОЙЛАНДИ\n{link}"
             self.tell(s["uid"], T_DONE.format(n=n, ch=self.channel, link=link))
         elif bad:
-            self.tell(s["uid"], T_BAD_OWNER.format(n=n))
+            people = s["people"] if "people" in s.keys() else None
+            if not people:                                  # старые заявки — восстановить ФИО и годы из подписи
+                try:
+                    people = json.dumps(core.parse("\n".join(f"{p['name']} {p['born']}-{p['died']}"
+                                                              for p in core.extract(s["caption"])), self.today()),
+                                        ensure_ascii=False)
+                except core.BadInput:
+                    people = None
+            if people:                                      # человеку остаётся прислать только фото → сразу предпросмотр
+                self.save(s["uid"], step="photo", photo=None, people=people)
+            self.tell(s["uid"], T_BAD_OWNER.format(n=n, tail=T_BAD_KEEP if people else T_BAD_NEW))
         elif s["status"] != "duplicate":                     # при повторе человеку уже ответили «бор»
             self.tell(s["uid"], T_REJECT.format(n=n))
         for o, mid in json.loads(s["owner_msgs"] or "{}").items():
@@ -387,7 +404,7 @@ class Bot:
                          caption=(self.owner_card(s)[:900] + "\n\n" + mark))
             except Exception:  # noqa: BLE001
                 pass
-        self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Жойланди ✅" if ok else "Расм сўралди" if bad else "Рад этилди")
+        self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Жойланди ✅" if ok else "🙏 Вежливо отправлено" if bad else "Рад этилди")
         return "published" if ok else "bad_photo" if bad else "rejected"
 
     def tell(self, chat: int, text: str) -> None:
