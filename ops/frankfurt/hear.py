@@ -33,8 +33,11 @@ def main(paths):
                     d = json.loads(urllib.request.urlopen(req, timeout=240).read())
                     parts = ((d.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
                     txt = "".join(x.get("text", "") for x in parts if not x.get("thought")).strip()
+                    if not txt:  # фильтр модели (PROHIBITED_CONTENT и т. п.) — пробуем другую модель
+                        errs.append(f"{m}: пусто {str((d.get('promptFeedback') or {}).get('blockReason', ''))}")
+                        continue
                     print(f"(модель: {m})")
-                    print(txt or f"(пустой ответ: {str(d)[:300]})")
+                    print(txt)
                     done = True
                     break
                 except urllib.error.HTTPError as e:
