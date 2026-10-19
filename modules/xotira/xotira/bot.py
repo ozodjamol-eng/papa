@@ -48,6 +48,16 @@ T_EXISTS = ("🕊 Бу хотира {ch} каналида аввал жойла�
 
 T_SCREEN = ("📱 Бу скриншотга ўхшайди. Иложи бўлса, асл расмни (галереядан) юборинг.\n"
             "Асли бўлмаса — давом этаверинг, ортиқча жойларини ўзимиз қирқиб тўғрилаймиз.")
+T_BAD = {
+    "blur": ("📷 Кечирасиз, расм хира чиққан — марҳумнинг юзи аниқ кўринмаяпти.\n\nХотира пости чиройли чиқиши учун "
+             "тиниқроқ расм юборинг: иложи бўлса, асл расмни ёки юзи яқиндан, аниқ тушган суратни."),
+    "small": ("📷 Кечирасиз, расмда юз жуда кичик — аниқ кўринмаяпти.\n\nЮзи яқинроқдан, тиниқ кўринадиган расм "
+              "юборинг."),
+    "noface": ("📷 Кечирасиз, бу расмда марҳумнинг юзи кўринмаяпти.\n\nЮзи аниқ кўринадиган расм юборинг."),
+}
+T_BAD_OWNER = ("📷 №{n} аризангиздаги расм аниқ эмас — юз яхши кўринмаяпти.\n\nТиниқроқ расм билан қайта юборинг: /start")
+T_PHOTO_OK = "✅ Расмингиз қабул қилинди."
+N_BAD = {"blur": "размыто", "small": "лицо слишком мелкое", "noface": "лица не видно"}
 N_AUTO = "✂️ Скриншот: лишнее обрезано автоматически (↩️ Оригинал — вернуть)"
 
 KB_FLOW = {"inline_keyboard": [[{"text": "⬅️ Орқага", "callback_data": "u:back"},
@@ -61,7 +71,8 @@ def kb_owner(n: int, status: str = "pending") -> dict:
     no = {"text": "❌ Рад этиш", "callback_data": f"o:no:{n}"}
     if status == "duplicate":                     # точный повтор: публиковать нельзя, только закрыть заявку
         return {"inline_keyboard": [[no]]}
-    rows = [[{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, no]]
+    rows = [[{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, no],
+            [{"text": "📷 Расм ёмон — бошқасини сўраш", "callback_data": f"o:bad:{n}"}]]
     if ph.available():
         rows.append([{"text": "✂️ Авто-обрезка", "callback_data": f"o:crop:{n}"},
                      {"text": "👤 По лицу", "callback_data": f"o:face:{n}"}])
@@ -188,6 +199,9 @@ class Bot:
         u = self.user(chat)
         if "photo" in msg:
             photo = msg["photo"][-1]["file_id"]
+            bad = self.try_photo(ph.quality, photo)
+            if bad:                                        # размыто / нет лица → вежливо просим другое
+                return self.bad_photo(chat, msg, photo, bad)
             self.warn_screenshot(chat, photo)
             cap = (msg.get("caption") or "").strip()
             people = u["people"]
@@ -198,6 +212,7 @@ class Bot:
                     self.save(chat, step="text", photo=photo, people=None)
                     self.api("sendMessage", chat_id=chat, text=f"⚠️ {e}\n\n{T_ASK_TEXT}", reply_markup=KB_FLOW)
                     return "bad"
+            self.db.execute("DELETE FROM kv WHERE k IN (?,?)", (f"bad:{chat}", f"badcap:{chat}"))
             self.save(chat, photo=photo, people=people)
             if people:
                 return self.preview(chat)
@@ -333,7 +348,7 @@ class Bot:
             self.notify_owners(r["id"])
         return "queue"
 
-    def decide(self, cq: dict, ok: bool, n: int) -> str:
+    def decide(self, cq: dict, ok: bool, n: int, bad: bool = False) -> str:
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
         if s is None or s["status"] not in ("pending", "duplicate"):
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Аввал кўриб чиқилган")
@@ -346,7 +361,7 @@ class Bot:
         self.db.execute("UPDATE subs SET status=?, decided=? WHERE id=? AND status IN ('pending','duplicate')",
                         ("working" if ok else "rejected", now(), n))
         self.db.commit()
-        mark = "❌ РАД ЭТИЛДИ"
+        mark = "📷 РАСМ ЁМОН — человека попросили прислать другое" if bad else "❌ РАД ЭТИЛДИ"
         if ok:
             try:
                 r = self.api("sendPhoto", chat_id=self.channel, photo=s["photo"], caption=s["caption"])
@@ -362,6 +377,8 @@ class Bot:
             link = f"https://t.me/{self.channel.lstrip('@')}/{r['message_id']}"
             mark = f"✅ ЖОЙЛАНДИ\n{link}"
             self.tell(s["uid"], T_DONE.format(n=n, ch=self.channel, link=link))
+        elif bad:
+            self.tell(s["uid"], T_BAD_OWNER.format(n=n))
         elif s["status"] != "duplicate":                     # при повторе человеку уже ответили «бор»
             self.tell(s["uid"], T_REJECT.format(n=n))
         for o, mid in json.loads(s["owner_msgs"] or "{}").items():
@@ -370,8 +387,8 @@ class Bot:
                          caption=(self.owner_card(s)[:900] + "\n\n" + mark))
             except Exception:  # noqa: BLE001
                 pass
-        self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Жойланди ✅" if ok else "Рад этилди")
-        return "published" if ok else "rejected"
+        self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Жойланди ✅" if ok else "Расм сўралди" if bad else "Рад этилди")
+        return "published" if ok else "bad_photo" if bad else "rejected"
 
     def tell(self, chat: int, text: str) -> None:
         try:
@@ -389,6 +406,53 @@ class Bot:
         except Exception as e:  # noqa: BLE001
             print(f"photo {fn.__name__}: {type(e).__name__}: {e}", flush=True)
             return None
+
+    def bad_photo(self, chat: int, msg: dict, photo: str, why: str) -> str:
+        """Бот сам отказал по фото. Человеку — просьба; владельцу — короткая карточка с кнопкой на случай ошибки бота."""
+        self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"bad:{chat}", photo))
+        cap = (msg.get("caption") or "").strip()
+        if cap:
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"badcap:{chat}", cap))
+        self.db.commit()
+        self.api("sendMessage", chat_id=chat, text=T_BAD[why], reply_markup=KB_FLOW)
+        f = msg.get("from") or {}
+        who = ((f.get("first_name") or "") + (f" @{f['username']}" if f.get("username") else f" (id {chat})")).strip()
+        kb = {"inline_keyboard": [[{"text": "✅ Фото нормальное — принять", "callback_data": f"o:pok:{chat}"}]]}
+        for o in self.owners:
+            if o == chat:
+                continue
+            try:
+                self.api("sendPhoto", chat_id=o, photo=photo, reply_markup=kb,
+                         caption=f"📷 Бот попросил другое фото: {who}\nПричина: {N_BAD[why]}.\n"
+                                 "Если фото нормальное — нажмите кнопку, бот продолжит с этим фото.")
+            except Exception as e:  # noqa: BLE001
+                print(f"owner {o}: {e}", flush=True)
+        return "bad_photo"
+
+    def accept_photo(self, cq: dict, uid: int) -> str:
+        """Владелец: «фото нормальное» — человек продолжает с этим фото."""
+        r = self.db.execute("SELECT v FROM kv WHERE k=?", (f"bad:{uid}",)).fetchone()
+        say = lambda t: self.api("answerCallbackQuery", callback_query_id=cq["id"], text=t)  # noqa: E731
+        if not r:
+            say("Уже неактуально — человек прислал другое фото")
+            return "stale"
+        c = self.db.execute("SELECT v FROM kv WHERE k=?", (f"badcap:{uid}",)).fetchone()
+        self.db.execute("DELETE FROM kv WHERE k IN (?,?)", (f"bad:{uid}", f"badcap:{uid}"))
+        self.db.commit()
+        self.tell(uid, T_PHOTO_OK)
+        u, people = self.user(uid), self.user(uid)["people"]
+        if c:
+            try:
+                people = json.dumps(core.parse(c[0], self.today()), ensure_ascii=False)
+            except core.BadInput:
+                pass
+        self.save(uid, photo=r[0], people=people)
+        say("✅ Принято")
+        if people:
+            return self.preview(uid)
+        self.save(uid, step="text")
+        self.api("sendMessage", chat_id=uid, text=T_ASK_TEXT, reply_markup=KB_FLOW)
+        return "photo_ok"
 
     def warn_screenshot(self, chat: int, file_id: str) -> None:
         if self.try_photo(ph.auto, file_id):
@@ -493,6 +557,10 @@ class Bot:
                 self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Фақат админ учун")
                 return "denied"
             _, act, n = data.split(":")
+            if act == "pok":
+                return self.accept_photo(cq, int(n))
+            if act == "bad":
+                return self.decide(cq, False, int(n), bad=True)
             if act in ("crop", "face", "orig", "own", "enh"):
                 return self.edit_photo(cq, act, int(n))
             return self.decide(cq, act == "ok", int(n))

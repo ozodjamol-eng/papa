@@ -261,6 +261,8 @@ class FileApi(Api):
 class PhotoFlow(unittest.TestCase):
     def setUp(self):
         self.api = FileApi(PH.encode(screenshot()))
+        q, PH.quality = PH.quality, lambda data: None              # здесь проверяем обрезку, не качество
+        self.addCleanup(setattr, PH, "quality", q)
         self.bot = B.Bot(self.api, B.connect(":memory:"), {42}, "@XOTIRAXOJAOBOD", today=TODAY)
 
     def channel(self):
@@ -323,3 +325,60 @@ class Enhance(PhotoFlow):
         img = screenshot()
         out = PH.decode(PH.enhance(PH.encode(img)))
         self.assertEqual(out.shape, img.shape)
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class Quality(unittest.TestCase):
+    def test_detail_sharp_vs_blur(self):
+        img = np.random.default_rng(3).integers(0, 255, (200, 200, 3), dtype=np.uint8)
+        self.assertGreater(PH.detail(img), PH.SHARP)
+        self.assertLess(PH.detail(cv2.GaussianBlur(img, (0, 0), 3)), PH.SHARP)
+
+    def test_no_face(self):
+        self.assertEqual(PH.quality(PH.encode(screenshot())), "noface")
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class QualityFlow(unittest.TestCase):
+    def setUp(self):
+        self.api = FileApi(b"x")
+        self.why = "blur"
+        q, PH.quality = PH.quality, lambda data: self.why
+        self.addCleanup(setattr, PH, "quality", q)
+        self.bot = B.Bot(self.api, B.connect(":memory:"), {42}, "@XOTIRAXOJAOBOD", today=TODAY)
+
+    def last(self, chat):
+        return [p for m, p in self.api.calls if p.get("chat_id") == chat][-1]
+
+    def test_blurry_refused_politely_owner_can_accept(self):
+        h = self.bot.handle
+        self.assertEqual(h(msg(photo="PH")), "bad_photo")
+        self.assertIn("хира", self.last(7)["text"])
+        self.assertIsNone(self.bot.user(7)["photo"])                     # фото не принято
+        card = self.last(42)
+        self.assertIn("размыто", card["caption"])
+        self.assertEqual(card["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "o:pok:7")
+        self.assertEqual(h(cb("o:pok:7", uid=7)), "denied")
+        self.assertEqual(h(cb("o:pok:7", uid=42)), "photo_ok")           # владелец: фото нормальное
+        self.assertEqual(self.bot.user(7)["photo"], "PH")
+        self.assertEqual(h(msg(text="Ахмедов Али 1950-2020")), "preview")
+        self.assertEqual(h(cb("o:pok:7", uid=42)), "stale")
+
+    def test_good_photo_after_refusal(self):
+        h = self.bot.handle
+        h(msg(photo="PH"))
+        self.why = None
+        self.assertEqual(h(msg(photo="PH")), "photo")
+        self.assertEqual(h(cb("o:pok:7", uid=42)), "stale")
+
+    def test_owner_button_bad_photo(self):
+        h = self.bot.handle
+        self.why = None
+        h(msg(photo="PH"))
+        h(msg(text="Ахмедов Али 1950-2020"))
+        self.assertEqual(h(cb("u:send")), "sent")
+        kb = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][-1]["reply_markup"]
+        self.assertEqual(kb["inline_keyboard"][1][0]["callback_data"], "o:bad:1")
+        self.assertEqual(h(cb("o:bad:1", uid=42)), "bad_photo")
+        self.assertIn("расм аниқ эмас", [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7][-1])
+        self.assertEqual(h(cb("o:ok:1", uid=42)), "dup")

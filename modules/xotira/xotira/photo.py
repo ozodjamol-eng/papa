@@ -146,3 +146,47 @@ def enhance(data: bytes) -> bytes:
     blur = cv2.GaussianBlur(img, (0, 0), 1.2)
     img = cv2.addWeighted(img, 1.3, blur, -0.3, 0)                   # лёгкая резкость
     return encode(img)
+
+
+# ---------- качество фото (19.10): размытое / нет лица → боту вежливо попросить другое ----------
+SHARP = 1.5        # «деталь» лица: чёткое ≈ 4–5, размытое ≈ 0.6–1.3
+MIN_FACE = 40      # лицо уже 40 px — слишком мелкое, не разглядеть
+
+
+def _detect(img):
+    H, W = img.shape[:2]
+    k = min(1.0, 800 / max(H, W))
+    sm = cv2.resize(img, (round(W * k), round(H * k)), interpolation=cv2.INTER_AREA) if k < 1 else img
+    det = cv2.FaceDetectorYN.create(MODEL, "", (sm.shape[1], sm.shape[0]), 0.6, 0.3, 50)
+    _, faces = det.detect(sm)
+    if faces is None or len(faces) == 0:
+        return None
+    return tuple(int(float(v) / k) for v in max(faces, key=lambda f: f[2] * f[3])[:4])
+
+
+def detail(face_img) -> float:
+    """Сколько мелкой детали в лице: разница с уменьшенной копией. Не зависит от размера фото."""
+    g = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+    s = min(128, g.shape[1])                                   # не растягиваем мелкое — растяжка «рисует» деталь
+    g = cv2.resize(g, (s, s), interpolation=cv2.INTER_AREA).astype(np.float32)
+    lo = cv2.resize(cv2.resize(g, (max(8, s * 3 // 8),) * 2, interpolation=cv2.INTER_AREA), (s, s),
+                    interpolation=cv2.INTER_CUBIC)
+    return float(np.abs(g - lo).mean())
+
+
+def quality(data: bytes) -> str | None:
+    """None — фото годится; 'noface' — лица нет; 'small' — лицо крошечное; 'blur' — лицо размыто."""
+    img = decode(data)
+    r = region(img)
+    if r and r[2] * r[3] < SCREEN * img.shape[0] * img.shape[1]:   # скриншот — смотрим только само фото
+        x, y, w, h = r
+        img = img[y:y + h, x:x + w]
+    f = _detect(img)
+    if f is None:
+        return "noface"
+    x, y, w, h = f
+    if w < MIN_FACE:
+        return "small"
+    H, W = img.shape[:2]
+    c = img[max(0, y):min(H, y + h), max(0, x):min(W, x + w)]
+    return "blur" if c.size == 0 or detail(c) < SHARP else None
