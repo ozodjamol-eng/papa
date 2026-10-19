@@ -68,30 +68,50 @@ def name_ok(name: str) -> bool:
 T_NO_NAME = "«{line}» — марҳумнинг исм-фамилияси ёзилмаган. Тўлиқ ёзинг, масалан: Қосимов Қўчқарвой 1942-2005"
 
 
+AGE_TAIL = re.compile(r"^\s*[-–—/]?\s*\d{1,3}\s*(?:ёш|йош|ёшда|yosh)?\b\.?", re.I)
+
+
+def clean_name(raw: str) -> str:
+    """19.10, владелец: в посте — ТОЛЬКО фамилия и имя. Обращения (хожи, дада, эна, ота…), служебные слова и цифры убираем."""
+    n = _name(re.sub(r"\d+", " ", raw))
+    words = [w for w in n.split(" ") if w and w.strip(".,:;!?()«»\"'").lower() not in SERVICE | TITLES]
+    return " ".join(words).strip(" .,:;-–—")
+
+
 def parse(text: str, today: dt.date | None = None) -> list[dict]:
-    """Строки «ФИО 1942-2005» → [{"name", "born", "died", "age"}]. Ошибка — BadInput с понятным (узб.) текстом."""
+    """«ФИО 1942-2005» (одна или две на строке) или «ФИО» ⏎ «1942-2005» → [{"name", "born", "died", "age"}].
+    Ошибка — BadInput с понятным (узб.) текстом. Возраст всегда считаем сами из годов."""
     today = today or dt.date.today()
-    people = []
+    people, pending = [], ""
     for line in (text or "").splitlines():
         line = line.strip()
         if not line:
             continue
-        m = YEARS.search(line)
-        if not m:
+        ms = list(YEARS.finditer(line))
+        if not ms:
             if re.search(r"\d", line):
                 raise BadInput(f"«{line}» — йилларни 1942-2005 кўринишида ёзинг.")
-            continue                                   # пустые/служебные строки без цифр пропускаем
-        born, died = int(m.group(2)), int(m.group(4))
-        name = _name(line[:m.start()] + " " + line[m.end():])
-        name = re.sub(r"\s*\d+\s*ёш\s*$|\s*\d+\s*yosh\s*$", "", name).strip()
-        name = _strip_service(name)
-        if len(name) < 3 or not name_ok(name):
-            raise BadInput(T_NO_NAME.format(line=line))
-        if not (1880 <= born <= died <= today.year):
-            raise BadInput(f"«{line}» — йиллар нотўғри: туғилган йил вафот йилидан олдин бўлиши керак.")
-        if died - born > 120:
-            raise BadInput(f"«{line}» — ёш 120 дан ошиб кетди, йилларни текширинг.")
-        people.append({"name": name, "born": born, "died": died, "age": died - born})
+            pending = line                            # имя на отдельной строке, годы — на следующей
+            continue
+        prev = 0
+        for i, m in enumerate(ms):
+            seg = AGE_TAIL.sub("", line[prev:m.start()])           # «-94 ёш» от предыдущего человека
+            tail = line[m.end():] if i == len(ms) - 1 else ""
+            tail = AGE_TAIL.sub("", tail)
+            raw = (seg + " " + tail).strip()
+            if not clean_name(raw) and pending:
+                raw = pending
+            pending = ""
+            name = clean_name(raw)
+            prev = m.end()
+            if len(name) < 3 or not name_ok(name):
+                raise BadInput(T_NO_NAME.format(line=line))
+            born, died = int(m.group(2)), int(m.group(4))
+            if not (1880 <= born <= died <= today.year):
+                raise BadInput(f"«{line}» — йиллар нотўғри: туғилган йил вафот йилидан олдин бўлиши керак.")
+            if died - born > 120:
+                raise BadInput(f"«{line}» — ёш 120 дан ошиб кетди, йилларни текширинг.")
+            people.append({"name": name, "born": born, "died": died, "age": died - born})
     if not people:
         raise BadInput("Маълумот топилмади. Намуна: Қосимов Қўчқарвой 1942-2005")
     if len(people) > MAX_PEOPLE:
@@ -100,8 +120,9 @@ def parse(text: str, today: dt.date | None = None) -> list[dict]:
 
 
 def caption(people: list[dict], footer: str) -> str:
-    lines = [f"{p['name']} {p['born']}-{p['died']}-{p['age']} ёш" for p in people]
-    return "\n\n".join(lines + [footer])
+    """19.10, владелец: имя-фамилия — строкой, годы — ПОД именем (не сбоку)."""
+    blocks = [f"{p['name']}\n{p['born']}-{p['died']}-{p['age']} ёш" for p in people]
+    return "\n\n".join(blocks + [footer])
 
 
 # ---------- повторы (18.10, решение владельца) ----------
@@ -111,7 +132,9 @@ _FOLD = str.maketrans({"ў": "у", "қ": "к", "ғ": "г", "ҳ": "х", "ё": "е
 OLD = re.compile(r"Марҳум:\s*(?P<n>.+?)\s*\n.*?Туғилган сана:\s*(?P<b>.+?)\s*\n.*?Вафот этган сана:\s*(?P<d>.+?)(?:\n|$)", re.S)
 
 
-TITLES = {"хожи", "ҳожи", "хожа", "дада", "она", "ота", "тога", "тоға", "ая", "буви", "бувим", "бобо", "бобом", "ака",
+TITLES = {"хожи", "ҳожи", "хожа", "ҳожа", "хожия", "ҳожия", "эна", "ена", "ойи", "ойижон", "дадажон", "момо", "мома", "хола",
+          "амаки", "тоғажон", "холажон", "бувижон", "бобожон", "опажон", "акажон", "домлажон", "ҳожиона", "хожиона",
+          "дада", "она", "ота", "тога", "тоға", "ая", "буви", "бувим", "бобо", "бобом", "ака",
           "опа", "домла", "марҳум", "мархум", "раҳматли", "рахматли"}
 
 

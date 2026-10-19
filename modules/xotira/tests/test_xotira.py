@@ -14,7 +14,7 @@ class Parse(unittest.TestCase):
     def test_two_people_like_channel(self):
         p = core.parse("Қосимов Қўчқарвой 1942-2005\nҚосимова Мўътабархон 1942–2026", TODAY())
         self.assertEqual(core.caption(p, "@XOTIRAXOJAOBOD"),
-                         "Қосимов Қўчқарвой 1942-2005-63 ёш\n\nҚосимова Мўътабархон 1942-2026-84 ёш\n\n@XOTIRAXOJAOBOD")
+                         "Қосимов Қўчқарвой\n1942-2005-63 ёш\n\nҚосимова Мўътабархон\n1942-2026-84 ёш\n\n@XOTIRAXOJAOBOD")
 
     def test_latin_lower_and_dates(self):
         p = core.parse("qosimov qo'chqarvoy 12.03.1942 - 05.06.2005", TODAY())
@@ -35,7 +35,20 @@ class Parse(unittest.TestCase):
             self.assertIn("исм-фамилия", str(cm.exception))
         p = core.parse("Марҳум Қосимов Қўчқарвой ёш 1942-2005", TODAY())
         self.assertEqual(p[0]["name"], "Қосимов Қўчқарвой")
-        self.assertEqual(core.parse("Қосимов Қўчқарвой ота 1942-2005", TODAY())[0]["name"], "Қосимов Қўчқарвой ота")
+        self.assertEqual(core.parse("Қосимов Қўчқарвой ота 1942-2005", TODAY())[0]["name"], "Қосимов Қўчқарвой")
+
+    def test_titles_removed_two_on_one_line(self):
+        # 19.10: заявка №61 — «хожи дада/эна», возраст и два человека в одной строке → только ФИО, годы под именем
+        p = core.parse("Муминов Абдунаби хожи дада 1906-2000-94 Муминова Хайринисо хожи эна 1924-2010-86 ёш", TODAY())
+        self.assertEqual([(x["name"], x["born"], x["died"], x["age"]) for x in p],
+                         [("Муминов Абдунаби", 1906, 2000, 94), ("Муминова Хайринисо", 1924, 2010, 86)])
+        self.assertEqual(core.caption(p, "@X"), "Муминов Абдунаби\n1906-2000-94 ёш\n\nМуминова Хайринисо\n1924-2010-86 ёш\n\n@X")
+
+    def test_name_line_then_years_line(self):
+        p = core.parse("Қосимов Қўчқарвой ота\n1942-2005", TODAY())
+        self.assertEqual(p[0]["name"], "Қосимов Қўчқарвой")
+        p = core.parse("Hoji dada Qosimov Qo'chqarvoy 1942-2005", TODAY())
+        self.assertEqual(p[0]["name"], "Қосимов Қўчқарвой")
 
     def test_future_year(self):
         with self.assertRaises(core.BadInput):
@@ -86,7 +99,7 @@ class Flow(unittest.TestCase):
         self.assertEqual(h(cb("o:ok:1", uid=7)), "denied")          # не владелец
         self.assertEqual(h(cb("o:ok:1", uid=42)), "published")
         ch = [p for p in self.sent("sendPhoto") if p["chat_id"] == "@XOTIRAXOJAOBOD"]
-        self.assertEqual(ch[0]["caption"], "Қосимов Қўчқарвой 1942-2005-63 ёш\n\n@XOTIRAXOJAOBOD")
+        self.assertEqual(ch[0]["caption"], "Қосимов Қўчқарвой\n1942-2005-63 ёш\n\n@XOTIRAXOJAOBOD")
         self.assertEqual(ch[0]["photo"], "PH")
         self.assertTrue(any("t.me/XOTIRAXOJAOBOD/" in p["text"] for p in self.sent("sendMessage") if p["chat_id"] == 7))
         self.assertEqual(h(cb("o:ok:1", uid=42)), "dup")             # второй раз не публикует
@@ -131,7 +144,7 @@ class Duplicates(unittest.TestCase):
         self.api = Api()
         self.db = B.connect(":memory:")
         self.bot = B.Bot(self.api, self.db, {42}, "@XOTIRAXOJAOBOD", today=TODAY)
-        B.index_post(self.db, 77, "Қосимов Қўчқарвой 1942-2005-63 ёш\n\nҚосимова Мўътабархон 1942-2026-84 ёш\n\n@XOTIRAXOJAOBOD")
+        B.index_post(self.db, 77, "Қосимов Қўчқарвой\n1942-2005-63 ёш\n\nҚосимова Мўътабархон\n1942-2026-84 ёш\n\n@XOTIRAXOJAOBOD")
 
     def go(self, text, uid=7):
         h = self.bot.handle
