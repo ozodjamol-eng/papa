@@ -31,7 +31,8 @@
     "github-now",
     "assistant-status",
     "assistant-restart",
-    "audit-status"
+    "audit-status",
+    "diag-errors"
   ],
   "approve": [
     "morning-pool-clear",
