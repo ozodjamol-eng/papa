@@ -44,6 +44,24 @@ def kind_of(text: str) -> str:
     return "ad" if any(w in t for w in AD_WORDS) else "personal"
 
 
+FIX_RIGHTS = """⚠️ ИИ-ассистент получает сообщения, но Telegram НЕ даёт ему отвечать.
+Исправить (1 минута):
+Настройки → Telegram для бизнеса → Чат-боты → @ozodjamol_ai_bot →
+1) «Управление сообщениями» / «Ответ на сообщения» — ВКЛЮЧИТЬ;
+2) «Доступ к чатам» — «Все личные чаты» (или хотя бы «Все, кроме контактов»).
+После этого напишите себе с другого номера — ассистент ответит."""
+
+
+def can_reply_of(bc: dict):
+    """Право отвечать из business_connection: новое поле rights.can_reply или старое can_reply. None — неизвестно."""
+    r = bc.get("rights")
+    if isinstance(r, dict) and "can_reply" in r:
+        return bool(r["can_reply"])
+    if "can_reply" in bc:
+        return bool(bc["can_reply"])
+    return None
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conn (id TEXT PRIMARY KEY, owner INTEGER NOT NULL, owner_chat INTEGER, enabled INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS chats (chat INTEGER PRIMARY KEY, replied_at TEXT, owner_at TEXT, kind TEXT, name TEXT);
@@ -70,10 +88,13 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None) -> str:
         db.execute("INSERT OR REPLACE INTO conn VALUES (?,?,?,?)",
                    (bc["id"], bc["user"]["id"], bc.get("user_chat_id"), int(bc.get("is_enabled", True))))
         db.commit()
+        can_reply = can_reply_of(bc)
+        print(f"assistant: подключение · ответ разрешён: {can_reply}", flush=True)
         if bc.get("is_enabled", True) and bc.get("user_chat_id"):
             api("sendMessage", chat_id=bc["user_chat_id"],
-                text="✅ ИИ-ассистент подключён к вашему Telegram.\nОтвечаю только на первое сообщение человека "
-                     "(реклама — прайс, остальное — «передал, скоро свяжется») и пересылаю вам сюда.")
+                text=("✅ ИИ-ассистент подключён к вашему Telegram.\nОтвечаю только на первое сообщение человека "
+                      "(реклама — прайс, остальное — «передал, скоро свяжется») и пересылаю вам сюда.")
+                if can_reply is not False else FIX_RIGHTS)
         return "connected" if bc.get("is_enabled", True) else "disconnected"
     m = upd.get("business_message")
     if not m:
@@ -95,7 +116,19 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None) -> str:
         return "quiet"
     text = m.get("text") or m.get("caption") or ""
     kind = kind_of(text)
-    api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT if kind == "ad" else PERSONAL_TEXT)
+    try:
+        api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT if kind == "ad" else PERSONAL_TEXT)
+    except RuntimeError as e:
+        # 19.10: BUSINESS_PEER_INVALID — у бота нет права отвечать (или чат вне доступа). Владельцу — инструкция, раз в сутки.
+        last = db.execute("SELECT v FROM kv WHERE k='rights_alert'").fetchone()
+        if c["owner_chat"] and (not last or now - dt.datetime.fromisoformat(last[0]) > dt.timedelta(hours=24)):
+            try:
+                api("sendMessage", chat_id=c["owner_chat"], text=FIX_RIGHTS + f"\n\n(ошибка Telegram: {str(e)[:80]})")
+                db.execute("INSERT OR REPLACE INTO kv VALUES('rights_alert', ?)", (now.isoformat(),))
+                db.commit()
+            except Exception:  # noqa: BLE001
+                pass
+        raise
     name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or "—"
     user = f" (@{frm['username']})" if frm.get("username") else ""
     db.execute("INSERT INTO chats(chat, replied_at, kind, name) VALUES(?,?,?,?) ON CONFLICT(chat) DO UPDATE SET "

@@ -93,3 +93,30 @@ class StartTextTest(unittest.TestCase):
         db.execute("INSERT INTO conn VALUES ('c1', 7, 7, 1)")
         self.assertIn("уведомления", A.start_text(db, {"from": {"id": 7}}))
         self.assertIn("@Ozodjamol", A.start_text(db, {"from": {"id": 99}}))
+
+
+class RightsTest(unittest.TestCase):
+    def test_peer_invalid_alerts_owner_once(self):
+        import datetime as dt
+        import assistant as A
+        db = A.connect(":memory:")
+        sent = []
+
+        def api(method, **p):
+            if p.get("business_connection_id"):
+                raise RuntimeError("sendMessage: Bad Request: BUSINESS_PEER_INVALID")
+            sent.append(p)
+            return {}
+        A.handle(db, {"business_connection": {"id": "c1", "user": {"id": 1}, "user_chat_id": 1, "is_enabled": True,
+                                              "rights": {"can_reply": False}}}, api)
+        self.assertIn("НЕ даёт ему отвечать", sent[-1]["text"])
+        sent.clear()
+        msg = lambda uid: {"business_message": {"business_connection_id": "c1", "chat": {"id": uid, "type": "private"},
+                                                "from": {"id": uid, "first_name": "A"}, "text": "салом"}}
+        now = dt.datetime(2026, 10, 19, 4, 0, tzinfo=dt.timezone.utc)
+        for uid in (5, 6):
+            with self.assertRaises(RuntimeError):
+                A.handle(db, msg(uid), api, now=now)
+        self.assertEqual(len(sent), 1)                 # инструкция владельцу — один раз в сутки
+        self.assertIn("Чат-боты", sent[0]["text"])
+
