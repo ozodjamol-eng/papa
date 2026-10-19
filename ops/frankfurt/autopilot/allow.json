@@ -28,7 +28,8 @@
     "xotira-restart",
     "xotira-scan",
     "xotira-sample",
-    "github-now"
+    "github-now",
+    "assistant-status"
   ],
   "approve": [
     "morning-pool-clear",
