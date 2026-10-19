@@ -197,3 +197,109 @@ class OwnerCardNoName(unittest.TestCase):
         self.assertIn("НЕТ ИМЕНИ", b.owner_card(R(row)))
         row["caption"] = "Қосимов Қўчқарвой 1942-2005-63 ёш\n\n@XOTIRAXOJAOBOD"
         self.assertNotIn("НЕТ ИМЕНИ", b.owner_card(R(row)))
+
+
+# ---------- 19.10: скриншоты и обрезка фото ----------
+from xotira import photo as PH  # noqa: E402
+
+try:
+    import cv2
+    import numpy as np
+except Exception:  # noqa: BLE001
+    cv2 = None
+
+
+def screenshot(bg=0, w=540, h=1170):
+    """Как присылают люди: экран телефона, в середине фото, сверху строка состояния, внизу кнопки."""
+    rnd = np.random.default_rng(1)
+    img = np.full((h, w, 3), bg, np.uint8)
+    img[300:900, 40:500] = rnd.integers(30, 230, (600, 460, 3), dtype=np.uint8)      # само фото
+    fg = 255 - bg
+    cv2.putText(img, "21:02", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (fg,) * 3, 2)   # строка состояния
+    for x, t in ((30, "CANCEL"), (220, "RESET"), (420, "CROP")):                       # кнопки редактора
+        cv2.putText(img, t, (x, 1000), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (fg,) * 3, 2)
+    return img
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class Photo(unittest.TestCase):
+    def test_dark_and_light_screenshot_cropped_to_photo(self):
+        for bg in (0, 255):
+            img = screenshot(bg)
+            x, y, w, h = PH.region(img)
+            self.assertLess(abs(x - 40) + abs(y - 300), 20, bg)
+            self.assertLess(abs(w - 460) + abs(h - 600), 30, bg)
+            out = PH.decode(PH.auto(PH.encode(img)))
+            self.assertLess(abs(out.shape[0] - 600), 20)
+
+    def test_normal_photo_untouched(self):
+        img = np.random.default_rng(2).integers(0, 255, (800, 600, 3), dtype=np.uint8)
+        self.assertIsNone(PH.auto(PH.encode(img)))
+        self.assertIsNone(PH.face(PH.encode(img)))                   # лица нет — честно «нет»
+
+
+class FileApi(Api):
+    """Фейковый Telegram с файлами: download отдаёт скриншот, upload возвращает новый file_id."""
+    def __init__(self, data):
+        super().__init__()
+        self.data, self.ups = data, []
+
+    def download(self, fid):
+        return self.data if fid in ("SHOT", "PH") else b"bad"
+
+    def upload(self, m, field, data, **p):
+        self.ups.append((m, p))
+        self.calls.append((m, p))
+        return {"message_id": 700 + len(self.ups), "photo": [{"file_id": f"CUT{len(self.ups)}"}]}
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class PhotoFlow(unittest.TestCase):
+    def setUp(self):
+        self.api = FileApi(PH.encode(screenshot()))
+        self.bot = B.Bot(self.api, B.connect(":memory:"), {42}, "@XOTIRAXOJAOBOD", today=TODAY)
+
+    def channel(self):
+        return [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == "@XOTIRAXOJAOBOD"]
+
+    def submit(self):
+        h = self.bot.handle
+        h(msg(photo="SHOT"))
+        self.assertTrue(any("скриншот" in p["text"] for m, p in self.api.calls if m == "sendMessage"))
+        h(msg(text="Аскарова Гулмирахон 1975-2026"))
+        self.assertEqual(h(cb("u:send")), "sent")
+
+    def test_screenshot_auto_cropped_and_published(self):
+        self.submit()
+        card = self.api.ups[0][1]
+        self.assertIn("обрезано автоматически", card["caption"])
+        texts = [b["text"] for row in card["reply_markup"]["inline_keyboard"] for b in row]
+        self.assertIn("👤 По лицу", texts)
+        self.assertEqual(self.bot.handle(cb("o:ok:1", uid=42)), "published")
+        self.assertEqual(self.channel()[0]["photo"], "CUT1")            # в канал ушло обрезанное
+
+    def test_original_and_own_photo(self):
+        self.submit()
+        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "orig")
+        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "same")
+        self.assertEqual(self.bot.handle(cb("o:crop:1", uid=42)), "crop")
+        self.assertEqual(self.bot.handle(cb("o:face:1", uid=7)), "denied")
+        self.assertEqual(self.bot.handle(cb("o:own:1", uid=42)), "wait")
+        self.assertEqual(self.bot.handle(msg(uid=42, photo="MINE")), "replaced")
+        self.bot.handle(cb("o:ok:1", uid=42))
+        self.assertEqual(self.channel()[0]["photo"], "MINE")
+        self.assertEqual(self.bot.handle(cb("o:crop:1", uid=42)), "dup")  # после публикации не трогаем
+
+    def test_reply_photo_to_card(self):
+        self.submit()
+        mid = json.loads(self.bot.db.execute("SELECT owner_msgs FROM subs").fetchone()[0])["42"]
+        m = msg(uid=42, photo="R")
+        m["message"]["reply_to_message"] = {"message_id": mid}
+        self.assertEqual(self.bot.handle(m), "replaced")
+
+    def test_broken_file_does_not_break_flow(self):
+        h = self.bot.handle
+        h(msg(photo="X"))                                               # download → b"bad"
+        h(msg(text="Ахмедов Али 1950-2020"))
+        self.assertEqual(h(cb("u:send")), "sent")
+        self.assertEqual(h(cb("o:face:1", uid=42)), "none")

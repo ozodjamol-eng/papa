@@ -10,7 +10,8 @@ Group=papa-xotira
 EnvironmentFile=/etc/papa-xotira/xotira.env
 Environment=XOTIRA_DB=/var/lib/papa-xotira/xotira.sqlite3 PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/papa/modules/xotira
-ExecStart=/usr/bin/python3 -m xotira
+# 19.10: с OpenCV (обрезка скриншотов) — из venv; если venv ещё нет — системный Python, бот работает без обрезки
+ExecStart=/bin/sh -c 'P=/opt/papa-venv/xotira/bin/python; [ -x "$$P" ] || P=/usr/bin/python3; exec "$$P" -m xotira'
 Restart=on-failure
 RestartSec=30
 StateDirectory=papa-xotira
@@ -28,8 +29,8 @@ RestrictAddressFamilies=AF_INET AF_INET6
 RestrictNamespaces=yes
 LockPersonality=yes
 UMask=0077
-MemoryMax=60M
-CPUQuota=10%
+MemoryMax=160M
+CPUQuota=30%
 TasksMax=8
 
 [Install]
