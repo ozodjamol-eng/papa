@@ -497,6 +497,15 @@ class TestChannelHub(Base):
         self.assertEqual(self.bot.calls, [])                                   # главный бот молчит
         self.assertIsNone(hub.handle(pb, self.db, CFG, ENV, hub_post(10, "КАТТА ДАВРА · ХАБ")))
 
+    def test_xojaobod_hub_main_bot(self):
+        # 19.10: главный бот берёт и ХАБ Хўжаобода (у группы нет своего пульта), КАТТА ДАВРА · ХАБ не путается
+        self.assertEqual(self.h(hub_post(7, "КАТТА ДАВРА · ХАБ")), "material")
+        self.assertEqual(self.h(hub_post(8, "ХЎЖАОБОД · ХАБ", chat=-100888, text="Хўжаободда янги боғ очилди")), "material")
+        self.assertEqual((store.get(self.db, 2)["channel"], store.get(self.db, 2)["stock"]), ("xojaobod", 1))
+        self.assertEqual(store.kv_get(self.db, "hub_xojaobod"), "-100888")
+        self.assertEqual(self.h(hub_post(9, "КАТТА ДАВРА · ХАБ", text="Бошқа янги клип")), "material")
+        self.assertEqual(store.get(self.db, 3)["channel"], "davra")
+
     def test_hub_album_one_material(self):
         self.assertEqual(self.h(hub_post(11, "КАТТА ДАВРА · ХАБ", gid="g1")), "album")
         self.assertEqual(self.h(hub_post(12, "КАТТА ДАВРА · ХАБ", text="", gid="g1")), "album")

@@ -14,7 +14,7 @@ def tg(tok, m, **p):
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
         return json.loads(e.read() or b"{}")
-for name, key, var in (("КАТТА ДАВРА", "davra", "GENPLAN_BOT_TOKEN"), ("PaparazziUZ", "paparazzi", "PAPARAZZI_BOT_TOKEN")):
+for name, key, var in (("КАТТА ДАВРА", "davra", "GENPLAN_BOT_TOKEN"), ("PaparazziUZ", "paparazzi", "PAPARAZZI_BOT_TOKEN"), ("Хўжаобод", "xojaobod", "GENPLAN_BOT_TOKEN")):
     tok = os.environ.get(var)
     row = db.execute("SELECT v FROM kv WHERE k=?", (f"hub_{key}",)).fetchone()
     hid = row["v"] if row else None

@@ -235,20 +235,27 @@ def _norm(t: str | None) -> str:
 
 def channel_hub(db, cfg: dict, post: dict, own: str | None) -> str | None:
     """18.10 (владелец): у каждого канала свой ХАБ — частный канал, куда он бросает собранное. Бот канала берёт
-    оттуда материал сам. Каждый бот — только свой хаб: главный — КАТТА ДАВРА, пульт PaparazziUZ — PaparazziUZ.
-    Хаб узнаётся по названию (hub_title в config.toml), потом запоминается по id."""
-    me = own or cfg.get("default_channel") or "davra"
-    ch = cfg["channels"].get(me) or {}
-    if not ch.get("hub_title"):
-        return None
+    оттуда материал сам. Каждый бот — только свой хаб: пульт PaparazziUZ — PaparazziUZ; главный бот — каналы без
+    своего пульта (КАТТА ДАВРА и, с 19.10, Хўжаобод). Хаб узнаётся по названию (hub_title), потом запоминается по id."""
+    if own:
+        mine = [own]
+    else:
+        first = cfg.get("default_channel") or "davra"
+        mine = [first] + [c for c, ch in cfg["channels"].items() if c != first and not ch.get("bot_token_env")]
     cid = int(post["chat"]["id"])
-    known = store.kv_get(db, f"hub_{me}", "")
-    if known:                                      # 18.10: хаб уже известен — только он (чужой канал с таким же названием — нет)
-        return me if int(known) == cid else None
-    if _norm(post["chat"].get("title")) == _norm(ch["hub_title"]):
-        if str(known) != str(cid):
+    title = _norm(post["chat"].get("title"))
+    for me in mine:
+        ch = cfg["channels"].get(me) or {}
+        if not ch.get("hub_title"):
+            continue
+        known = store.kv_get(db, f"hub_{me}", "")
+        if known:                                  # 18.10: хаб уже известен — только он (чужой канал с таким же названием — нет)
+            if int(known) == cid:
+                return me
+            continue
+        if title == _norm(ch["hub_title"]):
             store.kv_set(db, f"hub_{me}", str(cid))
-        return me
+            return me
     return None
 
 
