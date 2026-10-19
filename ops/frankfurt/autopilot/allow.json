@@ -32,7 +32,8 @@
     "assistant-status",
     "assistant-restart",
     "audit-status",
-    "diag-errors"
+    "diag-errors",
+    "audit-reports"
   ],
   "approve": [
     "morning-pool-clear",

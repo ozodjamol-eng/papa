@@ -1,5 +1,5 @@
 [Unit]
-Description=PAPA аудит (%i) — протокол docs/AUDIT.md, отчёт в КАТТА ДАВРА Пульт
+Description=PAPA аудит (%i) — протокол docs/AUDIT.md, отчёт в «PAPA ОТЧЁТЫ» (срочное — ещё и в пульт)
 After=network-online.target
 
 [Service]

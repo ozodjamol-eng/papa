@@ -50,6 +50,27 @@ def envf(*paths: str) -> dict:
     return out
 
 
+SELF_RESTART = {"papa-autopilot"}
+REPORTS_ENV = ("/etc/papa-test/bot.env", "/etc/papa-reports.env")   # бот отчётов + id канала «PAPA ОТЧЁТЫ»
+
+
+def deliver(env: dict, text: str, urgent: bool, send=None) -> list[str]:
+    """19.10, владелец: отчёт аудита — в «PAPA ОТЧЁТЫ» (как все отчёты). Срочное (❌) — ещё и в пульт.
+    Канал не настроен или не принял — отчёт в пульт, чтобы не потерялся. Возвращает, куда ушло."""
+    send = send or tg
+    rep = envf(*REPORTS_ENV)
+    tok, chan = rep.get("PAPA_TEST_BOT_TOKEN", ""), rep.get("PAPA_REPORTS_CHANNEL_ID", "")
+    went = []
+    if tok and chan and send(tok, "sendMessage", chat_id=chan, text=text[:4000], disable_web_page_preview=True).get("ok"):
+        went.append("reports")
+    if urgent or not went:
+        for o in env.get("OWNER_IDS", "").split(","):
+            if o.strip() and send(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text=text[:4000],
+                                  disable_web_page_preview=True).get("ok"):
+                went.append("pult")
+    return went
+
+
 def tg(token: str, method: str, **p) -> dict:
     data = urllib.parse.urlencode({k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
                                    for k, v in p.items()}).encode()
@@ -79,6 +100,8 @@ class Audit:
                 self.bad.append(f"служба {s}: {st or 'нет'}")
             else:
                 n = sh("systemctl", "show", "-p", "NRestarts", "--value", s)
+                if s in SELF_RESTART:                 # 19.10: автопилот сам перезапускается после каждого обновления кода — это норма
+                    continue
                 if n.isdigit() and int(n) >= 3:
                     self.warn.append(f"{s} перезапускалась {n} раз")
         for t in TIMERS:
@@ -338,9 +361,7 @@ def main(mode: str = "full", send: bool = True) -> int:
     (OUT / f"last-{mode}.json").write_text(json.dumps({"at": now.isoformat(), "bad": a.bad, "warn": a.warn, "info": a.info},
                                                       ensure_ascii=False), encoding="utf-8")
     if send and (not quick or a.bad):
-        for o in env.get("OWNER_IDS", "").split(","):
-            if o.strip():
-                tg(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text=msg[:4000], disable_web_page_preview=True)
+        print("отправлено:", ", ".join(deliver(env, msg, urgent=bool(a.bad))) or "никуда")
     return 1 if a.bad else 0
 
 
