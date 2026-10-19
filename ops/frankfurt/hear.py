@@ -21,7 +21,7 @@ def main(paths):
     for p in paths:
         data = base64.b64encode(Path(p).read_bytes()).decode()
         body = {"contents": [{"parts": [{"inline_data": {"mime_type": "audio/mp3", "data": data}}, {"text": PROMPT}]}],
-                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 8192}}
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 32768}}  # «думающие» модели тратят часть лимита на мысли
         print(f"===== {Path(p).name} =====", flush=True)
         done, errs = False, []
         for attempt in range(3):  # перегрузка Gemini (503) обычно временная — повтор с паузой
