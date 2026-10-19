@@ -33,7 +33,8 @@
     "assistant-restart",
     "audit-status",
     "diag-errors",
-    "audit-reports"
+    "audit-reports",
+    "hubs-check"
   ],
   "approve": [
     "morning-pool-clear",
