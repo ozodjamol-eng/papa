@@ -506,6 +506,10 @@ class TestChannelHub(Base):
         self.assertEqual(self.h(hub_post(9, "КАТТА ДАВРА · ХАБ", text="Бошқа янги клип")), "material")
         self.assertEqual(store.get(self.db, 3)["channel"], "davra")
 
+    def test_hub_title_latin_lookalikes(self):
+        self.assertEqual(self.h(hub_post(8, "XЎЖAОБОД · XАБ", chat=-100888, text="Хўжаободда янги боғ очилди")), "material")
+        self.assertEqual(store.get(self.db, 1)["channel"], "xojaobod")
+
     def test_hub_album_one_material(self):
         self.assertEqual(self.h(hub_post(11, "КАТТА ДАВРА · ХАБ", gid="g1")), "album")
         self.assertEqual(self.h(hub_post(12, "КАТТА ДАВРА · ХАБ", text="", gid="g1")), "album")

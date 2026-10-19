@@ -229,8 +229,12 @@ def kb_channel(mid: int, cfg: dict | None = None, allowed: list[str] | None = No
 
 # ---------- приём ----------
 
+_LOOK = str.maketrans({"x": "х", "a": "а", "o": "о", "e": "е", "p": "р", "c": "с", "k": "к", "b": "в", "h": "н",
+                       "m": "м", "t": "т", "y": "у"})   # 19.10: латинские двойники в названии хаба («XЎЖАОБОД») = кириллица
+
+
 def _norm(t: str | None) -> str:
-    return re.sub(r"[^0-9a-zа-яёўқғҳ]+", "", (t or "").lower())
+    return re.sub(r"[^0-9a-zа-яёўқғҳ]+", "", (t or "").lower()).translate(_LOOK)
 
 
 def channel_hub(db, cfg: dict, post: dict, own: str | None) -> str | None:
