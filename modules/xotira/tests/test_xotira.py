@@ -245,7 +245,7 @@ class FileApi(Api):
         self.data, self.ups = data, []
 
     def download(self, fid):
-        return self.data if fid in ("SHOT", "PH") else b"bad"
+        return self.data if fid in ("SHOT", "PH") or fid.startswith("CUT") else b"bad"
 
     def upload(self, m, field, data, **p):
         self.ups.append((m, p))
@@ -303,3 +303,19 @@ class PhotoFlow(unittest.TestCase):
         h(msg(text="Ахмедов Али 1950-2020"))
         self.assertEqual(h(cb("u:send")), "sent")
         self.assertEqual(h(cb("o:face:1", uid=42)), "none")
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class Enhance(PhotoFlow):
+    def test_enhance_once_then_orig(self):
+        self.submit()
+        self.assertEqual(self.bot.handle(cb("o:enh:1", uid=42)), "enh")
+        self.assertEqual(self.bot.handle(cb("o:enh:1", uid=42)), "same")      # дважды не улучшаем
+        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "orig")
+        self.bot.handle(cb("o:ok:1", uid=42))
+        self.assertEqual(self.channel()[0]["photo"], "SHOT")
+
+    def test_enhance_keeps_size(self):
+        img = screenshot()
+        out = PH.decode(PH.enhance(PH.encode(img)))
+        self.assertEqual(out.shape, img.shape)

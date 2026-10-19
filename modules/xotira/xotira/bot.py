@@ -64,8 +64,12 @@ def kb_owner(n: int, status: str = "pending") -> dict:
     if ph.available():
         rows.append([{"text": "✂️ Авто-обрезка", "callback_data": f"o:crop:{n}"},
                      {"text": "👤 По лицу", "callback_data": f"o:face:{n}"}])
-    rows.append([{"text": "↩️ Оригинал", "callback_data": f"o:orig:{n}"},
-                 {"text": "📎 Своё фото", "callback_data": f"o:own:{n}"}])
+        rows.append([{"text": "✨ Улучшить", "callback_data": f"o:enh:{n}"},
+                     {"text": "↩️ Оригинал", "callback_data": f"o:orig:{n}"}])
+        rows.append([{"text": "📎 Своё фото", "callback_data": f"o:own:{n}"}])
+    else:
+        rows.append([{"text": "↩️ Оригинал", "callback_data": f"o:orig:{n}"},
+                     {"text": "📎 Своё фото", "callback_data": f"o:own:{n}"}])
     return {"inline_keyboard": rows}
 
 
@@ -81,6 +85,8 @@ def connect(path: str) -> sqlite3.Connection:
         db.execute("ALTER TABLE subs ADD COLUMN report TEXT")
     if "photo_orig" not in {r[1] for r in db.execute("PRAGMA table_info(subs)")}:
         db.execute("ALTER TABLE subs ADD COLUMN photo_orig TEXT")      # 19.10: что прислал человек (для «↩️ Оригинал»)
+    if "enh" not in {r[1] for r in db.execute("PRAGMA table_info(subs)")}:
+        db.execute("ALTER TABLE subs ADD COLUMN enh TEXT")             # 19.10: file_id уже улучшенного фото (не улучшать дважды)
     return db
 
 
@@ -383,7 +389,7 @@ class Bot:
         if self.try_photo(ph.auto, file_id):
             self.api("sendMessage", chat_id=chat, text=T_SCREEN)
 
-    def set_photo(self, n: int, data: bytes | None = None, file_id: str | None = None) -> None:
+    def set_photo(self, n: int, data: bytes | None = None, file_id: str | None = None) -> str | None:
         """Новое фото заявки → в базу и во все карточки владельца (кнопки остаются)."""
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
         cap, kb = self.owner_card(s)[:1024], kb_owner(n, s["status"])
@@ -405,6 +411,7 @@ class Bot:
         if file_id:
             self.db.execute("UPDATE subs SET photo=? WHERE id=?", (file_id, n))
             self.db.commit()
+        return file_id
 
     def edit_photo(self, cq: dict, act: str, n: int) -> str:
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
@@ -428,6 +435,19 @@ class Bot:
             self.set_photo(n, file_id=orig)
             say("↩️ Оригинал")
             return "orig"
+        if act == "enh":                                          # улучшаем то, что сейчас в карточке (после обрезки)
+            if s["enh"] and s["enh"] == s["photo"]:
+                say("Уже улучшено. Не нравится — «↩️ Оригинал»")
+                return "same"
+            out = self.try_photo(ph.enhance, s["photo"])
+            if not out:
+                say("Не получилось обработать фото", True)
+                return "none"
+            fid = self.set_photo(n, data=out)
+            self.db.execute("UPDATE subs SET enh=? WHERE id=?", (fid, n))
+            self.db.commit()
+            say("✨ Готово")
+            return "enh"
         out = self.try_photo(ph.auto if act == "crop" else ph.face, orig)
         if not out:
             say("Лишнего не найдено — фото и так чистое" if act == "crop" else "Лицо не найдено — попробуйте «📎 Своё фото»", True)
@@ -468,7 +488,7 @@ class Bot:
                 self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Фақат админ учун")
                 return "denied"
             _, act, n = data.split(":")
-            if act in ("crop", "face", "orig", "own"):
+            if act in ("crop", "face", "orig", "own", "enh"):
                 return self.edit_photo(cq, act, int(n))
             return self.decide(cq, act == "ok", int(n))
         self.api("answerCallbackQuery", callback_query_id=cq["id"])

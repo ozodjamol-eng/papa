@@ -125,3 +125,24 @@ def face(data: bytes) -> bytes | None:
     x0 = int(min(max(0, cx - cw / 2), W - cw))
     y0 = int(min(max(0, cy - ch * 0.40), H - ch))   # лицо чуть выше центра, как на портрете
     return encode(img[y0:y0 + int(ch), x0:x0 + int(cw)])
+
+
+def enhance(data: bytes) -> bytes:
+    """«✨ Улучшить»: мягко — локальный автоконтраст (лицо в тени светлеет), снять жёлтый/синий оттенок, чуть резкости.
+    Лица умерших родные знают — поэтому всё слабо, без «фильтров»."""
+    img = decode(data)
+    f = img.astype(np.float32)
+    mean = f.reshape(-1, 3).mean(axis=0)                              # серый мир: убрать цветной оттенок лампы
+    gain = np.clip(mean.mean() / np.maximum(mean, 1), 0.8, 1.25)
+    f = f * (1 + (gain - 1) * 0.25)                                   # слабо — розовый платок и кожа остаются живыми
+    img = np.clip(f, 0, 255).astype(np.uint8)
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(l)
+    img = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[..., 1] = np.clip(hsv[..., 1] * 1.08, 0, 255)                 # чуть живее цвет (скриншоты блёклые)
+    img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    blur = cv2.GaussianBlur(img, (0, 0), 1.2)
+    img = cv2.addWeighted(img, 1.3, blur, -0.3, 0)                   # лёгкая резкость
+    return encode(img)
