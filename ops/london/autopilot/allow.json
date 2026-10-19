@@ -17,7 +17,8 @@
     "genplan5-ai-test",
     "xotira-find",
     "xotira-inspect",
-    "xotira-find2"
+    "xotira-find2",
+    "genplan5-ads-list"
   ],
   "approve": [
     "genplan5-overdue-skip",
