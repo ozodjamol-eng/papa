@@ -30,7 +30,8 @@
     "xotira-sample",
     "github-now",
     "assistant-status",
-    "assistant-restart"
+    "assistant-restart",
+    "audit-status"
   ],
   "approve": [
     "morning-pool-clear",
