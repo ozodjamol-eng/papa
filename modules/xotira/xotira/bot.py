@@ -241,6 +241,8 @@ class Bot:
     # ---------- владелец ----------
     def owner_card(self, s) -> str:
         rep = s["report"] if "report" in s.keys() and s["report"] else ""
+        if not all(core.name_ok(p["name"]) for p in core.extract(s["caption"]) or [{"name": ""}]):
+            rep = (rep + "\n" if rep else "") + "⛔ НЕТ ИМЕНИ: в посте нет исм-фамилии — не жойлайте, ответьте человеку"
         tail = "⏳ Ждёт вашего одобрения" if s["status"] == "pending" else (
             "🚫 Человеку ответили «уже есть». Если это другой человек — «Всё равно жойлаш»" if s["status"] == "duplicate" else "")
         return f"🕊 №{s['id']} · ариза: {s['who']}\n\n{s['caption']}\n\n{rep}\n{tail}".strip()

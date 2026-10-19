@@ -46,6 +46,28 @@ def _name(raw: str) -> str:
     return n
 
 
+# 19.10, владелец: пост ушёл в канал без имени («Йош 1979-2020-41 ёш») — такое пресекать.
+# Служебные слова не считаются именем: их убираем, а для поста нужны минимум 2 слова имени (фамилия + исм).
+SERVICE = {"йош", "ёш", "ёши", "йоши", "yosh", "yoshi", "туғилган", "тугилган", "вафот", "этган", "етган", "йил", "йили",
+           "й", "сана", "санаси", "марҳум", "мархум", "марҳума", "мархума", "раҳматли", "рахматли", "ёшида", "йошида",
+           "ёшда", "йошда", "тавалуд", "хотира", "фио", "исм", "фамилия"}
+
+
+def _strip_service(name: str) -> str:
+    words = [w for w in name.split(" ") if w.strip(".,:;!?()«»\"'").lower() not in SERVICE]
+    return " ".join(words).strip(" .,:;-–—")
+
+
+def name_ok(name: str) -> bool:
+    """Есть ли настоящее имя: ≥ 2 слова из букв (≥ 2 буквы), не служебные и не обращения (хожи, ота, она…)."""
+    real = [w for w in re.findall(r"[^\W\d_][^\W\d_'ʻ‘’-]*", name or "")
+            if len(w) >= 2 and w.lower() not in SERVICE and w.lower() not in TITLES]
+    return len(real) >= 2
+
+
+T_NO_NAME = "«{line}» — марҳумнинг исм-фамилияси ёзилмаган. Тўлиқ ёзинг, масалан: Қосимов Қўчқарвой 1942-2005"
+
+
 def parse(text: str, today: dt.date | None = None) -> list[dict]:
     """Строки «ФИО 1942-2005» → [{"name", "born", "died", "age"}]. Ошибка — BadInput с понятным (узб.) текстом."""
     today = today or dt.date.today()
@@ -62,8 +84,9 @@ def parse(text: str, today: dt.date | None = None) -> list[dict]:
         born, died = int(m.group(2)), int(m.group(4))
         name = _name(line[:m.start()] + " " + line[m.end():])
         name = re.sub(r"\s*\d+\s*ёш\s*$|\s*\d+\s*yosh\s*$", "", name).strip()
-        if len(name) < 3:
-            raise BadInput(f"«{line}» — исм-фамилия ёзилмаган.")
+        name = _strip_service(name)
+        if len(name) < 3 or not name_ok(name):
+            raise BadInput(T_NO_NAME.format(line=line))
         if not (1880 <= born <= died <= today.year):
             raise BadInput(f"«{line}» — йиллар нотўғри: туғилган йил вафот йилидан олдин бўлиши керак.")
         if died - born > 120:

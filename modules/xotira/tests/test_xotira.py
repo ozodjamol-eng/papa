@@ -26,6 +26,17 @@ class Parse(unittest.TestCase):
             with self.assertRaises(core.BadInput, msg=t):
                 core.parse(t, TODAY())
 
+    def test_no_name_blocked(self):
+        # 19.10: пост №52 ушёл в канал как «Йош 1979-2020-41 ёш» — без имени. Такое не пропускаем.
+        for t in ("Йош 1979-2020", "ёш 1979-2020", "Марҳум 1950-2010", "1979-2020 41 ёш", "Ота 1940-2000",
+                  "Қосимов 1942-2005", "Хожи ота 1930-2001"):
+            with self.assertRaises(core.BadInput, msg=t) as cm:
+                core.parse(t, TODAY())
+            self.assertIn("исм-фамилия", str(cm.exception))
+        p = core.parse("Марҳум Қосимов Қўчқарвой ёш 1942-2005", TODAY())
+        self.assertEqual(p[0]["name"], "Қосимов Қўчқарвой")
+        self.assertEqual(core.parse("Қосимов Қўчқарвой ота 1942-2005", TODAY())[0]["name"], "Қосимов Қўчқарвой ота")
+
     def test_future_year(self):
         with self.assertRaises(core.BadInput):
             core.parse("Ахмедов Али 1950-2030", TODAY())
@@ -160,3 +171,16 @@ class Duplicates(unittest.TestCase):
                                               "caption": "🕊 ХОТИРА\n\nМарҳум: Каримов Бобур\nТуғилган сана: 1960\nВафот этган сана: 2021\n"}})
         self.assertEqual(r, "indexed:1")
         self.assertEqual(self.go("Каримов Бобур 1960-2021", uid=9), "duplicate")
+
+
+class OwnerCardNoName(unittest.TestCase):
+    def test_card_warns_without_name(self):
+        b = B.Bot(api=lambda *a, **k: {}, db=B.connect(":memory:"), owners={1}, channel="@XOTIRAXOJAOBOD", today=TODAY)
+        row = {"id": 52, "who": "x", "caption": "Йош 1979-2020-41 ёш\n\n@XOTIRAXOJAOBOD", "status": "pending", "report": ""}
+
+        class R(dict):
+            def keys(self):
+                return super().keys()
+        self.assertIn("НЕТ ИМЕНИ", b.owner_card(R(row)))
+        row["caption"] = "Қосимов Қўчқарвой 1942-2005-63 ёш\n\n@XOTIRAXOJAOBOD"
+        self.assertNotIn("НЕТ ИМЕНИ", b.owner_card(R(row)))
