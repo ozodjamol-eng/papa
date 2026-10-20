@@ -514,6 +514,24 @@ class TestChannelHub(Base):
         self.assertEqual(self.bot.calls, [])                                   # главный бот молчит
         self.assertIsNone(hub.handle(pb, self.db, CFG, ENV, hub_post(10, "КАТТА ДАВРА · ХАБ")))
 
+    def test_xojaobod_bot_takes_its_hub_and_copies_to_papa_hub(self):
+        # 20.10 владелец: каждый бот — своё; аккаунт PAPA в ХАБ группы не добавляем — бот группы сам кладёт копию в PAPA HUB
+        from genplan import bots
+        xb = FakeBot()
+        bots.REG.clear(); bots.REG.update({"main": self.bot, "xojaobod": xb})
+        self.addCleanup(bots.REG.clear)
+        r = hub.handle(xb, self.db, CFG, ENV, hub_post(9, "ХЎЖАОБОД · ХАБ", chat=-100888, text="Хўжаободда янги боғ очилди"))
+        self.assertEqual(r, "material")
+        m = store.get(self.db, 1)
+        self.assertEqual((m["channel"], m["stock"], str(m["hub_chat"])), ("xojaobod", 1, ENV["HUB_CHAT_ID"]))
+        self.assertTrue(any(c[0] == "copyMessage" and str(c[1]["chat_id"]) == ENV["HUB_CHAT_ID"] for c in xb.calls))
+        self.assertEqual(self.bot.calls, [])                                   # главный бот молчит
+        # копия в PAPA HUB — не новый материал для главного бота
+        copy_id = m["hub_msg"]
+        self.assertIsNone(self.h({"channel_post": {"message_id": copy_id, "chat": {"id": int(ENV["HUB_CHAT_ID"]), "type": "channel"},
+                                                   "date": 1, "caption": "Хўжаободда янги боғ очилди", "photo": [{"file_id": "z", "file_unique_id": "z"}]}}))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 1)
+
     def test_main_bot_takes_only_davra_hub(self):
         # 20.10 владелец: каждый бот — своё. Главный бот (пульт Давры) ХАБ Хўжаобода НЕ берёт
         self.assertEqual(self.h(hub_post(7, "КАТТА ДАВРА · ХАБ")), "material")

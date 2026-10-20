@@ -319,6 +319,13 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         notes = (notes or []) + [pol]
     if stock:                                      # 18.10: пост из ХАБа канала — в 📦 запас, выйдет сам в пустой слот
         store.update(db, mid, stock=1)
+        if cfg["channels"][channel].get("publisher") == "account":
+            # 20.10 владелец: «каждый бот — своё». ХАБ группы читает только её бот; он сам кладёт копию в технический
+            # PAPA HUB, откуда аккаунт PAPA публикует в группу (аккаунт в ХАБ группы не добавляем).
+            try:
+                to_hub(bot, db, mid)
+            except Exception as e:  # noqa: BLE001
+                notes = (notes or []) + [f"⚠️ Не смог подготовить медиа для группы: {type(e).__name__}"]
         notes = ["📥 Из ХАБа канала — уже ваше одобрение"] + (notes or [])
     placed = None if stock else auto_place(db, cfg, mid)
     if placed:
@@ -352,6 +359,10 @@ def direct(bot, db, cfg, owners, hub: int, msgs: list[dict], channel: str | None
         ids = [x["message_id"] for x in r]
     else:
         ids = [bot("copyMessage", chat_id=hub, from_chat_id=chat, message_id=msgs[0]["message_id"])["message_id"]]
+    from . import bots
+    if bots.channel_of(bot):                       # копию от бота канала главный бот не принимает за новый материал
+        for x in ids:
+            store.kv_set(db, f"hubcopy_{x}", "1")
     return intake(bot, db, cfg, owners, hub, ids, msgs, reply_chat=chat, channel=channel)
 
 
@@ -435,6 +446,8 @@ def to_hub(bot, db, mid: int) -> None:
         new = [x["message_id"] for x in bot("copyMessages", chat_id=HUB_ID, from_chat_id=m["hub_chat"], message_ids=ids)]
     else:
         new = [bot("copyMessage", chat_id=HUB_ID, from_chat_id=m["hub_chat"], message_id=ids[0])["message_id"]]
+    for x in new:                                  # копию в PAPA HUB главный бот не принимает за новый материал
+        store.kv_set(db, f"hubcopy_{x}", "1")
     store.update(db, mid, hub_chat=HUB_ID, hub_msg=new[0], hub_msgs=json.dumps(new))
 
 
@@ -453,6 +466,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if int(post["chat"]["id"]) == hub:
             if own:                                  # пост в хабе видят все боты — принимает только главный
                 return None
+            if store.kv_get(db, f"hubcopy_{post['message_id']}"):
+                return None                          # служебная копия от бота канала (группа) — не новый материал
             if _album(post, dm=False):
                 return "album"
             return intake(bot, db, cfg, owners, hub, [post["message_id"]], [post])
