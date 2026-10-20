@@ -43,7 +43,9 @@ class Assistant(unittest.TestCase):
         self.assertEqual(r["business_connection_id"], "BC")
         self.assertIn("ИИ-ёрдамчиси", r["text"])                      # всегда говорит, что это ИИ-ассистент
         self.assertIn("50 000 сўм", r["text"])
-        self.assertIn("КАТТА ДАВРА", r["text"])
+        self.assertIn("XO'JAOBOD CITY 24", r["text"])          # реклама только в Хўжаобод (20.10)
+        self.assertNotIn("КАТТА ДАВРА", r["text"])
+        self.assertNotIn("PaparazziUZ", r["text"])
         self.assertIn("📣 РЕКЛАМА · Ali (@ali)", self.sent(OWNER)[0]["text"])
 
     def test_personal_short_reply(self):
