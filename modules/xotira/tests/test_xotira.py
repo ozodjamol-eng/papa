@@ -350,25 +350,44 @@ class QualityFlow(unittest.TestCase):
     def last(self, chat):
         return [p for m, p in self.api.calls if p.get("chat_id") == chat][-1]
 
-    def test_blurry_refused_politely_owner_can_accept(self):
+    def test_doubtful_photo_owner_decides(self):
+        # 20.10: бот сам человеку не отказывает — понятная карточка владельцу, 3 кнопки
         h = self.bot.handle
-        self.assertEqual(h(msg(photo="PH")), "bad_photo")
-        self.assertIn("хира", self.last(7)["text"])
-        self.assertIsNone(self.bot.user(7)["photo"])                     # фото не принято
+        self.assertEqual(h(msg(photo="PH", caption="Ахмедов Али 1950-2020")), "bad_photo")
+        self.assertIn("кутинг", self.last(7)["text"])                   # человеку — «ждите», не отказ
+        self.assertIsNone(self.bot.user(7)["photo"])
         card = self.last(42)
-        self.assertIn("размыто", card["caption"])
-        self.assertEqual(card["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "o:pok:7")
+        self.assertIn("Прислал: Али", card["caption"])
+        self.assertIn("За кого: Ахмедов Али 1950-2020", card["caption"])
+        self.assertIn("фото размытое", card["caption"])
+        self.assertNotIn("id", card["caption"])
+        btn = [b["callback_data"] for r in card["reply_markup"]["inline_keyboard"] for b in r]
+        self.assertEqual(btn, ["o:pok:7", "o:pnew:7", "o:pno:7"])
         self.assertEqual(h(cb("o:pok:7", uid=7)), "denied")
-        self.assertEqual(h(cb("o:pok:7", uid=42)), "photo_ok")           # владелец: фото нормальное
+        self.assertEqual(h(cb("o:pok:7", uid=42)), "preview")             # принять → сразу предпросмотр
         self.assertEqual(self.bot.user(7)["photo"], "PH")
-        self.assertEqual(h(msg(text="Ахмедов Али 1950-2020")), "preview")
-        self.assertEqual(h(cb("o:pok:7", uid=42)), "stale")
+        ed = [p for m, p in self.api.calls if m == "editMessageCaption"][-1]
+        self.assertIn("ПРИНЯТО", ed["caption"])
+        self.assertEqual(ed["reply_markup"], {"inline_keyboard": []})
+        self.assertEqual(h(cb("o:pno:7", uid=42)), "stale")
 
-    def test_good_photo_after_refusal(self):
+    def test_ask_new_and_refuse(self):
+        h = self.bot.handle
+        h(msg(photo="PH"))
+        self.assertIn("пока не написал", self.last(42)["caption"])
+        self.assertEqual(h(cb("o:pnew:7", uid=42)), "ask_new")
+        self.assertIn("хира", self.last(7)["text"])
+        h(msg(photo="PH"))
+        self.assertEqual(h(cb("o:pno:7", uid=42)), "refused")
+        self.assertIn("катта раҳмат", self.last(7)["text"])
+        self.assertIn("Вежливо отказано", [p for m, p in self.api.calls if m == "editMessageCaption"][-1]["caption"])
+
+    def test_good_photo_after_doubt(self):
         h = self.bot.handle
         h(msg(photo="PH"))
         self.why = None
         self.assertEqual(h(msg(photo="PH")), "photo")
+        self.assertIn("сам прислал", [p for m, p in self.api.calls if m == "editMessageCaption"][-1]["caption"])
         self.assertEqual(h(cb("o:pok:7", uid=42)), "stale")
 
     def test_owner_button_bad_photo(self):

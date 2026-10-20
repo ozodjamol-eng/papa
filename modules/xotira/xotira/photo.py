@@ -177,11 +177,16 @@ def detail(face_img) -> float:
 def quality(data: bytes) -> str | None:
     """None — фото годится; 'noface' — лица нет; 'small' — лицо крошечное; 'blur' — лицо размыто."""
     img = decode(data)
-    r = region(img)
-    if r and r[2] * r[3] < SCREEN * img.shape[0] * img.shape[1]:   # скриншот — смотрим только само фото
+    r, area = region(img), img.shape[0] * img.shape[1]
+    f = None
+    if r and MIN_AREA * area <= r[2] * r[3] < SCREEN * area:     # скриншот — сначала смотрим только само фото
         x, y, w, h = r
-        img = img[y:y + h, x:x + w]
-    f = _detect(img)
+        sub = img[y:y + h, x:x + w]
+        f = _detect(sub)
+        if f is not None:
+            img = sub
+    if f is None:                      # 20.10: обрезка ошиблась (старое фото, №97) — ищем лицо на всей картинке
+        f = _detect(img)
     if f is None:
         return "noface"
     x, y, w, h = f

@@ -62,7 +62,16 @@ T_BAD_OWNER = ("Ассалому алайкум! №{n} аризангиз уч�
 T_BAD_KEEP = "Маълумотлар сақланди ✅ Фақат янги расмни юборсангиз кифоя."
 T_BAD_NEW = "Қайта юбориш учун: /start"
 T_PHOTO_OK = "✅ Расмингиз қабул қилинди."
-N_BAD = {"blur": "размыто", "small": "лицо слишком мелкое", "noface": "лица не видно"}
+T_WAIT = "⏳ Расм қабул қилинди. Админ кўриб чиқмоқда — жавоб шу ерга келади, бир оз кутинг."
+T_REFUSE = ("Ассалому алайкум! Аризангиз учун катта раҳмат 🤲\n\n"
+            "Афсуски, бу расмда марҳумнинг юзи аниқ кўринмаяпти, шу сабабли хотира постини муносиб тайёрлаб бўлмайди. "
+            "Асл ёки тиниқроқ расм топилса, ҳар доим қайта юборишингиз мумкин: /start\n\nАллоҳ раҳмат қилсин.")
+N_BAD = {"blur": "фото размытое", "small": "лицо слишком мелкое", "noface": "бот не нашёл лицо"}
+# 20.10: бот сомневается в фото → сначала решает владелец (3 кнопки), человеку бот сам не отказывает
+N_DONE = {"pok": "✅ ПРИНЯТО — человек продолжает с этим фото",
+          "pnew": "🔄 Попросили у человека другое фото",
+          "pno": "🙏 Вежливо отказано",
+          "self": "📷 Человек сам прислал другое фото — эта карточка закрыта"}
 N_AUTO = "✂️ Скриншот: лишнее обрезано автоматически (↩️ Оригинал — вернуть)"
 
 KB_FLOW = {"inline_keyboard": [[{"text": "⬅️ Орқага", "callback_data": "u:back"},
@@ -207,7 +216,7 @@ class Bot:
         if "photo" in msg:
             photo = msg["photo"][-1]["file_id"]
             bad = self.try_photo(ph.quality, photo)
-            if bad:                                        # размыто / нет лица → вежливо просим другое
+            if bad:                                        # сомнительное фото → решает владелец
                 return self.bad_photo(chat, msg, photo, bad)
             self.warn_screenshot(chat, photo)
             cap = (msg.get("caption") or "").strip()
@@ -219,7 +228,8 @@ class Bot:
                     self.save(chat, step="text", photo=photo, people=None)
                     self.api("sendMessage", chat_id=chat, text=f"⚠️ {e}\n\n{T_ASK_TEXT}", reply_markup=KB_FLOW)
                     return "bad"
-            self.db.execute("DELETE FROM kv WHERE k IN (?,?)", (f"bad:{chat}", f"badcap:{chat}"))
+            if self.db.execute("SELECT 1 FROM kv WHERE k=?", (f"bad:{chat}",)).fetchone():
+                self.close_bad(chat, "self")               # прислал другое фото сам — старая карточка закрыта
             self.save(chat, photo=photo, people=people)
             if people:
                 return self.preview(chat)
@@ -425,45 +435,77 @@ class Bot:
             return None
 
     def bad_photo(self, chat: int, msg: dict, photo: str, why: str) -> str:
-        """Бот сам отказал по фото. Человеку — просьба; владельцу — короткая карточка с кнопкой на случай ошибки бота."""
-        self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"bad:{chat}", photo))
+        """Бот сомневается в фото. Человеку — «ждите», владельцу — простая карточка с 3 кнопками. Решает владелец."""
         cap = (msg.get("caption") or "").strip()
-        if cap:
-            self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"badcap:{chat}", cap))
-        self.db.commit()
-        self.api("sendMessage", chat_id=chat, text=T_BAD[why], reply_markup=KB_FLOW)
         f = msg.get("from") or {}
-        who = ((f.get("first_name") or "") + (f" @{f['username']}" if f.get("username") else f" (id {chat})")).strip()
-        kb = {"inline_keyboard": [[{"text": "✅ Фото нормальное — принять", "callback_data": f"o:pok:{chat}"}]]}
+        who = ((f.get("first_name") or "") + (f" @{f['username']}" if f.get("username") else "")).strip() or "—"
+        people = None
+        try:
+            people = core.parse(cap, self.today()) if cap else json.loads(self.user(chat)["people"] or "null")
+        except core.BadInput:
+            pass
+        whom = "\n".join(f"{p['name']} {p['born']}-{p['died']}" for p in people) if people else "пока не написал"
+        card = (f"📋 Хотира — новая заявка\n\nПрислал: {who}\nЗа кого: {whom}\n\n"
+                f"⚠️ Бот сомневается в фото: {N_BAD[why]}\n\nЧеловек ждёт вашего ответа.")
+        kb = {"inline_keyboard": [[{"text": "✅ Принять", "callback_data": f"o:pok:{chat}"},
+                                   {"text": "🔄 Другое фото", "callback_data": f"o:pnew:{chat}"}],
+                                  [{"text": "🙏 Вежливо отказать", "callback_data": f"o:pno:{chat}"}]]}
+        sent = {}
         for o in self.owners:
             if o == chat:
                 continue
             try:
-                self.api("sendPhoto", chat_id=o, photo=photo, reply_markup=kb,
-                         caption=f"📷 Бот попросил другое фото: {who}\nПричина: {N_BAD[why]}.\n"
-                                 "Если фото нормальное — нажмите кнопку, бот продолжит с этим фото.")
+                sent[str(o)] = self.api("sendPhoto", chat_id=o, photo=photo, caption=card, reply_markup=kb)["message_id"]
             except Exception as e:  # noqa: BLE001
                 print(f"owner {o}: {e}", flush=True)
+        kv = {f"bad:{chat}": photo, f"badwhy:{chat}": why, f"badcard:{chat}": json.dumps({"c": card, "m": sent})}
+        if cap:
+            kv[f"badcap:{chat}"] = cap
+        self.db.executemany("INSERT OR REPLACE INTO kv VALUES (?,?)", kv.items())
+        self.db.commit()
+        self.api("sendMessage", chat_id=chat, text=T_WAIT)
         return "bad_photo"
 
-    def accept_photo(self, cq: dict, uid: int) -> str:
-        """Владелец: «фото нормальное» — человек продолжает с этим фото."""
-        r = self.db.execute("SELECT v FROM kv WHERE k=?", (f"bad:{uid}",)).fetchone()
+    def close_bad(self, uid: int, act: str) -> str | None:
+        """Снять заявку «сомнительное фото»: обновить карточки владельца, убрать кнопки. → фото или None."""
+        keys = [f"{k}:{uid}" for k in ("bad", "badcap", "badwhy", "badcard")]
+        got = dict(self.db.execute(f"SELECT k, v FROM kv WHERE k IN ({','.join('?' * 4)})", keys).fetchall())
+        self.db.execute(f"DELETE FROM kv WHERE k IN ({','.join('?' * 4)})", keys)
+        self.db.commit()
+        card = json.loads(got.get(f"badcard:{uid}") or '{"c": "", "m": {}}')
+        for o, mid in card["m"].items():
+            try:
+                self.api("editMessageCaption", chat_id=int(o), message_id=mid,
+                         caption=f"{card['c']}\n\n{N_DONE[act]}"[:1024], reply_markup={"inline_keyboard": []})
+            except Exception:  # noqa: BLE001
+                pass
+        self._badcap, self._badwhy = got.get(f"badcap:{uid}"), got.get(f"badwhy:{uid}")
+        return got.get(f"bad:{uid}")
+
+    def answer_bad(self, cq: dict, act: str, uid: int) -> str:
+        """Кнопки владельца по сомнительному фото: pok / pnew / pno."""
         say = lambda t: self.api("answerCallbackQuery", callback_query_id=cq["id"], text=t)  # noqa: E731
-        if not r:
+        photo = self.close_bad(uid, act)
+        if not photo:
             say("Уже неактуально — человек прислал другое фото")
             return "stale"
-        c = self.db.execute("SELECT v FROM kv WHERE k=?", (f"badcap:{uid}",)).fetchone()
-        self.db.execute("DELETE FROM kv WHERE k IN (?,?)", (f"bad:{uid}", f"badcap:{uid}"))
-        self.db.commit()
+        if act == "pnew":
+            self.tell(uid, T_BAD.get(self._badwhy or "", T_BAD["noface"]))
+            say("🔄 Попросили другое фото")
+            return "ask_new"
+        if act == "pno":
+            self.reset(uid)
+            self.tell(uid, T_REFUSE)
+            say("🙏 Вежливо отказано")
+            return "refused"
         self.tell(uid, T_PHOTO_OK)
-        u, people = self.user(uid), self.user(uid)["people"]
-        if c:
+        people = self.user(uid)["people"]
+        if self._badcap:
             try:
-                people = json.dumps(core.parse(c[0], self.today()), ensure_ascii=False)
+                people = json.dumps(core.parse(self._badcap, self.today()), ensure_ascii=False)
             except core.BadInput:
                 pass
-        self.save(uid, photo=r[0], people=people)
+        self.save(uid, photo=photo, people=people)
         say("✅ Принято")
         if people:
             return self.preview(uid)
@@ -574,8 +616,8 @@ class Bot:
                 self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Фақат админ учун")
                 return "denied"
             _, act, n = data.split(":")
-            if act == "pok":
-                return self.accept_photo(cq, int(n))
+            if act in ("pok", "pnew", "pno"):
+                return self.answer_bad(cq, act, int(n))
             if act == "bad":
                 return self.decide(cq, False, int(n), bad=True)
             if act in ("crop", "face", "orig", "own", "enh"):
