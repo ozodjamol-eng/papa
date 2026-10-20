@@ -44,7 +44,9 @@ def occupied(db, channel: str, now: dt.datetime, exclude: int | None = None) -> 
     out = [dt.datetime.fromisoformat(m["scheduled_at"]) for m in store.scheduled(db, channel) if m["id"] != exclude]
     from . import morning
     since = now - dt.timedelta(hours=3)
-    return out + store.pulse_since(db, channel, since) + namaz.busy(db, channel, since) + morning.busy(db, channel, since)
+    from . import extras
+    return (out + store.pulse_since(db, channel, since) + namaz.busy(db, channel, since) + morning.busy(db, channel, since)
+            + extras.busy(db, channel, since))
 
 
 def blocked(db, channel: str, t: dt.datetime) -> bool:

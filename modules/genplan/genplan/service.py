@@ -172,6 +172,7 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
     reconcile(db, cfg, now)
     out["namaz"] = await tick_namaz(db, cfg, env, pubs, now, log)
     out["morning"] = await tick_morning(db, cfg, env, pubs, now, log)
+    out["extras"] = await tick_extras(db, cfg, env, pubs, now, log)
     for channel in cfg["channels"]:
         out["ids"] += smart.fill_from_stock(db, cfg, channel, now)        # 📦 запас → в пустые слоты
         due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
@@ -284,6 +285,63 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
             except PublishError as e:
                 morning.update(db, r["id"], status="failed", error=str(e)[:300])
                 ERRORS.append(f"❌ {ch['title']}: {morning.TITLE[r['key']]} не вышел — {e}")
+    return n
+
+
+async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log=print, fetch=None) -> int:
+    """20.10 (перенос из GENPLAN 5): ☀️ погода и курс 07:00, 🌙 Якуний пост 22:00, 📣 рекламные пакеты на N дней."""
+    import asyncio
+    from . import extras
+    extras.ensure_campaigns(db, now)
+    extras.ensure_day(db, cfg, now.date(), now)
+    ready, late = extras.due(db, now)
+    for r in late:
+        extras.mark(db, r, status="skipped", error="служба не работала в это время")
+        ch = cfg["channels"].get(r["channel"])
+        if ch:
+            ERRORS.append(f"⚠️ {ch['title']}: {extras.TITLE[r['key']]} пропущен — служба не работала в это время")
+    n = 0
+    for r in ready:
+        ch = cfg["channels"].get(r["channel"])
+        if not ch:
+            continue
+        to = target(cfg, env, r["channel"])
+        p = pubs[ch["publisher"]]
+        try:
+            if r["key"] == "info":
+                from . import digest
+                get = fetch or digest._get
+                try:
+                    w = await asyncio.to_thread(digest.weather, get)
+                except Exception:  # noqa: BLE001
+                    w = None
+                try:
+                    rt = await asyncio.to_thread(digest.rates, get)
+                except Exception:  # noqa: BLE001
+                    rt = None
+                body = extras.info_text(ch, w, rt, now.date())
+                if not body:
+                    raise PublishError("нет данных погоды и курса (сайты не ответили)")
+                hub_chat, hub_msg, media, ids = None, None, False, []
+            else:
+                f = extras.final_get(db, r["channel"])
+                if not f:
+                    extras.mark(db, r, status="skipped", error="Якуний пост не задан")
+                    continue
+                body, hub_chat, hub_msg, media, ids = f["text"], f["hub_chat"], f["hub_msg"], f["has_media"], f.get("hub_msgs") or []
+            if len(ids) > 1 and ch["publisher"] == "account":
+                mid = await p.publish_album(to, hub_chat, ids, body)
+            elif ch["publisher"] == "account":
+                mid = await p.publish(to, body, hub_chat, hub_msg, media)
+            else:
+                mid = p.publish(to, body, hub_chat, hub_msg, media, button=share_button(ch))
+            extras.mark(db, r, status="done", message_id=mid)
+            store.pulse_add(db, r["channel"], now, r["key"])
+            log(f"{r['channel']} {r['key']}: опубликовано")
+            n += 1
+        except PublishError as e:
+            extras.mark(db, r, status="failed", error=str(e)[:300])
+            ERRORS.append(f"❌ {ch['title']}: {extras.TITLE[r['key']]} не вышел — {e}")
     return n
 
 

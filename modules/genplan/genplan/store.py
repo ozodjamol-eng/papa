@@ -82,6 +82,8 @@ def connect(path: str) -> sqlite3.Connection:
     tails.setup(db)
     from . import morning
     morning.setup(db)
+    from . import extras
+    extras.setup(db)
     db.execute("CREATE INDEX IF NOT EXISTS idx_mat_fp ON materials(fp)")
     db.commit()
     return db

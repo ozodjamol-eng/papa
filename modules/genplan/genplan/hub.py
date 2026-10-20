@@ -65,7 +65,7 @@ def duplicate_note(db, m) -> str:
 
 
 def rubrics(cfg: dict, channel: str) -> list[str]:
-    out: list[str] = []
+    out: list[str] = ["Якуний пост"] if cfg["channels"][channel].get("final_post") else []   # 20.10: свой слот 22:00
     for s in cfg["channels"][channel]["slots"]:
         if s["kind"] in ("content", "music"):
             for r in [s.get("rubric")] + list(s.get("fallback", [])):
@@ -119,6 +119,11 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     if m["status"] == "published":
         return f"{base}\n\n✔️ {name} · {m['rubric']} — опубликовано", {"inline_keyboard": []}
     if m["status"] == "rejected":
+        from . import extras
+        f = extras.final_get(db, m["channel"]) if m["channel"] else None
+        if f and int(f["material_id"]) == int(mid):
+            at = (extras.opts(cfg["channels"][m["channel"]], "final") or {}).get("at", "22:00")
+            return f"{base}\n\n🌙 {name} · Якуний пост — ҳар куни {at}, пока не замените", {"inline_keyboard": []}
         return f"{base}\n\n🗑 Убрано", {"inline_keyboard": []}
     if m["status"] == "queued" and m["scheduled_at"]:
         t = dt.datetime.fromisoformat(m["scheduled_at"])
@@ -126,6 +131,11 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         what = m["topic"] if "topic" in m.keys() and m["topic"] else m["rubric"]
         tg = f" {m['tag']}" if "tag" in m.keys() and m["tag"] else ""
         txt = f"{base}\n\n{summary(db, cfg, m['channel'], now)}\n✅ {name} · {what}{tg} — {when}{' 🔒' if m['locked'] else ''}{dup}"
+        if (m["rubric"] or "").lower().startswith("реклама"):
+            from . import extras
+            c = extras.campaign_of(db, int(mid))
+            if c is not None:
+                txt += "\n" + extras.campaign_note(c)
         return txt, {"inline_keyboard": kb_queued(db, cfg, m, now)}
     # черновик — экран «➕ ПОСТ» пульта Хўжаобода (GENPLAN 5): группы → подрубрика (= смысл и один хэштег) → умное время
     from . import picker
@@ -177,6 +187,9 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
              [{"text": "📂 Рубрика", "callback_data": f"rs:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
              [{"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}, {"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}],
              [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
+    if (m["rubric"] or "").lower().startswith("реклама") and not m["urgent"]:
+        # 20.10 (как кампании GENPLAN 5): реклама на N дней — каждый день в это же время
+        rows.insert(0, [{"text": f"🔁 {n} кун", "callback_data": f"pk:{mid}:{n}"} for n in (3, 6, 10)])
     return rows
 
 
@@ -734,6 +747,16 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             show({"inline_keyboard": rows}, t + "\n\n" + title)
         else:
             if kind == "pf":
+                from . import extras
+                if extras.opts(cfg["channels"][m["channel"]], "final"):
+                    # 20.10 (как в GENPLAN 5): Якуний пост — выходит КАЖДЫЙ день в 22:00, пока его не заменят
+                    if cfg["channels"][m["channel"]]["publisher"] == "account":
+                        to_hub(bot, db, mid)
+                        m = store.get(db, mid)
+                    extras.final_set(db, m["channel"], m)
+                    show()
+                    bot("answerCallbackQuery", callback_query_id=cq["id"], text="🌙 Якуний пост: каждый день")
+                    return kind
                 r, tag, topic = "Якуний пост", (cfg["channels"][m["channel"]].get("hashtags") or {}).get("Якуний пост", ""), "🌙 Якуний пост"
             else:
                 it = picker.item(arg[0], int(arg[1]))
@@ -781,6 +804,14 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             t, _ = card(db, cfg, mid, now)
             show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
+    elif kind == "pk":                                  # 🔁 рекламный пакет на N дней
+        from . import extras
+        try:
+            c = extras.campaign_from(db, m, int(arg[0]))
+            note = extras.campaign_note(c)
+        except ValueError as e:
+            note = f"⚠️ {e}"
+        show()
     elif kind == "ur":
         last = smart.last_post(db, m["channel"], now)        # GENPLAN 5: прошлый пост был недавно — спросить
         gap = (now - last).total_seconds() / 60 if last else None
