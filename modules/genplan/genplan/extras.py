@@ -58,17 +58,25 @@ def opts(ch: dict, key: str) -> dict | None:
 
 # ---------- ☀️ погода и курс ----------
 
+# 20.10: полные фразы вместо обрывков («очиқ» → «очиқ ҳаво»)
+PHRASE = {"очиқ": "очиқ ҳаво", "булутли": "булутли ҳаво", "туман": "туманли ҳаво", "ёмғир": "ёмғир ёғади",
+          "қор": "қор ёғади", "шивалаб ёмғир": "шивалаб ёмғир ёғади"}
+
+
 def info_text(ch: dict, w: dict | None, r: dict | None, day: dt.date) -> str | None:
     """Текст как в GENPLAN 5 (без повторного «Хайрли тонг»). Нет ни погоды, ни курса — None (пост не выходит)."""
-    from .digest import sky
+    from .digest import _num, _signed, sky
     lines = []
     city = (w or {}).get("Хўжаобод")
     if city:
         word, icon = sky(city["code"], city.get("night", False))
-        lines.append(f"{icon} Хўжаободда ҳаво: {city['t']}°С, {word}")
+        word = PHRASE.get(word, word)
+        mx = (city.get("today") or {}).get("max")
+        day_part = f", кундузи {_signed(mx)}° гача" if mx is not None and mx > city["t"] else ""
+        lines.append(f"{icon} Хўжаобод: ҳозир {_signed(city['t'])}°{day_part}, {word}")
     if r and r.get("USD"):
-        usd = f"USD: {r['USD']['rate']:.2f} сўм"
-        eur = f" | EUR: {r['EUR']['rate']:.2f} сўм" if r.get("EUR") else ""
+        usd = f"USD — {_num(r['USD']['rate'])} сўм"
+        eur = f" | EUR — {_num(r['EUR']['rate'])} сўм" if r.get("EUR") else ""
         lines.append(f"💱 Валюта курси: {usd}{eur}")
     if not lines:
         return None

@@ -64,8 +64,10 @@ class T(unittest.TestCase):
     def test_info_text_like_genplan5(self):
         t = extras.info_text(CFG["channels"]["xojaobod"], W, R, dt.date(2026, 10, 21))
         self.assertTrue(t.startswith("#ОБ_ҲАВО"))
-        self.assertIn("Хўжаободда ҳаво: 10°С, очиқ", t)
-        self.assertIn("USD: 12044.72 сўм | EUR: 13525.02 сўм", t)
+        self.assertIn("Хўжаобод: ҳозир +10°, очиқ ҳаво", t)
+        self.assertIn("USD — 12 044,72 сўм | EUR — 13 525,02 сўм", t)
+        w2 = {"Хўжаобод": {"t": 8, "code": 0, "night": False, "today": {"min": 7, "max": 21}}}
+        self.assertIn("ҳозир +8°, кундузи +21° гача, очиқ ҳаво", extras.info_text(CFG["channels"]["xojaobod"], w2, R, dt.date(2026, 10, 21)))
         self.assertIn("@XOJAOBODCITY24", t)
         self.assertIsNone(extras.info_text(CFG["channels"]["xojaobod"], None, None, dt.date(2026, 10, 21)))
 

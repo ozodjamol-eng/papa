@@ -304,9 +304,9 @@ const FIN=NEWS_T0+3*NEWS_DT+.3;
 function finale(t){
   const k0=p(t,FIN,FIN+1.2); if(k0<=0)return;
   const bg=eo(k0);const gb=x.createLinearGradient(0,800,0,1620);gb.addColorStop(0,'rgba(8,10,35,0)');gb.addColorStop(.3,`rgba(8,10,35,${.55*bg})`);gb.addColorStop(.8,`rgba(8,10,35,${.55*bg})`);gb.addColorStop(1,'rgba(8,10,35,0)');x.fillStyle=gb;x.fillRect(0,800,W,820);
-  ['ХАЙРЛИ','ТУН!'].forEach((wd,i)=>{const k=p(t,FIN+.05+i*.28,FIN+.85+i*.28),e=back(k);
+  ['КЕЧКИ','ДАЙЖЕСТ'].forEach((wd,i)=>{const k=p(t,FIN+.05+i*.28,FIN+.85+i*.28),e=back(k);
     x.save();x.textAlign='center';x.translate(W/2,1000+i*215+(1-e)*120);const s=lerp(1.6,1,eo(k));x.scale(s,s);x.globalAlpha=eo(k);
-    x.font=(i?'200px':'150px')+' IDB';x.fillStyle='rgba(5,10,40,.45)';x.fillText(wd,7,9);x.fillStyle=i?'#ffd35a':'#fff';x.fillText(wd,0,0);x.restore();});
+    x.font=(i?'170px':'150px')+' IDB';x.fillStyle='rgba(5,10,40,.45)';x.fillText(wd,7,9);x.fillStyle=i?'#ffd35a':'#fff';x.fillText(wd,0,0);x.restore();});
   const k=eo(p(t,FIN+1.0,FIN+1.7));
   x.save();x.globalAlpha=k;x.textAlign='center';x.font='52px IDX';const tw=x.measureText(E.user).width+80;
   x.fillStyle='rgba(122,140,255,.9)';rr(W/2-tw/2,1400+(1-k)*30,tw,100,50);x.fill();x.fillStyle='#fff';x.fillText(E.user,W/2,1467+(1-k)*30);x.restore();

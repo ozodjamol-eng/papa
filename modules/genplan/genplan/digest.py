@@ -86,6 +86,7 @@ def weather(get=_get) -> dict:
         c, d = f["current"], f["daily"]
         w = {"t": round(c["temperature_2m"]), "code": c["weather_code"], "wind": round(c.get("wind_speed_10m") or 0),
              "night": not c.get("is_day", 0), "as_of": c.get("time"),
+             "today": {"min": round(d["temperature_2m_min"][0]), "max": round(d["temperature_2m_max"][0])},
              "tmr": {"min": round(d["temperature_2m_min"][1]), "max": round(d["temperature_2m_max"][1]),
                      "code": d["weather_code"][1], "rain": d.get("precipitation_probability_max", [None, None])[1]}}
         try:
@@ -226,6 +227,15 @@ def _num(v: float, digits: int = 2) -> str:
     return s
 
 
+def since_uz(s: str) -> str:
+    """«20.10.2026» → «20 октябрдан» (суффикс слитно, как пишут по-узбекски)."""
+    try:
+        d, m, _ = (int(v) for v in s.split("."))
+        return f"{d} {MONTHS[m - 1].rstrip('ь')}дан"
+    except (ValueError, IndexError):
+        return s
+
+
 def _signed(t: int) -> str:
     return f"+{t}" if t > 0 else str(t)
 
@@ -277,11 +287,11 @@ def compose(day: dt.date, w: dict, r: dict, news: list[dict], ad: str | None = N
             d = x["diff"]
             ch = f"📈 +{_num(d)}" if d > 0 else f"📉 −{_num(abs(d))}" if d < 0 else "➖ ўзгармади"
             rl.append(f"{flags.get(c, '')} {c} — {_num(x['rate'])} сўм {ch}")
-        block = f"💱 МБ КУРСИ{f' ({since} дан)' if since else ''}\n\n" + "\n".join(rl)
+        block = f"💱 МБ КУРСИ{f' ({since_uz(since)})' if since else ''}\n\n" + "\n".join(rl)
         parts_full.append(block)
         parts_short.append(block)
     ad = AD_DEFAULT if ad is None else ad.strip()
-    tail = (f"{ad}\n\n" if ad else "") + f"Хайрли тун, азиз хўжаободликлар! 🌙\n👉 @{USERNAME}"
+    tail = (f"{ad}\n\n" if ad else "") + f"👉 @{USERNAME}"   # 20.10 владелец: в 20:30 никаких прощаний — канал не «закрывается»
     j = lambda ps: f"\n\n{SEP}\n".join(ps + [tail])
     full = j(parts_full)
     if news:
