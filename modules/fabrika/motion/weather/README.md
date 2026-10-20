@@ -1,9 +1,14 @@
-# Моушн «Об-ҳаво Хўжаобод» (скилл vizavi-motion, тест 20.10.2026)
+# Моушн «Об-ҳаво Хўжаобод» — каждый день в 07:00 (утверждено владельцем 20.10.2026)
 
-Вертикаль 1080×1920, 60 fps, 15 с, H.264 + AAC. Всё кодом: Canvas + Playwright + FFmpeg, музыка и звуки синтезируются (numpy). Расход 0 $.
-Данные — объект `WEATHER` в scene.html (город, дата, сейчас/день/ночь, осадки, завтра, username) — позже подставлять автоматически из прогноза.
+Вертикаль 1080×1920, 60 fps, 15 с, H.264 + AAC. Canvas-сцена (скилл vizavi-motion) + Playwright + FFmpeg, музыка/звуки — numpy.
+Варианты по погоде: clear / partly / cloudy / fog / rain / snow; минус для зимы; «ҲОЗИР» = прогноз на 07:00.
 
-Сборка:
-    python3 audio.py
-    node render.mjs $PWD/scene.html video 60 video_raw.mp4
-    ffmpeg -i video_raw.mp4 -i audio.wav -c:v copy -c:a aac -b:a 192k -shortest out.mp4
+Как работает:
+1. GitHub Actions `motion-weather` в 05:15 (повтор 06:05) по Ташкенту: прогноз open-meteo → `make.py` → MP4 в ветку `motion`.
+   Франкфурт (1 ГБ ОЗУ) браузер не тянет (замер: 570–1400 МБ) — поэтому рендер на GitHub (бесплатно).
+2. GENPLAN (Франкфурт) в 07:00: `channels.xojaobod.info.video = true` → скачивает
+   `https://raw.githubusercontent.com/ozodjamol-eng/papa/motion/xojaobod-weather-ДАТА.mp4` и публикует видео с прежней подписью
+   (погода + курс). Нет файла/ошибка → прежний текстовый пост + сообщение владельцу.
+Откат: `info = { at = "07:00" }` без `video` и `papa-update genplan-restart`.
+
+Ручной тест: `git push origin HEAD:motion-test` → рендер; локально: `python3 make.py out` (или `python3 make.py out данные.json`).

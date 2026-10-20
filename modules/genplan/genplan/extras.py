@@ -78,6 +78,26 @@ def info_text(ch: dict, w: dict | None, r: dict | None, day: dt.date) -> str | N
     return "\n".join([tag, ""] + lines + (["", sig] if sig else []))
 
 
+# ---------- 🎬 ролик погоды (Fabrika, решение владельца 20.10) ----------
+# Рендер — GitHub Actions `motion-weather` (Франкфурт с 1 ГБ браузер не тянет), MP4 лежит в ветке motion публичного репо.
+VIDEO_URL = "https://raw.githubusercontent.com/ozodjamol-eng/papa/motion/xojaobod-weather-{day}.mp4"
+
+
+def weather_video(day: dt.date, get=None, folder: str | None = None):
+    """Готовый ролик погоды этого дня → локальный файл. Нет / не тот / битый — исключение (тогда выходит прежний текст)."""
+    import tempfile
+    from pathlib import Path
+    from .digest import _get
+    data = (get or (lambda u: _get(u, timeout=60, tries=2)))(VIDEO_URL.format(day=day.isoformat()))
+    if not data or len(data) < 200_000 or data[4:8] != b"ftyp":
+        raise ValueError("ролик не собран")
+    if len(data) > 49_000_000:
+        raise ValueError("ролик больше 49 МБ")
+    path = Path(folder or tempfile.gettempdir()) / f"xojaobod-weather-{day.isoformat()}.mp4"
+    path.write_bytes(data)
+    return path
+
+
 # ---------- 🌙 Якуний пост ----------
 
 def final_get(db, channel: str) -> dict | None:

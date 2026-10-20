@@ -1,8 +1,10 @@
 import { chromium } from 'playwright';
 import { spawn } from 'child_process';
 const [,, html, mode, arg, out] = process.argv; // mode: frames "0,3,6" outdir | video fps out.mp4
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args:['--allow-file-access-from-files'] });
+const exe = process.env.CHROME_PATH || undefined;
+const b = await chromium.launch({ executablePath: exe, args:['--allow-file-access-from-files'] });
 const pg = await b.newPage({ viewport: { width: 1080, height: 1920 } });
+if (process.env.WEATHER_JSON) { const fs = await import('fs'); const w = fs.readFileSync(process.env.WEATHER_JSON,'utf8'); await pg.addInitScript(w => { window.WEATHER = JSON.parse(w); }, w); }
 await pg.goto('file://' + html); await pg.evaluate(() => window.ready);
 if (mode === 'frames') {
   for (const t of arg.split(',').map(Number)) {

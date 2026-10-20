@@ -33,6 +33,12 @@ class Acc:
     async def publish_album(self, chat, hub_chat, ids, body):
         self.sent.append((chat, body, hub_chat, ids)); return 78
 
+    async def publish_file(self, chat, path, body):
+        if getattr(self, "fail_file", False):
+            from genplan.publish import PublishError
+            raise PublishError("FILE_PARTS_INVALID")
+        self.sent.append((chat, body, "FILE", Path(path).name)); return 79
+
 
 class BotPub:
     def __init__(self):
@@ -63,11 +69,55 @@ class T(unittest.TestCase):
         self.assertIn("@XOJAOBODCITY24", t)
         self.assertIsNone(extras.info_text(CFG["channels"]["xojaobod"], None, None, dt.date(2026, 10, 21)))
 
-    def test_info_published_0700_by_account(self):
+    def patch_data(self, video=None):
         from genplan import digest
-        orig = (digest.weather, digest.rates)
+        orig = (digest.weather, digest.rates, extras.weather_video)
         digest.weather, digest.rates = (lambda get: W), (lambda get: R)
-        self.addCleanup(lambda: (setattr(digest, "weather", orig[0]), setattr(digest, "rates", orig[1])))
+        extras.weather_video = video or (lambda day: (_ for _ in ()).throw(ValueError("ролик не собран")))
+        self.addCleanup(lambda: (setattr(digest, "weather", orig[0]), setattr(digest, "rates", orig[1]),
+                                 setattr(extras, "weather_video", orig[2])))
+
+    def fake_video(self, day):
+        f = Path(tempfile.mkdtemp()) / f"xojaobod-weather-{day}.mp4"
+        f.write_bytes(b"\0\0\0\x18ftypmp42" + b"0" * 300_000)
+        self.vid = f
+        return f
+
+    def test_info_video_0700(self):
+        self.patch_data(self.fake_video)
+        self.assertEqual(self.tick(at("07:00")), 1)
+        chat, body, kind, name = self.pubs["account"].sent[0]
+        self.assertEqual((chat, kind, name), ("@xojaobodcity24", "FILE", "xojaobod-weather-2026-10-21.mp4"))
+        self.assertIn("💱", body)                                      # подпись — прежний текст (погода + курс)
+        self.assertFalse(self.vid.exists())                            # временный файл убран
+        self.assertEqual(service.ERRORS, [])
+
+    def test_info_video_missing_text_fallback(self):
+        self.patch_data()                                              # ролик не собран → текст + сообщение владельцу
+        self.assertEqual(self.tick(at("07:00")), 1)
+        self.assertEqual(len(self.pubs["account"].sent[0]), 5)        # обычный publish
+        self.assertTrue(any("ролик погоды не готов" in e for e in service.ERRORS))
+
+    def test_info_video_send_fails_text_fallback(self):
+        self.patch_data(self.fake_video)
+        self.pubs["account"].fail_file = True
+        self.assertEqual(self.tick(at("07:00")), 1)
+        self.assertEqual(len(self.pubs["account"].sent[0]), 5)
+        self.assertTrue(any("не отправился" in e for e in service.ERRORS))
+        self.assertFalse(self.vid.exists())
+
+    def test_weather_video_checks(self):
+        d = dt.date(2026, 10, 21)
+        with self.assertRaises(ValueError):
+            extras.weather_video(d, get=lambda u: b"404: Not Found")
+        seen = []
+        f = extras.weather_video(d, get=lambda u: seen.append(u) or b"\0\0\0\x18ftypmp42" + b"0" * 300_000,
+                                 folder=tempfile.mkdtemp())
+        self.assertTrue(seen[0].endswith("/motion/xojaobod-weather-2026-10-21.mp4"))
+        self.assertTrue(f.exists())
+
+    def test_info_published_0700_by_account(self):
+        self.patch_data()
         self.assertEqual(self.tick(at("06:59")), 0)
         self.assertEqual(self.tick(at("07:00")), 1)
         chat, body, *_ = self.pubs["account"].sent[0]

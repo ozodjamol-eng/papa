@@ -43,6 +43,34 @@ class BotPublisher:
         return int(r["result"]["message_id"])
 
 
+def _bot_file(self, chat: str, path: str, caption: str = "") -> int:
+    """Локальное видео (ролик погоды Fabrika) → канал через sendVideo (multipart)."""
+    import uuid
+    from pathlib import Path
+    bnd = uuid.uuid4().hex
+    parts = [f"--{bnd}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode()
+             for k, v in (("chat_id", chat), ("caption", caption[:1024]), ("supports_streaming", "true"),
+                          ("width", "1080"), ("height", "1920"), ("duration", "15"))]
+    parts.append(f"--{bnd}\r\nContent-Disposition: form-data; name=\"video\"; filename=\"{Path(path).name}\"\r\n"
+                 f"Content-Type: video/mp4\r\n\r\n".encode() + Path(path).read_bytes() + b"\r\n")
+    parts.append(f"--{bnd}--\r\n".encode())
+    req = urllib.request.Request(f"{self.base}/sendVideo", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={bnd}"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        res = json.loads(e.read() or b"{}")
+    except Exception as e:  # noqa: BLE001
+        raise PublishError(f"{type(e).__name__}: {e}") from None
+    if not res.get("ok"):
+        raise PublishError(res.get("description", "unknown"))
+    return int(res["result"]["message_id"])
+
+
+BotPublisher.publish_file = _bot_file
+
+
 def _album_payload(media: list[dict], caption: str) -> list[dict]:
     kinds = {"photo": "photo", "video": "video", "document": "document", "audio": "audio"}
     out = [{"type": kinds.get(m["type"], "photo"), "media": m["file_id"]} for m in media if m["type"] in kinds][:10]
@@ -80,6 +108,16 @@ class AccountPublisher:
         except PublishError:
             raise
         except Exception as e:  # noqa: BLE001 — любая ошибка Telegram → понятная ошибка публикации
+            raise PublishError(f"{type(e).__name__}: {e}") from None
+        return int(m.id)
+
+    async def publish_file(self, chat: str, path: str, caption: str = "") -> int:
+        """Локальное видео (ролик погоды Fabrika) → группа от имени группы, как обычное видео (не файлом)."""
+        try:
+            from telethon.tl.types import DocumentAttributeVideo
+            m = await self.c.send_file(chat, path, caption=caption[:1024], supports_streaming=True, mime_type="video/mp4",
+                                       attributes=[DocumentAttributeVideo(duration=15, w=1080, h=1920, supports_streaming=True)])
+        except Exception as e:  # noqa: BLE001
             raise PublishError(f"{type(e).__name__}: {e}") from None
         return int(m.id)
 

@@ -1,0 +1,56 @@
+# ☀️ Ролик «Об-ҳаво Хўжаобод» каждый день (решение владельца 20.10). Рендер на GitHub (7 ГБ ОЗУ, бесплатно),
+# не на Франкфурте (1 ГБ — браузер не помещается). Готовый MP4 → ветка motion; служба GENPLAN забирает его к 07:00.
+# Не вышло — GENPLAN публикует прежний текст (пост не пропадает).
+name: motion-weather
+on:
+  schedule:
+    - cron: "15 0 * * *"      # 05:15 Ташкент; запас на задержки расписания GitHub
+    - cron: "5 1 * * *"       # 06:05 — повтор, если первый запуск опоздал/упал (готовый файл не пересобирается)
+  workflow_dispatch:
+  push:
+    branches: [motion-test]
+permissions:
+  contents: write
+concurrency: { group: motion-weather, cancel-in-progress: false }
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Уже собран сегодня?
+        id: chk
+        run: |
+          D=$(TZ=Asia/Tashkent date +%F)
+          echo "day=$D" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code origin refs/heads/motion >/dev/null && \
+             git fetch -q --depth 1 origin motion && git cat-file -e FETCH_HEAD:xojaobod-weather-$D.mp4 2>/dev/null \
+             && [ "${{ github.event_name }}" = "schedule" ]; then echo "done=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-node@v4
+        if: steps.chk.outputs.done != '1'
+        with: { node-version: "20" }
+      - name: Зависимости
+        if: steps.chk.outputs.done != '1'
+        working-directory: modules/fabrika/motion/weather
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y -q ffmpeg >/dev/null
+          python3 -m pip install -q numpy
+      - name: Рендер
+        if: steps.chk.outputs.done != '1'
+        working-directory: modules/fabrika/motion/weather
+        run: python3 make.py "$RUNNER_TEMP/out"
+      - name: В ветку motion (только последние 3 дня)
+        if: steps.chk.outputs.done != '1'
+        run: |
+          set -e
+          W="$RUNNER_TEMP/motion"; mkdir -p "$W"; cd "$W"; git init -q
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git fetch -q --depth 1 origin motion && git checkout -q FETCH_HEAD -- . 2>/dev/null || true
+          cp "$RUNNER_TEMP"/out/xojaobod-weather-* .
+          ls xojaobod-weather-*.mp4 | sort | head -n -3 | while read f; do rm -f "$f" "${f%.mp4}.json"; done
+          git checkout -q --orphan motion; git add -A
+          git -c user.name=papa-motion -c user.email=papa-motion@users.noreply.github.com commit -q -m "motion: ${{ steps.chk.outputs.day }}"
+          git push -q -f origin motion
+          ls -la

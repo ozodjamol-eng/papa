@@ -81,5 +81,6 @@ add(lp(fin,2500)*np.minimum(1,tt/0.3)*np.exp(-tt*0.9),12.2,gain=0.05)
 fade=np.clip((DUR-t)/0.8,0,1)*np.clip(t/0.4,0,1)
 st=np.stack([L,Rr],1)*fade[:,None]; st/=np.max(np.abs(st))/0.89
 st=np.tanh(st*1.1)/np.tanh(1.1)*0.9
-w=wave.open('audio.wav','wb');w.setnchannels(2);w.setsampwidth(2);w.setframerate(SR)
+import sys
+w=wave.open(sys.argv[1] if len(sys.argv)>1 else 'audio.wav','wb');w.setnchannels(2);w.setsampwidth(2);w.setframerate(SR)
 w.writeframes((st*32767).astype('<i2').tobytes());w.close(); print('audio ok')

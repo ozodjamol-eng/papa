@@ -1,10 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8">
 <style>
-@font-face{font-family:IDB;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf)}
-@font-face{font-family:IDX;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf)}
-@font-face{font-family:IDS;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf)}
-@font-face{font-family:IDM;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf)}
+@font-face{font-family:IDB;src:url(fonts/InterDisplay-Black.otf)}
+@font-face{font-family:IDX;src:url(fonts/InterDisplay-ExtraBold.otf)}
+@font-face{font-family:IDS;src:url(fonts/InterDisplay-SemiBold.otf)}
+@font-face{font-family:IDM;src:url(fonts/InterDisplay-Medium.otf)}
 html,body{margin:0;background:#000}
 canvas{display:block}
 </style></head><body>
@@ -13,8 +13,16 @@ canvas{display:block}
 // ===== ДАННЫЕ (подставляются автоматически в будущем) =====
 const D = window.WEATHER || {
   city:'ХЎЖАОБОД', date:'СЕШАНБА · 20 ОКТЯБР', now:15, hi:22, lo:9, rain:5,
-  sky:'Очиқ ҳаво, қуёшли', tHi:20, tLo:7, user:'@xojaobodcity24'
+  sky:'Очиқ ҳаво, қуёшли', tHi:20, tLo:7, user:'@xojaobodcity24', kind:'clear', tKind:'clear'
 };
+// температура: +15° / 0° / −3°
+const T=v=>(v>0?'+':v<0?'−':'')+Math.abs(Math.round(v))+'°';
+// вид погоды → параметры сцены
+const KIND={clear:{gray:0,clouds:4,ca:.75,sun:1,pr:''},partly:{gray:.22,clouds:7,ca:.85,sun:.9,pr:''},
+  cloudy:{gray:.55,clouds:10,ca:.92,sun:.5,pr:''},fog:{gray:.6,clouds:6,ca:.6,sun:.45,pr:'fog'},
+  rain:{gray:.68,clouds:11,ca:.95,sun:.35,pr:'rain'},snow:{gray:.45,clouds:10,ca:.95,sun:.5,pr:'snow'}};
+const K=KIND[D.kind]||KIND.clear;
+const ICON={clear:'sun',partly:'cloud',cloudy:'cloud',fog:'cloud',rain:'drop',snow:'snow'};
 const W=1080,H=1920, c=document.getElementById('c'), x=c.getContext('2d');
 
 // ===== утилиты =====
@@ -47,7 +55,9 @@ const R=rnd(7);
 const houses=[];for(let i=0;i<16;i++){houses.push({x:-120+i*85+R()*30,w:70+R()*50,h:70+R()*90,roof:R()<.6,win:R()})}
 const poplarsMid=[];for(let i=0;i<14;i++)poplarsMid.push({x:-80+i*95+R()*40,h:180+R()*120,w:26+R()*10});
 const poplarsFg=[{x:70,h:620,w:70},{x:190,h:520,w:58},{x:930,h:660,w:76},{x:1040,h:540,w:60}];
-const clouds=[{x:120,y:640,s:1.0,v:14},{x:820,y:560,s:.8,v:10},{x:470,y:420,s:1.2,v:16},{x:1050,y:820,s:.7,v:12}];
+const CL0=[{x:120,y:640,s:1.0,v:14},{x:820,y:560,s:.8,v:10},{x:470,y:420,s:1.2,v:16},{x:1050,y:820,s:.7,v:12},
+  {x:300,y:300,s:1.4,v:11},{x:700,y:760,s:1.1,v:15},{x:980,y:330,s:1.3,v:9},{x:40,y:450,s:1.2,v:13},{x:600,y:180,s:1.6,v:10},{x:880,y:980,s:1.0,v:17},{x:250,y:960,s:1.1,v:12}];
+const clouds=CL0.slice(0,K.clouds);
 
 // ===== камера =====
 // camY > 0 — камера поднимается вверх (сцена уходит вниз); zoom — общий масштаб
@@ -64,18 +74,19 @@ function layer(par,t,fn){ // слой с параллаксом par
 function sky(t){
   const d=eio(p(t,1.8,6.4));
   const g=x.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,mix('#16234a','#2f7fd0',d));
-  g.addColorStop(.45,mix('#5a4a86','#6fb3ea',d));
-  g.addColorStop(.75,mix('#f08a6a','#bfe2f6',d));
-  g.addColorStop(1,mix('#ffc88a','#e8f6fc',d));
+  const gy=(a,b)=>{const A=hex(a),B=hex(b);const m=A.map((v,i)=>Math.round(lerp(v,B[i],K.gray)));return '#'+m.map(v=>v.toString(16).padStart(2,'0')).join('')};
+  g.addColorStop(0,mix('#16234a',gy('#2f7fd0','#7c8796'),d));
+  g.addColorStop(.45,mix('#5a4a86',gy('#6fb3ea','#9aa4b0'),d));
+  g.addColorStop(.75,mix('#f08a6a',gy('#bfe2f6','#c3c9d0'),d));
+  g.addColorStop(1,mix('#ffc88a',gy('#e8f6fc','#dde1e5'),d));
   x.fillStyle=g; x.fillRect(0,0,W,H);
   // звёзды на рассвете
   const sa=1-p(t,0.5,3.2); if(sa>0){const r=rnd(3);for(let i=0;i<70;i++){const sx=r()*W,sy=r()*900,tw=.5+.5*Math.sin(t*3+i);x.fillStyle=`rgba(255,255,255,${sa*.7*tw})`;x.fillRect(sx,sy,2.4,2.4)}}
 }
 function cloudsL(t){
-  const a=.3+.45*eio(p(t,2,6));
+  const a=.3+(K.ca-.3)*eio(p(t,2,6)); const cc=Math.round(lerp(255,180,K.gray));
   clouds.forEach(cd=>{const cx=((cd.x+t*cd.v)%1300)-110; const s=cd.s;
-    x.save();x.globalAlpha=a;x.fillStyle='#fff';x.beginPath();
+    x.save();x.globalAlpha=a;x.fillStyle=`rgb(${cc},${cc+4},${cc+10})`;x.beginPath();
     [[0,0,90,34],[60,-20,70,40],[-55,-8,55,30],[20,8,80,26]].forEach(e=>{x.moveTo(cx+e[0]*s+e[2]*s,cd.y+e[1]*s);x.ellipse(cx+e[0]*s,cd.y+e[1]*s,e[2]*s,e[3]*s,0,0,Math.PI*2)});
     x.fill();x.restore();});
 }
@@ -95,7 +106,7 @@ function mountains(t){
 }
 function town(t){
   const d=eio(p(t,1.8,6.4)), base=1330;
-  x.fillStyle=mix('#3b4566','#6f9a72',d); x.fillRect(-200,base,1480,700);
+  x.fillStyle=mix('#3b4566',K.pr==='snow'?'#dfe7ee':'#6f9a72',d); x.fillRect(-200,base,1480,700);
   poplarsMid.forEach(q=>{x.fillStyle=mix('#2f3d55','#4f8a55',d);x.beginPath();x.ellipse(q.x,base-q.h/2,q.w,q.h/2,0,0,7);x.fill()});
   houses.forEach((h,i)=>{
     x.fillStyle=mix(i%2?'#4a4570':'#544d7a', i%2?'#f2e6d0':'#e9d6b8', d);
@@ -108,12 +119,12 @@ function town(t){
     x.fillStyle=`rgba(80,110,150,${off*.55})`;x.fillRect(h.x+h.w*.25,base-h.h*.6,14,18);x.fillRect(h.x+h.w*.6,base-h.h*.6,14,18);
   });
   // поле с рядами (хлопок/огороды долины)
-  for(let r=0;r<6;r++){x.strokeStyle=mix('#4a5578','#86b06e',d);x.lineWidth=6+r*3;x.beginPath();x.moveTo(-200,base+60+r*r*14+r*30);x.lineTo(1280,base+40+r*r*14+r*30);x.stroke()}
+  for(let r=0;r<6;r++){x.strokeStyle=mix('#4a5578',K.pr==='snow'?'#c9d5df':'#86b06e',d);x.lineWidth=6+r*3;x.beginPath();x.moveTo(-200,base+60+r*r*14+r*30);x.lineTo(1280,base+40+r*r*14+r*30);x.stroke()}
 }
 function foreground(t){
   const d=eio(p(t,1.8,6.4));
   x.save(); x.filter='blur(5px)'; // DOF: ближний план мягкий
-  x.fillStyle=mix('#232543','#3f7a45',d);
+  x.fillStyle=mix('#232543',K.pr==='snow'?'#e6edf2':'#3f7a45',d);
   x.beginPath();x.moveTo(-200,2000);x.lineTo(-200,1700);x.quadraticCurveTo(300,1610,600,1690);x.quadraticCurveTo(900,1760,1280,1640);x.lineTo(1280,2000);x.fill();
   poplarsFg.forEach((q,i)=>{const sway=Math.sin(t*1.3+i)*6;
     x.fillStyle=mix('#1c2238',i%2?'#2f6b3c':'#357843',d);
@@ -128,6 +139,7 @@ const SUNY=[[0,1330],[1.2,1250],[3,1040],[4.8,760],[6.2,640],[10,640],[11.8,690]
 function sun(t){
   const sx=path(SUNX,t), sy=path(SUNY,t);
   const r=lerp(120,96,eio(p(t,3,6)));
+  x.save();x.globalAlpha=lerp(1,K.sun,eio(p(t,2,6)));
   // свечение
   const glow=x.createRadialGradient(sx,sy,r*.4,sx,sy,r*4.2);
   glow.addColorStop(0,'rgba(255,220,140,.55)');glow.addColorStop(1,'rgba(255,200,120,0)');
@@ -139,6 +151,7 @@ function sun(t){
   const g=x.createRadialGradient(sx-r*.3,sy-r*.35,r*.1,sx,sy,r);
   g.addColorStop(0,'#fff6c8');g.addColorStop(.6,'#ffd35a');g.addColorStop(1,'#ffab2e');
   x.fillStyle=g;x.beginPath();x.arc(sx,sy,r,0,7);x.fill();
+  x.restore();
   return {sx,sy,r};
 }
 function dial(t,S){
@@ -149,25 +162,25 @@ function dial(t,S){
   x.lineCap='round';x.lineWidth=18;x.strokeStyle='rgba(255,255,255,.35)';
   x.beginPath();x.arc(S.sx,S.sy,R,A0,A1);x.stroke();
   // заполнение от мин. до текущей
-  const fill=eio(p(t,4.2,5.6)), frac=(D.now-D.lo)/(D.hi-D.lo);
+  const fill=eio(p(t,4.2,5.6)), frac=cl((D.now-D.lo)/Math.max(1,D.hi-D.lo),0.04,1);
   const gr=x.createLinearGradient(S.sx-R,0,S.sx+R,0);gr.addColorStop(0,'#7fd3ff');gr.addColorStop(.5,'#ffd35a');gr.addColorStop(1,'#ff7a3d');
   x.strokeStyle=gr;x.beginPath();x.arc(S.sx,S.sy,R,A0,A0+(A1-A0)*frac*fill);x.stroke();
   // подписи мин/макс у концов шкалы
   x.fillStyle='#fff';x.font='44px IDS';x.textAlign='center';
-  x.fillText(`+${D.lo}°`,S.sx+Math.cos(A0)*R-6,S.sy+Math.sin(A0)*R+66);
-  x.fillText(`+${D.hi}°`,S.sx+Math.cos(A1)*R+6,S.sy+Math.sin(A1)*R+66);
+  x.fillText(T(D.lo),S.sx+Math.cos(A0)*R-6,S.sy+Math.sin(A0)*R+66);
+  x.fillText(T(D.hi),S.sx+Math.cos(A1)*R+6,S.sy+Math.sin(A1)*R+66);
   x.restore();
 }
 function nowTemp(t,S){
   const a=eo(p(t,4.0,4.6))*(1-eio(p(t,11.6,12.3)));
   if(a<=0)return;
-  const v=Math.round(lerp(D.lo,D.now,eio(p(t,4.2,5.6))));
+  const v=Math.round(lerp(Math.min(D.lo,D.now),D.now,eio(p(t,4.2,5.6))));
   const pop=back(p(t,4.0,4.7)), pulse=1+.06*Math.exp(-12*Math.max(0,t-5.6))*(t>5.6?1:0);
   x.save();x.globalAlpha=a;x.translate(S.sx,S.sy+14);x.scale(pop*pulse,pop*pulse);
   x.font='120px IDB';x.textAlign='center';x.textBaseline='middle';
-  x.fillStyle='rgba(122,59,0,.55)';x.fillText(`+${v}°`,7,7);
-  x.lineJoin='round';x.lineWidth=10;x.strokeStyle='#e0761a';x.strokeText(`+${v}°`,0,0);
-  x.fillStyle='#fff';x.fillText(`+${v}°`,0,0);
+  x.fillStyle='rgba(122,59,0,.55)';x.fillText(T(v),7,7);
+  x.lineJoin='round';x.lineWidth=10;x.strokeStyle='#e0761a';x.strokeText(T(v),0,0);
+  x.fillStyle='#fff';x.fillText(T(v),0,0);
   x.restore();
   // «ҲОЗИР»
   const b=eo(p(t,4.6,5.2))*(1-eio(p(t,11.6,12.3)));
@@ -212,13 +225,15 @@ function icon(type,cx,cy,t){
   if(type==='sun'){x.rotate(t*.6);x.fillStyle='#ffb23e';for(let i=0;i<8;i++){x.rotate(Math.PI/4);x.fillRect(30,-5,16,10)}x.beginPath();x.arc(0,0,24,0,7);x.fill()}
   if(type==='moon'){x.fillStyle='#6b6fd8';x.beginPath();x.arc(0,0,30,0,7);x.fill();x.fillStyle='#fff';x.beginPath();x.arc(13,-9,26,0,7);x.fill();
     x.fillStyle='#ffc94a';[[-30,-26],[26,24],[-6,30]].forEach(q=>{x.beginPath();x.arc(q[0],q[1],4,0,7);x.fill()})}
+  if(type==='cloud'){const b=Math.sin(t*1.5)*3;x.fillStyle='#9fb0c8';x.beginPath();[[0,4+b,34,22],[-20,10+b,22,16],[18,-8+b,24,22],[-6,-10+b,20,18]].forEach(e=>{x.moveTo(e[0]+e[2],e[1]);x.ellipse(e[0],e[1],e[2],e[3],0,0,Math.PI*2)});x.fill()}
+  if(type==='snow'){x.rotate(t*.5);x.strokeStyle='#5aa8e8';x.lineWidth=6;x.lineCap='round';for(let i=0;i<6;i++){x.rotate(Math.PI/3);x.beginPath();x.moveTo(0,0);x.lineTo(0,-32);x.moveTo(0,-20);x.lineTo(-9,-28);x.moveTo(0,-20);x.lineTo(9,-28);x.stroke()}}
   if(type==='drop'){const b=Math.sin(t*4)*3;x.fillStyle='#45a9f0';x.beginPath();x.moveTo(0,-34+b);x.bezierCurveTo(26,-4+b,28,30,0,30);x.bezierCurveTo(-28,30,-26,-4+b,0,-34+b);x.fill();
     x.fillStyle='rgba(255,255,255,.7)';x.beginPath();x.ellipse(-8,8,6,10,-.4,0,7);x.fill()}
   x.restore();
 }
 const CARDS=[
-  {lab:'КУНДУЗ',val:()=>`+${D.hi}°`,ic:'sun',t0:6.55,col:'#ff8a3d'},
-  {lab:'ТУН',val:()=>`+${D.lo}°`,ic:'moon',t0:7.05,col:'#5a5fd0'},
+  {lab:'КУНДУЗ',val:()=>T(D.hi),ic:ICON[D.kind]||'sun',t0:6.55,col:'#ff8a3d'},
+  {lab:'ТУН',val:()=>T(D.night!==undefined?D.night:D.lo),ic:'moon',t0:7.05,col:'#5a5fd0'},
   {lab:'ЁҒИН',val:()=>`${D.rain}%`,ic:'drop',t0:7.55,col:'#2f93e0'},
 ];
 function cards(t){
@@ -255,9 +270,9 @@ function tomorrow(t){
   x.save();x.translate(lerp(W,0,e)+out*-W,0);x.globalAlpha=1-out;
   x.shadowColor='rgba(20,40,80,.25)';x.shadowBlur=40;x.shadowOffsetY=18;
   x.fillStyle='rgba(30,40,90,.82)';rr(X,Y,w,h,75);x.fill();x.shadowColor='transparent';
-  icon('sun',X+90,Y+h/2,t);
+  icon(ICON[D.tKind]||'sun',X+90,Y+h/2,t);
   x.fillStyle='#ffd35a';x.font='44px IDX';x.letterSpacing='6px';x.textAlign='left';x.fillText('ЭРТАГА',X+160,Y+92);
-  x.fillStyle='#fff';x.font='70px IDB';x.letterSpacing='0px';x.textAlign='right';x.fillText(`+${D.tHi}° / +${D.tLo}°`,X+w-50,Y+100);
+  x.fillStyle='#fff';x.font='70px IDB';x.letterSpacing='0px';x.textAlign='right';x.fillText(`${T(D.tHi)} / ${T(D.tLo)}`,X+w-50,Y+100);
   x.restore();
 }
 // птицы
@@ -267,6 +282,19 @@ function birds(t){
     const bx=lerp(-80,W+80,u), by=980-u*220+i*36+Math.sin(u*9+i)*14, fl=Math.sin(t*14+i*2)*16;
     x.strokeStyle='rgba(40,50,80,.75)';x.lineWidth=5;x.lineCap='round';
     x.beginPath();x.moveTo(bx-24,by-fl);x.quadraticCurveTo(bx-10,by-6,bx,by);x.quadraticCurveTo(bx+10,by-6,bx+24,by-fl);x.stroke();}
+}
+// осадки / туман — поверх мира, под интерфейсом
+function precip(t){
+  const a=eio(p(t,2.2,4.5)); if(!K.pr||a<=0)return;
+  const r=rnd(11);
+  if(K.pr==='rain'){x.save();x.strokeStyle=`rgba(210,225,245,${.55*a})`;x.lineWidth=3;x.lineCap='round';
+    for(let i=0;i<140;i++){const x0=r()*1300-100,y0=r()*H,v=1500+r()*700,len=38+r()*30;const y=(y0+t*v)%(H+100)-50,xx=x0-(y*0.18);
+      x.beginPath();x.moveTo(xx,y);x.lineTo(xx-len*.18,y+len);x.stroke();}x.restore();}
+  if(K.pr==='snow'){x.save();for(let i=0;i<120;i++){const x0=r()*W,y0=r()*H,v=90+r()*120,s=3+r()*6;
+      const y=(y0+t*v)%(H+40)-20,xx=x0+Math.sin(t*1.3+i)*26;x.fillStyle=`rgba(255,255,255,${(.6+.4*r())*a})`;x.beginPath();x.arc(xx,y,s,0,7);x.fill();}x.restore();}
+  if(K.pr==='fog'){x.save();for(let i=0;i<5;i++){const y=1150+i*130,off=Math.sin(t*.3+i)*80;
+      const g=x.createLinearGradient(0,y-70,0,y+70);g.addColorStop(0,'rgba(235,238,242,0)');g.addColorStop(.5,`rgba(235,238,242,${.42*a})`);g.addColorStop(1,'rgba(235,238,242,0)');
+      x.fillStyle=g;x.fillRect(-100+off,y-70,W+200,140);}x.restore();}
 }
 // финал
 function finale(t,S){
@@ -295,7 +323,8 @@ function flash(t){
 function vignette(){const g=x.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.78);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(10,10,40,.32)');x.fillStyle=g;x.fillRect(0,0,W,H)}
 
 function renderAt(t){
-  x.save();x.clearRect(0,0,W,H);x.letterSpacing='0px';
+  const SC=window.SCALE||1; if(c.width!==Math.round(W*SC)){c.width=Math.round(W*SC);c.height=Math.round(H*SC);}
+  x.setTransform(SC,0,0,SC,0,0);x.save();x.clearRect(0,0,W,H);x.letterSpacing='0px';
   layer(.15,t,()=>sky(t));
   layer(.3,t,()=>cloudsL(t));
   // солнце живёт между небом и горами в начале, затем выходит на передний план интерфейса
@@ -304,6 +333,7 @@ function renderAt(t){
   layer(.8,t,()=>town(t));
   birds(t);
   layer(1.25,t,()=>foreground(t));
+  precip(t);
   vignette();
   dial(t,S); nowTemp(t,S); title(t); cards(t); tomorrow(t); finale(t,S); flash(t);
   x.restore();

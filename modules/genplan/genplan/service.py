@@ -307,6 +307,7 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
             continue
         to = target(cfg, env, r["channel"])
         p = pubs[ch["publisher"]]
+        video = None
         try:
             if r["key"] == "info":
                 from . import digest
@@ -323,13 +324,29 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
                 if not body:
                     raise PublishError("нет данных погоды и курса (сайты не ответили)")
                 hub_chat, hub_msg, media, ids = None, None, False, []
+                if (ch.get("info") or {}).get("video"):          # 🎬 20.10: ролик погоды, подпись — тот же текст
+                    try:
+                        video = await asyncio.to_thread(extras.weather_video, now.date())
+                    except Exception as e:  # noqa: BLE001 — без ролика пост всё равно выходит текстом
+                        ERRORS.append(f"⚠️ {ch['title']}: ролик погоды не готов ({e}) — вышел текст")
             else:
                 f = extras.final_get(db, r["channel"])
                 if not f:
                     extras.mark(db, r, status="skipped", error="Якуний пост не задан")
                     continue
                 body, hub_chat, hub_msg, media, ids = f["text"], f["hub_chat"], f["hub_msg"], f["has_media"], f.get("hub_msgs") or []
-            if len(ids) > 1 and ch["publisher"] == "account":
+            mid = None
+            if video:
+                try:
+                    res = p.publish_file(to, str(video), body)
+                    mid = await res if asyncio.iscoroutine(res) else res
+                except PublishError as e:
+                    ERRORS.append(f"⚠️ {ch['title']}: ролик погоды не отправился ({e}) — вышел текст")
+                finally:
+                    video.unlink(missing_ok=True)
+            if mid is not None:
+                pass
+            elif len(ids) > 1 and ch["publisher"] == "account":
                 mid = await p.publish_album(to, hub_chat, ids, body)
             elif ch["publisher"] == "account":
                 mid = await p.publish(to, body, hub_chat, hub_msg, media)
