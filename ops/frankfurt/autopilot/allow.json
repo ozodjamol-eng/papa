@@ -35,7 +35,8 @@
     "diag-errors",
     "audit-reports",
     "hubs-check",
-    "bots-who"
+    "bots-who",
+    "xojaobod-check"
   ],
   "approve": [
     "morning-pool-clear",
