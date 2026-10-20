@@ -21,7 +21,8 @@
     "genplan5-ads-list",
     "genplan5-ads-trace",
     "genplan5-ad-window-find",
-    "genplan5-handover"
+    "genplan5-handover",
+    "genplan5-parity"
   ],
   "approve": [
     "genplan5-overdue-skip",
