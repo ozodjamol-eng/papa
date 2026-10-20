@@ -47,7 +47,7 @@ def check(db, now: dt.datetime) -> list[tuple[str, str]]:
                         "остальные будут пропущены! Разведите по времени."))
     late = (now - dt.timedelta(minutes=7)).strftime("%Y-%m-%dT%H:%M:%S")
     for r in db.execute("SELECT p.id, p.status, p.scheduled_at, p.last_error, c.name FROM scheduled_posts p "
-                        "LEFT JOIN campaigns c ON p.slot_key LIKE 'campaign_' || c.id || '_%' "
+                        "LEFT JOIN campaigns c ON p.slot_key = 'campaign_' || c.id || '_' || substr(p.scheduled_at,1,10) "
                         "WHERE p.rubric='ad' AND substr(p.scheduled_at,1,10)=? AND "
                         "(p.status IN ('skipped','failed') OR (p.status='pending' AND p.scheduled_at < ?))", (today, late)):
         what = {"skipped": "ПРОПУЩЕНА системой", "failed": "не вышла (ошибка)"}.get(r["status"], "время прошло — не вышла")
