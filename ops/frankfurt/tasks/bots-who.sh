@@ -4,7 +4,7 @@ set -uo pipefail
 set -a; . /etc/papa-genplan/genplan.env; [ -f /etc/papa-genplan/bots.env ] && . /etc/papa-genplan/bots.env; set +a
 /opt/papa-venv/razvedka/bin/python - <<'PY'
 import json, os, urllib.request
-for name, var in (("КАТТА ДАВРА (главный)", "GENPLAN_BOT_TOKEN"), ("PaparazziUZ", "PAPARAZZI_BOT_TOKEN")):
+for name, var in (("КАТТА ДАВРА (главный)", "GENPLAN_BOT_TOKEN"), ("PaparazziUZ", "PAPARAZZI_BOT_TOKEN"), ("Хўжаобод", "XOJAOBOD_BOT_TOKEN")):
     tok = os.environ.get(var)
     if not tok:
         print(f"{name}: нет токена"); continue
