@@ -297,8 +297,8 @@ def watch(cfg: dict, env: dict, now: dt.datetime, state: dict) -> list[str]:
         chat = "@" + ch["username"]
         snap = admins_snapshot(env.get(ch.get("bot_token_env", ""), "") or tok, chat)   # свой бот канала видит своих админов
         if snap is None:
-            if not state.setdefault("admin_unreadable", {}).get(code + "2"):
-                state["admin_unreadable"][code + "2"] = 1
+            if state.setdefault("admin_unreadable", {}).get(code) != now.date().isoformat():   # 20.10: напоминать раз в день, а не один раз навсегда
+                state["admin_unreadable"][code] = now.date().isoformat()
                 alerts.append(f"🛡 {ch['title']}: бот не видит список админов — охрана для него не работает")
             continue
         if code in adm:
@@ -326,6 +326,156 @@ def watch(cfg: dict, env: dict, now: dt.datetime, state: dict) -> list[str]:
     return alerts
 
 
+# ================= 🛡 СТРАЖ (20.10, владелец: «сделай раз и навсегда, чтобы был порядок») =================
+# Каждые 10 минут 05:00–23:00: может ли каждый публикующий писать в свой канал, жив ли ключ ИИ,
+# не застряла ли реклама/пост. Сломалось — СРАЗУ сообщение владельцу; что можно починить само — чинится
+# (права PAPA в группе — задача xojaobod-admin с кнопкой владельца). Повтор напоминания, пока не исправлено.
+AI_ENV = "/etc/papa-genplan/ai.env"
+REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600}
+
+
+def due(state: dict, key: str, kind: str, now: float) -> bool:
+    seen = state.setdefault("guard_seen", {})
+    if now - seen.get(key, 0) >= REPEAT[kind]:
+        seen[key] = now
+        return True
+    return False
+
+
+def ok_again(state: dict, key: str) -> bool:
+    """Было сломано, стало хорошо — один раз сообщить «восстановлено»."""
+    return state.setdefault("guard_seen", {}).pop(key, None) is not None
+
+
+def account_rights(run=None) -> dict | None:
+    run = run or (lambda: subprocess.run([PY, str(REPO / "ops/frankfurt/xojaobod_check.py"), "--json"],
+                                         capture_output=True, text=True, timeout=90).stdout)
+    try:
+        return json.loads((run() or "").strip().splitlines()[-1])
+    except (ValueError, IndexError, subprocess.SubprocessError, OSError):
+        return None
+
+
+def enqueue(task: str, reason: str, key: str, gw: Path = GW_DB) -> bool:
+    """Поставить задачу автопилоту (как это делает ИИ через шлюз). approve-задача придёт владельцу кнопкой."""
+    import hashlib
+    import secrets
+    if not gw.exists():
+        return False
+    payload = json.dumps({"task": task, "reason": reason[:300]}, ensure_ascii=False)
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    try:
+        c = sqlite3.connect(str(gw), timeout=15)
+        c.execute("INSERT OR IGNORE INTO tasks (id,operation,target,priority,status,payload,idempotency,fingerprint,"
+                  "requested_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                  (secrets.token_hex(12), "papa_task", "frankfurt", 10, "queued", payload, key,
+                   hashlib.sha256(payload.encode()).hexdigest(), "guard", now, now))
+        c.commit(); c.close()
+        return True
+    except sqlite3.Error:
+        return False
+
+
+def ai_alive(env_ai: dict, get=None) -> str | None:
+    """None — ключ жив (или не задан); иначе текст беды."""
+    key = env_ai.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        return None
+    def _get():
+        req = urllib.request.Request("https://api.anthropic.com/v1/models?limit=1",
+                                     headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status, ""
+        except urllib.error.HTTPError as e:
+            return e.code, (e.read() or b"")[:300].decode("utf-8", "replace")
+        except Exception as e:  # noqa: BLE001 — сеть: не тревожим
+            return 0, type(e).__name__
+    code, body = (get or _get)()
+    if code in (200, 0, 429, 500, 502, 503, 529):
+        return None
+    why = "организация отключена (organization_on_hold)" if "on_hold" in body or "disabled" in body else \
+          "ключ не принят (401)" if code == 401 else "нет денег на счёте" if "credit" in body.lower() else f"HTTP {code}"
+    return why
+
+
+def guard(cfg: dict, env: dict, now: dt.datetime, state: dict, db_path: Path = GP_DB, rights=account_rights,
+          ai_check=ai_alive, queue=enqueue) -> list[str]:
+    alerts: list[str] = []
+    t = now.timestamp()
+    main_tok = env.get("GENPLAN_BOT_TOKEN", "")
+    # 1) права публикации в каждом рабочем канале/группе
+    for code, ch in cfg["channels"].items():
+        live = ch.get("mode") == "live" or (ch.get("morning") or {}).get("live") or (ch.get("digest") or {}).get("live")
+        if not live:
+            continue
+        key = f"rights:{code}"
+        if ch.get("publisher") == "bot":
+            tok = env.get(ch.get("bot_token_env", ""), "") or main_tok
+            me = tg(tok, "getMe")
+            if not me.get("ok"):
+                continue                      # сеть/Telegram — не тревожим ложно
+            m = tg(tok, "getChatMember", chat_id="@" + ch["username"], user_id=me["result"]["id"])
+            if not m.get("ok"):
+                continue
+            r = m.get("result") or {}
+            good = r.get("status") == "administrator" and r.get("can_post_messages", True)
+            who = "@" + me["result"].get("username", "бот")
+        elif ch.get("publisher") == "account":
+            r = rights()
+            if r is None:
+                continue
+            good = bool(r.get("session") and r.get("admin"))
+            who = "аккаунт PAPA"
+            if not good and r.get("session") and due(state, f"heal:{code}", "heal", t):
+                if queue("xojaobod-admin", f"🛡 Страж: у аккаунта PAPA сняли права в {ch['title']} — вернуть (ничего не публикует)",
+                         f"guard-heal-{code}-{now:%Y%m%d%H}"):
+                    alerts.append(f"🛠 {ch['title']}: запросил починку — нажмите «✅ Разрешить» (xojaobod-admin)")
+            if not r.get("session"):
+                who = "аккаунт PAPA (сессия слетела — нужен вход владельца)"
+        else:
+            continue
+        if good:
+            if ok_again(state, key):
+                alerts.append(f"✅ {ch['title']}: права публикации снова в порядке")
+        elif due(state, key, "rights", t):
+            alerts.append(f"🚨 {ch['title']}: {who} НЕ МОЖЕТ публиковать (сняли права админа). Посты и реклама не выйдут!")
+    # 2) ключ ИИ
+    why = ai_check(envf(AI_ENV))
+    if why and due(state, "ai", "ai", t):
+        alerts.append(f"🚨 ИИ (Anthropic): {why}. ИИ-тексты и Тренд-разведка не работают — посты выходят без ИИ-хука. "
+                      "Проверьте console.anthropic.com → Billing / Appeal")
+    elif not why and ok_again(state, "ai"):
+        alerts.append("✅ ИИ (Anthropic) снова работает")
+    # 3) реклама и посты: время прошло — не вышли; ошибки публикации
+    if db_path.exists():
+        db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=15)
+        db.row_factory = sqlite3.Row
+        late = (now - dt.timedelta(minutes=7)).isoformat()
+        for r in db.execute("SELECT id, channel, rubric, scheduled_at FROM materials WHERE status='queued' "
+                            "AND scheduled_at IS NOT NULL AND scheduled_at < ?", (late,)).fetchall():
+            ad = (r["rubric"] or "").lower().startswith("реклама")
+            if due(state, f"stuck:{r['id']}", "post", t):
+                when = dt.datetime.fromisoformat(r["scheduled_at"]).astimezone(TZ).strftime("%H:%M")
+                alerts.append(("🚨 РЕКЛАМА" if ad else "⚠️ Пост") + f" ({Audit.title(cfg, r['channel'])}, {when}) не вышла вовремя — "
+                              "проверьте пульт (📅 СЕГОДНЯ)")
+        since = (now - dt.timedelta(hours=3)).isoformat()
+        try:
+            rows = db.execute("SELECT p.id, p.channel, p.error, m.rubric FROM publications p LEFT JOIN materials m ON m.id=p.material_id "
+                              "WHERE p.at>=? AND (p.status='failed' OR (p.status='missed' AND m.rubric LIKE 'Реклама%'))",
+                              (since,)).fetchall()
+        except sqlite3.Error:
+            rows = db.execute("SELECT id, channel, error, '' AS rubric FROM publications WHERE status='failed' AND at>=?",
+                              (since,)).fetchall()
+        for r in rows:
+            if due(state, f"pubfail:{r['id']}", "post", t):
+                ad = (r["rubric"] or "").lower().startswith("реклама")
+                alerts.append(("🚨 РЕКЛАМА не вышла" if ad else "❌ Пост не вышел") +
+                              f" ({Audit.title(cfg, r['channel'])}): {(r['error'] or '')[:150]}")
+        db.close()
+    return alerts
+
+
 def main(mode: str = "full", send: bool = True) -> int:
     quick = mode == "quick"
     now = dt.datetime.now(TZ)
@@ -338,7 +488,9 @@ def main(mode: str = "full", send: bool = True) -> int:
             state = json.loads(sp.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             state = {}
-        alerts = watch(cfg, env, now, state)
+        alerts = guard(cfg, env, now, state)
+        if now.minute < 10:                          # охрана админов и «тишина» — раз в час, как раньше
+            alerts += watch(cfg, env, now, state)
         sp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
         print("\n".join(alerts) or "watch: всё спокойно")
         if send and alerts:

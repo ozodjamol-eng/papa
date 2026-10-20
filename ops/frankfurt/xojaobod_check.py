@@ -1,6 +1,8 @@
 """Диагностика (только чтение): почему аккаунт PAPA не может писать в Хўжаобод Сити 24.
 Показывает: участник ли, админ ли, какие права, ограничения группы для всех. Ничего не публикует и не меняет."""
 import asyncio
+import json
+import sys
 from pathlib import Path
 
 from telethon import TelegramClient
@@ -10,6 +12,27 @@ from telethon.errors import UserNotParticipantError
 
 GROUP = "xojaobodcity24"
 PUB = dict(l.split("=", 1) for l in Path("/etc/papa-tg/publisher.env").read_text().splitlines() if "=" in l)
+
+
+async def as_json():
+    """Для «Стража»: {"session": bool, "member": bool, "admin": bool} одной строкой JSON."""
+    out = {"session": False, "member": False, "admin": False}
+    acc = TelegramClient(StringSession(PUB["PAPA_TG_SESSION"]), int(PUB["PAPA_TG_API_ID"]), PUB["PAPA_TG_API_HASH"])
+    await acc.connect()
+    try:
+        if await acc.is_user_authorized():
+            out["session"] = True
+            me = await acc.get_me()
+            g = await acc.get_entity(GROUP)
+            try:
+                p = await acc(GetParticipantRequest(g, me.id))
+                out["member"] = True
+                out["admin"] = getattr(p.participant, "admin_rights", None) is not None or type(p.participant).__name__ in ("ChannelParticipantAdmin", "ChannelParticipantCreator")
+            except UserNotParticipantError:
+                pass
+    finally:
+        await acc.disconnect()
+    print(json.dumps(out))
 
 
 async def main():
@@ -41,4 +64,4 @@ async def main():
     print("XOJAOBOD_CHECK_DONE — ничего не изменено")
 
 
-asyncio.run(main())
+asyncio.run(as_json() if "--json" in sys.argv else main())

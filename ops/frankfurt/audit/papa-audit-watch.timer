@@ -1,8 +1,9 @@
 [Unit]
-Description=PAPA охрана каналов и «тихий канал» — каждый час 07:05–23:05 Ташкент
+Description=PAPA Страж — каждые 10 минут 05:00–23:00 Ташкент (права, ИИ, реклама); охрана админов и «тишина» — раз в час
 
 [Timer]
-OnCalendar=*-*-* 02..18:05:00 UTC
+OnCalendar=*-*-* 00..17:00/10:00 UTC
+OnCalendar=*-*-* 18:00:00 UTC
 Persistent=false
 Unit=papa-audit@watch.service
 

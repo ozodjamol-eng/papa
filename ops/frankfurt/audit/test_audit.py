@@ -85,5 +85,52 @@ class TestDeliver(unittest.TestCase):
         send, calls = self._send()
         self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=False, send=send), ["pult"])
 
+
+class TestGuard(unittest.TestCase):
+    """🛡 Страж: права, ИИ, реклама — сразу тревога, без повторов-спама, починка ставится в очередь."""
+    def setUp(self):
+        d = Path(tempfile.mkdtemp())
+        self.p = d / "g.db"
+        db = store.connect(str(self.p))
+        self.now = dt.datetime(2026, 10, 20, 18, 45, tzinfo=pa.TZ)
+        mid = store.add_material(db, 1, 1, "Реклама: ўтин", True)
+        store.update(db, mid, channel="davra", rubric="Реклама", status="queued",
+                     scheduled_at=(self.now - dt.timedelta(minutes=15)).isoformat())
+        db.commit()
+        db.close()
+        self.queued = []
+        pa.tg = lambda tok, method, **p: {"ok": True, "result": {"id": 1, "username": "bot"}} if method == "getMe" else \
+            {"ok": True, "result": {"status": "administrator", "can_post_messages": True}}
+
+    def run_guard(self, state, rights=None, ai=None):
+        return pa.guard(CFG, {}, self.now, state, db_path=self.p,
+                        rights=rights or (lambda: {"session": True, "member": True, "admin": True}),
+                        ai_check=ai or (lambda e: None),
+                        queue=lambda task, reason, key: self.queued.append(task) or True)
+
+    def test_stuck_ad_alerts_once(self):
+        st = {}
+        a = self.run_guard(st)
+        self.assertTrue(any("🚨 РЕКЛАМА" in x for x in a), a)
+        self.assertFalse(any("РЕКЛАМА" in x for x in self.run_guard(st)))   # второй раз — без спама
+
+    def test_lost_admin_alerts_and_heals(self):
+        st = {}
+        a = self.run_guard(st, rights=lambda: {"session": True, "member": True, "admin": False})
+        self.assertTrue(any("Хўжаобод" in x and "НЕ МОЖЕТ" in x for x in a), a)
+        self.assertEqual(self.queued, ["xojaobod-admin"])
+        b = self.run_guard(st)
+        self.assertTrue(any("снова в порядке" in x for x in b), b)
+
+    def test_ai_disabled_alerts(self):
+        a = self.run_guard({}, ai=lambda e: "организация отключена (organization_on_hold)")
+        self.assertTrue(any("Anthropic" in x for x in a), a)
+
+    def test_ai_alive_parsing(self):
+        self.assertIsNone(pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (200, "")))
+        self.assertIn("отключена", pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (400, '{"error_code":"organization_on_hold"}')))
+        self.assertIsNone(pa.ai_alive({}, get=lambda: (401, "")))
+
+
 if __name__ == "__main__":
     unittest.main()
