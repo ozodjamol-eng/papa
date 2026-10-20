@@ -67,24 +67,23 @@ class TestDeliver(unittest.TestCase):
             return {"ok": ok_chan if p["chat_id"] == "-100900" else True}
         return send, calls
 
-    def test_report_to_reports_channel_only(self):
+    def test_report_goes_to_pult(self):
+        """20.10 владелец: отчёт — прямо в бот-пульт; канал отчётов — только запасной путь."""
         import papa_audit as A
         send, calls = self._send()
         A.envf = lambda *p: {"PAPA_TEST_BOT_TOKEN": "t", "PAPA_REPORTS_CHANNEL_ID": "-100900"}
-        self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=False, send=send), ["reports"])
-        self.assertEqual(calls, ["-100900"])
+        self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=False, send=send), ["pult"])
+        self.assertEqual(calls, ["42"])
 
-    def test_urgent_also_to_pult_and_fallback(self):
+    def test_pult_failed_fallback_to_channel(self):
         import papa_audit as A
-        send, calls = self._send()
-        A.envf = lambda *p: {"PAPA_TEST_BOT_TOKEN": "t", "PAPA_REPORTS_CHANNEL_ID": "-100900"}
-        self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=True, send=send), ["reports", "pult"])
-        send, calls = self._send(ok_chan=False)          # канал не принял — в пульт
-        self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=False, send=send), ["pult"])
-        A.envf = lambda *p: {}                            # канал не настроен — в пульт
-        send, calls = self._send()
-        self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=False, send=send), ["pult"])
+        calls = []
 
+        def send(tok, method, **p):
+            calls.append(p["chat_id"])
+            return {"ok": p["chat_id"] == "-100900"}
+        A.envf = lambda *p: {"PAPA_TEST_BOT_TOKEN": "t", "PAPA_REPORTS_CHANNEL_ID": "-100900"}
+        self.assertEqual(A.deliver({"OWNER_IDS": "42", "GENPLAN_BOT_TOKEN": "g"}, "x", urgent=True, send=send), ["reports"])
 
 class TestGuard(unittest.TestCase):
     """🛡 Страж: права, ИИ, реклама — сразу тревога, без повторов-спама, починка ставится в очередь."""

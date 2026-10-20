@@ -176,8 +176,8 @@ class TestMorning(unittest.TestCase):
         previews = [c for c in bot.calls if c[0] in ("copyMessage", "sendMessage")]
         self.assertEqual(len(previews), 6)
         kbs = [str(p[1]["reply_markup"]) for p in previews]
-        self.assertTrue(any("mo:a:" in k for k in kbs))                 # «Бугун — … куни» (агент): ✅ Одобрить и 🗑
-        self.assertEqual(sum("Выйдет сам" in k for k in kbs), 3)        # 17.10: «Хайрли тонг» — автопилот с вето 🗑
+        self.assertFalse(any("mo:a:" in k for k in kbs))                # 20.10: ✅ не нужен никому — утро выходит само
+        self.assertEqual(sum("Выйдет сам" in k for k in kbs), 6)        # оба утренних поста — автопилот с вето 🗑
         self.assertTrue(all("mo:x:" in k for k in kbs))
         # «Бугун — … куни» без ✅ не выходит: в Хўжаободе не одобряем — пропуск с напоминанием
         for r in self.db.execute("SELECT id, channel FROM fixed_posts WHERE day=?", (FRI.isoformat(),)).fetchall():
@@ -200,8 +200,8 @@ class TestMorning(unittest.TestCase):
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:55", FRI), log=lambda s: None))
         x = self.rows("xojaobod")
         self.assertEqual(x["greeting"]["status"], "done")                    # «Хайрли тонг» вышел сам (цикл как в Хўжаободе)
-        self.assertEqual(x["day"]["error"], "не одобрен")                    # пост дня агента без ✅ — нет
-        self.assertTrue(any("не одобрен" in e for e in service.ERRORS))
+        self.assertEqual(x["day"]["status"], "done")                         # 20.10: «Бугун — … куни» тоже сам, без ✅
+        self.assertFalse(any("не одобрен" in e for e in service.ERRORS))
 
     def make_pool(self, tmp):
         root = Path(tmp) / "pool"
@@ -325,9 +325,8 @@ class TestMorning(unittest.TestCase):
         morning.ensure_all(self.db, CFG, at("22:40"))
         self.db.execute("UPDATE fixed_posts SET prepared=1"); self.db.commit()
         self.assertIsNone(morning.approval_reminder(self.db, CFG, at("21:00")))
-        t = morning.approval_reminder(self.db, CFG, at("22:05"))
-        self.assertIn("не одобрено постов: 3", t)                        # только «Бугун — … куни» (агент)
-        self.assertIsNone(morning.approval_reminder(self.db, CFG, at("22:30")))     # раз в день
+        # 20.10 владелец: утро — протокол, выходит само; напоминаний «одобрите» больше нет
+        self.assertIsNone(morning.approval_reminder(self.db, CFG, at("22:05")))
 
     def test_use_manual_pool_post(self):
         morning.ensure_all(self.db, CFG, at("00:20", FRI))

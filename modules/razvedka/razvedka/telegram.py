@@ -147,9 +147,21 @@ async def reports_channel_id(client: TelegramClient) -> int | None:
     return None
 
 
-async def send_report(client: TelegramClient, text: str) -> bool:
-    """Отчёт → канал «PAPA ОТЧЁТЫ» ботом. Нет канала/бота — в PAPA TEST GROUP. В «Избранное» — НИКОГДА."""
+def owner_bot() -> tuple[str, list[int]]:
+    """20.10 владелец: отчёты — прямо в бот (главный пульт), без отдельных каналов.
+    Токен и id владельца — /etc/papa-owner-bot.env (OWNER_BOT_TOKEN, OWNER_IDS)."""
     import os
+    tok = os.environ.get("OWNER_BOT_TOKEN", "")
+    ids = [int(x) for x in os.environ.get("OWNER_IDS", "").split(",") if x.strip().lstrip("-").isdigit()]
+    return tok, ids
+
+
+async def send_report(client: TelegramClient, text: str) -> bool:
+    """Отчёт → владельцу в главный бот-пульт (20.10). Нет — по-старому: «PAPA ОТЧЁТЫ» / PAPA TEST GROUP. «Избранное» — НИКОГДА."""
+    import os
+    tok, ids = owner_bot()
+    if tok and ids and all(bot_send(tok, o, text) for o in ids):
+        return True
     token = os.environ.get("PAPA_TEST_BOT_TOKEN", "")
     if token:
         ch = await reports_channel_id(client)
@@ -205,9 +217,12 @@ def bot_send_album(token: str, chat_id: int, images: list[bytes], caption: str =
 
 
 async def send_report_cards(client: TelegramClient, images: list[bytes], caption: str) -> bool:
-    """Картинки → «PAPA ОТЧЁТЫ» ботом; нет канала/бота — в PAPA TEST GROUP. В «Избранное» — НИКОГДА."""
+    """Картинки → владельцу в главный бот-пульт (20.10); нет — «PAPA ОТЧЁТЫ» / PAPA TEST GROUP. «Избранное» — НИКОГДА."""
     import io
     import os
+    tok, ids = owner_bot()
+    if tok and ids and all(bot_send_album(tok, o, images, caption) for o in ids):
+        return True
     token = os.environ.get("PAPA_TEST_BOT_TOKEN", "")
     if token:
         ch = await reports_channel_id(client)

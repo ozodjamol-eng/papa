@@ -56,7 +56,8 @@
     "anon-test-account",
     "digest-install",
     "goldwater-voronka-install",
-    "goldwater-voronka-restart"
+    "goldwater-voronka-restart",
+    "reports-to-bot"
   ],
   "deny_patterns": [
     "-key$",

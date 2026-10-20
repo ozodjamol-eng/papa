@@ -423,22 +423,16 @@ def send_photo(token: str, chat: int, photo: Path, caption: str) -> dict:
 
 
 def preview(env: dict, report: dict, bot) -> None:
+    """20.10 владелец: вечер — протокол, выходит сам. Владельцу — одна короткая строка в бот (без копий в тест-каналы);
+    подробности — только если дайджест НЕ готов."""
     owners = [int(x) for x in env.get("OWNER_IDS", "").split(",") if x.strip().lstrip("-").isdigit()]
-    errs = "\n".join("• " + e for e in report.get("errors", [])) or "• нет"
-    head = (f"🌙 Свой Кечки дайжест PAPA — {'готов' if report.get('status') == 'READY' else '❌ НЕ готов'} (режим проверки)\n"
-            f"Новостей в лентах за сегодня: {report.get('news_in_feeds', 0)}, выбрано: {report.get('news', 0)}\n"
-            f"Проблемы:\n{errs}")
-    targets = owners + ([int(env["TEST_CHANNEL_ID"])] if env.get("TEST_CHANNEL_ID") else [])
+    if report.get("status") == "READY":
+        head = f"🌙 Кечки дайжест готов — выйдет сам (новостей: {report.get('news', 0)})"
+    else:
+        errs = "\n".join("• " + e for e in report.get("errors", [])) or "• нет"
+        head = f"❌ Кечки дайжест НЕ готов — сегодня не выйдет\nПричины:\n{errs}"
     for o in owners:
         bot("sendMessage", chat_id=o, text=head, disable_web_page_preview=True)
-    if report.get("status") != "READY":
-        return
-    out = Path(report["dir"])
-    m = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    full = (out / "digest.txt").read_text(encoding="utf-8")
-    for t in targets:
-        send_photo(env["GENPLAN_BOT_TOKEN"], t, out / "digest.png", m["photo_caption"])
-        bot("sendMessage", chat_id=t, text=full[:4096], disable_web_page_preview=True)
 
 
 def main(db, env: dict, bot) -> dict:

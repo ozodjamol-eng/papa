@@ -55,19 +55,19 @@ REPORTS_ENV = ("/etc/papa-test/bot.env", "/etc/papa-reports.env")   # бот о�
 
 
 def deliver(env: dict, text: str, urgent: bool, send=None) -> list[str]:
-    """19.10, владелец: отчёт аудита — в «PAPA ОТЧЁТЫ» (как все отчёты). Срочное (❌) — ещё и в пульт.
-    Канал не настроен или не принял — отчёт в пульт, чтобы не потерялся. Возвращает, куда ушло."""
+    """20.10 владелец: отчёты — прямо в бот (главный пульт), отдельных каналов не нужно.
+    Пульт не принял — запасной путь: бот отчётов в «PAPA ОТЧЁТЫ», чтобы не потерялось. Возвращает, куда ушло."""
     send = send or tg
-    rep = envf(*REPORTS_ENV)
-    tok, chan = rep.get("PAPA_TEST_BOT_TOKEN", ""), rep.get("PAPA_REPORTS_CHANNEL_ID", "")
     went = []
-    if tok and chan and send(tok, "sendMessage", chat_id=chan, text=text[:4000], disable_web_page_preview=True).get("ok"):
-        went.append("reports")
-    if urgent or not went:
-        for o in env.get("OWNER_IDS", "").split(","):
-            if o.strip() and send(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text=text[:4000],
-                                  disable_web_page_preview=True).get("ok"):
-                went.append("pult")
+    for o in env.get("OWNER_IDS", "").split(","):
+        if o.strip() and send(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text=text[:4000],
+                              disable_web_page_preview=True).get("ok"):
+            went.append("pult")
+    if not went:
+        rep = envf(*REPORTS_ENV)
+        tok, chan = rep.get("PAPA_TEST_BOT_TOKEN", ""), rep.get("PAPA_REPORTS_CHANNEL_ID", "")
+        if tok and chan and send(tok, "sendMessage", chat_id=chan, text=text[:4000], disable_web_page_preview=True).get("ok"):
+            went.append("reports")
     return went
 
 

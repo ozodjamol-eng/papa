@@ -30,7 +30,8 @@ from pathlib import Path
 
 from . import plan
 
-DEFAULTS = {"approval": ["day"], "day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
+DEFAULTS = {"approval": [],   # 20.10 владелец: утро — протокол, выходит само без ✅ (вето 🗑 в предпросмотре)
+             "day_post": "06:00", "greeting": "06:30", "grace": 15, "prepare_from": "18:00",
             "tag": "#ХАЙРЛИ_ТОНГ", "day_tag": "#БУГУН", "live": False, "max_seconds": 20}
 KEYS = ("day", "greeting")
 TITLE = {"day": "Бугун — … куни", "greeting": "Хайрли тонг"}
