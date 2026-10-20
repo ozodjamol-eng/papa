@@ -309,7 +309,7 @@ def next_mandatory(db, cfg: dict, channel: str, now: dt.datetime) -> tuple[dt.da
     for key, title in (("greeting", "Хайрли тонг"), ("day_post", "Бугун — … куни")):
         if mo.get(key):                                     # утро ещё не подготовлено — берём время из настроек
             for d in (0, 1):
-                t = plan.slot_time(now.date() + dt.timedelta(days=d), mo[key])
+                t = morning.resolve(db, mo[key], now.date() + dt.timedelta(days=d))   # 20.10: «bomdod-45|05:00» тоже (падало ValueError)
                 if t > now and not any(abs((x - t).total_seconds()) < 60 for x, _ in out):
                     out.append((t, title))
                     break

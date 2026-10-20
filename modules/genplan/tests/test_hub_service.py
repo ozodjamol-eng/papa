@@ -292,6 +292,23 @@ class TestMenu(unittest.TestCase):
 
 
 
+
+
+class TestNextMandatoryBomdod(unittest.TestCase):
+    """20.10: у Хўжаобода утро «bomdod-45|05:00» — ХАБ падал ValueError при подсказке ближайшего обязательного поста."""
+    def test_bomdod_spec(self):
+        import datetime as dt
+        import tempfile
+        import tomllib
+        from pathlib import Path
+        from genplan import plan, smart, store
+        cfg = tomllib.loads((Path(__file__).resolve().parents[1] / "config.toml").read_text(encoding="utf-8"))
+        db = store.connect(str(Path(tempfile.mkdtemp()) / "g.db"))
+        now = dt.datetime(2026, 10, 20, 3, 0, tzinfo=plan.TZ)
+        r = smart.next_mandatory(db, cfg, "xojaobod", now)
+        self.assertIsNotNone(r)
+        self.assertEqual(r[0].strftime("%H:%M"), "05:00")      # без времени намаза — запасное 05:00
+
 if __name__ == "__main__":
     unittest.main()
 
