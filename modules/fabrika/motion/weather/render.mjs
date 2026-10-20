@@ -12,7 +12,7 @@ if (mode === 'frames') {
     await pg.screenshot({ path: `${out}/f_${String(t).padStart(5,'0')}.jpg`, type: 'jpeg', quality: 85 });
   }
 } else {
-  const fps = Number(arg), dur = 15, n = Math.round(dur * fps);
+  const fps = Number(arg), dur = await pg.evaluate(() => window.DUR || 15), n = Math.round(dur * fps);
   const ff = spawn('ffmpeg', ['-y','-v','error','-f','image2pipe','-framerate',String(fps),'-i','-','-c:v','libx264','-preset','medium','-crf','18','-pix_fmt','yuv420p','-r',String(fps),out], { stdio: ['pipe','inherit','inherit'] });
   for (let i = 0; i < n; i++) {
     const img = await pg.evaluate(([t, dt]) => window.renderAt(t), [i / fps, 1/fps]);

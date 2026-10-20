@@ -132,6 +132,8 @@ NEWS_SYSTEM = """Сен Хўжаобод (Андижон вилояти) аҳо�
 Сенга бугунги янгиликлар САРЛАВҲАЛАРИ рўйхати берилади (манба ва ҳавола билан).
 Вазифа: энг муҳим 3–5 тасини танла — аввало Андижон вилояти ва Хўжаобод, кейин бутун Ўзбекистон учун муҳим
 (нарх-наво, коммунал, йўл, таълим, соғлиқ, ҳаво, қонун ўзгаришлари). Реклама, кўнгилочар, жиноят тафсилотлари — йўқ.
+САЛБИЙ янгиликлар УМУМАН ОЛИНМАЙДИ: ўлим, ҳалокат, йўл-транспорт ҳодисаси, жиноят, қамоқ, суд, уруш, портлаш, ёнғин,
+табиий офат, касаллик тарқалиши, жанжал, фожиа. Фақат ижобий ёки нейтрал, фойдали янгиликлар.
 Ҳар бирини ўзбек тилида КИРИЛЛ ёзувида бир қисқа гап (130 белгигача) қилиб ёз. ФАҚАТ сарлавҳада бор маълумот —
 ҳеч нарса қўшма, рақам ўйлаб топма. Агар муҳим янгилик бўлмаса — камроқ танла.
 Жавоб — фақат JSON: [{"i": сарлавҳа рақами, "t": "қисқа гап"}]"""
@@ -172,6 +174,8 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
             continue
         seen.add(n)
         it = items[n - 1]
+        if NEG_RX.search(it["title"]) or NEG_RX.search(g["t"]):     # ИИ всё же взял негатив — выбрасываем
+            continue
         out.append({"t": cyr(g["t"].strip())[:160], "src": it["src"], "url": it["url"]})
     return out[:5]
 
@@ -186,6 +190,10 @@ def cyr(t: str) -> str:
 
 LOCAL_RX = re.compile(r"андижон|andijon|андижан|хўжаобод|xo.?jaobod|хужаобод|фарғона|farg.?ona|наманган|namangan", re.I)
 SKIP_RX = re.compile(r"реклама|reklama|\bpr\b|ҳамкорлик|hamkorlik|видео:|video:|фото:|foto:|тест|test|конкурс|konkurs", re.I)
+# 20.10 владелец: отрицательные новости в дайджест (и ролик) не берём вообще — запасной фильтр без ИИ
+NEG_RX = re.compile(r"(?<![а-яёўқғҳa-z])(?:ўлди|ўлим|o['ʻ’`]?ldi|o['ʻ’`]?lim)|вафот|halok|ҳалок|фожиа|fojia|авария|avariya|ЙТҲ|YTH|ДТП|жиноят|jinoyat|қамо|qamo|"
+                    r"суд\b|sud\b|уруш|urush|портла|portla|ёнғин|yong.?in|офат|ofat|зилзила|zilzila|касаллик|kasallik|қизамиқ|qizamiq|"
+                    r"жанжал|janjal|mojaro|можаро|ўғирл|o.?g.?irl|қотил|qotil|hibs|ҳибс|жарима|jarima|tergov|тергов", re.I)
 
 
 def fallback_news(items: list[dict], n: int = 4) -> list[dict]:
@@ -195,7 +203,7 @@ def fallback_news(items: list[dict], n: int = 4) -> list[dict]:
     pool = []
     for x in items:
         t = x["title"]
-        if SKIP_RX.search(t) or (translit.RU_ONLY.search(t) and not translit.UZ_CYR.search(t)):
+        if SKIP_RX.search(t) or NEG_RX.search(t) or (translit.RU_ONLY.search(t) and not translit.UZ_CYR.search(t)):
             continue
         pool.append({**x, "local": bool(LOCAL_RX.search(t))})
     pool.sort(key=lambda x: (not x["local"], x["time"] and -int(x["time"].replace(":", ""))))

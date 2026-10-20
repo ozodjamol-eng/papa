@@ -140,3 +140,19 @@ class TestLive(unittest.TestCase):
         self.assertIsNone(run(now.replace(minute=40)))          # второй раз — нет
         self.assertEqual(len(sent), 1)
         self.assertEqual(sent[0][0], "@xojaobodcity24")
+
+
+class NegativeNews(unittest.TestCase):
+    """20.10 владелец: отрицательные новости не берём; обычные слова («бўлди», «бўлим») не должны отсеиваться."""
+    def test_negative_filtered(self):
+        from genplan.digest import NEG_RX
+        for t in ["Андижонда ЙТҲ: 2 киши ҳалок бўлди", "Ronaldu jarimaga tortildi", "Тошкентда ёнғин", "Ҳайдовчи ўлди",
+                  "«Kuryerlar odam emasmi?» - restorandagi mojaro va 5 sutkalik qamoq", "Qizamiq tarqalgani rad etildi"]:
+            self.assertTrue(NEG_RX.search(t), t)
+
+    def test_normal_kept(self):
+        from genplan.digest import NEG_RX
+        for t in ["Ўзбекистонда Google Pay ишга тушди", "Янги мактаб қуриб битказилди ва фойдаланишга топширилди бўлди",
+                  "Ҳоким бўлими янги хизматни йўлга қўйди", "Bu yil hosil mo'l bo'ldi", "Президент АҚШ компаниялари билан учрашди"]:
+            self.assertFalse(NEG_RX.search(t), t)
+
