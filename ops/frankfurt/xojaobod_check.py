@@ -56,6 +56,8 @@ async def main():
                     print(f"  {k}={getattr(p.participant, k)}")
         except UserNotParticipantError:
             print("НЕ УЧАСТНИК группы")
+        hubs = [d.title async for d in acc.iter_dialogs() if any(w in (d.title or "").upper() for w in ("ХАБ", "XАБ", "HUB"))]
+        print("ХАБы, которые видит аккаунт PAPA (он копирует оттуда медиа в группу):", ", ".join(hubs) or "НИ ОДНОГО")
         full = await acc(GetFullChannelRequest(g))
         fc = full.full_chat
         print(f"slowmode={getattr(fc, 'slowmode_seconds', None)} participants={getattr(fc, 'participants_count', None)}")
