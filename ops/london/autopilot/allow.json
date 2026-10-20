@@ -34,7 +34,9 @@
     "genplan5-ai-tokens",
     "genplan5-hook-scheme",
     "genplan5-guard-install",
-    "genplan5-utin-1730"
+    "genplan5-utin-1730",
+    "genplan5-stop",
+    "genplan5-start"
   ],
   "deny_patterns": [
     "-key$",
