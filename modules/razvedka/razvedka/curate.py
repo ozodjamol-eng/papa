@@ -22,10 +22,14 @@ from pathlib import Path
 
 # Папки владельца (16.10: «я уже создал и собрал там нужные каналы»); PAPA·… — старые папки, на случай если появятся снова.
 ROUTES = {"davra": ("KATTA DAVRA", "PAPA·Давра", "PAPA·Спорт"), "paparazzi": ("Paparazzi UZ", "PAPA·Музыка")}
-BOTS = dict(x.split("=", 1) for x in os.environ.get(
-    "CURATOR_BOTS", "davra=PapaGenplanBot,paparazzi=PaparazziUZ_PultBot").split(",") if "=" in x)
+BOTS = {"davra": "PapaGenplanBot", "paparazzi": "PaparazziUZ_PultBot", "xojaobod": "XOJAOBODCITYAVTOPOSTBOT",
+        **dict(x.split("=", 1) for x in os.environ.get("CURATOR_BOTS", "").split(",") if "=" in x)}
+# 20.10: Хўжаобод — из папки «XOJAOBOD CITY» через СВОЙ бот (каждый бот — своё). Включается при переходе группы на PAPA
+# (флаг-файл ставит задача перехода): до этого бот принадлежит GENPLAN 5, и пересылать ему нельзя.
+XOJAOBOD_FLAG = Path(os.environ.get("CURATOR_XOJAOBOD_FLAG", "/etc/papa-curator-xojaobod"))
+OWN = {"kattadavrauz", "ozodjamoll", "xojaobodcity24", "xojaobodlikarimiz"}
 PER_RUN = {k: int(v) for k, v in (x.split("=", 1) for x in os.environ.get(
-    "CURATOR_PER_RUN", "davra=5,paparazzi=4").split(",") if "=" in x)}
+    "CURATOR_PER_RUN", "davra=5,paparazzi=4,xojaobod=4").split(",") if "=" in x)}
 MAX_HOURS, MIN_AGE_MIN, MIN_VIEWS = 12, 40, 300
 AD = re.compile(r"#?реклама|#?reklama|ҳамкорлик|hamkorlik|sotiladi|сотилади|нархи|narxi|скидк|chegirma|"
                 r"чегирма|буюртма|buyurtma|доставка|yetkazib|📞|☎️|\+998[\s\d-]{9,}|t\.me/\+|joinchat|aksiya|акция", re.I)
@@ -189,6 +193,11 @@ def kind(m) -> str | None:
 
 
 async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel: str, log=print) -> list[dict]:
+    # 20.10: только чужие каналы-источники — не свои каналы/ХАБы, не группы и не боты (в папках бывает всё вместе)
+    title = (getattr(ent, "title", "") or "").upper()
+    if (not getattr(ent, "broadcast", False) or (getattr(ent, "username", "") or "").lower() in OWN
+            or any(w in title for w in ("ХАБ", "XАБ", "HUB", "PAPA"))):
+        return []
     msgs = [m async for m in client.iter_messages(ent, limit=60, wait_time=1)]
     posts = [m for m in msgs if not m.action]
     views = [m.views or 0 for m in posts if m.date < now - dt.timedelta(hours=2)]
@@ -261,7 +270,10 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     folders = await folder_peers(client)
     report = {}
     gemini_ok = bool(os.environ.get("GEMINI_API_KEY"))
-    for channel, names in ROUTES.items():
+    routes = dict(ROUTES)
+    if XOJAOBOD_FLAG.exists():
+        routes["xojaobod"] = ("XOJAOBOD CITY", "PAPA·Шаҳар")
+    for channel, names in routes.items():
         since = dt.datetime.fromisoformat(st.get(f"last_{channel}", (now - dt.timedelta(hours=8)).isoformat()))
         since = max(since, now - dt.timedelta(hours=MAX_HOURS))
         peers = peers_in(folders, names)

@@ -364,7 +364,9 @@ def direct(bot, db, cfg, owners, hub: int, msgs: list[dict], channel: str | None
     chat = msgs[0]["chat"]["id"]
     text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
     if channel not in cfg["channels"]:
-        channel = smart.guess_channel(cfg, text, any("audio" in x for x in msgs))
+        # 20.10 владелец: «каждый бот — своё»: всё, что брошено в бот, идёт в его канал (главный бот — КАТТА ДАВРА)
+        from . import bots as _b
+        channel = _b.channel_of(bot) or cfg.get("default_channel") or "davra"
     if cfg["channels"][channel]["publisher"] == "bot":
         return intake(bot, db, cfg, owners, chat, [x["message_id"] for x in msgs], msgs, reply_chat=chat, channel=channel)
     if len(msgs) > 1:
