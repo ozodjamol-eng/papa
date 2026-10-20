@@ -48,8 +48,9 @@ def off_policy(text: str, channel: str) -> str:
     """Имя нарушенной группы политики канала или ''."""
     return next((g for g in FORBID.get(channel, ()) if POLICY[g].search(text or "")), "")
 WORD = re.compile(r"[^\W\d_]{4,}")
-VISION = """Это кадр из поста Telegram-канала. Ответь ТОЛЬКО JSON:
-{"foreign_logo": true/false — на кадре есть логотип/водяной знак/@имя/название чужого канала или СМИ,
+VISION = """Это кадр(ы) из поста Telegram-канала (может быть сетка из нескольких кадров видео). Ответь ТОЛЬКО JSON:
+{"foreign_logo": true/false — ХОТЯ БЫ на одном кадре есть логотип, водяной знак, @имя, значок Telegram/Instagram/TikTok
+   рядом с именем или название канала/СМИ — даже мелкий, полупрозрачный, в углу или внизу по центру,
  "ad": true/false — это реклама (товар, цена, телефон, магазин),
  "bad": true/false — кровь, жестокость, 18+, мертвые}"""
 
@@ -120,6 +121,42 @@ def vision(jpeg: bytes) -> dict:
     raise RuntimeError("Gemini недоступен: " + "; ".join(errs[-2:]))
 
 
+# 20.10 владелец: Куратор брал видео с чужим лого (@ShohonaKulgu внизу по центру) — проверялась только обложка.
+# Теперь у видео проверяются 4 настоящих кадра (сетка 2×2); видео больше VIDEO_MAX_MB не проверить — не берём.
+# Источник, у которого дважды нашли чужое лого, больше не берём вовсе (logo_sources в curator.json).
+VIDEO_MAX_MB = int(os.environ.get("CURATOR_VIDEO_MAX_MB", "40"))
+LOGO_SOURCES = {"@shohonakulgu"}            # владелец 20.10: ставит своё лого на все видео
+LOGO_STRIKES = 2
+
+
+def frames_grid(video: bytes, duration: float, tmp: Path | None = None) -> bytes | None:
+    """4 кадра видео (10/35/60/85 %) → одна картинка-сетка 2×2 (ffmpeg). None — не получилось."""
+    import subprocess
+    import tempfile
+    d = Path(tempfile.mkdtemp(dir=tmp))
+    try:
+        src = d / "v.mp4"
+        src.write_bytes(video)
+        shots = []
+        for i, f in enumerate((0.10, 0.35, 0.60, 0.85)):
+            out = d / f"f{i}.jpg"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{max(duration * f, 0.5):.2f}", "-i", str(src),
+                            "-frames:v", "1", "-vf", "scale=540:-2", str(out)], timeout=60, check=False)
+            if out.exists():
+                shots.append(out)
+        if not shots:
+            return None
+        while len(shots) < 4:
+            shots.append(shots[-1])
+        grid = d / "grid.jpg"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *sum((["-i", str(x)] for x in shots), []), "-filter_complex",
+                        "[0][1]hstack[a];[2][3]hstack[b];[a][b]vstack", "-q:v", "4", str(grid)], timeout=60, check=False)
+        return grid.read_bytes() if grid.exists() else shots[0].read_bytes()
+    finally:
+        import shutil
+        shutil.rmtree(d, ignore_errors=True)
+
+
 # ---------- Telegram ----------
 async def folder_peers(client) -> dict[str, list]:
     from telethon.tl.functions.messages import GetDialogFiltersRequest
@@ -184,16 +221,31 @@ async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel:
 
 
 async def clean_frame(client, c: dict) -> bool | None:
-    """True — кадр чистый; False — чужое лого/реклама/жестокость; None — проверить нельзя (Gemini)."""
+    """True — кадры чистые; False — чужое лого/реклама/жестокость; None — проверить нельзя (не берём)."""
     if c["kind"] == "audio":
         return True
-    try:
-        jpeg = await client.download_media(c["msg"], file=bytes, thumb=-1)
-    except Exception:  # noqa: BLE001
-        jpeg = None
+    jpeg = None
+    m = c["msg"]
+    if c["kind"] == "video":
+        size = getattr(m.file, "size", 0) or 0
+        if size > VIDEO_MAX_MB * 1024 * 1024:
+            return None                                   # большое видео не проверить по кадрам — не берём
+        try:
+            video = await client.download_media(m, file=bytes)
+            jpeg = await asyncio.to_thread(frames_grid, video, float(m.file.duration or 10))
+        except Exception:  # noqa: BLE001
+            jpeg = None
+        if not jpeg:
+            return None
+    else:
+        try:
+            jpeg = await client.download_media(m, file=bytes, thumb=-1)
+        except Exception:  # noqa: BLE001
+            jpeg = None
     if not jpeg:
         return None
     v = await asyncio.to_thread(vision, jpeg)
+    c["foreign_logo"] = bool(v.get("foreign_logo"))
     return not (v.get("foreign_logo") or v.get("ad") or v.get("bad"))
 
 
@@ -226,9 +278,12 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             await asyncio.sleep(1)
         want = PER_RUN.get(channel, 4)
         sent, checked, skipped = 0, 0, 0
+        blocked = LOGO_SOURCES | set(st.get("logo_sources", []))
         for c in pick(cands, want * 3, hist):
             if sent >= want:
                 break
+            if c["source"].lower() in blocked:          # источник ставит своё лого на видео — не берём
+                continue
             ok = None
             if gemini_ok:
                 try:
@@ -241,6 +296,12 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                 continue
             if not ok:
                 skipped += 1
+                if c.get("foreign_logo"):
+                    strikes = st.setdefault("logo_strikes", {})
+                    strikes[c["source"].lower()] = strikes.get(c["source"].lower(), 0) + 1
+                    if strikes[c["source"].lower()] >= LOGO_STRIKES and c["source"].lower() not in st.setdefault("logo_sources", []):
+                        st["logo_sources"].append(c["source"].lower())
+                        log(f"  🚫 {c['source']}: чужое лого {LOGO_STRIKES} раза — источник больше не берём")
                 hist.append({"key": c["key"], "sig": sorted(sig(c["text"])), "ts": now.isoformat()})
                 continue
             try:     # с подписью источника: в карточке пульта видно «📡 Куратор нашёл · @источник»
