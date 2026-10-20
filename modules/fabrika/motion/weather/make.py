@@ -23,6 +23,18 @@ def kind(code: int) -> str:
     return "partly"
 
 
+def day_kind(codes) -> str:
+    """Вид погоды по дневным часам 08–17 (суточный код open-meteo — самый «плохой» час, сутки выглядели бы пасмурными)."""
+    ks = [kind(c) for c in codes if c is not None] or ["partly"]
+    for pr in ("snow", "rain"):
+        if ks.count(pr) >= 2:
+            return pr
+    if ks.count("fog") >= 3:
+        return "fog"
+    m = sum({"clear": 0, "partly": 1, "cloudy": 2}.get(k, 1) for k in ks) / len(ks)
+    return "clear" if m < 0.6 else "partly" if m < 1.4 else "cloudy"
+
+
 SKY = {"clear": "Очиқ ҳаво, қуёшли", "partly": "Қисман булутли", "cloudy": "Булутли ҳаво", "fog": "Туманли ҳаво",
        "rain": "Ёмғир ёғиши кутилмоқда", "snow": "Қор ёғиши кутилмоқда"}
 
@@ -34,13 +46,13 @@ def data(day: dt.date, get=None) -> dict:
     f = json.loads((get or (lambda u: urllib.request.urlopen(u, timeout=30).read()))(url))
     h, d = f["hourly"], f["daily"]
     i = h["time"].index(f"{day}T{HOUR:02d}:00")
-    # вид дня — по дневному коду (самое значимое за день), но дождь/снег утром тоже важны
-    k = kind(d["weather_code"][0])
+    hc = lambda dd: [h["weather_code"][h["time"].index(f"{dd}T{x:02d}:00")] for x in range(8, 18)]
+    k = day_kind(hc(day))
     return {"city": "ХЎЖАОБОД", "date": f"{WD[day.weekday()]} · {day.day} {MON[day.month - 1]}",
             "now": round(h["temperature_2m"][i]), "hi": round(d["temperature_2m_max"][0]), "lo": round(d["temperature_2m_min"][0]),
             "night": round(d["temperature_2m_min"][1]), "rain": int(d["precipitation_probability_max"][0] or 0),
             "kind": k, "sky": SKY[k], "tHi": round(d["temperature_2m_max"][1]), "tLo": round(d["temperature_2m_min"][2]),
-            "tKind": kind(d["weather_code"][1]), "user": "@xojaobodcity24", "day": day.isoformat()}
+            "tKind": day_kind(hc(day + dt.timedelta(days=1))), "user": "@xojaobodcity24", "day": day.isoformat()}
 
 
 def build(out: Path, w: dict, fps: int = 60) -> Path:
