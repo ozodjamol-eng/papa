@@ -57,7 +57,8 @@
     "digest-install",
     "goldwater-voronka-install",
     "goldwater-voronka-restart",
-    "reports-to-bot"
+    "reports-to-bot",
+    "namaz-import"
   ],
   "deny_patterns": [
     "-key$",
@@ -66,5 +67,8 @@
     "-qr$",
     "^tg-account-",
     "^autopilot-"
+  ],
+  "deny": [
+    "xojaobod-bot-token"
   ]
 }
