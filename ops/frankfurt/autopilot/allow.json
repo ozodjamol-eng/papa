@@ -34,7 +34,8 @@
     "audit-status",
     "diag-errors",
     "audit-reports",
-    "hubs-check"
+    "hubs-check",
+    "bots-who"
   ],
   "approve": [
     "morning-pool-clear",
