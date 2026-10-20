@@ -36,7 +36,8 @@
     "audit-reports",
     "hubs-check",
     "bots-who",
-    "xojaobod-check"
+    "xojaobod-check",
+    "group-peek"
   ],
   "approve": [
     "morning-pool-clear",
