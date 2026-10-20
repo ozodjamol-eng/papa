@@ -20,7 +20,8 @@
     "xotira-find2",
     "genplan5-ads-list",
     "genplan5-ads-trace",
-    "genplan5-ad-window-find"
+    "genplan5-ad-window-find",
+    "genplan5-handover"
   ],
   "approve": [
     "genplan5-overdue-skip",
