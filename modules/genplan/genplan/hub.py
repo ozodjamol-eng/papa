@@ -240,12 +240,13 @@ def _norm(t: str | None) -> str:
 def channel_hub(db, cfg: dict, post: dict, own: str | None) -> str | None:
     """18.10 (владелец): у каждого канала свой ХАБ — частный канал, куда он бросает собранное. Бот канала берёт
     оттуда материал сам. Каждый бот — только свой хаб: пульт PaparazziUZ — PaparazziUZ; главный бот — каналы без
-    своего пульта (КАТТА ДАВРА и, с 19.10, Хўжаобод). Хаб узнаётся по названию (hub_title), потом запоминается по id."""
+    своего пульта — только КАТТА ДАВРА (20.10: чужие хабы главный бот не берёт). Хаб узнаётся по названию (hub_title), потом запоминается по id."""
     if own:
         mine = [own]
     else:
-        first = cfg.get("default_channel") or "davra"
-        mine = [first] + [c for c, ch in cfg["channels"].items() if c != first and not ch.get("bot_token_env")]
+        # 20.10 владелец: «каждый бот отвечает за своё» — главный бот (пульт КАТТА ДАВРА) берёт ТОЛЬКО хаб КАТТА ДАВРА.
+        # Хаб Хўжаобода — только его собственный бот (подключается при переходе группы на PAPA).
+        mine = [cfg.get("default_channel") or "davra"]
     cid = int(post["chat"]["id"])
     title = _norm(post["chat"].get("title"))
     for me in mine:
