@@ -60,7 +60,8 @@
     "goldwater-voronka-install",
     "goldwater-voronka-restart",
     "reports-to-bot",
-    "namaz-import"
+    "namaz-import",
+    "xojaobod-golive"
   ],
   "deny_patterns": [
     "-key$",
