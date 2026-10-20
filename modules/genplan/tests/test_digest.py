@@ -207,6 +207,7 @@ class VideoDigest(unittest.TestCase):
             calls.append(args)
             if args[:2] == ["git", "add"]:
                 self.assertTrue((Path(cwd) / "data" / "davra.json").exists())
+                self.assertIn(["git", "fetch", "-q", "--depth", "1", digest.REPO_SSH, "main"], calls)   # поверх main (workflow)
             self.assertIn(str(key), env["GIT_SSH_COMMAND"])
         self.assertEqual(digest.push_video_data(NOW.date(), {"davra": {"a": 1}}, run=run), "ok")
         self.assertEqual(calls[-1][-2:], [digest.REPO_SSH, "digest-data"])

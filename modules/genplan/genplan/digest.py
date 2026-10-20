@@ -589,10 +589,14 @@ def push_video_data(day: dt.date, payloads: dict, run=None) -> str:
     try:
         Path(home, ".ssh").mkdir(mode=0o700, parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "data").mkdir()
+            # Коммит поверх main: GitHub запускает Actions по файлу workflow ИЗ ПРИСЛАННОГО коммита (в пустой ветке его нет)
+            for args in (["git", "init", "-q"], ["git", "fetch", "-q", "--depth", "1", REPO_SSH, "main"],
+                         ["git", "checkout", "-q", "-b", "digest-data", "FETCH_HEAD"]):
+                run(args, tmp, env)
+            (Path(tmp) / "data").mkdir(exist_ok=True)
             for name, data in payloads.items():
                 (Path(tmp) / "data" / f"{name}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-            for args in (["git", "init", "-q", "-b", "digest-data"], ["git", "add", "-A"],
+            for args in (["git", "add", "data"],
                          ["git", "-c", "user.name=papa-frankfurt", "-c", "user.email=papa@localhost", "commit", "-q", "-m", f"digest {day}"],
                          ["git", "push", "-q", "-f", REPO_SSH, "digest-data"]):
                 run(args, tmp, env)
