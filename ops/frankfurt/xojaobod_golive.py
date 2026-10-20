@@ -54,7 +54,6 @@ def main() -> None:
         store.update(db, r["id"], status="rejected")
     print(f"тестовые остатки Хўжаобода убраны: {len(left)}")
     # 2) реклама
-    tomorrow = now.date() + dt.timedelta(days=1)
     for a in H["ads"]:
         if int(a["days_left"]) <= 0:
             continue
@@ -62,7 +61,9 @@ def main() -> None:
         mid = store.add_material(db, H["group_id"], ids[0], caps[a["name"]], True, hub_msgs=ids)
         if mid is None:
             mid = db.execute("SELECT id FROM materials WHERE hub_chat=? AND hub_msg=?", (H["group_id"], ids[0])).fetchone()[0]
-        at = plan.slot_time(tomorrow, a["at"])
+        at = plan.slot_time(now.date(), a["at"])          # сегодня, если время ещё впереди, иначе завтра
+        if at <= now + dt.timedelta(minutes=5):
+            at = plan.slot_time(now.date() + dt.timedelta(days=1), a["at"])
         store.update(db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at.isoformat(),
                      locked=1, guessed=0, via="xojaobod")
         c = extras.campaign_from(db, store.get(db, mid), int(a["days_left"]), name=a["name"])
