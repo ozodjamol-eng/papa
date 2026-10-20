@@ -43,14 +43,14 @@ class BotPublisher:
         return int(r["result"]["message_id"])
 
 
-def _bot_file(self, chat: str, path: str, caption: str = "") -> int:
+def _bot_file(self, chat: str, path: str, caption: str = "", duration: int = 15) -> int:
     """Локальное видео (ролик погоды Fabrika) → канал через sendVideo (multipart)."""
     import uuid
     from pathlib import Path
     bnd = uuid.uuid4().hex
     parts = [f"--{bnd}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode()
              for k, v in (("chat_id", chat), ("caption", caption[:1024]), ("supports_streaming", "true"),
-                          ("width", "1080"), ("height", "1920"), ("duration", "15"))]
+                          ("width", "1080"), ("height", "1920"), ("duration", str(duration)))]
     parts.append(f"--{bnd}\r\nContent-Disposition: form-data; name=\"video\"; filename=\"{Path(path).name}\"\r\n"
                  f"Content-Type: video/mp4\r\n\r\n".encode() + Path(path).read_bytes() + b"\r\n")
     parts.append(f"--{bnd}--\r\n".encode())
@@ -111,12 +111,12 @@ class AccountPublisher:
             raise PublishError(f"{type(e).__name__}: {e}") from None
         return int(m.id)
 
-    async def publish_file(self, chat: str, path: str, caption: str = "") -> int:
+    async def publish_file(self, chat: str, path: str, caption: str = "", duration: int = 15) -> int:
         """Локальное видео (ролик погоды Fabrika) → группа от имени группы, как обычное видео (не файлом)."""
         try:
             from telethon.tl.types import DocumentAttributeVideo
             m = await self.c.send_file(chat, path, caption=caption[:1024], supports_streaming=True, mime_type="video/mp4",
-                                       attributes=[DocumentAttributeVideo(duration=15, w=1080, h=1920, supports_streaming=True)])
+                                       attributes=[DocumentAttributeVideo(duration=duration, w=1080, h=1920, supports_streaming=True)])
         except Exception as e:  # noqa: BLE001
             raise PublishError(f"{type(e).__name__}: {e}") from None
         return int(m.id)

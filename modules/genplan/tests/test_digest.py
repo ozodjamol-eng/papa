@@ -121,6 +121,13 @@ class TestFallback(unittest.TestCase):
         self.assertTrue(got[0]["t"].startswith("Андижонда"))
 
 
+MP4 = b"\0\0\0\x18ftypmp42" + b"0" * 300_000
+
+
+def NOVID(url):
+    raise RuntimeError("404")
+
+
 class TestLive(unittest.TestCase):
     def test_publish_once_in_window(self):
         import asyncio
@@ -134,7 +141,7 @@ class TestLive(unittest.TestCase):
                 sent.append((to, caption)); return type("M", (), {"id": 7})()
         cfg = {"channels": {"xojaobod": {"username": "xojaobodcity24", "publisher": "account", "mode": "shadow",
                                          "morning": {"live": True}, "digest": {"live": True}}}}
-        run = lambda t: asyncio.run(digest.publish_live(db, cfg, {"TEST_GROUP_ID": "1"}, Acc(), t, d))
+        run = lambda t: asyncio.run(digest.publish_live(db, cfg, {"TEST_GROUP_ID": "1"}, Acc(), t, d, vget=NOVID))
         self.assertIsNone(run(now.replace(minute=10)))          # рано
         self.assertIn("опубликован", run(now))
         self.assertIsNone(run(now.replace(minute=40)))          # второй раз — нет
@@ -156,3 +163,89 @@ class NegativeNews(unittest.TestCase):
                   "Ҳоким бўлими янги хизматни йўлга қўйди", "Bu yil hosil mo'l bo'ldi", "Президент АҚШ компаниялари билан учрашди"]:
             self.assertFalse(NEG_RX.search(t), t)
 
+
+
+class VideoDigest(unittest.TestCase):
+    """20.10 владелец: дайджест роликом — Хўжаобод и КАТТА ДАВРА (рендер на GitHub, публикация в 20:30)."""
+    def setUp(self):
+        self.d = Path(tempfile.mkdtemp()); self.db = store.connect(self.d / "g.db")
+
+    def test_xojaobod_video_json(self):
+        r = digest.build(self.db, self.d, NOW, get=fake_get, gen=fake_gen)
+        v = json.loads((Path(r["dir"]) / "video.json").read_text(encoding="utf-8"))
+        self.assertEqual((v["channel"], v["date"], v["tHi"], v["tLo"], v["tKind"]), ("xojaobod", "ЖУМА · 16 ОКТЯБРЬ", 23, 10, "partly"))
+        self.assertEqual([x["c"] for x in v["rates"]], ["USD", "EUR", "RUB"])
+        self.assertEqual(v["news"][0]["src"], "Kun.uz")
+        self.assertFalse(v["news"][0]["t"].endswith("."))
+
+    def test_davra_package_no_politics_no_farewell(self):
+        r = digest.build_davra(self.db, self.d, NOW, get=fake_get, gen=fake_gen)
+        self.assertEqual(r["status"], "READY")
+        m = json.loads((Path(r["dir"]) / "manifest.json").read_text(encoding="utf-8"))
+        cap = m["caption"]
+        for part in ("📍 Ўзбекистон", "Тошкент: +10…+23°", "Самарқанд", "🎉 @kattadavrauz", "МБ КУРСИ (17 октябрдан)"):
+            self.assertIn(part, cap)
+        self.assertNotIn("Хайрли", cap)
+        self.assertNotIn("Хўжаобод", cap.split("━━━━━━━━━━━━")[0])
+        v = json.loads((Path(r["dir"]) / "video.json").read_text(encoding="utf-8"))
+        self.assertEqual((v["brand"], v["user"], len(v["cities"])), (["КАТТА", "ДАВРА"], "@kattadavrauz", 3))
+
+    def test_politics_blocked_for_davra(self):
+        items = [{"title": "Prezident AQSH kompaniyalari rahbarlari bilan uchrashdi", "src": "Kun.uz", "url": "u1", "time": "10:00"},
+                 {"title": "O'zbekistonda Google Pay ishga tushdi", "src": "Kun.uz", "url": "u2", "time": "11:00"}]
+        got = digest.fallback_news(items, 3, block=digest.POL_RX)
+        self.assertEqual([x["url"] for x in got], ["u2"])
+        gen = lambda s, u: '[{"i": 1, "t": "Президент учрашди"}, {"i": 2, "t": "Google Pay ишга тушди"}]'
+        self.assertEqual([x["url"] for x in digest.pick_news(self.db, items, gen, system=digest.DAVRA_SYSTEM, block=digest.POL_RX)], ["u2"])
+
+    def test_push_video_data(self):
+        key = self.d / "k"; key.write_text("x")
+        orig = digest.DEPLOY_KEY; digest.DEPLOY_KEY = str(key); self.addCleanup(lambda: setattr(digest, "DEPLOY_KEY", orig))
+        calls = []
+
+        def run(args, cwd, env):
+            calls.append(args)
+            if args[:2] == ["git", "add"]:
+                self.assertTrue((Path(cwd) / "data" / "davra.json").exists())
+            self.assertIn(str(key), env["GIT_SSH_COMMAND"])
+        self.assertEqual(digest.push_video_data(NOW.date(), {"davra": {"a": 1}}, run=run), "ok")
+        self.assertEqual(calls[-1][-2:], [digest.REPO_SSH, "digest-data"])
+        digest.DEPLOY_KEY = str(self.d / "нет")
+        self.assertIn("нет ключа", digest.push_video_data(NOW.date(), {"davra": {}}))
+
+    def test_xojaobod_publishes_video_then_banner_fallback(self):
+        import asyncio
+        now = dt.datetime(2026, 10, 16, 20, 31, tzinfo=plan.TZ)
+        digest.build(self.db, self.d, now.replace(hour=19, minute=50), get=fake_get, gen=fake_gen)
+        sent = []
+
+        class Acc:
+            async def send_file(self, to, path, caption="", **kw):
+                sent.append((Path(path).suffix, kw.get("supports_streaming"))); return type("M", (), {"id": 9})()
+        cfg = {"channels": {"xojaobod": {"username": "xojaobodcity24", "publisher": "account", "mode": "live",
+                                         "morning": {"live": True}, "digest": {"live": True}}}}
+        res = asyncio.run(digest.publish_live(self.db, cfg, {}, Acc(), now, self.d, vget=lambda u: MP4))
+        self.assertIn("роликом", res)
+        self.assertEqual(sent, [(".mp4", True)])
+
+    def test_davra_video_and_text_fallback(self):
+        import asyncio
+        now = dt.datetime(2026, 10, 16, 20, 30, tzinfo=plan.TZ)
+        digest.build_davra(self.db, self.d, now.replace(hour=19, minute=50), get=fake_get, gen=fake_gen)
+        out = []
+
+        class Bot:
+            def publish_file(self, to, path, caption, duration=15):
+                out.append(("video", to, duration)); return 11
+
+            def publish(self, to, text, *a, **k):
+                out.append(("text", to)); return 12
+        cfg = {"channels": {"davra": {"username": "kattadavrauz", "publisher": "bot", "mode": "live", "digest": {"live": True}}}}
+        res = asyncio.run(digest.publish_live_davra(self.db, cfg, {}, Bot(), now, self.d, vget=lambda u: MP4))
+        self.assertIn("роликом", res)
+        self.assertEqual(out, [("video", "@kattadavrauz", 25)])
+        self.assertIsNone(asyncio.run(digest.publish_live_davra(self.db, cfg, {}, Bot(), now, self.d, vget=lambda u: MP4)))  # один раз
+        db2 = store.connect(self.d / "g2.db"); out.clear()
+        res = asyncio.run(digest.publish_live_davra(db2, cfg, {}, Bot(), now, self.d, vget=NOVID))
+        self.assertIn("вышел текст", res)
+        self.assertEqual(out, [("text", "@kattadavrauz")])

@@ -1,0 +1,50 @@
+# 🌙 Ролики «Кечки дайжест» — Хўжаобод и КАТТА ДАВРА (решение владельца 20.10). Франкфурт в 19:50 кладёт данные
+# в ветку digest-data (deploy-key) → здесь рендер → MP4 в ветку motion → GENPLAN публикует в 20:30. Нет ролика — картинка/текст.
+name: motion-digest
+on:
+  push:
+    branches: [digest-data]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: motion-branch, cancel-in-progress: false }
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - name: Данные Франкфурта
+        run: |
+          git fetch -q --depth 1 origin digest-data
+          mkdir -p "$RUNNER_TEMP/data" && git archive FETCH_HEAD data | tar -x -C "$RUNNER_TEMP"
+          ls -la "$RUNNER_TEMP/data"
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Зависимости
+        working-directory: modules/fabrika/motion/weather
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y -q ffmpeg >/dev/null
+          python3 -m pip install -q numpy
+      - name: Рендер
+        working-directory: modules/fabrika/motion/digest
+        run: |
+          ln -sfn ../weather/node_modules node_modules
+          python3 make_digest.py "$RUNNER_TEMP/data" "$RUNNER_TEMP/out"
+      - name: В ветку motion (по 3 последних дня на канал)
+        run: |
+          set -e
+          W="$RUNNER_TEMP/motion"; mkdir -p "$W"; cd "$W"; git init -q
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git fetch -q --depth 1 origin motion && git checkout -q FETCH_HEAD -- . 2>/dev/null || true
+          cp "$RUNNER_TEMP"/out/*-digest-*.mp4 .
+          for pre in xojaobod-digest davra-digest xojaobod-weather; do
+            ls $pre-*.mp4 2>/dev/null | sort | head -n -3 | while read f; do rm -f "$f" "${f%.mp4}.json"; done
+          done
+          git checkout -q --orphan motion; git add -A
+          git -c user.name=papa-motion -c user.email=papa-motion@users.noreply.github.com commit -q -m "motion: дайджесты"
+          git push -q -f origin motion
+          ls -la

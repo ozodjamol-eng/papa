@@ -218,6 +218,7 @@ function title(t){
 function weatherTomorrow(t){
   const kin=spring(p(t,4.1,5.1)*1.1), kout=eio(p(t,8.0,8.6)); if(t<4.1||kout>=1)return;
   chip('ЭРТАГА ОБ-ҲАВО',500,eo(p(t,3.9,4.5))*(1-kout));
+  if(E.cities&&E.cities.length){citiesCard(t,kin,kout);return;}
   const w=920,h=620,X=(W-w)/2,Y=640;
   x.save();x.translate(W/2-kout*W*1.1,Y+h/2+(1-cl(kin,0,1.2))*300);x.scale(lerp(.6,1,cl(kin,0,1.1)),lerp(.6,1,cl(kin,0,1.1)));x.rotate(-kout*.2);x.translate(-W/2,-(Y+h/2));
   card(X,Y,w,h,1);
@@ -230,9 +231,23 @@ function weatherTomorrow(t){
     icon(it[0],cx+22,Y+500,t,.9);x.textAlign='left';x.font='40px IDX';x.fillStyle='#7c80a0';x.letterSpacing='3px';x.fillText(it[1],cx+70,Y+470);x.letterSpacing='0px';
     x.font='64px IDB';x.fillStyle='#2b2d4a';x.fillText(it[2],cx+70,Y+545);});
   x.restore();
-  const ks=eo(p(t,5.2,5.9))*(1-kout);
+  const ks=E.cities&&E.cities.length?0:eo(p(t,5.2,5.9))*(1-kout);
   if(ks>0){x.save();x.globalAlpha=ks;x.font='50px IDX';x.textAlign='center';const tw=x.measureText(E.tSky).width+90;
     x.fillStyle='rgba(30,40,90,.85)';rr(W/2-tw/2,1320,tw,92,46);x.fill();x.fillStyle='#fff';x.fillText(E.tSky,W/2,1383);x.restore();}
+}
+function citiesCard(t,kin,kout){
+  const n=E.cities.length,rowH=170,w=920,h=60+n*rowH,X=(W-w)/2,Y=640;
+  x.save();x.translate(W/2-kout*W*1.1,Y+h/2+(1-cl(kin,0,1.2))*300);x.scale(lerp(.6,1,cl(kin,0,1.1)),lerp(.6,1,cl(kin,0,1.1)));x.rotate(-kout*.2);x.translate(-W/2,-(Y+h/2));
+  card(X,Y,w,h,1);
+  E.cities.forEach((c,i)=>{const yy=Y+30+i*rowH, k=eo(p(t,4.5+i*.25,5.1+i*.25));
+    x.save();x.globalAlpha=k;x.translate((1-k)*40,0);
+    icon(ICON[c.kind]||'sun',X+100,yy+rowH/2,t,1.3);
+    x.textAlign='left';x.fillStyle='#2b2d4a';x.font='62px IDX';x.fillText(c.name,X+190,yy+rowH/2+22);
+    x.textAlign='right';x.font='70px IDB';x.fillText(T(c.hi),X+w-60,yy+rowH/2+10);
+    x.fillStyle='#7c80a0';x.font='38px IDX';x.fillText('кечаси '+T(c.lo),X+w-60,yy+rowH/2+58);
+    if(i<n-1){x.fillStyle='#e9ecf5';x.fillRect(X+60,yy+rowH-2,w-120,2);}
+    x.restore();});
+  x.restore();
 }
 function icon(type,cx,cy,t,s=1){
   x.save();x.translate(cx,cy);x.scale(s,s);
@@ -300,11 +315,11 @@ function news(t){
 }
 
 // ===== финал =====
-const FIN=NEWS_T0+3*NEWS_DT+.3;
+const FIN=NEWS_T0+Math.max(1,E.news.length)*NEWS_DT+.3;
 function finale(t){
   const k0=p(t,FIN,FIN+1.2); if(k0<=0)return;
   const bg=eo(k0);const gb=x.createLinearGradient(0,800,0,1620);gb.addColorStop(0,'rgba(8,10,35,0)');gb.addColorStop(.3,`rgba(8,10,35,${.55*bg})`);gb.addColorStop(.8,`rgba(8,10,35,${.55*bg})`);gb.addColorStop(1,'rgba(8,10,35,0)');x.fillStyle=gb;x.fillRect(0,800,W,820);
-  ['КЕЧКИ','ДАЙЖЕСТ'].forEach((wd,i)=>{const k=p(t,FIN+.05+i*.28,FIN+.85+i*.28),e=back(k);
+  (E.brand||['КЕЧКИ','ДАЙЖЕСТ']).forEach((wd,i)=>{const k=p(t,FIN+.05+i*.28,FIN+.85+i*.28),e=back(k);
     x.save();x.textAlign='center';x.translate(W/2,1000+i*215+(1-e)*120);const s=lerp(1.6,1,eo(k));x.scale(s,s);x.globalAlpha=eo(k);
     x.font=(i?'170px':'150px')+' IDB';x.fillStyle='rgba(5,10,40,.45)';x.fillText(wd,7,9);x.fillStyle=i?'#ffd35a':'#fff';x.fillText(wd,0,0);x.restore();});
   const k=eo(p(t,FIN+1.0,FIN+1.7));

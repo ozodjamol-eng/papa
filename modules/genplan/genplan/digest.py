@@ -140,7 +140,7 @@ NEWS_SYSTEM = """Сен Хўжаобод (Андижон вилояти) аҳо�
 Жавоб — фақат JSON: [{"i": сарлавҳа рақами, "t": "қисқа гап"}]"""
 
 
-def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
+def pick_news(db, items: list[dict], gen=None, sleep=None, system: str | None = None, block=None) -> list[dict]:
     """ИИ выбирает и пересказывает. Ссылки — только из ленты (что ИИ «придумал» — выбрасываем)."""
     if not items:
         return []
@@ -152,7 +152,7 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
     raw, last = "", None
     for attempt in range(4):                       # Gemini бывает перегружен (503) — ждём и повторяем
         try:
-            raw = gen(NEWS_SYSTEM, f"Бугунги сарлавҳалар:\n{lst}")
+            raw = gen(system or NEWS_SYSTEM, f"Бугунги сарлавҳалар:\n{lst}")
             break
         except Exception as e:  # noqa: BLE001
             last = e
@@ -175,7 +175,7 @@ def pick_news(db, items: list[dict], gen=None, sleep=None) -> list[dict]:
             continue
         seen.add(n)
         it = items[n - 1]
-        if NEG_RX.search(it["title"]) or NEG_RX.search(g["t"]):     # ИИ всё же взял негатив — выбрасываем
+        if NEG_RX.search(it["title"]) or NEG_RX.search(g["t"]) or (block and (block.search(it["title"]) or block.search(g["t"]))):  # ИИ всё же взял негатив/запрет — выбрасываем
             continue
         out.append({"t": cyr(g["t"].strip())[:160], "src": it["src"], "url": it["url"]})
     return out[:5]
@@ -197,14 +197,14 @@ NEG_RX = re.compile(r"(?<![а-яёўқғҳa-z])(?:ўлди|ўлим|o['ʻ’`]?l
                     r"жанжал|janjal|mojaro|можаро|ўғирл|o.?g.?irl|қотил|qotil|hibs|ҳибс|жарима|jarima|tergov|тергов", re.I)
 
 
-def fallback_news(items: list[dict], n: int = 4) -> list[dict]:
+def fallback_news(items: list[dict], n: int = 4, block=None) -> list[dict]:
     """Без ИИ (лимит Gemini): заголовки как есть — сначала наш регион, по одному из источника по кругу.
     Только узбекский (латиница → кириллица), русские заголовки пропускаем."""
     from . import translit
     pool = []
     for x in items:
         t = x["title"]
-        if SKIP_RX.search(t) or NEG_RX.search(t) or (translit.RU_ONLY.search(t) and not translit.UZ_CYR.search(t)):
+        if SKIP_RX.search(t) or NEG_RX.search(t) or (block and block.search(t)) or (translit.RU_ONLY.search(t) and not translit.UZ_CYR.search(t)):
             continue
         pool.append({**x, "local": bool(LOCAL_RX.search(t))})
     pool.sort(key=lambda x: (not x["local"], x["time"] and -int(x["time"].replace(":", ""))))
@@ -420,8 +420,199 @@ def build(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) ->
     tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(out / "manifest.json")                  # READY-манифест — последним и атомарно (протокол 12.10)
     report.update({"status": "READY", "dir": str(out), "caption_len": len(caption)})
+    try:                                                 # 🎬 данные для ролика (рендер — GitHub Actions)
+        (out / "video.json").write_text(json.dumps(video_data_xojaobod(day, w, r, news), ensure_ascii=False, indent=1),
+                                        encoding="utf-8")
+    except Exception as e:  # noqa: BLE001 — без ролика выйдет баннер
+        report["errors"].append(f"данные ролика: {e}")
     (out / "build-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     return report
+
+
+# ---------- 🎬 ролики-дайджесты (решение владельца 20.10: Хўжаобод и КАТТА ДАВРА — роликом) ----------
+MOTION_RAW = "https://raw.githubusercontent.com/ozodjamol-eng/papa/motion/{name}"
+DEPLOY_KEY = os.environ.get("PAPA_MOTION_KEY", "/etc/papa-motion/deploy_key")
+REPO_SSH = "git@github.com:ozodjamol-eng/papa.git"
+RATE_SIGN = {"USD": "$", "EUR": "€", "RUB": "₽"}
+SKY_PH = {"очиқ": "Очиқ ҳаво", "қисман булутли": "Қисман булутли", "булутли": "Булутли ҳаво", "туман": "Туманли ҳаво",
+          "шивалаб ёмғир": "Шивалаб ёмғир", "ёмғир": "Ёмғир ёғади", "қор": "Қор ёғади", "момақалдироқ": "Момақалдироқ"}
+
+
+def vkind(code) -> str:
+    c = int(code)
+    if c in (0, 1): return "clear"
+    if c == 2: return "partly"
+    if c == 3: return "cloudy"
+    if c in (45, 48): return "fog"
+    if c in (71, 73, 75, 77, 85, 86): return "snow"
+    if 51 <= c <= 67 or 80 <= c <= 82 or c >= 95: return "rain"
+    return "partly"
+
+
+def sky_phrase(code) -> str:
+    w = sky(code)[0]
+    return SKY_PH.get(w, w[:1].upper() + w[1:])
+
+
+def short_news(t: str, n: int = 110) -> str:
+    """Заголовок для карточки ролика: без точки в конце, длинный — по слову с «…»."""
+    t = t.strip().rstrip(".")
+    return t if len(t) <= n else t[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def video_head(day: dt.date) -> str:
+    return f"{WEEKDAYS[day.weekday()].upper()} · {day.day} {MONTHS[day.month - 1].upper()}"
+
+
+def video_rates(r: dict) -> list[dict]:
+    return [{"c": c, "s": RATE_SIGN[c], "v": x["rate"], "d": x["diff"]} for c, x in r.items() if c in RATE_SIGN]
+
+
+def video_data_xojaobod(day: dt.date, w: dict, r: dict, news: list[dict]) -> dict:
+    x = w.get("Хўжаобод") or next(iter(w.values()))
+    t = x["tmr"]
+    return {"channel": "xojaobod", "day": day.isoformat(), "date": video_head(day), "tHi": t["max"], "tLo": t["min"],
+            "tKind": vkind(t["code"]), "tSky": sky_phrase(t["code"]), "rain": int(t.get("rain") or 0),
+            "rates": video_rates(r), "news": [{"t": short_news(n["t"]), "src": n["src"]} for n in news[:3]],
+            "user": "@xojaobodcity24", "brand": ["КЕЧКИ", "ДАЙЖЕСТ"]}
+
+
+# --- КАТТА ДАВРА (общереспубликанский: погода по городам, без политики — политика канала 16.10)
+DAVRA_CITIES = {"Тошкент": (41.2995, 69.2401), "Самарқанд": (39.6542, 66.9597), "Андижон": (40.7829, 72.3442)}
+DAVRA_USER = "kattadavrauz"
+POL_RX = re.compile(r"президент|prezident|мирзиёев|mirziyoyev|вазир|vazir|сенат|senat|парламент|parlament|сайлов|saylov|"
+                    r"депутат|deputat|ҳоким|hokim|давлат котиби|davlat kotibi|элчи|elchi|АҚШ|AQSH|Трамп|Tramp|Путин|Putin|"
+                    r"Зеленск|Zelensk|Эрон|Eron|Исроил|Isroil|Ғазо|G.azo|санкция|sanksiya|партия|partiya|Рубио|Rubio|Кремл|Kreml", re.I)
+DAVRA_SYSTEM = """Сен «КАТТА ДАВРА» — бутун Ўзбекистон учун кўнгилочар ва фойдали Telegram-канал кечки дайжестининг муҳарририсан.
+Сенга бугунги янгиликлар САРЛАВҲАЛАРИ рўйхати берилади. Энг қизиқарли 3 тасини танла: технологиялар ва сунъий интеллект,
+спорт ютуқлари, маданият ва санъат, одамлар учун фойдали янгиликлар (хизматлар, имкониятлар, қулайликлар), Ўзбекистон ютуқлари.
+СИЁСАТ УМУМАН ЙЎҚ: президент, вазирлар, давлатлараро учрашувлар, сайлов, хорижий сиёсат, уруш.
+САЛБИЙ янгиликлар УМУМАН ОЛИНМАЙДИ: ўлим, ҳалокат, ЙТҲ, жиноят, қамоқ, суд, портлаш, ёнғин, табиий офат, касаллик, жанжал.
+Ҳар бирини ўзбек тилида КИРИЛЛ ёзувида бир қисқа гап (110 белгигача) қилиб ёз. ФАҚАТ сарлавҳада бор маълумот — ҳеч нарса қўшма.
+Мос янгилик бўлмаса — камроқ танла. Жавоб — фақат JSON: [{"i": сарлавҳа рақами, "t": "қисқа гап"}]"""
+
+
+def weather_cities(get=_get, cities: dict | None = None) -> dict:
+    out = {}
+    for city, (lat, lon) in (cities or DAVRA_CITIES).items():
+        f = json.loads(get(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+                           "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+                           "&timezone=Asia%2FTashkent&forecast_days=2"))
+        d = f["daily"]
+        out[city] = {"max": round(d["temperature_2m_max"][1]), "min": round(d["temperature_2m_min"][1]),
+                     "code": d["weather_code"][1], "rain": (d.get("precipitation_probability_max") or [None, None])[1]}
+    return out
+
+
+def compose_davra(day: dt.date, cw: dict, r: dict, news: list[dict], ad: str | None = None) -> str:
+    head = f"🌙 КЕЧКИ ДАЙЖЕСТ\n📅 {date_uz(day)}, {WEEKDAYS[day.weekday()]}\n📍 Ўзбекистон"
+    nums = ("1️⃣", "2️⃣", "3️⃣")
+    parts = [head]
+    if news:
+        srcs = ", ".join(dict.fromkeys(n["src"] for n in news))
+        parts.append("📰 КУН ЯНГИЛИКЛАРИ\n\n" + "\n".join(f"{nums[i]} {n['t']}" for i, n in enumerate(news[:3]))
+                     + f"\n\n🔗 {'Манба' if len(set(n['src'] for n in news)) == 1 else 'Манбалар'}: {srcs}")
+    if cw:
+        lines = []
+        for city, x in cw.items():
+            word, icon = sky(x["code"])
+            lines.append(f"{icon} {city}: {_signed(x['min'])}…{_signed(x['max'])}°, {SKY_PH.get(word, word).lower()}")
+        parts.append("🌤 ЭРТАГА ОБ-ҲАВО\n\n" + "\n".join(lines))
+    if r:
+        flags = {"USD": "🇺🇸", "EUR": "🇪🇺", "RUB": "🇷🇺"}
+        since = next(iter(r.values())).get("date", "")
+        rl = []
+        for c, x in r.items():
+            d = x["diff"]
+            ch = f"📈 +{_num(d)}" if d > 0 else f"📉 −{_num(abs(d))}" if d < 0 else "➖ ўзгармади"
+            rl.append(f"{flags.get(c, '')} {c} — {_num(x['rate'])} сўм {ch}")
+        parts.append(f"💱 МБ КУРСИ{f' ({since_uz(since)})' if since else ''}\n\n" + "\n".join(rl))
+    ad = AD_DEFAULT if ad is None else ad.strip()
+    tail = (f"{ad}\n\n" if ad else "") + f"🎉 @{DAVRA_USER}"      # без прощаний: в 20:30 канал не «закрывается»
+    return f"\n\n{SEP}\n".join(parts + [tail])[:1024]
+
+
+def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) -> dict:
+    now = (now or dt.datetime.now(TZ)).astimezone(TZ)
+    day = now.date()
+    out = root / f"evening-digest-davra-{day.isoformat()}"
+    out.mkdir(parents=True, exist_ok=True)
+    report = {"errors": []}
+    try:
+        cw = weather_cities(get)
+    except Exception as e:  # noqa: BLE001
+        cw = {}
+        report["errors"].append(f"погода: {e}")
+    try:
+        r = rates(get)
+    except Exception as e:  # noqa: BLE001
+        r = {}
+        report["errors"].append(f"курс ЦБ: {e}")
+    items, ferr = news_items(day, get)
+    report["errors"] += [f"лента {x}" for x in ferr]
+    try:
+        news = pick_news(db, items, gen, system=DAVRA_SYSTEM, block=POL_RX)[:3]
+    except Exception as e:  # noqa: BLE001
+        news = []
+        report["errors"].append(f"новости (ИИ): {e}")
+    if items and not news:
+        news = fallback_news(items, 3, block=POL_RX)
+    report.update({"news": len(news), "weather": bool(cw), "rates": bool(r)})
+    if not cw:
+        report["status"] = "INVALID"
+        return report
+    caption = compose_davra(day, cw, r, news, os.environ.get("DIGEST_AD_TEXT"))
+    vd = {"channel": "davra", "day": day.isoformat(), "date": video_head(day),
+          "cities": [{"name": c, "hi": x["max"], "lo": x["min"], "kind": vkind(x["code"])} for c, x in cw.items()],
+          "rates": video_rates(r), "news": [{"t": short_news(n["t"]), "src": n["src"]} for n in news],
+          "user": f"@{DAVRA_USER}", "brand": ["КАТТА", "ДАВРА"]}
+    (out / "video.json").write_text(json.dumps(vd, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp = out / "manifest.json.tmp"
+    tmp.write_text(json.dumps({"status": "READY", "date": day.isoformat(), "caption": caption}, ensure_ascii=False, indent=1),
+                   encoding="utf-8")
+    tmp.replace(out / "manifest.json")
+    report.update({"status": "READY", "dir": str(out)})
+    return report
+
+
+def push_video_data(day: dt.date, payloads: dict, run=None) -> str:
+    """Данные роликов → ветка digest-data на GitHub (push запускает рендер в Actions). Ключ — deploy-key владельца."""
+    if not payloads:
+        return "нет данных"
+    if not Path(DEPLOY_KEY).exists():
+        return "нет ключа GitHub (задача motion-key)"
+    import tempfile
+    run = run or (lambda args, cwd, env: subprocess.run(args, cwd=cwd, env=env, capture_output=True, timeout=90, check=True))
+    home = os.environ.get("HOME", "/var/lib/papa-genplan")
+    env = {**os.environ, "GIT_SSH_COMMAND": f"ssh -i {DEPLOY_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "
+                                            f"-o UserKnownHostsFile={home}/.ssh/known_hosts"}
+    try:
+        Path(home, ".ssh").mkdir(mode=0o700, parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "data").mkdir()
+            for name, data in payloads.items():
+                (Path(tmp) / "data" / f"{name}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+            for args in (["git", "init", "-q", "-b", "digest-data"], ["git", "add", "-A"],
+                         ["git", "-c", "user.name=papa-frankfurt", "-c", "user.email=papa@localhost", "commit", "-q", "-m", f"digest {day}"],
+                         ["git", "push", "-q", "-f", REPO_SSH, "digest-data"]):
+                run(args, tmp, env)
+        return "ok"
+    except Exception as e:  # noqa: BLE001
+        err = getattr(e, "stderr", b"") or b""
+        return f"{type(e).__name__}: {err.decode(errors='replace')[-160:] if isinstance(err, bytes) else err}"
+
+
+def motion_video(name: str, get=None, folder: str | None = None) -> Path:
+    """Готовый ролик из ветки motion → локальный файл. Нет / битый — исключение."""
+    import tempfile
+    data = (get or (lambda u: _get(u, timeout=60, tries=2)))(MOTION_RAW.format(name=name))
+    if not data or len(data) < 200_000 or data[4:8] != b"ftyp":
+        raise ValueError("ролик не собран")
+    if len(data) > 49_000_000:
+        raise ValueError("ролик больше 49 МБ")
+    path = Path(folder or tempfile.gettempdir()) / name
+    path.write_bytes(data)
+    return path
 
 
 # ---------- предпросмотр ----------
@@ -440,7 +631,7 @@ def send_photo(token: str, chat: int, photo: Path, caption: str) -> dict:
         return json.loads(r.read())
 
 
-def preview(env: dict, report: dict, bot) -> None:
+def preview(env: dict, report: dict, bot, davra: dict | None = None, push: str | None = None) -> None:
     """20.10 владелец: вечер — протокол, выходит сам. Владельцу — одна короткая строка в бот (без копий в тест-каналы);
     подробности — только если дайджест НЕ готов."""
     owners = [int(x) for x in env.get("OWNER_IDS", "").split(",") if x.strip().lstrip("-").isdigit()]
@@ -449,6 +640,11 @@ def preview(env: dict, report: dict, bot) -> None:
     else:
         errs = "\n".join("• " + e for e in report.get("errors", [])) or "• нет"
         head = f"❌ Кечки дайжест НЕ готов — сегодня не выйдет\nПричины:\n{errs}"
+    if davra is not None:
+        head += (f"\n🎉 КАТТА ДАВРА: готов (новостей: {davra.get('news', 0)})" if davra.get("status") == "READY"
+                 else "\n❌ КАТТА ДАВРА: не готов — " + "; ".join(davra.get("errors", [])[:3]))
+    if push is not None:
+        head += "\n🎬 Ролики: собираются на GitHub" if push == "ok" else f"\n🎬 Ролики не запущены ({push}) — выйдут картинка/текст"
     for o in owners:
         bot("sendMessage", chat_id=o, text=head, disable_web_page_preview=True)
 
@@ -456,8 +652,18 @@ def preview(env: dict, report: dict, bot) -> None:
 def main(db, env: dict, bot) -> dict:
     root = Path(os.environ.get("PAPA_DIGEST_DIR", "/var/lib/papa-genplan/digest"))
     report = build(db, root)
-    print(json.dumps(report, ensure_ascii=False), flush=True)
-    preview(env, report, bot)
+    try:
+        rd = build_davra(db, root)
+    except Exception as e:  # noqa: BLE001 — дайджест Хўжаобода не зависит от Давры
+        rd = {"status": "INVALID", "errors": [f"{type(e).__name__}: {e}"]}
+    payloads = {}
+    for name, rep in (("xojaobod", report), ("davra", rd)):
+        vj = Path(rep.get("dir", "")) / "video.json"
+        if rep.get("status") == "READY" and vj.exists():
+            payloads[name] = json.loads(vj.read_text(encoding="utf-8"))
+    push = push_video_data(dt.datetime.now(TZ).date(), payloads)
+    print(json.dumps({"xojaobod": report, "davra": rd, "push": push}, ensure_ascii=False), flush=True)
+    preview(env, report, bot, rd, push)
     return report
 
 
@@ -467,7 +673,8 @@ def live_opts(cfg: dict) -> dict:
     return (cfg.get("channels", {}).get("xojaobod") or {}).get("digest") or {}
 
 
-async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = None, root: Path | None = None) -> str | None:
+async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = None, root: Path | None = None,
+                       vget=None) -> str | None:
     """Один раз в день: готовый пакет (manifest READY) → баннер с подписью в группу от аккаунта PAPA (анонимный админ).
     Только в окне at…until (ночью — никогда). Пакета нет / не READY — молчим (владелец видел предпросмотр с ошибками)."""
     o = live_opts(cfg)
@@ -491,9 +698,77 @@ async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = 
     from . import morning
     to = morning.target(cfg, env, "xojaobod")
     store_set(db, flag, "sending")                      # сначала флаг: ни при каком сбое — не дважды
+    vid, note = None, ""
+    try:                                                # 🎬 20.10: ролик, если GitHub его собрал
+        vid = motion_video(f"xojaobod-digest-{day}.mp4", vget)
+    except Exception as e:  # noqa: BLE001
+        note = f" (ролика нет: {e} — вышла картинка)"
+    if vid:
+        try:
+            msg = await acc.send_file(to, str(vid), caption=m["photo_caption"][:1024], **video_kw(25))
+            store_set(db, flag, str(getattr(msg, "id", "ok")))
+            return f"🌙 Кечки дайжест роликом опубликован в «Хўжаобод Сити 24» ({to}) в {hm}."
+        except Exception as e:  # noqa: BLE001
+            note = f" (ролик не отправился: {type(e).__name__} — вышла картинка)"
+        finally:
+            vid.unlink(missing_ok=True)
     msg = await acc.send_file(to, str(out / "digest.png"), caption=m["photo_caption"][:1024])
     store_set(db, flag, str(getattr(msg, "id", "ok")))
-    return f"🌙 Кечки дайжест опубликован в «Хўжаобод Сити 24» ({to}) в {hm}."
+    return f"🌙 Кечки дайжест опубликован в «Хўжаобод Сити 24» ({to}) в {hm}{note}."
+
+
+def video_kw(duration: int) -> dict:
+    """Telethon: отправить как видео (не файлом)."""
+    try:
+        from telethon.tl.types import DocumentAttributeVideo
+        return {"supports_streaming": True,
+                "attributes": [DocumentAttributeVideo(duration=duration, w=1080, h=1920, supports_streaming=True)]}
+    except ImportError:
+        return {"supports_streaming": True}
+
+
+async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | None = None, root: Path | None = None,
+                             vget=None) -> str | None:
+    """🎉 КАТТА ДАВРА 20:30 (решение владельца 20.10): ролик + текст от имени канала (бот); ролика нет — текст."""
+    ch = cfg.get("channels", {}).get("davra") or {}
+    o = ch.get("digest") or {}
+    if not o.get("live"):
+        return None
+    now = (now or dt.datetime.now(TZ)).astimezone(TZ)
+    hm = now.strftime("%H:%M")
+    if not (o.get("at", "20:30") <= hm < o.get("until", "22:00")):
+        return None
+    day = now.date().isoformat()
+    flag = f"digest_pub_davra_{day}"
+    if store_get(db, flag):
+        return None
+    out = (root or Path(os.environ.get("PAPA_DIGEST_DIR", "/var/lib/papa-genplan/digest"))) / f"evening-digest-davra-{day}"
+    try:
+        m = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if m.get("status") != "READY" or m.get("date") != day:
+        return None
+    from . import service
+    to = service.target(cfg, env, "davra")
+    store_set(db, flag, "sending")
+    note = ""
+    try:
+        vid = motion_video(f"davra-digest-{day}.mp4", vget)
+    except Exception as e:  # noqa: BLE001
+        vid, note = None, f" (ролика нет: {e} — вышел текст)"
+    if vid:
+        try:
+            mid = bot.publish_file(to, str(vid), m["caption"], duration=25)
+            store_set(db, flag, str(mid))
+            return f"🎉 Кечки дайжест роликом опубликован в «КАТТА ДАВРА» ({to}) в {hm}."
+        except Exception as e:  # noqa: BLE001
+            note = f" (ролик не отправился: {e} — вышел текст)"
+        finally:
+            vid.unlink(missing_ok=True)
+    mid = bot.publish(to, m["caption"])
+    store_set(db, flag, str(mid))
+    return f"🎉 Кечки дайжест опубликован в «КАТТА ДАВРА» ({to}) в {hm}{note}."
 
 
 def store_get(db, k):

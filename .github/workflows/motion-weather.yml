@@ -11,7 +11,7 @@ on:
     branches: [motion-test]
 permissions:
   contents: write
-concurrency: { group: motion-weather, cancel-in-progress: false }
+concurrency: { group: motion-branch, cancel-in-progress: false }
 jobs:
   render:
     runs-on: ubuntu-latest

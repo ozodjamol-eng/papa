@@ -114,6 +114,7 @@ hub_title = "КАТТА ДАВРА · ХАБ"   # 18.10: свой ХАБ кан�
 policy = { politics = "xojaobod", crime = "", showbiz = "paparazzi" }   # нельзя → куда подойдёт ("" — никуда)
 username = "kattadavrauz"
 mode = "live"                    # РАБОТА — решение владельца 2026-10-15 («хватит тестов»). Откат: "shadow"
+digest = { live = true, at = "20:30", until = "22:00" }   # 🎉 20.10 владелец: «отныне на КАТТА ДАВРА тоже такой дайджест» — ролик + текст. Откат: live = false
 publisher = "bot"                # канал: бот публикует от имени канала
 signature = "🎉 @kattadavrauz"
 signatures = ["🎉 Энг қизиқарли ва фойдали видеолар 👉 @kattadavrauz", "🔥 Кунинг энг сара видеолари — КАТТА ДАВРАда 👉 @kattadavrauz", "💡 Фойдали ва қизиқарлиси — бир жойда 👉 @kattadavrauz"]   # 17.10 утверждено владельцем, по очереди

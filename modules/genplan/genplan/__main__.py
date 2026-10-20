@@ -239,6 +239,13 @@ async def run() -> None:
                         service.ERRORS.append(pub)
                 except Exception as e:  # noqa: BLE001
                     service.ERRORS.append(f"⚠️ Кечки дайжест не вышел в группу: {type(e).__name__}: {str(e)[:150]}")
+                try:                                          # 🎉 Кечки дайжест → КАТТА ДАВРА (20:30, решение 20.10)
+                    from . import digest as _dg
+                    pub = await _dg.publish_live_davra(db, c, env, pubs["bot"])
+                    if pub:
+                        service.ERRORS.append(pub)
+                except Exception as e:  # noqa: BLE001
+                    service.ERRORS.append(f"⚠️ Кечки дайжест не вышел в КАТТА ДАВРА: {type(e).__name__}: {str(e)[:150]}")
                 from . import namaz
                 rem = namaz.reminder(db, c, dt.datetime.now(plan.TZ))
                 if rem:
