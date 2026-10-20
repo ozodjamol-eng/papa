@@ -30,7 +30,8 @@
     "nexus-old-restore",
     "genplan5-ai-hook",
     "genplan5-ai-tokens",
-    "genplan5-hook-scheme"
+    "genplan5-hook-scheme",
+    "genplan5-guard-install"
   ],
   "deny_patterns": [
     "-key$",

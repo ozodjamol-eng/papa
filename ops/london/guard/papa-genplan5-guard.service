@@ -1,0 +1,6 @@
+[Unit]
+Description=PAPA Страж рекламы GENPLAN 5 (только чтение базы, тревога владельцу)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/papa/ops/london/guard/genplan5_guard.py

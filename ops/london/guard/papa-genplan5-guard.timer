@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA Страж рекламы GENPLAN 5 — каждые 10 минут 06:00–23:00 Ташкент
+
+[Timer]
+OnCalendar=*-*-* 01..17:00/10:00 UTC
+OnCalendar=*-*-* 18:00:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target
