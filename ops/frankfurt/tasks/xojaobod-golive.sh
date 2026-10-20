@@ -13,6 +13,8 @@ cp -a "$DB" "$B"; echo "копия базы: $B"
 /opt/papa-venv/razvedka/bin/python /opt/papa/ops/frankfurt/xojaobod_golive.py
 chown papa-genplan:papa-genplan "$DB" "$DB"-wal "$DB"-shm 2>/dev/null || true
 touch /etc/papa-curator-xojaobod; echo "Куратор Хўжаобода: включён"
+TOK=$(grep -E '^XOJAOBOD_BOT_TOKEN=' /etc/papa-genplan/bots.env | cut -d= -f2-)
+echo "вебхук GENPLAN 5 снят: $(curl -s "https://api.telegram.org/bot$TOK/deleteWebhook" | grep -o '"ok":[a-z]*')"; unset TOK
 systemctl start papa-genplan papa-fabrika; sleep 8
 echo "genplan: $(systemctl is-active papa-genplan) · fabrika: $(systemctl is-active papa-fabrika)"
 journalctl -u papa-genplan -n 8 --no-pager -o cat | grep -v '^$' || true

@@ -29,6 +29,11 @@ async def captions(ids_by_key: dict) -> dict:
     try:
         for k, ids in ids_by_key.items():
             msgs = [m for m in await acc.get_messages(H["group_id"], ids=ids) if m]
+            if msgs and msgs[0].grouped_id:                 # альбом — берём все его сообщения
+                around = [m for m in await acc.get_messages(H["group_id"], ids=list(range(ids[0] - 10, ids[0] + 11))) if m]
+                msgs = sorted((m for m in around if m.grouped_id == msgs[0].grouped_id), key=lambda m: m.id)
+                ids_by_key[k][:] = [m.id for m in msgs]
+                print(f"{k}: альбом из {len(msgs)} — {ids_by_key[k]}")
             if not msgs or not any(m.media for m in msgs):
                 raise SystemExit(f"❌ {k}: в группе нет медиа сообщений {ids}")
             out[k] = next((m.message for m in msgs if m.message), "") or ""
@@ -38,7 +43,8 @@ async def captions(ids_by_key: dict) -> dict:
 
 
 def main() -> None:
-    caps = asyncio.run(captions({**{a["name"]: a["ids"] for a in H["ads"]}, **({"final": H["final"]["ids"]} if H.get("final") else {})}))
+    keys = {**{a["name"]: a["ids"] for a in H["ads"]}, **({"final": H["final"]["ids"]} if H.get("final") else {})}
+    caps = asyncio.run(captions(keys))        # альбомы расширяются на месте (ids в H)
     db = store.connect(DB)
     now = dt.datetime.now(plan.TZ)
     # 1) тестовые остатки

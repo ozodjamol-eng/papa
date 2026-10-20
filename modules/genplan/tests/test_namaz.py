@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT))
 from genplan import hub, namaz, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+CFG["channels"]["xojaobod"].pop("mode", None)   # 20.10 группа в работе; эти тесты проверяют режим теста
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "TEST_GROUP_ID": "-100111", "TEST_CHANNEL_ID": "-100222"}
 THU, FRI = dt.date(2026, 10, 15), dt.date(2026, 10, 16)
 BLOCK = "Намоз вақтлари: 15.10.2026\nБомдод 05:45\nПешин 12:45\nАср 16:00\nШом 17:45\nХуфтон 19 10"

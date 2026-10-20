@@ -11,6 +11,7 @@ import json  # noqa: E402
 from genplan import hub, menu, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+CFG["channels"]["xojaobod"].pop("mode", None)   # 20.10 группа в работе; эти тесты проверяют режим теста
 CFG["auto_place"] = False          # эти тесты проверяют ручной выбор рубрики
 CFG["auto_channels"] = ["davra"]   # и канал по умолчанию
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "TEST_GROUP_ID": "-100111", "TEST_CHANNEL_ID": "-100222"}
