@@ -340,6 +340,13 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
             except Exception as e:  # noqa: BLE001
                 notes = (notes or []) + [f"⚠️ Не смог подготовить медиа для группы: {type(e).__name__}"]
         notes = ["📥 Из ХАБа канала — уже ваше одобрение"] + (notes or [])
+    from . import ai, translit
+    if translit.language_note(text):               # 20.10 владелец: перевод утверждён — русский текст ИИ переводит САМ
+        if ai.available() and text.strip():
+            store.job_add(db, "ai", {"mid": mid, "owner_chat": reply_chat or next(iter(owners))})
+            notes = (notes or []) + ["🤖 Русский текст — перевожу на узбекский (кириллица) автоматически"]
+        else:
+            notes = (notes or []) + ["⛔ Русский текст, ИИ недоступен — пост НЕ выйдет, пока не будет перевода (✏️)"]
     placed = None if stock else auto_place(db, cfg, mid)
     if placed:
         notes = (notes or []) + [placed]

@@ -116,6 +116,17 @@ def tag_for(cfg: dict, ch: dict, m) -> str:
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print,
                       now: dt.datetime | None = None) -> bool:
     ch = cfg["channels"][channel]
+    from . import translit
+    if translit.language_note(m["text"] or "") and not (m["rubric"] or "").lower().startswith("реклама"):  # 20.10: предохранитель — русский текст в канал не выходит никогда
+        from . import ai
+        try:
+            store.update(db, m["id"], text=ai.rewrite(db, m["text"], ch["title"]))
+            m = store.get(db, m["id"])
+        except Exception as e:  # noqa: BLE001
+            store.record(db, channel, day, slot, m["id"], "failed", error=f"нет перевода: {e}")
+            ERRORS.append(f"⛔ {ch['title']}: пост на русском не опубликован — нет перевода ({e}). Нажмите 🤖 в карточке.")
+            log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — русский текст без перевода")
+            return False
     own = tuple(c["username"] for c in cfg["channels"].values())
     is_ad = (m["rubric"] or "").lower().startswith("реклама")
     tag = "#РЕКЛАМА" if is_ad else tag_for(cfg, ch, m)

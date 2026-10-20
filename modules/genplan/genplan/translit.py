@@ -64,13 +64,25 @@ def auto(text: str) -> tuple[str, bool]:
     return (to_cyrillic(text), True) if is_uz_latin(text) else (text, False)
 
 
-RU_ONLY = re.compile(r"[ыщэЫЩЭ]")
+RU_ONLY = re.compile(r"[ыщэьЫЩЭЬ]")
 UZ_CYR = re.compile(r"[ЎўҚқҒғҲҳ]")
+# 20.10: частые русские слова — у узбекского таких нет (раньше ловили только по ы/щ/э ≥3 и пропускали русские посты)
+RU_WORDS = re.compile(r"(?<![а-яё])(и|не|в|на|что|это|как|для|с|по|вы|вас|ваш[а-я]*|если|или|но|от|за|все|всё|у|к|из|чтобы|только|очень|можно|нужно|стоит|который|которая|так|же|при)(?![а-яё])", re.I)
+
+
+def is_russian(text: str) -> bool:
+    t = text or ""
+    cyr = len(re.findall(r"[А-Яа-яЁё]", t))
+    if cyr < 20:
+        return False
+    uz = len(UZ_CYR.findall(t))
+    if uz and uz * 40 >= cyr:            # заметно узбекских букв — это узбекский текст (возможны русские вставки)
+        return False
+    return len(RU_ONLY.findall(t)) >= 2 or len(RU_WORDS.findall(t)) >= 3
 
 
 def language_note(text: str) -> str:
-    """Подсказка владельцу в хабе: русский текст сам не переводится (это шаг ИИ)."""
-    t = text or ""
-    if len(RU_ONLY.findall(t)) >= 3 and not UZ_CYR.search(t):
-        return "⚠️ Текст на русском — автоматически не переводится"
+    """Подсказка владельцу в хабе: русский текст переводит ИИ (утверждено 20.10)."""
+    if is_russian(text):
+        return "🌐 Текст на русском — ИИ переводит на узбекский (кириллица)"
     return ""
