@@ -50,11 +50,14 @@ class CardG5(Base):
         now = at("12:00")
         self.queued(now)
         store.pulse_add(self.db, "davra", now - dt.timedelta(minutes=5), "manual")
-        self.tap("ur:1", now)
-        self.assertIn("Всё равно опубликовать", self.last_card()["text"])
+        self.assertEqual(self.tap("ur:1", now, confirm=False), "confirm")      # 21.10: сначала «✅ Утверждаю»
+        c = self.last_card()
+        self.assertIn("Последний пост вышел 5 мин назад", c["text"])
+        self.assertEqual(c["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "ok:ur:1")
         self.assertFalse(store.get(self.db, 1)["urgent"])
-        self.tap("ur:1:y", now)
+        self.tap("ur:1", now)
         self.assertTrue(store.get(self.db, 1)["urgent"])
+        self.assertIn("✅ Принято — выйдет СЕЙЧАС", self.last_card()["text"])   # итог — в карточке, не всплывашкой
 
     def test_other_options(self):
         now = at("08:00")

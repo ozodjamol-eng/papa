@@ -192,16 +192,17 @@ class T(unittest.TestCase):
             calls = []
 
             def __call__(self, method, **p):
+                self.calls.append((method, p))
                 if method == "editMessageText":
                     raise RuntimeError("Bad Request: message is not modified")
-                self.calls.append((method, p))
                 return {}
         b = Bot()
         q = {"id": "q", "from": {"id": 42}, "data": f"p1:{mid}", "message": {"chat": {"id": 42}, "message_id": 5}}
         self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "p1")
         q["data"] = f"p1y:{mid}"
         self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "p1y")
-        self.assertIn("Утверждено", b.calls[-1][1]["text"])
+        self.assertIn("✅ Утверждено", [p for m, p in b.calls if m == "editMessageText"][-1]["text"])   # в карточке
+        self.assertEqual(b.calls[-1], ("answerCallbackQuery", {"callback_query_id": "q"}))          # без всплывашки
         _, kb = hub.card(self.db, CFG, mid, at("08:00"))
         self.assertEqual(kb["inline_keyboard"][0][0]["text"], "✅ Разовая · утверждено")
         q["data"] = f"bk:{mid}"

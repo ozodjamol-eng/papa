@@ -125,6 +125,8 @@ def clone_for(db, mid: int, channel: str) -> int:
     cur = db.execute("INSERT INTO materials(hub_chat,hub_msg,text,has_media,channel,created_at,owner_msg,media,hub_msgs,fp) "
                      "VALUES (?,?,?,?,?,?,?,?,?,?)", (r["hub_chat"], r["hub_msg"], r["text"], r["has_media"], channel,
                                                      r["created_at"], r["owner_msg"], r["media"], r["hub_msgs"], r["fp"]))
+    if "via" in r.keys() and r["via"]:                     # 21.10: тот же бот видит источник (секундная копия для группы)
+        db.execute("UPDATE materials SET via=? WHERE id=?", (r["via"], cur.lastrowid))
     db.commit()
     return cur.lastrowid
 

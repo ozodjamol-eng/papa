@@ -316,7 +316,7 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(morning.get(self.db, rid)["status"], "pending")
         hub.callback(bot, self.db, CFG, {42}, {**cq, "data": f"mo:a:{rid}"})
         self.assertEqual(morning.get(self.db, rid)["approved"], 1)
-        self.assertIn("ОДОБРЕНО", str(bot.calls[-2][1]["reply_markup"]))
+        self.assertIn("УТВЕРЖДЕНО", str(bot.calls[-2][1]["reply_markup"]))
         hub.callback(bot, self.db, CFG, {42}, {**cq, "data": f"mo:r:{rid}"})
         r = morning.get(self.db, rid)
         self.assertEqual((r["status"], r["prepared"], r["redo"]), ("pending", 0, 1))

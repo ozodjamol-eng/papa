@@ -147,6 +147,134 @@ def cleanup_hubcopy(db, env: dict, pubs: dict, m, log=print) -> int:
     return 0
 
 
+def stage(db, env: dict, pubs: dict, via: str | None, src_chat, ids: list[int], has_media: bool):
+    """21.10 владелец: PAPA HUB — не свалка. Пост группы хранится там, куда его бросили (чат пульта / ХАБ группы).
+    Аккаунт PAPA видит только PAPA HUB, поэтому бот кладёт туда копию ЛИШЬ на секунды публикации, потом удаляет.
+    Возвращает (новые id в PAPA HUB, бот) или None — копия не нужна (текст или материал уже в PAPA HUB)."""
+    hub = str(env.get("HUB_CHAT_ID", ""))
+    ids = [int(x) for x in ids if x]
+    if not hub or not has_media or not src_chat or str(src_chat) == hub or not ids:
+        return None
+    p = (pubs.get(f"bot:{via}") if via and via != "main" else None) or pubs.get("bot")
+    if p is None or not hasattr(p, "http"):
+        raise PublishError("нет бота, чтобы подготовить медиа для группы")
+    store.kv_set(db, "hub_staging", "1")                  # главный бот не примет эту копию за новый материал
+    if len(ids) > 1:
+        r = p.http("copyMessages", {"chat_id": int(hub), "from_chat_id": src_chat, "message_ids": ids})
+        new = [int(x["message_id"]) for x in (r.get("result") or [])] if r.get("ok") else []
+    else:
+        r = p.http("copyMessage", {"chat_id": int(hub), "from_chat_id": src_chat, "message_id": ids[0]})
+        new = [int(r["result"]["message_id"])] if r.get("ok") else []
+    if not new:
+        store.kv_set(db, "hub_staging", "")
+        raise PublishError("не смог подготовить медиа для группы: " + str(r.get("description", "?")))
+    for x in new:
+        store.kv_set(db, f"hubcopy_{x}", "1")
+    return new, p
+
+
+def unstage(db, env: dict, staged, log=print) -> None:
+    """Секундная копия в PAPA HUB — удалить сразу после публикации (и при ошибке тоже)."""
+    if not staged:
+        return
+    new, p = staged
+    try:
+        r = p.http("deleteMessages", {"chat_id": int(env["HUB_CHAT_ID"]), "message_ids": new})
+        if not r.get("ok"):
+            ERRORS.append(f"⚠️ PAPA HUB: не смог убрать служебную копию ({r.get('description', '?')})")
+    except Exception as e:  # noqa: BLE001
+        ERRORS.append(f"⚠️ PAPA HUB: не смог убрать служебную копию ({e})")
+    finally:
+        store.kv_set(db, "hub_staging", "")
+
+
+def hub_clean_once(db, cfg: dict, env: dict, pubs: dict, log=print) -> dict:
+    """21.10 владелец: «не засоряй PAPA HUB — раз и навсегда». Один раз убрать из PAPA HUB все старые служебные
+    копии постов группы. Копии, которые ещё нужны (пост в плане, Якуний пост, реклама на несколько дней), сначала
+    переезжают в чат пульта группы — там их источник; дальше они попадают в PAPA HUB только на секунды публикации."""
+    out = {"moved": 0, "deleted": 0, "errors": 0}
+    if store.kv_get(db, "hub_clean_v1") == "done":
+        return out
+    hub = str(env.get("HUB_CHAT_ID", ""))
+    owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
+    if not hub or not owners:
+        return out
+    group = next((c for c, ch in cfg["channels"].items() if ch["publisher"] == "account"), None)
+    copies = {int(r[0][len("hubcopy_"):]) for r in db.execute("SELECT k FROM kv WHERE k LIKE 'hubcopy_%'").fetchall()
+              if r[0][len("hubcopy_"):].isdigit()}
+    if not copies:
+        store.kv_set(db, "hub_clean_v1", "done")
+        return out
+
+    def bot_for(via):
+        return (pubs.get(f"bot:{via}") if via and via != "main" else None) or pubs.get(f"bot:{group}") or pubs.get("bot")
+
+    def move(ids, via):
+        """Копии из PAPA HUB → тихо в чат пульта владельца; новые id или None."""
+        b = bot_for(via)
+        if len(ids) > 1:
+            r = b.http("copyMessages", {"chat_id": owners[0], "from_chat_id": int(hub), "message_ids": ids,
+                                        "disable_notification": True})
+            return [int(x["message_id"]) for x in r.get("result") or []] if r.get("ok") else None
+        r = b.http("copyMessage", {"chat_id": owners[0], "from_chat_id": int(hub), "message_id": ids[0],
+                                   "disable_notification": True})
+        return [int(r["result"]["message_id"])] if r.get("ok") else None
+
+    keep: set[int] = set()
+    for m in db.execute("SELECT * FROM materials WHERE hub_chat=? AND status IN ('queued','draft','failed')",
+                        (int(hub),)).fetchall():
+        ids = [int(x) for x in (json.loads(m["hub_msgs"] or "[]") or [m["hub_msg"]]) if x]
+        if not ids or not all(x in copies for x in ids):
+            continue                                        # брошен прямо в PAPA HUB (не служебная копия) — не трогаем
+        via = (m["via"] if "via" in m.keys() else None) or group
+        new = move(ids, via)
+        if not new:
+            out["errors"] += 1
+            keep.update(ids)
+            continue
+        db.execute("UPDATE materials SET hub_chat=?, hub_msg=?, hub_msgs=?, via=? WHERE id=?",
+                   (owners[0], new[0], json.dumps(new), via, m["id"]))
+        out["moved"] += 1
+    for k in ("final_xojaobod", "final_davra", "final_paparazzi"):
+        f = json.loads(store.kv_get(db, k, "") or "null")
+        if not f or str(f.get("hub_chat")) != hub:
+            continue
+        ids = [int(x) for x in (f.get("hub_msgs") or [f.get("hub_msg")]) if x]
+        if not ids or not all(x in copies for x in ids):
+            continue
+        new = move(ids, f.get("via") or group)
+        if not new:
+            out["errors"] += 1
+            keep.update(ids)
+            continue
+        f.update(hub_chat=owners[0], hub_msg=new[0], hub_msgs=new if len(new) > 1 else [], via=f.get("via") or group)
+        store.kv_set(db, k, json.dumps(f, ensure_ascii=False))
+        out["moved"] += 1
+    db.commit()
+    gone = sorted(copies - keep)
+    for i in range(0, len(gone), 100):
+        part = gone[i:i + 100]
+        done = False
+        for p in [pubs.get(f"bot:{group}"), pubs.get("bot")]:
+            if not p or not hasattr(p, "http"):
+                continue
+            try:
+                r = p.http("deleteMessages", {"chat_id": int(hub), "message_ids": part})
+            except Exception:  # noqa: BLE001
+                continue
+            if r.get("ok"):
+                done = True
+                break
+        if done:
+            out["deleted"] += len(part)
+        else:
+            out["errors"] += 1
+    if not out["errors"]:
+        store.kv_set(db, "hub_clean_v1", "done")
+    log(f"PAPA HUB очищен: перенесено {out['moved']}, удалено {out['deleted']}, ошибок {out['errors']}")
+    return out
+
+
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print,
                       now: dt.datetime | None = None) -> bool:
     ch = cfg["channels"][channel]
@@ -176,14 +304,20 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
     via = m["via"] if "via" in m.keys() else None
     p = pub_for(pubs, ch, channel, via, from_hub=str(m["hub_chat"]) == str(env.get("HUB_CHAT_ID")))
     to = target(cfg, env, channel)
+    staged = None
     try:
+        src_chat, src_ids = m["hub_chat"], (hub_ids or [m["hub_msg"]])
+        if ch["publisher"] == "account":
+            staged = stage(db, env, pubs, via, m["hub_chat"], src_ids, bool(m["has_media"]))
+            if staged:
+                src_chat, src_ids = int(env["HUB_CHAT_ID"]), staged[0]
         if len(hub_ids) > 1:                               # альбом — одним постом
             if ch["publisher"] == "account":
-                mid = await p.publish_album(to, m["hub_chat"], hub_ids, body)
+                mid = await p.publish_album(to, src_chat, src_ids, body)
             else:
                 mid = p.publish_album(to, media, body)
         elif ch["publisher"] == "account":
-            mid = await p.publish(to, body, m["hub_chat"], m["hub_msg"], bool(m["has_media"]))
+            mid = await p.publish(to, body, src_chat, src_ids[0], bool(m["has_media"]))
         else:
             mid = p.publish(to, body, m["hub_chat"], m["hub_msg"], bool(m["has_media"]), button=share_button(ch))
         store.update(db, m["id"], status="published")
@@ -198,6 +332,8 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
         ERRORS.append(f"❌ {ch['title']}: пост не вышел — {e}")
         log(f"{channel} {slot or 'срочно'}: ОШИБКА {e}")
         return False
+    finally:
+        unstage(db, env, staged, log)
 
 
 def reconcile(db, cfg: dict, now: dt.datetime) -> int:
@@ -355,6 +491,7 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
         to = target(cfg, env, r["channel"])
         p = pubs[ch["publisher"]]
         video = None
+        staged = None
         try:
             if r["key"] == "info":
                 from . import digest
@@ -382,6 +519,12 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
                     extras.mark(db, r, status="skipped", error="Якуний пост не задан")
                     continue
                 body, hub_chat, hub_msg, media, ids = f["text"], f["hub_chat"], f["hub_msg"], f["has_media"], f.get("hub_msgs") or []
+                if ch["publisher"] == "account":           # 21.10: в PAPA HUB — только на секунды публикации
+                    staged = stage(db, env, pubs, f.get("via"), hub_chat, ids or [hub_msg], bool(media))
+                    if staged:
+                        hub_chat = int(env["HUB_CHAT_ID"])
+                        ids = staged[0] if len(ids) > 1 else []
+                        hub_msg = staged[0][0]
             mid = None
             if video:
                 try:
@@ -406,6 +549,8 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
         except PublishError as e:
             extras.mark(db, r, status="failed", error=str(e)[:300])
             ERRORS.append(f"❌ {ch['title']}: {extras.TITLE[r['key']]} не вышел — {e}")
+        finally:
+            unstage(db, env, staged, log)
     return n
 
 

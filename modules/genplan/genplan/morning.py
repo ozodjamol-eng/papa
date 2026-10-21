@@ -976,7 +976,7 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
 def buttons(rid: int, state: str) -> dict:
     """Кнопки под предпросмотром: что нажато — видно сразу (решение владельца 16.10: ✅ и 🗑)."""
     rows = {"new": [("✅ Одобрить", "a"), ("🗑 Не публиковать", "x")],
-            "approved": [("✅ ОДОБРЕНО", "n"), ("🗑 Не публиковать", "x")],
+            "approved": [("✅ УТВЕРЖДЕНО", "n"), ("🗑 Не публиковать", "x")],
             "auto": [("🤖 Выйдет сам", "n"), ("🗑 Не публиковать", "x")],
             "cancelled": [("🗑 НЕ ВЫЙДЕТ", "n"), ("↩️ Вернуть", "u")]}[state]
     return {"inline_keyboard": [[{"text": t, "callback_data": f"mo:{a}:{rid}"} for t, a in rows]]}
@@ -987,10 +987,10 @@ def callback(bot, db, cq: dict) -> str:
     r = get(db, int(rid))
     chat, mid = cq["message"]["chat"]["id"], cq["message"]["message_id"]
     if not r:
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Пост не найден")
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "missing"
     if r["status"] == "done":
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Уже опубликован")
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "done"
     at = dt.datetime.fromisoformat(r["at"])
 
@@ -1006,36 +1006,36 @@ def callback(bot, db, cq: dict) -> str:
             except Exception:  # noqa: BLE001
                 pass
     if act == "n":
-        bot("answerCallbackQuery", callback_query_id=cq["id"],
-            text=("Выйдет сам 🤖" if not needs_ok(DEFAULTS["approval"], r["key"]) else "Уже одобрено ✅")
-            if r["approved"] else "Не будет опубликован 🗑")
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "mo:n"
     if act == "a":
         update(db, r["id"], approved=1, status="pending")
         mark("approved", f"✅ Одобрено — выйдет {at:%d.%m в %H:%M}")
-        bot("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True,
-            text=f"✅ ОДОБРЕНО\nВыйдет {at:%d.%m в %H:%M}. Повторно нажимать не нужно.")
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "mo:a"
     if act == "x":
         update(db, r["id"], status="cancelled", approved=0)
         mark("cancelled", "🗑 Не будет опубликован")
-        bot("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True,
-            text="🗑 НЕ БУДЕТ ОПУБЛИКОВАН\nПередумали — «↩️ Вернуть».")
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "mo:x"
     if act == "u":
         if needs_ok(DEFAULTS["approval"], r["key"]):
             update(db, r["id"], status="pending", approved=0)
             mark("new", "↩️ Вернул — нажмите ✅, чтобы вышел")
-            bot("answerCallbackQuery", callback_query_id=cq["id"], text="↩️ Вернул — нажмите ✅, чтобы вышел")
+            bot("answerCallbackQuery", callback_query_id=cq["id"])
         else:                                                   # автопилот с вето: вернул — снова выйдет сам
             update(db, r["id"], status="pending", approved=1)
             mark("auto", f"↩️ Вернул — выйдет сам {at:%d.%m в %H:%M}")
-            bot("answerCallbackQuery", callback_query_id=cq["id"], text=f"↩️ Вернул — выйдет сам {at:%d.%m в %H:%M}")
+            bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "mo:u"
     # «🔄 Заменить» со старых предпросмотров — новый вариант поста
     update(db, r["id"], status="pending", prepared=0, redo=1, tries=0, next_try=None, hub_msg=None, preview_sent=0,
            approved=0)
-    bot("answerCallbackQuery", callback_query_id=cq["id"], text="🔄 Готовлю новый вариант — пришлю через 1–2 минуты.")
+    try:                                                         # 21.10: итог — постоянным сообщением, не всплывашкой
+        bot("sendMessage", chat_id=chat, reply_to_message_id=mid, text="🔄 Готовлю новый вариант — пришлю через 1–2 минуты.")
+    except Exception:  # noqa: BLE001
+        pass
+    bot("answerCallbackQuery", callback_query_id=cq["id"])
     return "mo:r"
 
 

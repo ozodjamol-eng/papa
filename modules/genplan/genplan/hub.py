@@ -461,13 +461,8 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         notes = (notes or []) + [pol]
     if stock:                                      # 18.10: пост из ХАБа канала — в 📦 запас, выйдет сам в пустой слот
         store.update(db, mid, stock=1)
-        if cfg["channels"][channel].get("publisher") == "account":
-            # 20.10 владелец: «каждый бот — своё». ХАБ группы читает только её бот; он сам кладёт копию в технический
-            # PAPA HUB, откуда аккаунт PAPA публикует в группу (аккаунт в ХАБ группы не добавляем).
-            try:
-                to_hub(bot, db, mid)
-            except Exception as e:  # noqa: BLE001
-                notes = (notes or []) + [f"⚠️ Не смог подготовить медиа для группы: {type(e).__name__}"]
+        # 20.10 владелец: «каждый бот — своё». ХАБ группы читает только её бот; копию в PAPA HUB он кладёт
+        # только в момент публикации и сразу убирает (21.10: PAPA HUB — не свалка).
         notes = ["📥 Из ХАБа канала — уже ваше одобрение"] + (notes or [])
     from . import ai, translit
     if translit.language_note(text):               # 20.10 владелец: перевод утверждён — русский текст ИИ переводит САМ
@@ -503,18 +498,9 @@ def direct(bot, db, cfg, owners, hub: int, msgs: list[dict], channel: str | None
         # 20.10 владелец: «каждый бот — своё»: всё, что брошено в бот, идёт в его канал (главный бот — КАТТА ДАВРА)
         from . import bots as _b
         channel = _b.channel_of(bot) or cfg.get("default_channel") or "davra"
-    if cfg["channels"][channel]["publisher"] == "bot":
-        return intake(bot, db, cfg, owners, chat, [x["message_id"] for x in msgs], msgs, reply_chat=chat, channel=channel)
-    if len(msgs) > 1:
-        r = bot("copyMessages", chat_id=hub, from_chat_id=chat, message_ids=[x["message_id"] for x in msgs])
-        ids = [x["message_id"] for x in r]
-    else:
-        ids = [bot("copyMessage", chat_id=hub, from_chat_id=chat, message_id=msgs[0]["message_id"])["message_id"]]
-    from . import bots
-    if bots.channel_of(bot):                       # копию от бота канала главный бот не принимает за новый материал
-        for x in ids:
-            store.kv_set(db, f"hubcopy_{x}", "1")
-    return intake(bot, db, cfg, owners, hub, ids, msgs, reply_chat=chat, channel=channel)
+    # 21.10 владелец: PAPA HUB — не свалка. И для группы пост остаётся там, куда его бросили (чат пульта);
+    # в PAPA HUB копия появляется только на секунды публикации и сразу удаляется (service.staged).
+    return intake(bot, db, cfg, owners, chat, [x["message_id"] for x in msgs], msgs, reply_chat=chat, channel=channel)
 
 
 def flush_albums(bot, db, cfg: dict, env: dict, now_ts: float | None = None) -> int:
@@ -618,8 +604,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if int(post["chat"]["id"]) == hub:
             if own:                                  # пост в хабе видят все боты — принимает только главный
                 return None
-            if store.kv_get(db, f"hubcopy_{post['message_id']}"):
-                return None                          # служебная копия от бота канала (группа) — не новый материал
+            if store.kv_get(db, f"hubcopy_{post['message_id']}") or store.kv_get(db, "hub_staging"):
+                return None                          # служебная копия на секунды публикации (группа) — не новый материал
             if _album(post, dm=False):
                 return "album"
             return intake(bot, db, cfg, owners, hub, [post["message_id"]], [post])
@@ -840,7 +826,7 @@ def autopilot_answer(bot, db, cq: dict) -> str:
     store.kv_set(db, k, "yes" if ans == "y" else "no")
     text = (cq["message"].get("text") or "") + ("\n\n✅ РАЗРЕШЕНО — выполняю" if ans == "y" else "\n\n❌ ОТКАЗАНО")
     bot("editMessageText", chat_id=cq["message"]["chat"]["id"], message_id=cq["message"]["message_id"], text=text[:4096])
-    bot("answerCallbackQuery", callback_query_id=cq["id"], text="✅ Разрешено" if ans == "y" else "❌ Отказано", show_alert=True)
+    bot("answerCallbackQuery", callback_query_id=cq["id"])     # итог — постоянной строкой в сообщении
     return "ap_" + ans
 
 
@@ -855,22 +841,34 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     if cq["data"].startswith("ap:"):                      # автопилот просит разрешения на задачу (Франкфурт)
         return autopilot_answer(bot, db, cq)
     chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
-    kind, mid_s, *arg = cq["data"].split(":")
+    data = cq["data"]
+    confirmed = data.startswith("ok:")                    # 21.10 владелец: выбор вступает в силу только после «✅ Утверждаю»
+    if confirmed:
+        data = data[3:]
+    kind, mid_s, *arg = data.split(":")
     mid = int(mid_s)
     m = store.get(db, mid)
     if m is None:
-        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Материал не найден")
+        _edit(bot, chat, msg_id, (cq["message"].get("text") or "") + "\n\n⚠️ Материал не найден", None)
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "missing"
     note = ""
+    shown: dict = {}
 
     def show(markup=None, text=None):
         t, kb = card(db, cfg, mid, now)
-        try:
-            bot("editMessageText", chat_id=chat, message_id=msg_id, text=text or t, reply_markup=markup or kb,
-                disable_web_page_preview=True)
-        except Exception as e:  # noqa: BLE001 — 21.10: «ничего не изменилось» не должно ломать кнопку
-            if "not modified" not in str(e):
-                raise
+        shown.update(text=text or t, kb=markup or kb)
+        _edit(bot, chat, msg_id, shown["text"], shown["kb"])
+
+    if kind in CONFIRM and not confirmed:
+        ask = confirm_text(db, cfg, m, kind, arg, now)
+        if ask:
+            t, _ = card(db, cfg, mid, now)
+            show({"inline_keyboard": [[{"text": "✅ Утверждаю", "callback_data": "ok:" + data}],
+                                      [{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]},
+                 t + "\n\n" + ask)
+            bot("answerCallbackQuery", callback_query_id=cq["id"])
+            return "confirm"
 
     if kind in ("sm", "tm", "nx"):
         t = dt.datetime.fromtimestamp(int(arg[0]), plan.TZ) if arg and arg[0] else None
@@ -900,19 +898,15 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
                 from . import extras
                 if extras.opts(cfg["channels"][m["channel"]], "final"):
                     # 20.10 (как в GENPLAN 5): Якуний пост — выходит КАЖДЫЙ день в 22:00, пока его не заменят
-                    if cfg["channels"][m["channel"]]["publisher"] == "account":
-                        to_hub(bot, db, mid)
-                        m = store.get(db, mid)
-                    extras.final_set(db, m["channel"], m)
+                    extras.final_set(db, m["channel"], m, via=m["via"] if "via" in m.keys() else None)
+                    note = "✅ Принято: 🌙 Якуний пост — каждый день, пока не замените"
                     show()
-                    bot("answerCallbackQuery", callback_query_id=cq["id"], text="🌙 Якуний пост: каждый день")
-                    return kind
+                    return _done(bot, cq, chat, msg_id, shown, note, kind)
                 r, tag, topic = "Якуний пост", (cfg["channels"][m["channel"]].get("hashtags") or {}).get("Якуний пост", ""), "🌙 Якуний пост"
             else:
                 it = picker.item(arg[0], int(arg[1]))
                 if it is None:
-                    bot("answerCallbackQuery", callback_query_id=cq["id"], text="Рубрика не найдена")
-                    return kind
+                    return _done(bot, cq, chat, msg_id, shown, "⚠️ Рубрика не найдена", kind)
                 _code, emoji, label, tag, k = it
                 r, topic = picker.rubric_for(cfg, m["channel"], k, rs), f"{emoji} {label}"
             upd = {"rubric": r, "guessed": 0, "stock": 0, "tag": tag, "topic": topic}
@@ -1012,7 +1006,7 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     elif kind == "ur":
         last = smart.last_post(db, m["channel"], now)        # GENPLAN 5: прошлый пост был недавно — спросить
         gap = (now - last).total_seconds() / 60 if last else None
-        if gap is not None and 0 <= gap < smart.NOW_WARNING_GAP and not arg:
+        if gap is not None and 0 <= gap < smart.NOW_WARNING_GAP and not arg and not confirmed:
             show({"inline_keyboard": [[{"text": "✅ Да", "callback_data": f"ur:{mid}:y"}],
                                       [{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]},
                  f"⚠️ Последний пост вышел {int(gap)} мин назад.\n\nВсё равно опубликовать сейчас?")
@@ -1056,9 +1050,6 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         elif any(t not in movable(cfg, m) for t in targets):
             note = "Этот пост можно поставить только в канал своего пульта"
         else:
-            if any(cfg["channels"][t]["publisher"] == "account" for t in targets if t in cfg["channels"]):
-                to_hub(bot, db, mid)                 # в группу публикует аккаунт PAPA — ему нужен хаб
-                m = store.get(db, mid)
             store.update(db, mid, channel=targets[0], status="draft", scheduled_at=None, urgent=0, locked=0,
                          rubric=smart.guess_rubric(cfg, targets[0], strip_sources(m["text"])), guessed=1)
             note = auto_place(db, cfg, mid) or ""
@@ -1116,5 +1107,91 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     elif kind == "del":
         store.update(db, mid, status="rejected")
         show()
-    bot("answerCallbackQuery", callback_query_id=cq["id"], **({"text": note} if note else {}))
+    if confirmed and not note and kind in CONFIRM:
+        m2 = store.get(db, mid)
+        if m2 is not None and m2["status"] in ("queued", "draft"):
+            note = "✅ Принято" + (" — выйдет СЕЙЧАС" if m2["urgent"] else "")
+    return _done(bot, cq, chat, msg_id, shown, note, kind)
+
+
+# 21.10 владелец: всё, что меняет план, — только после «✅ Утверждаю» (как в классическом пульте GENPLAN 5).
+# Навигация (группы рубрик, «Другие варианты», «Назад») — без подтверждения. Реклама подтверждается своим шагом
+# (✅ Разовая / 📅 Несколько дней → «✅ Утверждаю»), поэтому её время второй раз не спрашиваем.
+CONFIRM = ("sm", "tm", "nx", "pi", "pf", "rq", "sk", "ur")
+
+
+def _edit(bot, chat, msg_id, text, kb) -> None:
+    try:
+        bot("editMessageText", chat_id=chat, message_id=msg_id, text=(text or "")[:4096], reply_markup=kb or {"inline_keyboard": []},
+            disable_web_page_preview=True)
+    except Exception as e:  # noqa: BLE001 — 21.10: «ничего не изменилось» не должно ломать кнопку
+        if "not modified" not in str(e):
+            raise
+
+
+def _done(bot, cq, chat, msg_id, shown: dict, note: str, kind: str) -> str:
+    """21.10 владелец: никаких всплывающих чёрных окошек, которые сразу исчезают. Итог нажатия — постоянной строкой
+    прямо в карточке; Telegram получает пустой ответ (только чтобы кнопка перестала «крутиться»)."""
+    if note:
+        text = shown.get("text") or (cq["message"].get("text") or "")
+        kb = shown.get("kb") or cq["message"].get("reply_markup")
+        _edit(bot, chat, msg_id, f"{text}\n\n{note}", kb)
+    bot("answerCallbackQuery", callback_query_id=cq["id"])
     return kind
+
+
+def confirm_text(db, cfg: dict, m, kind: str, arg: list, now: dt.datetime) -> str | None:
+    """Что именно произойдёт после «✅ Утверждаю» — канал, рубрика, время. None — подтверждать нечего."""
+    ch_code = m["channel"]
+    if ch_code not in cfg["channels"]:
+        return None
+    name = NAMES.get(ch_code, ch_code)
+    rub = m["topic"] if "topic" in m.keys() and m["topic"] else (m["rubric"] or "—")
+    when = None
+    if kind in ("sm", "tm", "nx"):
+        if (m["rubric"] or "").lower().startswith("реклама"):
+            return None                                  # у рекламы своё «✅ Утверждаю» (Разовая / Несколько дней)
+        t = dt.datetime.fromtimestamp(int(arg[0]), plan.TZ) if arg and arg[0] else None
+        if t is None:
+            st = smart.smart_time(db, cfg, ch_code, m["rubric"], now, exclude=m["id"])
+            t = st[0] if st else None
+        if t is None:
+            return None
+        when = smart.fmt(t, now)
+    elif kind in ("pi", "rq"):
+        if kind == "pi":
+            from . import picker
+            it = picker.item(arg[0], int(arg[1])) if len(arg) > 1 else None
+            if it is None:
+                return None
+            _code, emoji, label, _tag, k = it
+            r = picker.rubric_for(cfg, ch_code, k, rubrics(cfg, ch_code))
+            rub = f"{emoji} {label}"
+        else:
+            rs = rubrics(cfg, ch_code)
+            r = rs[int(arg[0])] if arg and int(arg[0]) < len(rs) else None
+            if r is None:
+                return None
+            rub = r
+        if m["status"] == "queued" and (m["locked"] or m["urgent"]) and m["scheduled_at"]:
+            when = smart.fmt(dt.datetime.fromisoformat(m["scheduled_at"]), now) + " (ваше время не меняю)"
+        else:
+            st = smart.smart_time(db, cfg, ch_code, r, now, exclude=m["id"])
+            when = f"🧠 {smart.fmt(st[0], now)}" if st else "свободного времени нет — выберете вручную"
+    elif kind == "pf":
+        from . import extras
+        at = (extras.opts(cfg["channels"][ch_code], "final") or {}).get("at", "22:00")
+        rub, when = "🌙 Якуний пост", f"каждый день в {at}, пока не замените (старый Якуний заменится)"
+    elif kind == "sk":
+        rs = rubrics(cfg, ch_code)
+        rub = rs[int(arg[0])] if arg and int(arg[0]) < len(rs) else rub
+        when = "📦 в запас — выйдет сам в пустой слот рубрики"
+    elif kind == "ur":
+        last = smart.last_post(db, ch_code, now)
+        gap = (now - last).total_seconds() / 60 if last else None
+        when = "🚀 СЕЙЧАС"
+        if gap is not None and 0 <= gap < smart.NOW_WARNING_GAP:
+            when += f"\n⚠️ Последний пост вышел {int(gap)} мин назад"
+    if when is None:
+        return None
+    return f"❓ Проверьте и утвердите:\n📍 Канал: {name}\n📂 Рубрика: {rub}\n🕐 Время: {when}\n\nУтверждаете?"

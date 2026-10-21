@@ -113,9 +113,12 @@ def final_get(db, channel: str) -> dict | None:
     return json.loads(raw) if raw else None
 
 
-def final_set(db, channel: str, m) -> dict:
-    """Материал → Якуний пост канала (выходит каждый день до замены). Материал больше не ждёт обычной публикации."""
+def final_set(db, channel: str, m, via: str | None = None) -> dict:
+    """Материал → Якуний пост канала (выходит каждый день до замены). Материал больше не ждёт обычной публикации.
+    21.10: источник — там, куда владелец бросил пост (чат пульта / ХАБ канала); в PAPA HUB копия кладётся только
+    на секунды публикации (service.staged), поэтому via — бот, который видит этот источник."""
     v = {"material_id": int(m["id"]), "text": m["text"] or "", "hub_chat": int(m["hub_chat"]), "hub_msg": int(m["hub_msg"]),
+         "via": via,
          "hub_msgs": json.loads(m["hub_msgs"] or "[]") if "hub_msgs" in m.keys() else [],
          "has_media": bool(m["has_media"]), "set_at": dt.datetime.now(plan.TZ).isoformat()}
     store.kv_set(db, f"final_{channel}", json.dumps(v, ensure_ascii=False))

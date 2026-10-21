@@ -71,8 +71,12 @@ class Base(unittest.TestCase):
     def h(self, u):
         return hub.handle(self.bot, self.db, CFG, ENV, u)
 
-    def tap(self, data, now):
-        return hub.callback(self.bot, self.db, CFG, {42}, cb(data)["callback_query"], now)
+    def tap(self, data, now, confirm=True):
+        """Нажатие владельца. 21.10: выбор вступает в силу после «✅ Утверждаю» — тест жмёт его следом (confirm=False — нет)."""
+        r = hub.callback(self.bot, self.db, CFG, {42}, cb(data)["callback_query"], now)
+        if r == "confirm" and confirm:
+            return hub.callback(self.bot, self.db, CFG, {42}, cb("ok:" + data)["callback_query"], now)
+        return r
 
     def last_card(self):
         return [p for m, p in self.bot.calls if m in ("sendMessage", "editMessageText")][-1]
@@ -114,7 +118,7 @@ class TestIntake(Base):
         self.tap(f"sm:1:{t}", now)
         self.tap(f"sm:2:{t}", now)                                            # то же время уже занято
         self.assertEqual(store.get(self.db, 2)["status"], "draft")
-        self.assertEqual(self.bot.calls[-1][1].get("text"), "Это время уже занято — показываю новое")
+        self.assertIn("Это время уже занято — показываю новое", self.last_card()["text"])   # 21.10: в карточке
 
     def test_tomorrow_when_today_full(self):
         self.h(dm(40, "Ҳажвия 😂 кулги", photo_uid="h1"))
@@ -386,7 +390,7 @@ class TestNoHub(Base):
         self.assertEqual(m["hub_chat"], 42)                                    # лежит в чате с ботом
         self.tap("ch:1:" + hub.REV["xojaobod"], at("09:00"))
         m = store.get(self.db, 1)
-        self.assertEqual(str(m["hub_chat"]), ENV["HUB_CHAT_ID"])               # для группы — скопирован в хаб
+        self.assertEqual(m["hub_chat"], 42)                                    # 21.10: и для группы — без копии в хаб
         self.assertEqual(m["channel"], "xojaobod")
 
 
@@ -590,12 +594,13 @@ class TestChannelHub(Base):
         r = hub.handle(xb, self.db, CFG, ENV, hub_post(9, "ХЎЖАОБОД · ХАБ", chat=-100888, text="Хўжаободда янги боғ очилди"))
         self.assertEqual(r, "material")
         m = store.get(self.db, 1)
-        self.assertEqual((m["channel"], m["stock"], str(m["hub_chat"])), ("xojaobod", 1, ENV["HUB_CHAT_ID"]))
-        self.assertTrue(any(c[0] == "copyMessage" and str(c[1]["chat_id"]) == ENV["HUB_CHAT_ID"] for c in xb.calls))
+        # 21.10 владелец: PAPA HUB — не свалка. Материал остаётся в ХАБе группы, в PAPA HUB при броске ничего не кладём
+        self.assertEqual((m["channel"], m["stock"], str(m["hub_chat"])), ("xojaobod", 1, "-100888"))
+        self.assertFalse(any(c[0] in ("copyMessage", "copyMessages") for c in xb.calls))
         self.assertEqual(self.bot.calls, [])                                   # главный бот молчит
-        # копия в PAPA HUB — не новый материал для главного бота
-        copy_id = m["hub_msg"]
-        self.assertIsNone(self.h({"channel_post": {"message_id": copy_id, "chat": {"id": int(ENV["HUB_CHAT_ID"]), "type": "channel"},
+        # секундная копия в PAPA HUB во время публикации — не новый материал для главного бота
+        store.kv_set(self.db, "hub_staging", "1")
+        self.assertIsNone(self.h({"channel_post": {"message_id": 555, "chat": {"id": int(ENV["HUB_CHAT_ID"]), "type": "channel"},
                                                    "date": 1, "caption": "Хўжаободда янги боғ очилди", "photo": [{"file_id": "z", "file_unique_id": "z"}]}}))
         self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 1)
 
@@ -626,3 +631,78 @@ class TestChannelHub(Base):
         self.assertEqual(ids, [1])
         self.assertEqual(store.get(self.db, 1)["status"], "queued")
         self.assertTrue(m["rubric"])
+
+
+class TestPapaHubClean(Base):
+    """21.10 владелец: PAPA HUB — не свалка. Пост группы попадает туда только на секунды публикации."""
+
+    class Http:
+        def __init__(self):
+            self.calls = []
+
+        def http(self, method, p):
+            self.calls.append((method, p))
+            if method == "copyMessage":
+                return {"ok": True, "result": {"message_id": 7001}}
+            return {"ok": True, "result": True}
+
+    class Acc:
+        def __init__(self):
+            self.sent = []
+
+        async def publish(self, to, body, hub_chat, hub_msg, media):
+            self.sent.append((hub_chat, hub_msg, media))
+            return 1
+
+    def test_group_post_staged_then_deleted(self):
+        self.h(dm(70, "Хўжаободда янги боғ очилди", photo_uid="k1"))
+        store.update(self.db, 1, channel="xojaobod", via="xojaobod", status="queued",
+                     scheduled_at=at("09:00").isoformat(), rubric="Янгилик")
+        xb, acc = self.Http(), self.Acc()
+        pubs = {"account": acc, "bot": self.Http(), "bot:xojaobod": xb}
+        ok = asyncio.run(service.publish_one(self.db, CFG, ENV, pubs, "xojaobod", store.get(self.db, 1), "09:00",
+                                             MON.isoformat(), log=lambda *_: None, now=at("09:00")))
+        self.assertTrue(ok)
+        self.assertEqual(acc.sent, [(-100777, 7001, True)])                     # аккаунт взял секундную копию
+        self.assertEqual(xb.calls[0][0], "copyMessage")
+        self.assertEqual(xb.calls[0][1]["from_chat_id"], 42)                     # из чата пульта
+        self.assertIn(("deleteMessages", {"chat_id": -100777, "message_ids": [7001]}), xb.calls)   # и сразу убрал
+        self.assertEqual(store.kv_get(self.db, "hub_staging", ""), "")
+
+    def test_drop_card_needs_approve(self):
+        self.h(dm(71, "Ажойиб видео", photo_uid="k2"))
+        now = at("08:00")
+        st = smart.smart_time(self.db, CFG, "davra", store.get(self.db, 1)["rubric"], now, exclude=1)
+        data = f"sm:1:{int(st[0].timestamp())}"
+        self.assertEqual(self.tap(data, now, confirm=False), "confirm")
+        self.assertEqual(store.get(self.db, 1)["status"], "draft")              # без «✅ Утверждаю» не встаёт в план
+        kb = self.last_card()["reply_markup"]["inline_keyboard"]
+        self.assertEqual(kb[0][0], {"text": "✅ Утверждаю", "callback_data": "ok:" + data})
+        self.assertIn("Утверждаете?", self.last_card()["text"])
+        self.tap("ok:" + data, now, confirm=False)
+        self.assertEqual(store.get(self.db, 1)["status"], "queued")
+        self.assertIn("✅ Принято", self.last_card()["text"])                    # итог остаётся в карточке
+        self.assertEqual(self.bot.calls[-1], ("answerCallbackQuery", {"callback_query_id": "q"}))   # без всплывашки
+
+
+    def test_hub_clean_once(self):
+        # старые служебные копии: одна нужна (пост в плане), одна — Якуний, одна — мусор после публикации
+        for x in (501, 502, 503):
+            store.kv_set(self.db, f"hubcopy_{x}", "1")
+        a = store.add_material(self.db, -100777, 501, "План", True)
+        store.update(self.db, a, channel="xojaobod", status="queued", via="xojaobod", scheduled_at=at("20:00").isoformat())
+        store.kv_set(self.db, "final_xojaobod", json.dumps({"material_id": 99, "text": "Муфтий", "hub_chat": -100777,
+                                                             "hub_msg": 502, "hub_msgs": [], "has_media": True}))
+        xb = self.Http()
+        n = iter(range(8001, 8100))
+        xb.http = lambda m, p, c=xb.calls: (c.append((m, p)), {"ok": True, "result": {"message_id": next(n)}}
+                                            if m == "copyMessage" else {"ok": True, "result": True})[1]
+        out = service.hub_clean_once(self.db, CFG, ENV, {"bot": self.Http(), "bot:xojaobod": xb}, log=lambda *_: None)
+        self.assertEqual((out["moved"], out["deleted"], out["errors"]), (2, 3, 0))
+        m = store.get(self.db, a)
+        self.assertEqual((m["hub_chat"], m["hub_msg"]), (42, 8001))               # теперь хранится в чате пульта
+        f = json.loads(store.kv_get(self.db, "final_xojaobod"))
+        self.assertEqual((f["hub_chat"], f["hub_msg"], f["via"]), (42, 8002, "xojaobod"))
+        dels = [p["message_ids"] for mm, p in xb.calls if mm == "deleteMessages"]
+        self.assertEqual(dels, [[501, 502, 503]])
+        self.assertEqual(service.hub_clean_once(self.db, CFG, ENV, {"bot:xojaobod": xb}), {"moved": 0, "deleted": 0, "errors": 0})

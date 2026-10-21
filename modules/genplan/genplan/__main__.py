@@ -107,6 +107,18 @@ async def run() -> None:
     for k, tok in bots.TOKENS.items():
         if k != "main":
             pubs[f"bot:{k}"] = BotPublisher(tok)
+    try:                                                  # 21.10: один раз убрать из PAPA HUB старые служебные копии
+        hc = service.hub_clean_once(db, cfg(), env, pubs, log=lambda t: print(t, flush=True))
+        if hc["moved"] or hc["deleted"] or hc["errors"]:
+            gb = bots.for_channel(next((c for c, ch in cfg()["channels"].items() if ch["publisher"] == "account"), None), bot)
+            for o in str(env.get("OWNER_IDS", "")).split(","):
+                gb("sendMessage", chat_id=int(o), text=(
+                    f"🧹 PAPA HUB очищен: убрано {hc['deleted']} служебных копий"
+                    + (f", {hc['moved']} нужных поста (в плане / Якуний) теперь хранятся здесь, в пульте" if hc["moved"] else "")
+                    + (f"\n⚠️ Не получилось: {hc['errors']} — попробую при следующем запуске" if hc["errors"] else "")
+                    + "\nДальше в PAPA HUB пост попадает только на секунды публикации и сразу удаляется."))
+    except Exception as e:  # noqa: BLE001
+        print(f"hub_clean: {e}", flush=True)
     offsets = {k: int(store.kv_get(db, "offset" if k == "main" else f"offset_{k}", "0")) for k in reg}
     next_tick = 0.0
     next_health, last_health = 0.0, None
