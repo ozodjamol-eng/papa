@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Linux замена greenkey.swift: ключ #00FF00 → альфа, подавление зелёного, разбивка на отдельные объекты, плотная обрезка PNG.
+usage: greenkey <in.png> <out_prefix> [minAreaFrac=0.002] -> <out_prefix>.png (1 объект) или <out_prefix>_1.png, _2.png …; печатает JSON"""
+import sys, json
+import numpy as np
+from PIL import Image
+from scipy import ndimage
+a = sys.argv
+if len(a) < 3: print(__doc__); sys.exit(2)
+src, pre = a[1], a[2]; minf = float(a[3]) if len(a) > 3 else 0.002
+im = np.asarray(Image.open(src).convert('RGB')).astype(np.float64)
+r, g, b = im[..., 0], im[..., 1], im[..., 2]; mx = np.maximum(r, b)
+d = g - mx                                       # «зелёность»
+A = np.clip(1 - (d - 40) / (120 - 40), 0, 1)     # d<=40 → непрозрачно, d>=120 → прозрачно
+ng = np.where(g > mx, mx + (g - mx) * 0.15, g)   # despill
+out = np.dstack([r * A, ng * A, b * A, A * 255]).clip(0, 255).astype(np.uint8)
+h, w = A.shape
+small = A[::4, ::4] > 0.5
+lab, n = ndimage.label(ndimage.binary_closing(small, iterations=2))
+pieces = []
+for i, sl in enumerate(ndimage.find_objects(lab), 1):
+    area = (lab[sl] == i).sum() * 16
+    if area < minf * w * h: continue
+    y0, y1 = sl[0].start * 4, min(h, sl[0].stop * 4); x0, x1 = sl[1].start * 4, min(w, sl[1].stop * 4)
+    pieces.append((y0, y1, x0, x1))
+pieces.sort(key=lambda p: (p[0] // (h / 3), p[2]))
+res = []
+for k, (y0, y1, x0, x1) in enumerate(pieces, 1):
+    crop = out[y0:y1, x0:x1].copy()
+    ys, xs = np.nonzero(crop[..., 3] > 8)
+    if len(ys): crop = crop[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    name = f'{pre}.png' if len(pieces) == 1 else f'{pre}_{k}.png'
+    Image.fromarray(crop, 'RGBA').save(name); res.append({'file': name, 'w': crop.shape[1], 'h': crop.shape[0]})
+print(json.dumps(res))

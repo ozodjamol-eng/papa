@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Linux замена encode.swift: последовательность кадров f_00000.png|jpg → H.264 MP4 (ffmpeg).
+# usage: encode <frames_dir> <fps> <out.mp4> [bitrate_mbps=24]
+set -e; D="$1"; FPS="$2"; OUT="$3"; MB="${4:-24}"
+[ -z "$OUT" ] && { echo "usage: encode <frames_dir> <fps> <out.mp4> [mbps]" >&2; exit 2; }
+EXT=png; ls "$D"/f_00000.jpg >/dev/null 2>&1 && EXT=jpg
+ffmpeg -v error -y -framerate "$FPS" -start_number 0 -i "$D/f_%05d.$EXT" -c:v libx264 -preset slow -b:v "${MB}M" -maxrate "$((MB*2))M" -bufsize "$((MB*2))M" -pix_fmt yuv420p -movflags +faststart "$OUT"
+echo "$OUT"

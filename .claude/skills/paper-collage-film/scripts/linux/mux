@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Linux замена mux.swift: видео (копия) + звук (AAC), обрезка по длине видео.
+# usage: mux <video.mp4> <audio.m4a> <out.mp4>
+set -e; V="$1"; A="$2"; OUT="$3"
+[ -z "$OUT" ] && { echo "usage: mux <video> <audio> <out>"; exit 2; }
+DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$V")
+ffmpeg -v error -y -i "$V" -i "$A" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 256k -t "$DUR" -movflags +faststart "$OUT"
+echo "$OUT"

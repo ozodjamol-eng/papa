@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Linux замена extract.swift: кадры видео с фиксированным fps в JPEG (ffmpeg).
+# usage: extract <in.mp4> <out_dir> <fps> [maxWidth=1920] [quality=0.9]
+set -e; IN="$1"; OUT="$2"; FPS="$3"; MW="${4:-1920}"; Q="${5:-0.9}"
+[ -z "$FPS" ] && { echo "usage: extract <in> <out_dir> <fps> [maxW] [q]"; exit 2; }
+mkdir -p "$OUT"; QV=$(python3 -c "print(max(2,min(31,round(2+(1-$Q)*29))))")
+ffmpeg -v error -y -i "$IN" -vf "fps=$FPS,scale='min($MW,iw)':-2" -q:v "$QV" -start_number 0 "$OUT/f_%05d.jpg"
+ls "$OUT" | wc -l

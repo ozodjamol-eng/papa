@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="fonts_local.css"><title>9:16 frame</title></head><body>
+<script>window.FILM_SIZE = [1920, 1080];
+/* Рамка 9:16 (1080×1920) для Reels/Shorts/Stories: сверху — название, снизу — @юзер и призыв; посередине прозрачное «рваное окно»,
+ * куда tools/vertical.sh кладёт 16:9-ролик во всю ширину (1080×608, y 656–1264). Все слова — в VCFG (правьте под бренд). */
+window.VCFG = window.VCFG || {
+  title: ['КАТТА', 'ДАВРА'], titleFont: '"Unbounded 900"',
+  topTag: 'БУТУН ЎЗБЕКИСТОН УЧУН',
+  handle: '@kattadavrauz', bottomTag: 'ТЕЛЕГРАМ КАНАЛ · ОБУНА БЎЛИНГ',
+  stickers: [['doira', 160, 1415, 250, -12], ['note', 440, 1405, 130, -8], ['plane', 920, 1405, 180, -18]],
+};
+</script>
+<script src="clips.js"></script><script src="engine.js"></script><script src="deco.js"></script><script src="kit.js"></script><script src="collage.js"></script><script src="collage_fx.js"></script>
+<script>
+(function () {
+  const C = CL.C, X = CLX, VW = 1080, VH = 1920, WIN = { y0: 672, y1: 1248 }, V = window.VCFG;
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  const pc = (x, shape, fill, o) => CL.piece(x, shape, fill, Object.assign({ cache: false }, o));
+  function edge(y, seed) { const r = CL.R(seed), pts = []; let v = 0; for (let x = -20; x <= VW + 20; x += 6) { v = v * 0.82 + (r() - 0.5) * 7; pts.push([x, y + v + Math.sin(x / 37 + seed) * 4]); } return pts; }
+  window.__CUTS = { vframe: async () => {
+    await document.fonts.ready;
+    for (const f of [`400 96px ${V.titleFont}`, '900 96px "Inter Tight"', '400 96px "Chewy"']) await document.fonts.load(f);
+    const c = mk(VW, VH), x = c.getContext('2d');
+    x.drawImage(CL.watercolor(33, { w: VW, h: VH, tone: 0.86, dots: 0.5, bloom: 0.7, clouds: 0.4, cloudY: [0.03, 0.3] }), 0, 0);
+    // верх: полосы + название
+    await pc(x, { band: [-80, 90, 700, -40, 130, 100] }, { color: C.cobalt }, { seed: 601, amp: 11, halftone: { color: '#0B3A92', cell: 18, angle: 20, r: [0.06, 0.42], grad: [-80, 90, 700, -40] } });
+    await pc(x, { band: [520, -30, 1160, 120, 110, 80] }, { color: C.pink, brush: 0.4 }, { seed: 602, amp: 9, halftone: { color: 'rgba(229,35,30,0.7)', cell: 14, angle: 30, r: [0.04, 0.38], grad: [520, 0, 1160, 0] } });
+    await pc(x, { circle: [VW / 2, 420, 330] }, { color: C.sun, brush: 0.6 }, { seed: 603, amp: 12, halftone: { color: 'rgba(240,122,46,0.9)', cell: 17, angle: 30, r: [0.42, 0.03], grad: [VW / 2, 750, VW / 2, 90] } });
+    await pc(x, { band: [-60, 640, 1140, 600, 70, 60] }, { color: C.red, speck: 0.3 }, { seed: 604, amp: 9 });
+    const size = (() => { const m = mk(8, 8).getContext('2d'); m.font = `400 100px ${V.titleFont}`; const tw = Math.max(...V.title.map((s) => [...s].reduce((a, ch) => a + m.measureText(ch).width, 0))); return 100 * (VW * 0.82) / tw; })();
+    await X.title(x, V.title, VW / 2, 420, 10, 0, { size, font: V.titleFont, drop: false, zoom: 0 });
+    if (V.topTag) await X.tag(x, VW / 2, 120, V.topTag, { pop: 1, color: 'white', font: 'sans', size: 40, rot: -0.02, tape: 'top' });
+    // низ: красная полоса с @юзером, жёлтая с призывом, наклейки
+    await pc(x, { band: [-60, 1300, 1140, 1330, 70, 60] }, { color: C.sun, brush: 0.6 }, { seed: 605, amp: 8 });
+    await pc(x, [-40, 1530, VW + 80, 210], C.paper, { seed: 606, amp: 12 });
+    await pc(x, { band: [-60, 1870, 1140, 1850, 150, 120] }, { color: C.cobalt }, { seed: 607, amp: 9, halftone: { color: '#0B3A92', cell: 16, angle: 20, r: [0.06, 0.4], grad: [0, 1800, 1080, 1920] } });
+    for (const [n, sx, sy, h, rot] of V.stickers || []) await CL.sprite(x, n, sx, sy, { h, rot, shadow: { dx: 8, dy: 12, blur: 14, alpha: 0.4 } });
+    U = CLX._; const L = U.logoSprite(V.handle, 120, 'red', 8); U.drawPiece(x, L, VW / 2, 1635, { shadow: true });
+    if (V.bottomTag) await X.tag(x, VW / 2, 1790, V.bottomTag, { pop: 1, color: 'yellow', font: 'sans', size: 40, rot: 0.015, tape: false });
+    CL.printGrain(x, 0, 0.05);
+    // рваное окно под видео
+    const top = edge(WIN.y0, 7), bot = edge(WIN.y1, 11), hole = new Path2D();
+    hole.moveTo(top[0][0], top[0][1]); top.forEach((p) => hole.lineTo(p[0], p[1])); bot.slice().reverse().forEach((p) => hole.lineTo(p[0], p[1])); hole.closePath();
+    // тень бумаги на видео + белые волокнистые края
+    x.save(); x.globalCompositeOperation = 'destination-out'; x.fill(hole); x.restore();
+    const r = CL.R(5), band = (pts, dir) => { const p = new Path2D(); p.moveTo(pts[0][0], pts[0][1]); pts.forEach((q) => p.lineTo(q[0], q[1])); pts.slice().reverse().forEach((q) => p.lineTo(q[0], q[1] + dir * (4 + r() * 12))); p.closePath(); return p; };
+    x.save(); x.fillStyle = CL.pat(x, CL.paper(C.paper, 3, { tex: 0.8 })); x.fill(band(top, 1)); x.fill(band(bot, -1)); x.restore();
+    return c; } };
+  let U;
+})();
+</script></body></html>

@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="fonts_local.css"><title>code cut-outs</title></head><body>
+<script>window.FILM_SIZE = [1920, 1080];</script>
+<script src="clips.js"></script><script src="engine.js"></script><script src="deco.js"></script><script src="kit.js"></script><script src="collage.js"></script><script src="collage_fx.js"></script>
+<script>
+/* КАТТА ДАВРА — вырезки, нарисованные кодом из рваной бумаги (без платной генерации).
+ * Каждая вырезка = слои торн-бумаги с белым волокнистым краем; общий центр холста 700,700. Тень добавляет CL.sprite при отрисовке, здесь shadow:false на внешнем слое. */
+(function () {
+  const C = CL.C, mk = (w = 1400, h = 1400) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  const P = (x, shape, fill, o = {}) => CL.piece(x, shape, fill, Object.assign({ cache: false, shadow: false }, o));
+  const IN = { shadow: { dx: 3, dy: 5, blur: 6, alpha: 0.28 } }; // inner layers: a small shadow on the layer below
+  const arc = (cx, cy, rx, ry, a0, a1, n = 28) => { const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 1]); } return p; };
+  const TAU = Math.PI * 2;
+
+  const CUTS = {
+    // ДОЙРА — бубен: деревянный обод с орнаментом, кольца-бубенцы, кожа с полутоном. Центр кожи = центр PNG (для «Влёта в бубен» → ирис).
+    doira: async () => { const c = mk(), x = c.getContext('2d'), cx = 700, cy = 700;
+      await P(x, { circle: [cx, cy, 540] }, { color: '#B9742A', brush: 0.7 }, { seed: 11, amp: 10, halftone: { color: 'rgba(90,40,10,0.55)', cell: 16, angle: 30, r: [0.05, 0.42], grad: [cx - 540, cy - 540, cx + 540, cy + 540] } });
+      for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, r0 = 470, r1 = 535, w = 0.11; // орнамент: треугольники по ободу
+        await P(x, { poly: [[cx + Math.cos(a - w) * r0, cy + Math.sin(a - w) * r0, 0], [cx + Math.cos(a + w) * r0, cy + Math.sin(a + w) * r0, 0], [cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, 1]] }, i % 2 ? C.red : C.cobalt, { seed: 100 + i, amp: 3, white: [1, 4], ...IN }); }
+      for (let i = 0; i < 10; i++) { const a = (i + 0.5) / 10 * TAU; // кольца-бубенцы (по два)
+        for (const d of [-0.035, 0.035]) await P(x, { circle: [cx + Math.cos(a + d) * 452, cy + Math.sin(a + d) * 452, 30] }, { color: '#C8CCD2', tex: 0.6 }, { seed: 200 + i * 2 + (d > 0), amp: 2, white: [1, 4], halftone: { color: 'rgba(60,66,80,0.6)', cell: 7, angle: 45, r: [0.1, 0.45], grad: [0, cy - 30, 0, cy + 30] }, ...IN }); }
+      await P(x, { circle: [cx, cy, 410] }, { color: '#F2DFB4', tex: 1.1 }, { seed: 13, amp: 9, white: [3, 12], halftone: { color: 'rgba(196,128,52,0.55)', cell: 15, angle: 20, r: (X, Y) => 0.03 + 0.4 * Math.pow(Math.min(1, Math.hypot(X - cx, Y - cy) / 410), 2.2) }, ...IN });
+      await P(x, { circle: [cx, cy, 130] }, { color: '#E9C98A', tex: 1 }, { seed: 14, amp: 5, white: [2, 6], dotgrid: { cell: 14, r: 0.12, angle: 10 }, ...IN });
+      return c; },
+    // МИКРОФОН — ретро: сетка-капсула, золотое кольцо, тёмная ручка с красным кольцом
+    mic: async () => { const c = mk(), x = c.getContext('2d'), cx = 700;
+      await P(x, { band: [cx, 760, cx, 1290, 190, 120] }, { color: C.navy, brush: 0.5 }, { seed: 31, amp: 6, halftone: { color: 'rgba(120,150,230,0.5)', cell: 12, angle: 0, r: [0.05, 0.4], grad: [cx - 95, 0, cx + 95, 0] } });
+      await P(x, [cx - 110, 980, 220, 60], C.red, { seed: 32, amp: 4, white: [2, 6], ...IN });
+      await P(x, { ellipse: [cx, 500, 230, 290] }, { color: '#AEB4BE', tex: 0.9 }, { seed: 33, amp: 8, dotgrid: { cell: 18, r: 0.2, angle: 0 }, halftone: { color: 'rgba(30,40,60,0.55)', cell: 13, angle: 30, r: [0.04, 0.4], grad: [cx - 230, 0, cx + 230, 0] }, ...IN });
+      await P(x, { band: [cx, 260, cx, 740, 26, 26], tips: false }, '#E3E6EA', { seed: 34, amp: 2, white: [1, 3], ...IN });
+      await P(x, { ellipse: [cx, 780, 250, 52] }, { color: C.mustard, brush: 0.6 }, { seed: 35, amp: 4, white: [2, 7], halftone: { color: 'rgba(160,90,10,0.6)', cell: 9, angle: 0, r: [0.05, 0.4], grad: [cx - 250, 0, cx + 250, 0] }, ...IN });
+      return c; },
+    // ЛАМПОЧКА — «фойдали»: жёлтая колба с полутоном, цоколь полосками, лучи
+    bulb: async () => { const c = mk(), x = c.getContext('2d'), cx = 700, cy = 560;
+      for (let i = 0; i < 9; i++) { const a = -Math.PI / 2 + (i - 4) * 0.36, r0 = 370, r1 = 520; await P(x, { band: [cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, 46, 22] }, C.sun, { seed: 41 + i, amp: 4, white: [2, 6] }); }
+      await P(x, { poly: [[cx - 150, 790, 1], [cx + 150, 790, 1], [cx + 110, 930, 0], [cx - 110, 930, 0]] }, '#FFE16B', { seed: 50, amp: 5 });
+      await P(x, { circle: [cx, cy, 320] }, { color: '#FFE36A', tex: 0.9 }, { seed: 51, amp: 9, halftone: { color: 'rgba(240,122,46,0.75)', cell: 15, angle: 30, r: [0.02, 0.44], grad: [cx - 260, cy - 260, cx + 300, cy + 300] }, ...IN });
+      await P(x, { ellipse: [cx - 110, cy - 120, 70, 110] }, '#FFFBEA', { seed: 52, amp: 4, white: [1, 4], rot: 30, ...IN });
+      for (let i = 0; i < 4; i++) await P(x, [cx - 120 + i * 4, 920 + i * 52, 240 - i * 8, 56], i % 2 ? '#8F96A3' : '#C4C9D1', { seed: 60 + i, amp: 3, white: [1, 4], ...IN });
+      await P(x, { poly: [[cx - 60, 1125, 1], [cx + 60, 1125, 1], [cx, 1180, 1]] }, C.ink, { seed: 65, amp: 3, white: [1, 4], ...IN });
+      return c; },
+    // НОТЫ ♫ — чёрная бумага, белый рваный край
+    note: async () => { const c = mk(), x = c.getContext('2d');
+      await P(x, { band: [430, 470, 980, 330, 120, 120], tips: false }, C.ink, { seed: 71, amp: 6 });
+      await P(x, { band: [470, 470, 470, 1040, 48, 48], tips: false }, C.ink, { seed: 72, amp: 4 });
+      await P(x, { band: [940, 340, 940, 920, 48, 48], tips: false }, C.ink, { seed: 73, amp: 4 });
+      await P(x, { ellipse: [390, 1050, 120, 88] }, C.ink, { seed: 74, amp: 6, rot: -25 });
+      await P(x, { ellipse: [860, 930, 120, 88] }, C.ink, { seed: 75, amp: 6, rot: -25 });
+      return c; },
+    // СМАЙЛ — «кулги»: жёлтый круг, прищуренные глаза-дуги, широкая улыбка
+    smile: async () => { const c = mk(), x = c.getContext('2d'), cx = 700, cy = 700;
+      await P(x, { circle: [cx, cy, 400] }, { color: C.sun, tex: 1 }, { seed: 81, amp: 10, halftone: { color: 'rgba(240,122,46,0.6)', cell: 16, angle: 30, r: [0.02, 0.38], grad: [cx - 300, cy - 300, cx + 350, cy + 350] } });
+      for (const s of [-1, 1]) await P(x, { poly: [...arc(cx + s * 140, cy - 60, 80, 70, Math.PI * 1.08, Math.PI * 1.92, 14), ...arc(cx + s * 140, cy - 60, 52, 42, Math.PI * 1.92, Math.PI * 1.08, 14)] }, C.ink, { seed: 82 + (s > 0), amp: 3, white: [1, 5], ...IN });
+      await P(x, { poly: [[cx - 230, cy + 60, 1], ...arc(cx, cy + 60, 230, 210, 0.02, Math.PI - 0.02, 26).reverse().reverse(), [cx + 230, cy + 60, 1]] }, '#7A1410', { seed: 84, amp: 5, white: [2, 7], ...IN });
+      await P(x, [cx - 190, cy + 62, 380, 62], '#FFFDF6', { seed: 85, amp: 3, white: [1, 4], ...IN });
+      await P(x, { ellipse: [cx, cy + 200, 110, 50] }, C.red, { seed: 86, amp: 3, white: [1, 4], ...IN });
+      for (const s of [-1, 1]) await P(x, { circle: [cx + s * 270, cy + 70, 55] }, C.pink, { seed: 87 + (s > 0), amp: 3, white: [1, 4], ...IN });
+      return c; },
+    // БУМАЖНЫЙ САМОЛЁТИК (символ Telegram-канала, без логотипа)
+    plane: async () => { const c = mk(), x = c.getContext('2d');
+      const tip = [1180, 380], tail = [240, 820], mid = [620, 900], low = [700, 1080];
+      await P(x, { poly: [[tail[0], tail[1], 1], [tip[0], tip[1], 1], [mid[0], mid[1], 0]] }, '#FFFFFF', { seed: 91, amp: 5, white: [2, 8], halftone: { color: 'rgba(91,211,243,0.55)', cell: 11, angle: 30, r: [0.03, 0.3], grad: [tail[0], tail[1], tip[0], tip[1]] } });
+      await P(x, { poly: [[mid[0], mid[1], 1], [tip[0], tip[1], 1], [low[0], low[1], 1]] }, '#BDEBFA', { seed: 92, amp: 5, white: [2, 8], halftone: { color: 'rgba(22,96,218,0.6)', cell: 11, angle: 30, r: [0.05, 0.42], grad: [low[0], low[1], tip[0], tip[1]] }, ...IN });
+      await P(x, { poly: [[tail[0] + 120, tail[1] - 10, 1], [tip[0], tip[1], 1], [560, 980, 1]] }, '#E9F7FC', { seed: 93, amp: 4, white: [1, 6], ...IN });
+      return c; },
+    // ГУМБАЗ — бирюзовый купол на барабане с изразцами (Самарканд-Бухара, обобщённо)
+    dome: async () => { const c = mk(), x = c.getContext('2d'), cx = 700;
+      await P(x, [cx - 330, 860, 660, 330], { color: C.cobalt, brush: 0.4 }, { seed: 101, amp: 7, halftone: { color: 'rgba(255,255,255,0.55)', cell: 22, angle: 45, r: [0.12, 0.22], grad: [0, 860, 0, 1190] } });
+      await P(x, [cx - 330, 880, 660, 46], { color: '#F2DFB4' }, { seed: 102, amp: 3, white: [1, 4], news: { alpha: 0.35 }, ...IN });
+      for (let i = 0; i < 5; i++) await P(x, { poly: [...arc(cx - 240 + i * 120, 1120, 40, 120, Math.PI, TAU, 10), [cx - 200 + i * 120, 1180, 0], [cx - 280 + i * 120, 1180, 0]] }, '#0E2E6B', { seed: 110 + i, amp: 2, white: [1, 4], ...IN });
+      await P(x, { poly: [[cx - 310, 880, 0], ...arc(cx, 880, 310, 470, Math.PI, TAU, 36), [cx + 310, 880, 0]] }, { color: '#22A6C8', brush: 0.5 }, { seed: 103, amp: 8, halftone: { color: 'rgba(8,60,110,0.65)', cell: 15, angle: 20, r: [0.03, 0.42], grad: [cx - 320, 600, cx + 320, 760] }, ...IN });
+      for (let i = -3; i <= 3; i++) if (i) await P(x, { band: [cx + i * 60, 870, cx + i * 32, 470 + Math.abs(i) * 40, 16, 8], tips: false }, '#1782A3', { seed: 120 + i + 3, amp: 2, white: [0.5, 2.5], shadow: false });
+      await P(x, { circle: [cx, 395, 44] }, C.mustard, { seed: 130, amp: 3, white: [1, 5], ...IN });
+      await P(x, { band: [cx, 360, cx, 230, 16, 8], tips: false }, C.mustard, { seed: 131, amp: 2, white: [1, 4], ...IN });
+      return c; },
+  };
+  window.__CUTS = CUTS;
+})();
+</script></body></html>
