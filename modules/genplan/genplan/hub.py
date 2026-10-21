@@ -200,7 +200,11 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
                 many = f"✅ 📅 до {extras.WD[end.weekday()]} · {c['days']} {extras.days_word(int(c['days']))}"
             else:
                 many = "📅 Несколько дней"
-            rows.insert(0, [{"text": "Разовая" if multi else "✅ Разовая", "callback_data": f"p1:{mid}"},
+            ok = store.kv_get(db, f"ad_ok_{mid}", "") == "1"
+            if ok and multi:
+                many = many + " · утверждено"
+            rows.insert(0, [{"text": "Разовая" if multi else ("✅ Разовая · утверждено" if ok else "✅ Разовая"),
+                             "callback_data": f"p1:{mid}"},
                             {"text": many, "callback_data": f"pd:{mid}"}])
     return rows
 
@@ -967,24 +971,44 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             t, _ = card(db, cfg, mid, now)
             show(kb_days(m), t + "\n\n📅 До какого дня крутить рекламу (каждый день в это же время)?")
-    elif kind == "p1":                                  # ✅ Разовая — повторы снимаем
-        from . import extras
-        c = extras.campaign_of(db, mid)
-        if c is None or c["status"] == "stopped" or int(c["days"]) <= 1:
-            when = smart.fmt(dt.datetime.fromisoformat(m["scheduled_at"]), now) if m["scheduled_at"] else "—"
-            note = f"✅ Уже разовая — выйдет один раз: {when}"
+    elif kind == "p1":                                  # ✅ Разовая → экран «Утверждаю» (21.10 владелец: как в классике)
+        if not m["scheduled_at"]:
+            note = "Сначала выберите время рекламы"
         else:
-            n = extras.campaign_stop(db, mid)
-            note = "✅ Разовая — повторы сняты" + (f" (убрано: {n})" if n else "")
-            show()
-    elif kind == "pk":                                  # 📅 рекламный пакет на N дней
+            t0 = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
+            from . import extras
+            t, _ = card(db, cfg, mid, now)
+            show({"inline_keyboard": [[{"text": "✅ Утверждаю", "callback_data": f"p1y:{mid}"}],
+                                      [{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]},
+                 t + f"\n\n❓ Реклама выйдет ОДИН раз: {extras.WD[t0.weekday()]} {t0:%d.%m %H:%M}. Утверждаете?")
+    elif kind == "p1y":
+        from . import extras
+        extras.campaign_stop(db, mid)
+        store.kv_set(db, f"ad_ok_{mid}", "1")
+        note = "✅ Утверждено: разовая реклама"
+        show()
+    elif kind == "pky":                                 # 📅 N дней — утверждено
         from . import extras
         try:
             c = extras.campaign_from(db, m, int(arg[0]))
-            note = extras.campaign_note(c)
+            store.kv_set(db, f"ad_ok_{mid}", "1")
+            note = "✅ Утверждено: " + extras.campaign_note(c)
         except ValueError as e:
             note = f"⚠️ {e}"
         show()
+    elif kind == "pk":                                  # 📅 N дней → экран «Утверждаю»
+        from . import extras
+        if not m["scheduled_at"]:
+            note = "Сначала выберите время рекламы"
+        else:
+            n = int(arg[0])
+            t0 = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
+            end = t0.date() + dt.timedelta(days=n - 1)
+            t, _ = card(db, cfg, mid, now)
+            show({"inline_keyboard": [[{"text": "✅ Утверждаю", "callback_data": f"pky:{mid}:{n}"}],
+                                      [{"text": "‹ Назад", "callback_data": f"pd:{mid}"}]]},
+                 t + f"\n\n❓ Реклама {n} {extras.days_word(n)}: {extras.WD[t0.weekday()]} {t0:%d.%m} – "
+                     f"{extras.WD[end.weekday()]} {end:%d.%m}, каждый день {t0:%H:%M}. Утверждаете?")
     elif kind == "ur":
         last = smart.last_post(db, m["channel"], now)        # GENPLAN 5: прошлый пост был недавно — спросить
         gap = (now - last).total_seconds() / 60 if last else None

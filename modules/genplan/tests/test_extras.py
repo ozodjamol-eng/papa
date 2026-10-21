@@ -199,9 +199,26 @@ class T(unittest.TestCase):
         b = Bot()
         q = {"id": "q", "from": {"id": 42}, "data": f"p1:{mid}", "message": {"chat": {"id": 42}, "message_id": 5}}
         self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "p1")
-        self.assertIn("Уже разовая", b.calls[-1][1]["text"])
+        q["data"] = f"p1y:{mid}"
+        self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "p1y")
+        self.assertIn("Утверждено", b.calls[-1][1]["text"])
+        _, kb = hub.card(self.db, CFG, mid, at("08:00"))
+        self.assertEqual(kb["inline_keyboard"][0][0]["text"], "✅ Разовая · утверждено")
         q["data"] = f"bk:{mid}"
         self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "bk")   # «не изменилось» не ломает
+
+    def test_days_need_approve(self):
+        mid = store.add_material(self.db, -100777, 66, "Реклама", True)
+        store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())
+        bot = lambda method, **p: {}  # noqa: E731
+        q = {"id": "q", "from": {"id": 42}, "data": f"pk:{mid}:4", "message": {"chat": {"id": 42}, "message_id": 5}}
+        hub.callback(bot, self.db, CFG, {42}, q, at("08:00"))
+        self.assertIsNone(extras.campaign_of(self.db, mid))                  # без «Утверждаю» пакета нет
+        q["data"] = f"pky:{mid}:4"
+        hub.callback(bot, self.db, CFG, {42}, q, at("08:00"))
+        self.assertEqual(extras.campaign_of(self.db, mid)["days"], 4)
+        _, kb = hub.card(self.db, CFG, mid, at("08:00"))
+        self.assertEqual(kb["inline_keyboard"][0][1]["text"], "✅ 📅 до Сб · 4 дня · утверждено")
 
     def test_busy_day_moves_to_ad_window(self):
         mid = store.add_material(self.db, -100777, 63, "Реклама", True)
