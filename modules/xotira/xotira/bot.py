@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import os
 import sqlite3
 import time
@@ -66,6 +67,10 @@ T_WAIT = "⏳ Расм қабул қилинди. Админ кўриб чиқм
 T_REFUSE = ("Ассалому алайкум! Аризангиз учун катта раҳмат 🤲\n\n"
             "Афсуски, бу расмда марҳумнинг юзи аниқ кўринмаяпти, шу сабабли хотира постини муносиб тайёрлаб бўлмайди. "
             "Асл ёки тиниқроқ расм топилса, ҳар доим қайта юборишингиз мумкин: /start\n\nАллоҳ раҳмат қилсин.")
+T_HAS = ("Ассалому алайкум! Аризангиз учун катта раҳмат 🤲\n\n"
+         "Сиз юборган марҳум ҳақидаги хотира пости каналимизда аллақачон жойлаштирилган:\n{links}\n\n"
+         "Шу сабабли уни қайта жойлаштирмаймиз. Тушунганингиз учун раҳмат.\n"
+         "Аллоҳ марҳумни Ўз раҳматига олсин 🤲")
 N_BAD = {"blur": "фото размытое", "small": "лицо слишком мелкое", "noface": "бот не нашёл лицо"}
 # 20.10: бот сомневается в фото → сначала решает владелец (3 кнопки), человеку бот сам не отказывает
 N_DONE = {"pok": "✅ ПРИНЯТО — человек продолжает с этим фото",
@@ -81,12 +86,19 @@ KB_PREVIEW = {"inline_keyboard": [[{"text": "✅ Юбориш", "callback_data":
                                    {"text": "❌ Бекор қилиш", "callback_data": "u:cancel"}]]}
 
 
-def kb_owner(n: int, status: str = "pending") -> dict:
+def report_links(report: str | None) -> list[str]:
+    """Ссылки на уже опубликованные посты из отчёта проверки (⚠️ ПОВТОР / 🔎 Похоже)."""
+    return list(dict.fromkeys(re.findall(r"https://t\.me/\S+", report or "")))
+
+
+def kb_owner(n: int, status: str = "pending", report: str | None = None) -> dict:
     no = {"text": "❌ Рад этиш", "callback_data": f"o:no:{n}"}
     if status == "duplicate":                     # точный повтор: публиковать нельзя, только закрыть заявку
         return {"inline_keyboard": [[no]]}
-    rows = [[{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, no],
-            [{"text": "🙏 Вежливо отказать — попросить другое фото", "callback_data": f"o:bad:{n}"}]]
+    rows = [[{"text": "✅ Жойлаш", "callback_data": f"o:ok:{n}"}, no]]
+    if report_links(report):                      # 21.10: бот нашёл похожий пост — вежливо «уже есть в канале»
+        rows.append([{"text": "🙏 Уже есть в канале — вежливо отказать", "callback_data": f"o:has:{n}"}])
+    rows.append([{"text": "🙏 Вежливо отказать — попросить другое фото", "callback_data": f"o:bad:{n}"}])
     if ph.available():
         rows.append([{"text": "✂️ Авто-обрезка", "callback_data": f"o:crop:{n}"},
                      {"text": "👤 По лицу", "callback_data": f"o:face:{n}"}])
@@ -342,7 +354,7 @@ class Bot:
         sent, pid = {}, s["photo"]
         for o in self.owners:
             try:
-                kb = kb_owner(n, s["status"])
+                kb = kb_owner(n, s["status"], s["report"])
                 cap = self.owner_card(s)[:1024]
                 if data:                                          # обрезанное фото — загружаем один раз
                     r = self.api.upload("sendPhoto", "photo", data, chat_id=o, caption=cap, reply_markup=kb)
@@ -365,7 +377,7 @@ class Bot:
             self.notify_owners(r["id"])
         return "queue"
 
-    def decide(self, cq: dict, ok: bool, n: int, bad: bool = False) -> str:
+    def decide(self, cq: dict, ok: bool, n: int, bad: bool = False, has: bool = False) -> str:
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
         if s is None or s["status"] not in ("pending", "duplicate"):
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Аввал кўриб чиқилган")
@@ -378,7 +390,14 @@ class Bot:
         self.db.execute("UPDATE subs SET status=?, decided=? WHERE id=? AND status IN ('pending','duplicate')",
                         ("working" if ok else "rejected", now(), n))
         self.db.commit()
-        mark = "🙏 ВЕЖЛИВО ОТКАЗАНО — человека попросили прислать другое фото" if bad else "❌ РАД ЭТИЛДИ"
+        links = report_links(s["report"]) if has else []
+        if has and not links:
+            self.db.execute("UPDATE subs SET status=? WHERE id=?", (s["status"], n))
+            self.db.commit()
+            self.api("answerCallbackQuery", callback_query_id=cq["id"], show_alert=True, text="Каналда ўхшаш пост топилмади")
+            return "nolink"
+        mark = ("🙏 ВЕЖЛИВО ОТКАЗАНО — человеку отправлена ссылка: уже есть в канале" if has else
+                "🙏 ВЕЖЛИВО ОТКАЗАНО — человека попросили прислать другое фото" if bad else "❌ РАД ЭТИЛДИ")
         if ok:
             try:
                 r = self.api("sendPhoto", chat_id=self.channel, photo=s["photo"], caption=s["caption"])
@@ -394,6 +413,8 @@ class Bot:
             link = f"https://t.me/{self.channel.lstrip('@')}/{r['message_id']}"
             mark = f"✅ ЖОЙЛАНДИ\n{link}"
             self.tell(s["uid"], T_DONE.format(n=n, ch=self.channel, link=link))
+        elif has:
+            self.tell(s["uid"], T_HAS.format(links="\n".join(links)))
         elif bad:
             people = s["people"] if "people" in s.keys() else None
             if not people:                                  # старые заявки — восстановить ФИО и годы из подписи
@@ -414,8 +435,8 @@ class Bot:
                          caption=(self.owner_card(s)[:900] + "\n\n" + mark))
             except Exception:  # noqa: BLE001
                 pass
-        self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Жойланди ✅" if ok else "🙏 Вежливо отправлено" if bad else "Рад этилди")
-        return "published" if ok else "bad_photo" if bad else "rejected"
+        self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Жойланди ✅" if ok else "🙏 Вежливо отправлено" if bad or has else "Рад этилди")
+        return "published" if ok else "exists" if has else "bad_photo" if bad else "rejected"
 
     def tell(self, chat: int, text: str) -> None:
         try:
@@ -520,7 +541,7 @@ class Bot:
     def set_photo(self, n: int, data: bytes | None = None, file_id: str | None = None) -> str | None:
         """Новое фото заявки → в базу и во все карточки владельца (кнопки остаются)."""
         s = self.db.execute("SELECT * FROM subs WHERE id=?", (n,)).fetchone()
-        cap, kb = self.owner_card(s)[:1024], kb_owner(n, s["status"])
+        cap, kb = self.owner_card(s)[:1024], kb_owner(n, s["status"], s["report"])
         for o, mid in json.loads(s["owner_msgs"] or "{}").items():
             try:
                 if data:
@@ -620,6 +641,8 @@ class Bot:
                 return self.answer_bad(cq, act, int(n))
             if act == "bad":
                 return self.decide(cq, False, int(n), bad=True)
+            if act == "has":
+                return self.decide(cq, False, int(n), has=True)
             if act in ("crop", "face", "orig", "own", "enh"):
                 return self.edit_photo(cq, act, int(n))
             return self.decide(cq, act == "ok", int(n))

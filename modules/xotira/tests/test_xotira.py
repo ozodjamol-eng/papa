@@ -180,6 +180,24 @@ class Duplicates(unittest.TestCase):
         self.assertEqual(self.go("Қосимов Қўчқарвой 1950-2019"), "sent")
         self.assertIn("🔎 Похоже", self.owner_caps()[-1])
 
+    def test_similar_has_polite_exists_button(self):
+        self.assertEqual(self.go("Қосимов Қўчқарвой 1950-2019"), "sent")
+        kb = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][-1]["reply_markup"]
+        self.assertIn({"text": "🙏 Уже есть в канале — вежливо отказать", "callback_data": "o:has:1"},
+                      [b for row in kb["inline_keyboard"] for b in row])
+        self.assertEqual(self.bot.handle(cb("o:has:1", uid=7)), "denied")
+        self.assertEqual(self.bot.handle(cb("o:has:1", uid=42)), "exists")
+        user = [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == 7][-1]
+        self.assertIn("аллақачон жойлаштирилган", user)
+        self.assertIn("t.me/XOTIRAXOJAOBOD/77", user)
+        self.assertEqual(self.bot.handle(cb("o:has:1", uid=42)), "dup")
+        self.assertFalse(any(m == "sendPhoto" and p["chat_id"] == "@XOTIRAXOJAOBOD" for m, p in self.api.calls))
+
+    def test_clean_report_has_no_exists_button(self):
+        self.go("Ахмедов Али 1950-2020")
+        kb = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][-1]["reply_markup"]
+        self.assertNotIn("o:has:1", str(kb))
+
     def test_pending_repeat_and_channel_index(self):
         self.go("Ахмедов Али 1950-2020")
         self.assertEqual(self.go("Ахмедов Али 1950-2020", uid=8), "sent")       # нет ссылки на канал — не «уже есть»
