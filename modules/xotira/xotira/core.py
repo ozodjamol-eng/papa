@@ -177,20 +177,33 @@ def extract(caption_text: str) -> list[dict]:
     return out
 
 
+def _r(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
 def compare(person: dict, rec: dict) -> str | None:
-    """'same' — то же имя и те же годы; 'similar' — имя похоже (или то же) — проверить глазами; None — другой человек."""
+    """'same' — то же имя и те же годы; 'similar' — имя похоже (или то же) — проверить глазами; None — другой человек.
+    21.10: люди обходили проверку — меняли годы, писали фамилию иначе (Рахмов/Раҳмонов), меняли местами имя и фамилию.
+    Теперь похожее имя показываем владельцу ПРИ ЛЮБЫХ годах; «same» (бот сам отвечает «уже есть») — только при точных годах."""
     a, b = key(person["name"]), key(rec["name"])
     same_years = person["born"] == rec["born"] and person["died"] == rec["died"]
-    if a == b and same_years:
-        return "same"
-    wa, wb = a.split(), b.split()
-    if len(wa) >= 2 and len(wb) >= 2 and wa[:2] == wb[:2]:       # отчество/обращение есть только в одном варианте
+    if a == b:
         return "same" if same_years else "similar"
-    ratio = difflib.SequenceMatcher(None, a, b).ratio()
-    if len(wa) >= 2 and len(wb) >= 2:                              # фамилия+имя похожи (опечатка), отчество не мешает
-        ratio = max(ratio, difflib.SequenceMatcher(None, " ".join(wa[:2]), " ".join(wb[:2])).ratio())
+    wa, wb = a.split(), b.split()
+    if len(wa) >= 2 and len(wb) >= 2:
+        if wa[:2] == wb[:2] or sorted(wa[:2]) == sorted(wb[:2]):   # отчество есть в одном варианте / имя и фамилия местами
+            return "same" if same_years else "similar"
+        pair = max(min(_r(wa[0], wb[0]), _r(wa[1], wb[1])), min(_r(wa[0], wb[1]), _r(wa[1], wb[0])))
+        if same_years and pair >= 0.93:
+            return "same"
+        if pair >= 0.8:                                             # обе части имени похожи (опечатка, другое написание)
+            return "similar"
+        if same_years and (wa[1] == wb[1] or wa[0] == wb[0]) and min(len(wa[0]), len(wa[1])) >= 3:
+            return "similar"                                        # годы точь-в-точь, одна часть имени та же
+        return None
+    ratio = _r(a, b)
     if same_years and ratio >= 0.85:
         return "same" if ratio >= 0.93 else "similar"
-    if a == b or (ratio >= 0.9 and abs(person["died"] - rec["died"]) <= 1):
+    if ratio >= 0.9:
         return "similar"
     return None

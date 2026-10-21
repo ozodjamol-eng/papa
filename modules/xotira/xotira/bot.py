@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS posts (msg_id INTEGER NOT NULL, name TEXT NOT NULL, key TEXT NOT NULL, born INTEGER,
     died INTEGER, date TEXT, PRIMARY KEY (msg_id, key));
 CREATE INDEX IF NOT EXISTS idx_posts_died ON posts(died);
+-- 21.10: отпечатки фото канала — повтор узнаём по самому фото, даже если ФИО и годы изменили
+CREATE TABLE IF NOT EXISTS prints (msg_id INTEGER PRIMARY KEY, fp BLOB NOT NULL, date TEXT);
 """
 DAY_LIMIT = 5
 
@@ -140,6 +142,47 @@ def index_post(db, msg_id: int, text: str, date: str | None = None) -> int:
     return len(people)
 
 
+def index_print(db, msg_id: int, data: bytes, date: str | None = None) -> bool:
+    """Фото поста канала → отпечаток в базу. False — фото не разобрать (или нет OpenCV)."""
+    if not ph.available():
+        return False
+    try:
+        fp = ph.fingerprint(data)
+    except Exception as e:  # noqa: BLE001
+        print(f"print {msg_id}: {type(e).__name__}: {e}", flush=True)
+        return False
+    if not fp:
+        return False
+    db.execute("INSERT OR REPLACE INTO prints VALUES (?,?,?)", (msg_id, fp, date or now()))
+    db.commit()
+    return True
+
+
+def photo_hits(db, data: bytes, cache: dict | None = None, skip: int | None = None) -> list[tuple[int, int]]:
+    """→ [(msg_id, совпавших точек)] постов канала с ТЕМ ЖЕ фото, лучшие сначала."""
+    if not ph.available() or not data:
+        return []
+    try:
+        fp = ph.fingerprint(data)
+    except Exception:  # noqa: BLE001
+        return []
+    if not fp:
+        return []
+    me = ph.unpack(fp)
+    cache = {} if cache is None else cache
+    hits = []
+    for r in db.execute("SELECT msg_id, fp FROM prints"):
+        if r["msg_id"] == skip:
+            continue
+        other = cache.get(r["msg_id"])
+        if other is None:
+            other = cache[r["msg_id"]] = ph.unpack(r["fp"])
+        n = ph.match(me, other)
+        if n >= ph.SAME_POINTS:
+            hits.append((r["msg_id"], n))
+    return sorted(hits, key=lambda x: -x[1])
+
+
 class Api:
     def __init__(self, token: str):
         self.base = f"https://api.telegram.org/bot{token}"
@@ -188,6 +231,7 @@ class Bot:
     def __init__(self, api, db, owners: set[int], channel: str, today=None):
         self.api, self.db, self.owners, self.channel = api, db, owners, channel
         self.today = today or dt.date.today
+        self._fp_cache: dict = {}                             # отпечатки фото канала в памяти (~8 МБ)
 
     # ---------- состояние ----------
     def user(self, uid: int) -> dict:
@@ -285,9 +329,10 @@ class Bot:
             return "limit"
         people = json.loads(u["people"])
         cap = core.caption(people, self.channel)
-        dup, lines, links = self.check(people)
+        raw = self.fetch(u["photo"])
+        dup, lines, links = self.check(people, raw)
         status = "duplicate" if dup and links else "pending"
-        cropped = self.try_photo(ph.auto, u["photo"])              # скриншот → лишнее срезаем сразу
+        cropped = self.safe(ph.auto, raw)                          # скриншот → лишнее срезаем сразу
         if cropped:
             lines.append(N_AUTO)
         cur = self.db.execute("INSERT INTO subs(uid, who, photo, caption, created, status, report, photo_orig, people) "
@@ -307,19 +352,22 @@ class Bot:
     def link(self, msg_id: int) -> str:
         return f"https://t.me/{self.channel.lstrip('@')}/{msg_id}"
 
-    def check(self, people: list[dict]) -> tuple[bool, list[str], list[str]]:
-        """→ (все люди — точный повтор?, строки отчёта владельцу, ссылки на найденные посты)."""
+    def check(self, people: list[dict], data: bytes | None = None) -> tuple[bool, list[str], list[str]]:
+        """→ (все люди — точный повтор?, строки отчёта владельцу, ссылки на найденные посты).
+        21.10: сравниваем со ВСЕМИ постами (годы могли изменить) и само фото — с фото канала."""
         n_posts = self.db.execute("SELECT COUNT(DISTINCT msg_id) FROM posts").fetchone()[0]
+        n_prints = self.db.execute("SELECT COUNT(*) FROM prints").fetchone()[0]
         lines, links, all_same = [], [], True
+        hits = photo_hits(self.db, data, self._fp_cache) if n_prints else []
+        for msg_id, _ in hits[:2]:
+            links.append(self.link(msg_id))
+            lines.append(f"📸 ЭТО ФОТО уже было в канале 👉 {self.link(msg_id)}")
         for p in people:
             found_same, found_sim = [], []
-            for r in self.db.execute("SELECT * FROM posts WHERE died BETWEEN ? AND ?", (p["died"] - 1, p["died"] + 1)):
+            for r in self.db.execute("SELECT * FROM posts"):
                 c = core.compare(p, dict(r))
                 (found_same if c == "same" else found_sim if c == "similar" else []).append(r)
-            if not found_same:                                   # то же имя, но годы другие — тоже показать
-                k = core.key(p["name"])
-                found_sim += [r for r in self.db.execute("SELECT * FROM posts WHERE key=?", (k,))
-                              if r["msg_id"] not in {x["msg_id"] for x in found_sim}]
+            found_sim.sort(key=lambda r: abs((r["died"] or 0) - p["died"]) + abs((r["born"] or 0) - p["born"]))
             for s in self.db.execute("SELECT id, caption FROM subs WHERE status IN ('pending','working')"):
                 if any(core.compare(p, q) == "same" for q in core.extract(s["caption"])):
                     found_same.append({"msg_id": None, "sub": s["id"], "name": p["name"], "born": p["born"], "died": p["died"]})
@@ -333,10 +381,12 @@ class Bot:
                     lines.append(f"⚠️ ПОВТОР: {who} — уже ждёт одобрения (№{r['sub']})")
             else:
                 all_same = False
-                for r in found_sim[:2]:
+                for r in found_sim[:3]:
                     lines.append(f"🔎 Похоже: {r['name']} {r['born']}-{r['died']} 👉 {self.link(r['msg_id'])}")
         head = f"📋 Проверено постов канала: {n_posts}" if n_posts else "📋 База канала ещё не загружена — проверить повторы нельзя"
-        if not any(x.startswith(("⚠️", "🔎")) for x in lines) and n_posts:
+        if n_prints:
+            head += f" · фото: {n_prints}"
+        if not any(x.startswith(("⚠️", "🔎", "📸")) for x in lines) and n_posts:
             lines.append("✅ Повторов нет")
         return all_same and bool(people), [head] + lines, links
 
@@ -410,6 +460,9 @@ class Bot:
             self.db.execute("UPDATE subs SET status='published', channel_msg=? WHERE id=?", (r["message_id"], n))
             self.db.commit()
             index_post(self.db, r["message_id"], s["caption"])
+            data = self.fetch(s["photo"])
+            if data:
+                index_print(self.db, r["message_id"], data)
             link = f"https://t.me/{self.channel.lstrip('@')}/{r['message_id']}"
             mark = f"✅ ЖОЙЛАНДИ\n{link}"
             self.tell(s["uid"], T_DONE.format(n=n, ch=self.channel, link=link))
@@ -445,6 +498,26 @@ class Bot:
             print(f"tell {chat}: {e}", flush=True)
 
     # ---------- фото: скриншоты и обрезка (19.10) ----------
+    def fetch(self, file_id: str) -> bytes | None:
+        """Скачать фото (для обрезки и проверки по фото). Ошибка → None."""
+        if not ph.available() or not hasattr(self.api, "download") or not file_id:
+            return None
+        try:
+            return self.api.download(file_id)
+        except Exception as e:  # noqa: BLE001
+            print(f"download: {type(e).__name__}: {e}", flush=True)
+            return None
+
+    @staticmethod
+    def safe(fn, data: bytes | None) -> bytes | None:
+        if not data:
+            return None
+        try:
+            return fn(data)
+        except Exception as e:  # noqa: BLE001
+            print(f"photo {fn.__name__}: {type(e).__name__}: {e}", flush=True)
+            return None
+
     def try_photo(self, fn, file_id: str) -> bytes | None:
         """Скачать фото и прогнать обработку. Любая ошибка → None (бот работает дальше без обрезки)."""
         if not ph.available() or not hasattr(self.api, "download"):
@@ -668,6 +741,10 @@ class Bot:
         if (post.get("chat", {}).get("username") or "").lower() != self.channel.lstrip("@").lower():
             return None
         text = post.get("caption") or post.get("text") or ""
+        if post.get("photo"):                                   # 21.10: и фото — в базу отпечатков
+            data = self.fetch(post["photo"][-1]["file_id"])
+            if data:
+                index_print(self.db, post["message_id"], data)
         return f"indexed:{index_post(self.db, post['message_id'], text)}"
 
     def handle(self, upd: dict) -> str | None:

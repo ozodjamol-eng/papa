@@ -422,3 +422,74 @@ class QualityFlow(unittest.TestCase):
         self.assertIn("Фақат янги расмни", txt)
         self.assertEqual(h(cb("o:ok:1", uid=42)), "dup")
         self.assertEqual(h(msg(photo="PH")), "preview")                 # ФИО и годы сохранены — сразу предпросмотр
+
+
+# ---------- 21.10: обход проверки — другое написание, другие годы, то же фото ----------
+class NameTricks(unittest.TestCase):
+    def cmp(self, a, b):
+        return core.compare(a, b)
+
+    def test_tricks(self):
+        P = lambda n, b, d: {"name": n, "born": b, "died": d}  # noqa: E731
+        self.assertEqual(self.cmp(P("Рахмов Эргашбой", 1939, 2007), P("Раҳмонов Эргашбой ота", 1933, 2004)), "similar")
+        self.assertEqual(self.cmp(P("Эргашбой Раҳмонов", 1933, 2006), P("Раҳмонов Эргашбой", 1933, 2006)), "same")
+        self.assertEqual(self.cmp(P("Эргашбой Раҳмонов", 1930, 2001), P("Раҳмонов Эргашбой", 1933, 2006)), "similar")
+        self.assertEqual(self.cmp(P("Rahmonov Ergashboy", 1950, 2010), P("Раҳмонов Эргашбой", 1933, 2006)), "similar")
+        self.assertEqual(self.cmp(P("Тошматов Эргашбой", 1933, 2006), P("Раҳмонов Эргашбой", 1933, 2006)), "similar")
+        self.assertIsNone(self.cmp(P("Тошматов Эргашбой", 1940, 2010), P("Раҳмонов Эргашбой", 1933, 2006)))
+        self.assertIsNone(self.cmp(P("Абдураимов Абдулла", 1950, 2010), P("Абдуллаев Абдулла", 1950, 2011)))
+        self.assertIsNone(self.cmp(P("Каримов Бобур", 1960, 2021), P("Ахмедов Али", 1950, 2020)))
+
+
+def picture(seed=3, w=500, h=600):
+    """Фото «как настоящее»: фигуры с углами и переходами — есть за что зацепиться."""
+    rnd = np.random.default_rng(seed)
+    img = np.full((h, w, 3), 120, np.uint8)
+    for _ in range(40):
+        c = tuple(int(v) for v in rnd.integers(0, 255, 3))
+        if rnd.random() < 0.5:
+            x, y = (int(v) for v in rnd.integers(0, (w, h)))
+            cv2.rectangle(img, (x, y), (x + int(rnd.integers(20, 120)), y + int(rnd.integers(20, 120))), c, -1)
+        else:
+            cv2.circle(img, tuple(int(v) for v in rnd.integers(0, (w, h))), int(rnd.integers(10, 60)), c, -1)
+    return cv2.GaussianBlur(img, (3, 3), 0)
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class PhotoRepeat(unittest.TestCase):
+    def setUp(self):
+        q, PH.quality = PH.quality, lambda data: None
+        self.addCleanup(setattr, PH, "quality", q)
+        orig = picture()
+        shot = np.full((1170, 540, 3), 15, np.uint8)
+        shot[300:900, 20:520] = cv2.resize(orig, (500, 600))
+        cv2.putText(shot, "21:02", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (240,) * 3, 2)
+        self.files = {"OLD": PH.encode(orig), "SHOT": PH.encode(shot), "OTHER": PH.encode(picture(9))}
+        api = FileApi(b"")
+        api.download = lambda fid: self.files.get(fid, b"bad")
+        self.api = api
+        self.db = B.connect(":memory:")
+        self.bot = B.Bot(api, self.db, {42}, "@XOTIRAXOJAOBOD", today=TODAY)
+        self.assertEqual(self.bot.handle({"channel_post": {"message_id": 30, "chat": {"username": "XOTIRAXOJAOBOD"},
+                                                           "photo": [{"file_id": "OLD"}],
+                                                           "caption": "Раҳмонов Эргашбой\n1933-2006-73 ёш"}}), "indexed:1")
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM prints").fetchone()[0], 1)
+
+    def go(self, photo, text):
+        h = self.bot.handle
+        h(msg(photo=photo))
+        h(msg(text=text))
+        h(cb("u:send"))
+        return [p for m, p in self.api.calls if m == "sendPhoto" and p.get("chat_id") == 42][-1]  # карточка владельцу
+
+    def test_same_photo_other_name_caught(self):
+        card = self.go("SHOT", "Тошматов Алишер 1950-2015")              # имя и годы — совсем другие
+        self.assertIn("ЭТО ФОТО уже было", card["caption"])
+        self.assertIn("t.me/XOTIRAXOJAOBOD/30", card["caption"])
+        self.assertIn("o:has:1", str(card["reply_markup"]))
+        self.assertNotIn("Повторов нет", card["caption"])
+
+    def test_other_photo_clean(self):
+        card = self.go("OTHER", "Тошматов Алишер 1950-2015")
+        self.assertNotIn("ЭТО ФОТО", card["caption"])
+        self.assertIn("Повторов нет", card["caption"])

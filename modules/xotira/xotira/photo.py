@@ -195,3 +195,49 @@ def quality(data: bytes) -> str | None:
     H, W = img.shape[:2]
     c = img[max(0, y):min(H, y + h), max(0, x):min(W, x + w)]
     return "blur" if c.size == 0 or detail(c) < SHARP else None
+
+
+# ---------- отпечаток фото (21.10): повтор по самому фото, даже если ФИО и годы изменили ----------
+# Опорные точки фото (ORB) + проверка геометрии (RANSAC): узнаёт то же фото после скриншота, обрезки, пересжатия,
+# поворота, чёрно-белой копии и даже пересъёмки бумажного фото телефоном. Разные фото дают ≤ 6 совпавших точек,
+# одно и то же — десятки и сотни. Отпечаток ~12 КБ, сравнение ~2 мс. Бесплатно, всё на сервере.
+FEATURES = 300
+SAME_POINTS = 20   # столько точек сошлось геометрически → это то же фото
+_orb = None
+_bf = None
+
+
+def fingerprint(data: bytes) -> bytes | None:
+    """Фото → отпечаток (bytes для базы) или None, если зацепиться не за что."""
+    global _orb
+    img = decode(data)
+    r, area = region(img), img.shape[0] * img.shape[1]
+    if r and MIN_AREA * area <= r[2] * r[3] < SCREEN * area:     # скриншот — берём только само фото
+        x, y, w, h = r
+        img = img[y:y + h, x:x + w]
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    k = 480 / max(g.shape)
+    g = cv2.resize(g, None, fx=k, fy=k, interpolation=cv2.INTER_AREA if k < 1 else cv2.INTER_CUBIC)
+    _orb = _orb or cv2.ORB_create(FEATURES)
+    kp, d = _orb.detectAndCompute(g, None)
+    if d is None or len(kp) < 10:
+        return None
+    pts = np.float32([p.pt for p in kp])
+    return np.uint16(len(kp)).tobytes() + pts.astype(np.float16).tobytes() + d.tobytes()
+
+
+def unpack(blob: bytes) -> tuple:
+    n = int(np.frombuffer(blob[:2], np.uint16)[0])
+    pts = np.frombuffer(blob[2:2 + n * 4], np.float16).reshape(n, 2).astype(np.float32)
+    return pts, np.frombuffer(blob[2 + n * 4:], np.uint8).reshape(n, 32)
+
+
+def match(a: tuple, b: tuple) -> int:
+    """Сколько точек двух фото сошлось геометрически (0 — ничего общего)."""
+    global _bf
+    _bf = _bf or cv2.BFMatcher(cv2.NORM_HAMMING)
+    m = [x[0] for x in _bf.knnMatch(a[1], b[1], k=2) if len(x) == 2 and x[0].distance < 0.75 * x[1].distance]
+    if len(m) < SAME_POINTS:
+        return len(m) // 2                                         # мало даже кандидатов — точно не то же фото
+    _, mask = cv2.findHomography(a[0][[x.queryIdx for x in m]], b[0][[x.trainIdx for x in m]], cv2.RANSAC, 6.0)
+    return int(mask.sum()) if mask is not None else 0
