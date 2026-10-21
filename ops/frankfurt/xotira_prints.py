@@ -28,14 +28,16 @@ for f in sorted(os.listdir(SCAN)) if os.path.isdir(SCAN) else []:
 total = db.execute("SELECT COUNT(*) FROM prints").fetchone()[0]
 print(f"отпечатков добавлено: {ok} · фото не разобрать: {bad} · всего фото в базе: {total}")
 
-# --- уже существующие повторы в канале ---
+# --- уже существующие повторы в канале: тяжело (~10 мин CPU, 21.10 перегрузил сервер) — только по XOTIRA_REPORT=1 ---
+if os.environ.get("XOTIRA_REPORT") != "1":
+    raise SystemExit(0)
 t = time.time()
 rows = [(r["msg_id"], ph.unpack(r["fp"])) for r in db.execute("SELECT msg_id, fp FROM prints ORDER BY msg_id")]
 same_photo = []
 for i in range(len(rows)):
     for j in range(i + 1, len(rows)):
         n = ph.match(rows[i][1], rows[j][1])
-        if n >= ph.SAME_POINTS:
+        if n >= ph.MAYBE_POINTS:
             same_photo.append((rows[i][0], rows[j][0], n))
 print(f"\n📸 ОДНО И ТО ЖЕ ФОТО в канале дважды: {len(same_photo)} пар (проверка {time.time() - t:.0f} с)")
 names = {r["msg_id"]: f"{r['name']} {r['born']}-{r['died']}" for r in db.execute("SELECT * FROM posts")}

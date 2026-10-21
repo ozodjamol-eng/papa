@@ -178,7 +178,7 @@ def photo_hits(db, data: bytes, cache: dict | None = None, skip: int | None = No
         if other is None:
             other = cache[r["msg_id"]] = ph.unpack(r["fp"])
         n = ph.match(me, other)
-        if n >= ph.SAME_POINTS:
+        if n >= ph.MAYBE_POINTS:
             hits.append((r["msg_id"], n))
     return sorted(hits, key=lambda x: -x[1])
 
@@ -359,9 +359,10 @@ class Bot:
         n_prints = self.db.execute("SELECT COUNT(*) FROM prints").fetchone()[0]
         lines, links, all_same = [], [], True
         hits = photo_hits(self.db, data, self._fp_cache) if n_prints else []
-        for msg_id, _ in hits[:2]:
+        for msg_id, n in hits[:2]:
             links.append(self.link(msg_id))
-            lines.append(f"📸 ЭТО ФОТО уже было в канале 👉 {self.link(msg_id)}")
+            lines.append(f"📸 ЭТО ФОТО уже было в канале 👉 {self.link(msg_id)}" if n >= ph.SAME_POINTS else
+                         f"📸 Возможно, то же фото (проверьте) 👉 {self.link(msg_id)}")
         for p in people:
             found_same, found_sim = [], []
             for r in self.db.execute("SELECT * FROM posts"):
