@@ -22,7 +22,8 @@ async def main():
     db = B.connect(DB)
     posts = people = empty = photos = 0
     os.makedirs(SCAN, exist_ok=True)
-    have = {r[0] for r in db.execute("SELECT msg_id FROM prints")}
+    face = os.path.exists(os.environ.get("XOTIRA_FACE_MODEL", "/nonexistent"))
+    have = {r[0] for r in db.execute("SELECT msg_id FROM faced" if face else "SELECT msg_id FROM prints")}
     try:
         async for m in c.iter_messages(CH):
             posts += 1

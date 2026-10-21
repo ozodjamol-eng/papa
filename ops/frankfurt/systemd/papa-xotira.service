@@ -29,7 +29,8 @@ RestrictAddressFamilies=AF_INET AF_INET6
 RestrictNamespaces=yes
 LockPersonality=yes
 UMask=0077
-MemoryMax=160M
+# 21.10: +узнавание лица (SFace int8, ~+50 МБ)
+MemoryMax=220M
 CPUQuota=30%
 TasksMax=8
 

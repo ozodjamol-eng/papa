@@ -17,6 +17,11 @@ import uuid
 
 from . import core, photo as ph
 
+try:
+    import numpy as np
+except Exception:  # noqa: BLE001
+    np = None
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (uid INTEGER PRIMARY KEY, step TEXT, photo TEXT, people TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS subs (
@@ -29,6 +34,9 @@ CREATE TABLE IF NOT EXISTS posts (msg_id INTEGER NOT NULL, name TEXT NOT NULL, k
 CREATE INDEX IF NOT EXISTS idx_posts_died ON posts(died);
 -- 21.10: отпечатки фото канала — повтор узнаём по самому фото, даже если ФИО и годы изменили
 CREATE TABLE IF NOT EXISTS prints (msg_id INTEGER PRIMARY KEY, fp BLOB NOT NULL, date TEXT);
+-- 21.10: лица с фото канала — тот же человек на ДРУГОМ фото
+CREATE TABLE IF NOT EXISTS faces (msg_id INTEGER NOT NULL, i INTEGER NOT NULL, vec BLOB NOT NULL, PRIMARY KEY (msg_id, i));
+CREATE TABLE IF NOT EXISTS faced (msg_id INTEGER PRIMARY KEY);
 """
 DAY_LIMIT = 5
 
@@ -151,11 +159,54 @@ def index_print(db, msg_id: int, data: bytes, date: str | None = None) -> bool:
     except Exception as e:  # noqa: BLE001
         print(f"print {msg_id}: {type(e).__name__}: {e}", flush=True)
         return False
-    if not fp:
-        return False
-    db.execute("INSERT OR REPLACE INTO prints VALUES (?,?,?)", (msg_id, fp, date or now()))
+    if fp:
+        db.execute("INSERT OR REPLACE INTO prints VALUES (?,?,?)", (msg_id, fp, date or now()))
+    if ph.face_ready():
+        try:
+            fs = ph.faces(data)
+        except Exception as e:  # noqa: BLE001
+            print(f"faces {msg_id}: {type(e).__name__}: {e}", flush=True)
+            fs = None
+        if fs is not None:
+            db.execute("DELETE FROM faces WHERE msg_id=?", (msg_id,))
+            db.executemany("INSERT INTO faces VALUES (?,?,?)", [(msg_id, i, v) for i, v in enumerate(fs)])
+            db.execute("INSERT OR REPLACE INTO faced VALUES (?)", (msg_id,))
     db.commit()
-    return True
+    return bool(fp)
+
+
+class FaceIndex:
+    """Все лица канала в памяти (матрица N×128, ~0.3 МБ на 600 фото); перечитывается, когда в базе прибавилось."""
+    def __init__(self):
+        self.n, self.ids, self.m = -1, [], None
+
+    def load(self, db):
+        n = db.execute("SELECT COUNT(*) FROM faces").fetchone()[0]
+        if n != self.n:
+            rows = db.execute("SELECT msg_id, vec FROM faces").fetchall()
+            self.ids = [r["msg_id"] for r in rows]
+            self.m = np.stack([ph.vec(r["vec"]) for r in rows]) if rows else None
+            self.n = n
+        return self
+
+    def hits(self, db, data: bytes) -> list[tuple[int, float]]:
+        """→ [(msg_id, сходство лица)] ≥ порога «похоже», лучшие сначала (по одному на пост)."""
+        if not ph.face_ready() or not data:
+            return []
+        try:
+            fs = ph.faces(data)
+        except Exception:  # noqa: BLE001
+            return []
+        self.load(db)
+        if not fs or self.m is None:
+            return []
+        best: dict[int, float] = {}
+        for f in fs:
+            sims = self.m @ ph.vec(f)
+            for i in np.nonzero(sims >= ph.MAYBE_FACE)[0]:
+                mid = self.ids[int(i)]
+                best[mid] = max(best.get(mid, 0.0), float(sims[i]))
+        return sorted(best.items(), key=lambda x: -x[1])
 
 
 def photo_hits(db, data: bytes, cache: dict | None = None, skip: int | None = None) -> list[tuple[int, int]]:
@@ -231,7 +282,8 @@ class Bot:
     def __init__(self, api, db, owners: set[int], channel: str, today=None):
         self.api, self.db, self.owners, self.channel = api, db, owners, channel
         self.today = today or dt.date.today
-        self._fp_cache: dict = {}                             # отпечатки фото канала в памяти (~8 МБ)
+        self._fp_cache: dict = {}
+        self._faces = FaceIndex()                             # отпечатки фото канала в памяти (~8 МБ)
 
     # ---------- состояние ----------
     def user(self, uid: int) -> dict:
@@ -363,6 +415,11 @@ class Bot:
             links.append(self.link(msg_id))
             lines.append(f"📸 ЭТО ФОТО уже было в канале 👉 {self.link(msg_id)}" if n >= ph.SAME_POINTS else
                          f"📸 Возможно, то же фото (проверьте) 👉 {self.link(msg_id)}")
+        seen = {m for m, _ in hits[:2]}
+        for msg_id, sim in [h for h in self._faces.hits(self.db, data) if h[0] not in seen][:2]:
+            links.append(self.link(msg_id))
+            lines.append(f"👤 ТОТ ЖЕ ЧЕЛОВЕК по лицу ({sim:.2f}) 👉 {self.link(msg_id)}" if sim >= ph.SAME_FACE else
+                         f"👤 Лицо похоже ({sim:.2f}) — проверьте 👉 {self.link(msg_id)}")
         for p in people:
             found_same, found_sim = [], []
             for r in self.db.execute("SELECT * FROM posts"):
@@ -387,7 +444,10 @@ class Bot:
         head = f"📋 Проверено постов канала: {n_posts}" if n_posts else "📋 База канала ещё не загружена — проверить повторы нельзя"
         if n_prints:
             head += f" · фото: {n_prints}"
-        if not any(x.startswith(("⚠️", "🔎", "📸")) for x in lines) and n_posts:
+            n_faces = self.db.execute("SELECT COUNT(*) FROM faced").fetchone()[0]
+            if n_faces and ph.face_ready():
+                head += f" · лица: {n_faces}"
+        if not any(x.startswith(("⚠️", "🔎", "📸", "👤")) for x in lines) and n_posts:
             lines.append("✅ Повторов нет")
         return all_same and bool(people), [head] + lines, links
 

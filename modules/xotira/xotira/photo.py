@@ -243,3 +243,49 @@ def match(a: tuple, b: tuple) -> int:
         return len(m) // 2                                         # мало даже кандидатов — точно не то же фото
     _, mask = cv2.findHomography(a[0][[x.queryIdx for x in m]], b[0][[x.trainIdx for x in m]], cv2.RANSAC, 6.0)
     return int(mask.sum()) if mask is not None else 0
+
+
+# ---------- узнавание по лицу (21.10): другое фото того же человека ----------
+# SFace int8 (OpenCV Zoo, бесплатно, ~10 МБ, +~46 МБ памяти). Лицо → 128 чисел; сходство лиц — косинус (1 — одно лицо).
+# Модель лежит на сервере (качает задача xotira-scan); нет модели — бот работает как раньше, без этой проверки.
+FACE_MODEL = os.environ.get("XOTIRA_FACE_MODEL", "/var/lib/papa-xotira/models/face_recognition_sface_2021dec_int8.onnx")
+SAME_FACE = 0.55     # пороги уточнены на реальном канале — см. docs/STATE.md
+MAYBE_FACE = 0.45
+MAX_FACES = 3        # на фото бывает пара (муж и жена) — помним до 3 лиц
+_rec = None
+
+
+def face_ready() -> bool:
+    return cv2 is not None and os.path.exists(FACE_MODEL)
+
+
+def faces(data: bytes) -> list[bytes]:
+    """Лица на фото → список отпечатков лица (128 чисел, float16). Нет лиц/модели → []."""
+    global _rec
+    if not face_ready():
+        return []
+    img = decode(data)
+    r, area = region(img), img.shape[0] * img.shape[1]
+    if r and MIN_AREA * area <= r[2] * r[3] < SCREEN * area:
+        x, y, w, h = r
+        img = img[y:y + h, x:x + w]
+    H, W = img.shape[:2]
+    k = min(1.0, 900 / max(H, W))
+    sm = cv2.resize(img, (round(W * k), round(H * k)), interpolation=cv2.INTER_AREA) if k < 1 else img
+    det = cv2.FaceDetectorYN.create(MODEL, "", (sm.shape[1], sm.shape[0]), 0.7, 0.3, 50)
+    _, found = det.detect(sm)
+    if found is None:
+        return []
+    _rec = _rec or cv2.FaceRecognizerSF.create(FACE_MODEL, "")
+    out = []
+    for f in sorted(found, key=lambda f: -f[2] * f[3])[:MAX_FACES]:
+        if f[2] < 30:                                            # лицо слишком мелкое — не узнать
+            continue
+        v = _rec.feature(_rec.alignCrop(sm, f)).flatten().astype(np.float32)
+        v /= max(float(np.linalg.norm(v)), 1e-6)
+        out.append(v.astype(np.float16).tobytes())
+    return out
+
+
+def vec(blob: bytes):
+    return np.frombuffer(blob, np.float16).astype(np.float32)

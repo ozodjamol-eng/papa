@@ -493,3 +493,33 @@ class PhotoRepeat(unittest.TestCase):
         card = self.go("OTHER", "Тошматов Алишер 1950-2015")
         self.assertNotIn("ЭТО ФОТО", card["caption"])
         self.assertIn("Повторов нет", card["caption"])
+
+
+try:
+    from skimage import data as SK
+except Exception:  # noqa: BLE001
+    SK = None
+
+
+@unittest.skipIf(cv2 is None or SK is None or not PH.face_ready(), "нет OpenCV/модели лица/тестового фото")
+class FaceRepeat(unittest.TestCase):
+    """Другое фото того же человека (здесь — зеркальное: по точкам фото уже не совпадает) → «👤 по лицу»."""
+    def test_mirror_photo_caught_by_face(self):
+        q, PH.quality = PH.quality, lambda data: None
+        self.addCleanup(setattr, PH, "quality", q)
+        astro = cv2.cvtColor(SK.astronaut(), cv2.COLOR_RGB2BGR)
+        files = {"OLD": PH.encode(astro), "NEW": PH.encode(cv2.GaussianBlur(cv2.flip(astro, 1), (5, 5), 0))}
+        api = FileApi(b"")
+        api.download = lambda fid: files.get(fid, b"bad")
+        db = B.connect(":memory:")
+        bot = B.Bot(api, db, {42}, "@XOTIRAXOJAOBOD", today=TODAY)
+        bot.handle({"channel_post": {"message_id": 30, "chat": {"username": "XOTIRAXOJAOBOD"},
+                                     "photo": [{"file_id": "OLD"}], "caption": "Раҳмонов Эргашбой\n1933-2006-73 ёш"}})
+        self.assertGreater(db.execute("SELECT COUNT(*) FROM faces").fetchone()[0], 0)
+        bot.handle(msg(photo="NEW"))
+        bot.handle(msg(text="Тошматов Алишер 1950-2015"))
+        bot.handle(cb("u:send"))
+        card = [p for m, p in api.calls if m == "sendPhoto" and p.get("chat_id") == 42][-1]
+        self.assertIn("ТОТ ЖЕ ЧЕЛОВЕК по лицу", card["caption"])
+        self.assertNotIn("ЭТО ФОТО", card["caption"])
+        self.assertIn("o:has:1", str(card["reply_markup"]))

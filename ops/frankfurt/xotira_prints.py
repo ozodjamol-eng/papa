@@ -28,6 +28,29 @@ for f in sorted(os.listdir(SCAN)) if os.path.isdir(SCAN) else []:
 total = db.execute("SELECT COUNT(*) FROM prints").fetchone()[0]
 print(f"отпечатков добавлено: {ok} · фото не разобрать: {bad} · всего фото в базе: {total}")
 
+# --- лица: сколько и похожие пары (матрица — быстро, сервер не грузит) ---
+names = {}
+for r in db.execute("SELECT * FROM posts"):
+    names.setdefault(r["msg_id"], f"{r['name']} {r['born']}-{r['died']}")
+if ph.face_ready():
+    import numpy as np
+    rows = db.execute("SELECT msg_id, vec FROM faces").fetchall()
+    n_faced = db.execute("SELECT COUNT(*) FROM faced").fetchone()[0]
+    print(f"\n👤 лиц запомнено: {len(rows)} с {n_faced} фото")
+    if rows:
+        ids = [r["msg_id"] for r in rows]
+        m = np.stack([ph.vec(r["vec"]) for r in rows])
+        s = m @ m.T
+        pairs = {}
+        for i, j in zip(*np.nonzero(np.triu(s, 1) >= 0.40)):
+            a, b = sorted((ids[i], ids[j]))
+            if a != b:
+                pairs[(a, b)] = max(pairs.get((a, b), 0), float(s[i, j]))
+        for t in (0.40, 0.45, 0.50, 0.55, 0.60, 0.70):
+            print(f"  пар постов со сходством лица ≥ {t:.2f}: {sum(v >= t for v in pairs.values())}")
+        for (a, b), v in sorted(pairs.items(), key=lambda x: -x[1])[:60]:
+            print(f"  {v:.2f}  #{a} {names.get(a, '—')}  ↔  #{b} {names.get(b, '—')}")
+
 # --- уже существующие повторы в канале: тяжело (~10 мин CPU, 21.10 перегрузил сервер) — только по XOTIRA_REPORT=1 ---
 if os.environ.get("XOTIRA_REPORT") != "1":
     raise SystemExit(0)
@@ -40,7 +63,6 @@ for i in range(len(rows)):
         if n >= ph.MAYBE_POINTS:
             same_photo.append((rows[i][0], rows[j][0], n))
 print(f"\n📸 ОДНО И ТО ЖЕ ФОТО в канале дважды: {len(same_photo)} пар (проверка {time.time() - t:.0f} с)")
-names = {r["msg_id"]: f"{r['name']} {r['born']}-{r['died']}" for r in db.execute("SELECT * FROM posts")}
 for a, b, n in same_photo[:40]:
     print(f"  #{a} {names.get(a, '—')}  ↔  #{b} {names.get(b, '—')}  ({n} точек)  {link(b)}")
 
