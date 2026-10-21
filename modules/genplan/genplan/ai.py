@@ -80,6 +80,26 @@ def _claude(system: str, user: str, http=None) -> str:
     return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
 
 
+_DOWN: dict = {}                     # 21.10: Claude отключён (organization_on_hold / нет баланса) — до этой отметки времени сразу Gemini
+DOWN_FOR = 6 * 3600
+
+
+def _claude_down() -> bool:
+    import time
+    return _DOWN.get("claude", 0) > time.time()
+
+
+def _mark_down(e) -> None:
+    """Ошибка Claude «аккаунт отключён / нет денег» — 6 часов не пробуем его (Gemini сразу), потом проверим снова."""
+    import time
+    try:
+        body = e.read().decode(errors="replace") if hasattr(e, "read") else str(e)
+    except Exception:  # noqa: BLE001
+        body = ""
+    if any(w in body for w in ("organization_on_hold", "disabled", "credit balance")):
+        _DOWN["claude"] = time.time() + DOWN_FOR
+
+
 def _order():
     """Порядок ИИ для текста. Решение владельца 17.10: основной — Anthropic Claude (AI_PRIMARY=claude),
     Gemini — запасной. Без AI_PRIMARY — как раньше (Gemini → Claude). Просмотр кадров (vision) — только Gemini."""
@@ -109,7 +129,7 @@ def generate(db, system: str, user: str, http=None) -> str:
         raise AIError("нет ключа ИИ")
     if _count(db) > LIMIT:
         raise AIError(f"дневной лимит ИИ ({LIMIT}) исчерпан")
-    providers = [(n, f) for n, f, k in _order() if os.environ.get(k)]
+    providers = [(n, f) for n, f, k in _order() if os.environ.get(k) and not (n == "Claude" and _claude_down())]
     out, errs = "", []
     for name, fn in providers:
         try:
@@ -118,6 +138,8 @@ def generate(db, system: str, user: str, http=None) -> str:
                 break
             errs.append(f"{name}: пустой ответ")
         except urllib.error.HTTPError as e:
+            if name == "Claude" and e.code in (400, 401, 403):
+                _mark_down(e)
             errs.append(f"{name}: {'лимит исчерпан' if e.code == 429 else f'ошибка {e.code}'}")
         except Exception as e:  # noqa: BLE001
             errs.append(f"{name}: недоступен ({type(e).__name__})")
