@@ -241,6 +241,9 @@ class VideoDigest(unittest.TestCase):
 
             def publish(self, to, text, *a, **k):
                 out.append(("text", to)); return 12
+
+            def publish_photo(self, to, path, caption):
+                out.append(("photo", to, Path(path).suffix)); return 13
         cfg = {"channels": {"davra": {"username": "kattadavrauz", "publisher": "bot", "mode": "live", "digest": {"live": True}}}}
         res = asyncio.run(digest.publish_live_davra(self.db, cfg, {}, Bot(), now, self.d, vget=lambda u: MP4))
         self.assertIn("роликом", res)
@@ -248,8 +251,14 @@ class VideoDigest(unittest.TestCase):
         self.assertIsNone(asyncio.run(digest.publish_live_davra(self.db, cfg, {}, Bot(), now, self.d, vget=lambda u: MP4)))  # один раз
         db2 = store.connect(self.d / "g2.db"); out.clear()
         res = asyncio.run(digest.publish_live_davra(db2, cfg, {}, Bot(), now, self.d, vget=NOVID))
-        self.assertIn("вышел текст", res)
-        self.assertEqual(out, [("text", "@kattadavrauz")])
+        self.assertIn("картинкой", res)
+        self.assertEqual(out, [("photo", "@kattadavrauz", ".png")])      # 21.10: никогда голый текст
+        db3 = store.connect(self.d / "g3.db"); out.clear()
+        (self.d / f"evening-digest-davra-{now.date()}" / "digest.png").unlink()
+        res = asyncio.run(digest.publish_live_davra(db3, cfg, {}, Bot(), now, self.d, vget=NOVID))
+        self.assertIn("нет картинки", res)
+        self.assertEqual(out, [])
+        self.assertIsNone(asyncio.run(digest.publish_live_davra(db3, cfg, {}, Bot(), now, self.d, vget=NOVID)))
 
 
 class WeatherTrigger(unittest.TestCase):
@@ -260,3 +269,23 @@ class WeatherTrigger(unittest.TestCase):
         self.assertEqual(digest.trigger_weather(NOW.date(), run=lambda a, c, e: calls.append(a)), "ok")
         self.assertIn(["git", "checkout", "-q", "-b", "weather-req", "FETCH_HEAD"], calls)
         self.assertEqual(calls[-1][-1], "weather-req")
+
+
+class DigestWatch(unittest.TestCase):
+    def test_alert_once_when_missing(self):
+        d = Path(tempfile.mkdtemp()); db = store.connect(d / "w.db")
+        cfg = {"channels": {"xojaobod": {"digest": {"live": True}}, "davra": {"digest": {"live": True}}}}
+        early = dt.datetime(2026, 10, 21, 20, 40, tzinfo=plan.TZ)
+        at = dt.datetime(2026, 10, 21, 20, 45, tzinfo=plan.TZ)
+        self.assertIsNone(digest.watch(db, cfg, early))
+        store.kv_set(db, "digest_pub_2026-10-21", "145990")
+        msg = digest.watch(db, cfg, at)
+        self.assertIn("КАТТА ДАВРА", msg)
+        self.assertNotIn("Хўжаобод", msg)
+        self.assertIsNone(digest.watch(db, cfg, at))           # один раз в день
+
+    def test_silent_when_all_out(self):
+        d = Path(tempfile.mkdtemp()); db = store.connect(d / "w.db")
+        cfg = {"channels": {"xojaobod": {"digest": {"live": True}}, "davra": {"digest": {"live": True}}}}
+        store.kv_set(db, "digest_pub_2026-10-21", "1"); store.kv_set(db, "digest_pub_davra_2026-10-21", "2")
+        self.assertIsNone(digest.watch(db, cfg, dt.datetime(2026, 10, 21, 21, 0, tzinfo=plan.TZ)))

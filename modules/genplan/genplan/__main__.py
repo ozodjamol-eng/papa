@@ -259,6 +259,13 @@ async def run() -> None:
                         service.ERRORS.append(pub)
                 except Exception as e:  # noqa: BLE001
                     service.ERRORS.append(f"⚠️ Кечки дайжест не вышел в КАТТА ДАВРА: {type(e).__name__}: {str(e)[:150]}")
+                try:                                          # 🛡 20:45 сторож: дайджест не вышел — сразу владельцу (21.10)
+                    from . import digest as _dg
+                    wm = _dg.watch(db, c)
+                    if wm:
+                        service.ERRORS.append(wm)
+                except Exception as e:  # noqa: BLE001
+                    print(f"digest-watch: {e}", flush=True)
                 from . import namaz
                 rem = namaz.reminder(db, c, dt.datetime.now(plan.TZ))
                 if rem:

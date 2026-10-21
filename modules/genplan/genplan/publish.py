@@ -71,6 +71,33 @@ def _bot_file(self, chat: str, path: str, caption: str = "", duration: int = 15)
 BotPublisher.publish_file = _bot_file
 
 
+def _bot_photo(self, chat: str, path: str, caption: str = "") -> int:
+    """Локальная картинка (баннер дайджеста) → канал через sendPhoto (multipart). 21.10: КАТТА ДАВРА — с картинкой."""
+    import uuid
+    from pathlib import Path
+    bnd = uuid.uuid4().hex
+    parts = [f"--{bnd}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode()
+             for k, v in (("chat_id", chat), ("caption", caption[:1024]))]
+    parts.append(f"--{bnd}\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"{Path(path).name}\"\r\n"
+                 f"Content-Type: image/png\r\n\r\n".encode() + Path(path).read_bytes() + b"\r\n")
+    parts.append(f"--{bnd}--\r\n".encode())
+    req = urllib.request.Request(f"{self.base}/sendPhoto", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={bnd}"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        res = json.loads(e.read() or b"{}")
+    except Exception as e:  # noqa: BLE001
+        raise PublishError(f"{type(e).__name__}: {e}") from None
+    if not res.get("ok"):
+        raise PublishError(res.get("description", "unknown"))
+    return int(res["result"]["message_id"])
+
+
+BotPublisher.publish_photo = _bot_photo
+
+
 def _album_payload(media: list[dict], caption: str) -> list[dict]:
     kinds = {"photo": "photo", "video": "video", "document": "document", "audio": "audio"}
     out = [{"type": kinds.get(m["type"], "photo"), "media": m["file_id"]} for m in media if m["type"] in kinds][:10]

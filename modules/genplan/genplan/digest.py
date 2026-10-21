@@ -368,6 +368,73 @@ def banner(day: dt.date, w: dict, r: dict, dst: Path) -> Path:
     return dst
 
 
+def banner_davra(day: dt.date, cw: dict, r: dict, dst: Path) -> Path:
+    """🎉 21.10 владелец: КАТТА ДАВРА — дайджест тоже с картинкой (никогда голый текст). Стиль — как у Хўжаобода:
+    ночной градиент, полумесяц, «КЕЧКИ ДАЙЖЕСТ», дата; погода на завтра по городам, курс $, @KATTADAVRAUZ."""
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from . import media
+    W = H = 1080
+    rainy = any(x["code"] >= 51 for x in cw.values())
+    top, bottom = ((24, 32, 48), (58, 70, 92)) if rainy else ((10, 18, 52), (64, 38, 104))
+    img = Image.new("RGB", (W, H))
+    px = ImageDraw.Draw(img)
+    for y in range(H):
+        k = y / (H - 1)
+        px.line([(0, y), (W, y)], fill=tuple(int(top[i] + (bottom[i] - top[i]) * k) for i in range(3)))
+    img = img.convert("RGBA")
+    moon = Image.new("L", (W, H), 0)
+    md = ImageDraw.Draw(moon)
+    md.ellipse((790, 100, 950, 260), fill=255)
+    md.ellipse((840, 78, 1000, 238), fill=0)
+    glow = Image.new("RGBA", (W, H), (255, 232, 160, 0))
+    glow.putalpha(moon.filter(ImageFilter.GaussianBlur(22)).point(lambda v: int(v * 0.8)))
+    img.alpha_composite(glow)
+    light = Image.new("RGBA", (W, H), (255, 241, 196, 0))
+    light.putalpha(moon)
+    img.alpha_composite(light)
+    d = ImageDraw.Draw(img)
+    f_title = ImageFont.truetype(FONT_SERIF, 92)
+    f_date = ImageFont.truetype(FONT, 40)
+    f_head = ImageFont.truetype(FONT, 40)
+    f_city = ImageFont.truetype(FONT, 50)
+    f_temp = ImageFont.truetype(FONT_SERIF, 58)
+    f_small = ImageFont.truetype(FONT_REG, 34)
+    d.text((80, 120), "КЕЧКИ", font=f_title, fill=(255, 255, 255))
+    d.text((80, 222), "ДАЙЖЕСТ", font=f_title, fill=(255, 214, 120))
+    d.text((84, 340), f"{date_uz(day).upper()} · ЎЗБЕКИСТОН", font=f_date, fill=(200, 210, 235))
+    d.text((84, 440), "ЭРТАГА ОБ-ҲАВО", font=f_head, fill=(255, 214, 120))
+    rows = Image.new("RGBA", (W, H), (0, 0, 0, 0))              # полупрозрачные плашки — отдельным слоем
+    rd = ImageDraw.Draw(rows)
+    for i in range(min(3, len(cw))):
+        rd.rounded_rectangle((70, 498 + i * 132, W - 70, 614 + i * 132), radius=28, fill=(255, 255, 255, 28))
+    img.alpha_composite(rows)
+    d = ImageDraw.Draw(img)
+    y = 510
+    for city, x in list(cw.items())[:3]:
+        d.text((104, y), city, font=f_city, fill=(255, 255, 255))
+        word = SKY_PH.get(sky(x["code"])[0], sky(x["code"])[0])
+        d.text((106, y + 56), word, font=f_small, fill=(200, 210, 235))
+        temp = f"{_signed(x['min'])}…{_signed(x['max'])}°"
+        tw = d.textlength(temp, font=f_temp)
+        d.text((W - 104 - tw, y + 14), temp, font=f_temp, fill=(255, 255, 255))
+        y += 132
+    if "USD" in r:
+        text = f"$1 = {_num(r['USD']['rate'])}"
+        tw = d.textlength(text, font=f_small)
+        d.rounded_rectangle((80, 900, 80 + tw + 48, 966), radius=33, fill=(255, 214, 120))
+        d.text((104, 914), text, font=f_small, fill=(20, 20, 30))
+    logo = media.text_logo("@" + DAVRA_USER.upper(), dst.with_suffix(".logo.png"), height=44)
+    lg = Image.open(logo).convert("RGBA")
+    img.alpha_composite(lg, ((W - lg.width) // 2, H - lg.height - 30))
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    img.convert("RGB").save(dst, "PNG", optimize=True)
+    try:
+        dst.with_suffix(".logo.png").unlink()
+    except OSError:
+        pass
+    return dst
+
+
 # ---------- пакет ----------
 def sha(p: Path | bytes) -> str:
     return hashlib.sha256(p if isinstance(p, bytes) else p.read_bytes()).hexdigest()
@@ -567,9 +634,10 @@ def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=No
           "rates": video_rates(r), "news": [{"t": short_news(n["t"]), "src": n["src"]} for n in news],
           "user": f"@{DAVRA_USER}", "brand": ["КАТТА", "ДАВРА"]}
     (out / "video.json").write_text(json.dumps(vd, ensure_ascii=False, indent=1), encoding="utf-8")
+    png = banner_davra(day, cw, r, out / "digest.png")        # 21.10: всегда с картинкой — голого текста не бывает
     tmp = out / "manifest.json.tmp"
-    tmp.write_text(json.dumps({"status": "READY", "date": day.isoformat(), "caption": caption}, ensure_ascii=False, indent=1),
-                   encoding="utf-8")
+    tmp.write_text(json.dumps({"status": "READY", "date": day.isoformat(), "caption": caption, "image_sha256": sha(png)},
+                              ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(out / "manifest.json")
     report.update({"status": "READY", "dir": str(out)})
     return report
@@ -759,6 +827,12 @@ async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | N
         return None
     if m.get("status") != "READY" or m.get("date") != day:
         return None
+    png = out / "digest.png"
+    if not png.exists() or sha(png) != m.get("image_sha256"):     # 21.10 владелец: без картинки — не выпускать
+        if store_get(db, flag + "_warn"):
+            return None
+        store_set(db, flag + "_warn", "1")
+        return "❌ Кечки дайжест КАТТА ДАВРА не вышел: нет картинки. Без картинки не выпускаю — нужно проверить."
     from . import service
     to = service.target(cfg, env, "davra")
     store_set(db, flag, "sending")
@@ -766,19 +840,45 @@ async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | N
     try:
         vid = motion_video(f"davra-digest-{day}.mp4", vget)
     except Exception as e:  # noqa: BLE001
-        vid, note = None, f" (ролика нет: {e} — вышел текст)"
+        vid, note = None, " (картинкой)"
     if vid:
         try:
             mid = bot.publish_file(to, str(vid), m["caption"], duration=25)
             store_set(db, flag, str(mid))
             return f"🎉 Кечки дайжест роликом опубликован в «КАТТА ДАВРА» ({to}) в {hm}."
         except Exception as e:  # noqa: BLE001
-            note = f" (ролик не отправился: {e} — вышел текст)"
+            note = f" (ролик не отправился: {e} — вышла картинка)"
         finally:
             vid.unlink(missing_ok=True)
-    mid = bot.publish(to, m["caption"])
+    mid = bot.publish_photo(to, str(png), m["caption"])
     store_set(db, flag, str(mid))
     return f"🎉 Кечки дайжест опубликован в «КАТТА ДАВРА» ({to}) в {hm}{note}."
+
+
+def watch(db, cfg: dict, now: dt.datetime | None = None) -> str | None:
+    """🛡 21.10 владелец: сторож протокола. В 20:45 — если Кечки дайжест (Хўжаобод / КАТТА ДАВРА, где он включён)
+    сегодня не вышел, один раз за день сразу пишет владельцу в пульт. Ничего не публикует."""
+    now = (now or dt.datetime.now(TZ)).astimezone(TZ)
+    if not ("20:45" <= now.strftime("%H:%M") < "22:00"):
+        return None
+    day = now.date().isoformat()
+    if store_get(db, f"digest_watch_{day}"):
+        return None
+    chans = cfg.get("channels", {})
+    miss = []
+    if (chans.get("xojaobod") or {}).get("digest", {}).get("live"):
+        v = store_get(db, f"digest_pub_{day}")
+        if not v or v == "sending":
+            miss.append("Хўжаобод Сити 24")
+    if (chans.get("davra") or {}).get("digest", {}).get("live"):
+        v = store_get(db, f"digest_pub_davra_{day}")
+        if not v or v == "sending":
+            miss.append("КАТТА ДАВРА")
+    store_set(db, f"digest_watch_{day}", "ok" if not miss else "alert")
+    if not miss:
+        return None
+    return ("🛡 Сторож: Кечки дайжест в 20:30 НЕ вышел — " + ", ".join(miss)
+            + ". Протокол нарушен, нужно проверить (папка дайджеста на Франкфурте).")
 
 
 def store_get(db, k):
