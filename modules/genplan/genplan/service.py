@@ -113,6 +113,40 @@ def tag_for(cfg: dict, ch: dict, m) -> str:
     return "" if guessed else (ch.get("hashtags") or {}).get(rubric, "")
 
 
+def cleanup_hubcopy(db, env: dict, pubs: dict, m, log=print) -> int:
+    """21.10 владелец: PAPA HUB — не свалка. Служебную копию поста группы (её кладёт бот Хўжаобода, чтобы аккаунт PAPA
+    мог опубликовать медиа) после выхода удаляем. Не трогаем рекламу, рекламные пакеты и Якуний пост — они выходят снова."""
+    hub = str(env.get("HUB_CHAT_ID", ""))
+    if not hub or str(m["hub_chat"]) != hub:
+        return 0
+    ids = json.loads(m["hub_msgs"] or "[]") if "hub_msgs" in m.keys() else []
+    ids = [int(x) for x in (ids or [m["hub_msg"]]) if x and store.kv_get(db, f"hubcopy_{x}")]
+    if not ids:
+        return 0                                       # не наша копия (материал брошен прямо в PAPA HUB) — не удаляем
+    from . import extras
+    if extras.campaign_of(db, int(m["id"])):
+        return 0
+    for k in ("final_xojaobod", "final_davra", "final_paparazzi"):
+        f = store.kv_get(db, k, "")
+        if f and (f'"hub_msg": {ids[0]}' in f or f'"material_id": {int(m["id"])}' in f):
+            return 0
+    via = m["via"] if "via" in m.keys() else None
+    for p in [pubs.get(f"bot:{via}"), pubs.get("bot")]:
+        if not p or not hasattr(p, "http"):
+            continue
+        try:
+            r = p.http("deleteMessages", {"chat_id": int(hub), "message_ids": ids})
+        except Exception:  # noqa: BLE001
+            continue
+        if r.get("ok"):
+            for x in ids:
+                db.execute("DELETE FROM kv WHERE k=?", (f"hubcopy_{x}",))
+            db.commit()
+            log(f"PAPA HUB: служебная копия убрана ({len(ids)})")
+            return len(ids)
+    return 0
+
+
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print,
                       now: dt.datetime | None = None) -> bool:
     ch = cfg["channels"][channel]
@@ -154,6 +188,8 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
             mid = p.publish(to, body, m["hub_chat"], m["hub_msg"], bool(m["has_media"]), button=share_button(ch))
         store.update(db, m["id"], status="published")
         store.record(db, channel, day, slot, m["id"], "done", mid)
+        if ch["publisher"] == "account" and not is_ad:
+            cleanup_hubcopy(db, env, pubs, m, log)
         store.pulse_add(db, channel, now or dt.datetime.now(plan.TZ), "bot")
         log(f"{channel} {slot or 'срочно'}: опубликовано ({m['rubric']})")
         return True

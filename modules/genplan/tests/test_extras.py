@@ -169,3 +169,45 @@ class T(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HubCopyCleanup(unittest.TestCase):
+    """21.10 владелец: служебная копия в PAPA HUB после выхода поста группы — удаляется (кроме рекламы/пакетов/Якуний)."""
+    def setUp(self):
+        self.db = store.connect(str(Path(tempfile.mkdtemp()) / "g.db"))
+        extras.setup(self.db)
+        self.calls = []
+        outer = self
+
+        class P:
+            def http(self, method, payload):
+                outer.calls.append((method, payload)); return {"ok": True}
+        self.pubs = {"bot": P(), "bot:xojaobod": P()}
+
+    def mat(self, hub_msg=501):
+        mid = store.add(self.db, channel="xojaobod", text="т", hub_chat=-100777, hub_msg=hub_msg, has_media=1) \
+            if hasattr(store, "add") else None
+        return mid
+
+    def row(self, mid=1, hub_msg=501, via="xojaobod"):
+        return {"id": mid, "hub_chat": -100777, "hub_msg": hub_msg, "hub_msgs": json.dumps([hub_msg]), "via": via}
+
+    class R(dict):
+        def keys(self):
+            return super().keys()
+
+    def test_deletes_own_copy(self):
+        store.kv_set(self.db, "hubcopy_501", "1")
+        n = service.cleanup_hubcopy(self.db, ENV, self.pubs, self.R(self.row()), lambda *_: None)
+        self.assertEqual(n, 1)
+        self.assertEqual(self.calls, [("deleteMessages", {"chat_id": -100777, "message_ids": [501]})])
+        self.assertIsNone(store.kv_get(self.db, "hubcopy_501"))
+
+    def test_keeps_owner_material_in_papa_hub(self):
+        self.assertEqual(service.cleanup_hubcopy(self.db, ENV, self.pubs, self.R(self.row()), lambda *_: None), 0)
+        self.assertEqual(self.calls, [])
+
+    def test_keeps_final_post(self):
+        store.kv_set(self.db, "hubcopy_501", "1")
+        store.kv_set(self.db, "final_xojaobod", json.dumps({"material_id": 9, "hub_msg": 501}))
+        self.assertEqual(service.cleanup_hubcopy(self.db, ENV, self.pubs, self.R(self.row()), lambda *_: None), 0)
