@@ -442,12 +442,40 @@ class TestAdButton(Base):
         self.tap("ad:1", now)
         self.assertEqual(store.get(self.db, 1)["rubric"], "Реклама")
         c = self.last_card()
-        self.assertIn("📣 Реклама — выберите время", c["text"])
-        first = self.flat(c["reply_markup"])[0]
-        self.assertTrue(first["text"].startswith("📣 "))                    # первым — рекламное окно
-        self.tap(first["callback_data"], now)
+        self.assertIn("📣 Реклама — когда выпустить?", c["text"])
+        btns = self.flat(c["reply_markup"])
+        self.assertEqual([b["text"] for b in btns][1:], ["🕐 Другое время", "✍️ Своё время", "⬅️ Отмена"])
+        self.assertEqual(btns[0]["text"], "🧠 Умное время · 09:40")          # ближайшее рекламное окно
+        self.tap(btns[0]["callback_data"], now)
         m = store.get(self.db, 1)
-        self.assertEqual((m["status"], m["rubric"]), ("queued", "Реклама"))
+        self.assertEqual((m["status"], m["rubric"], dt.datetime.fromisoformat(m["scheduled_at"])), ("queued", "Реклама", at("09:40")))
+
+    def test_other_time_list(self):
+        self.h(dm(95, "Скидка!", photo_uid="z5"))
+        store.update(self.db, 1, channel="xojaobod")
+        now = at("09:00")
+        self.tap("ad:1", now); self.tap("ao:1", now)
+        btns = self.flat(self.last_card()["reply_markup"])
+        self.assertTrue(btns[0]["text"].startswith("📣 "))
+        self.assertEqual(btns[-1]["callback_data"], "ad:1")
+
+    def test_own_time(self):
+        self.h(dm(96, "Скидка!", photo_uid="z6"))
+        store.update(self.db, 1, channel="xojaobod")
+        now = at("09:00")
+        self.tap("ad:1", now); self.tap("aw:1", now)
+        self.assertEqual(hub.own_time(self.bot, self.db, CFG, 1, "25:99", 42, now), "own_time_bad")
+        self.assertEqual(hub.own_time(self.bot, self.db, CFG, 1, "завтра 18:25", 42, now), "own_time")
+        m = store.get(self.db, 1)
+        self.assertEqual((m["status"], m["locked"]), ("queued", 1))
+        self.assertEqual(dt.datetime.fromisoformat(m["scheduled_at"]), at("18:25", MON + dt.timedelta(days=1)))
+
+    def test_parse_when(self):
+        now = at("09:00")
+        self.assertEqual(hub.parse_when("18 25", now), at("18:25"))
+        self.assertEqual(hub.parse_when("Эртага 7.30", now), at("07:30", MON + dt.timedelta(days=1)))
+        self.assertEqual(hub.parse_when("23.10 18:25", now), at("18:25", dt.date(2026, 10, 23)))
+        self.assertIsNone(hub.parse_when("скоро", now))
 
     def test_album_after_panel_ads(self):
         self.h(dm(92, menu.P_ADS))

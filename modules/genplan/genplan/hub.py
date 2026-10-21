@@ -238,15 +238,84 @@ def ad_times(db, cfg, mid: int, now: dt.datetime, n: int = 10) -> list[dt.dateti
     return (sorted(out) + rest)[:max(n, len(out))]
 
 
+AD_HEAD = "📣 Реклама — когда выпустить?"
+
+
 def ad_screen(db, cfg, mid: int, now: dt.datetime) -> tuple[str, dict]:
-    """Материал → реклама: рубрика «Реклама» (текст рекламодателя не трогаем) и выбор времени."""
+    """21.10 владелец: экран рекламы — 4 кнопки, как в GENPLAN 5: 🧠 Умное время · ЧЧ:ММ / 🕐 Другое время /
+    ✍️ Своё время / ⬅️ Отмена. Текст рекламодателя не трогаем."""
     store.update(db, mid, rubric="Реклама", guessed=0, stock=0, tag=None, topic=None)
+    t, _ = card(db, cfg, mid, now)
+    ts = ad_times(db, cfg, mid, now, n=1)
+    rows = []
+    if ts:
+        lbl = f"{ts[0]:%H:%M}" if ts[0].date() == now.date() else f"завтра {ts[0]:%H:%M}" \
+            if ts[0].date() == now.date() + dt.timedelta(days=1) else f"{ts[0]:%d.%m %H:%M}"
+        rows.append([{"text": f"🧠 Умное время · {lbl}", "callback_data": f"tm:{mid}:{int(ts[0].timestamp())}"}])
+    rows += [[{"text": "🕐 Другое время", "callback_data": f"ao:{mid}"}, {"text": "✍️ Своё время", "callback_data": f"aw:{mid}"}],
+             [{"text": "⬅️ Отмена", "callback_data": f"bk:{mid}"}]]
+    return f"{AD_HEAD}\n\n{t}", {"inline_keyboard": rows}
+
+
+def ad_list(db, cfg, mid: int, now: dt.datetime) -> tuple[str, dict]:
+    """🕐 Другое время для рекламы: свободное время сегодня/завтра, рекламные окна (📣) первыми."""
     t, _ = card(db, cfg, mid, now)
     windows = {s["t"] for s in cfg["channels"][store.get(db, mid)["channel"]].get("slots", []) if s.get("kind") == "ad"}
     btn = [{"text": ("📣 " if f"{x:%H:%M}" in windows else "") + smart.fmt(x, now),
             "callback_data": f"tm:{mid}:{int(x.timestamp())}"} for x in ad_times(db, cfg, mid, now)]
-    rows = [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]
-    return "📣 Реклама — выберите время (📣 — рекламное окно):\n\n" + t, {"inline_keyboard": rows}
+    rows = [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"ad:{mid}"}]]
+    return "🕐 Выберите время (📣 — рекламное окно):\n\n" + t, {"inline_keyboard": rows}
+
+
+def parse_when(text: str, now: dt.datetime) -> dt.datetime | None:
+    """«18:25», «18 25», «18.25», «завтра 18:25», «эртага 18:25», «23.10 18:25» → время (Ташкент)."""
+    import re
+    s = (text or "").strip().lower()
+    day = now.date()
+    if re.match(r"^(завтра|эртага|ertaga)\b", s):
+        day += dt.timedelta(days=1)
+        s = re.sub(r"^(завтра|эртага|ertaga)\s*", "", s)
+    else:
+        md = re.match(r"^(\d{1,2})[./](\d{1,2})\s+", s)
+        if md:
+            try:
+                day = dt.date(now.year, int(md.group(2)), int(md.group(1)))
+            except ValueError:
+                return None
+            s = s[md.end():]
+    mt = re.fullmatch(r"(\d{1,2})[:\s.,](\d{2})", s)
+    if not mt or int(mt.group(1)) > 23 or int(mt.group(2)) > 59:
+        return None
+    return plan.slot_time(day, f"{int(mt.group(1)):02d}:{mt.group(2)}")
+
+
+def own_time(bot, db, cfg, mid: int, txt: str, chat: int, now: dt.datetime | None = None) -> str:
+    """✍️ Своё время для рекламы: проверяем окно публикаций, Жуму и промежуток между постами."""
+    now = now or _now()
+    m = store.get(db, mid)
+    ch = cfg["channels"][m["channel"]]
+    t = parse_when(txt, now)
+    err = None
+    if t is None:
+        err = "Не понял время. Пример: 18:25 или завтра 18:25"
+    elif t < now + smart.LEAD:
+        err = "Это время уже прошло. Пример: завтра 18:25"
+    elif not smart.allowed(ch, t, m["rubric"]):
+        w = smart.rules(ch)["window"]
+        err = f"Публикации только {w[0]}–{w[1]}."
+    elif smart.blocked(db, m["channel"], t):
+        err = "В это время тихое окно (Жума/намоз)."
+    elif not smart.is_free(ch, t, smart.occupied(db, m["channel"], now, exclude=mid)):
+        err = f"Рядом уже есть пост (нужно ≥ {smart.rules(ch)['gap']} мин между постами)."
+    if err:
+        bot("sendMessage", chat_id=chat, text=f"⚠️ {err}\nНапишите другое время.")
+        return "own_time_bad"
+    store.kv_set(db, "await_time", "")
+    store.update(db, mid, status="queued", scheduled_at=t.isoformat(), urgent=0, locked=1, stock=0)
+    c, kb = card(db, cfg, mid, now)
+    r = bot("sendMessage", chat_id=chat, text=c[:4096], reply_markup=kb, disable_web_page_preview=True)
+    store.update(db, mid, owner_msg=r["message_id"])
+    return "own_time"
 
 
 def kb_rubric(cfg: dict, mid: int, channel: str) -> dict:
@@ -564,12 +633,19 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         key = bots.key_of(bot)
         if txt in PANEL_BUTTONS:                      # панель пульта: 🚨/📣 — следующий пост особый
             store.kv_set(db, "await_text", "")
+            store.kv_set(db, "await_time", "")
             mode = "ad" if txt == P_ADS else ""          # 17.10: 🚨 СРОЧНО больше не выпускает пост вслепую — выбор всегда на карточке
             store.kv_set(db, f"mode_{key}", f"{mode}|{_now().isoformat()}" if mode else "")
             return "panel:" + txt
         if txt.startswith("/") or txt in BY_BUTTON or txt in (B_ALL, B_QUEUE, B_TODAY, B_HELP, B_NAMAZ):
             store.kv_set(db, "await_text", "")
+            store.kv_set(db, "await_time", "")
             return "cmd:" + txt.split()[0]
+        wt = store.kv_get(db, "await_time", "")
+        if wt and txt and not any(k in msg for k in MEDIA_KEYS):     # ✍️ своё время для рекламы
+            return own_time(bot, db, cfg, int(wt), txt, msg["chat"]["id"])
+        if wt:                                                        # бросил новый пост — ожидание времени снимаем
+            store.kv_set(db, "await_time", "")
         from . import namaz
         if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):   # 🕌 время намаза
             r = save_namaz(bot, db, cfg, msg, txt)
@@ -827,6 +903,14 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     elif kind == "ad":                                  # 📣 Реклама на карточке
         t, kb = ad_screen(db, cfg, mid, now)
         show(kb, t)
+    elif kind == "ao":                                  # 📣 → 🕐 Другое время
+        t, kb = ad_list(db, cfg, mid, now)
+        show(kb, t)
+    elif kind == "aw":                                  # 📣 → ✍️ Своё время
+        store.kv_set(db, "await_text", "")
+        store.kv_set(db, "await_time", mid)
+        bot("sendMessage", chat_id=chat, reply_to_message_id=msg_id,
+            text="✍️ Напишите время одним сообщением, например:\n18:25\nзавтра 18:25\n23.10 18:25")
     elif kind == "sr":                                  # 📦 В запас: выбрать рубрику
         rs = rubrics(cfg, m["channel"])
         icons = cfg["channels"][m["channel"]].get("icons") or {}
@@ -924,6 +1008,7 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
                 r = bot("sendMessage", chat_id=chat, text=t, reply_markup=kb, disable_web_page_preview=True)
                 store.update(db, cid, owner_msg=r["message_id"])
     elif kind == "ed":
+        store.kv_set(db, "await_time", "")
         store.kv_set(db, "await_text", mid)
         bot("sendMessage", chat_id=chat, reply_to_message_id=msg_id,
             text="✏️ Пришлите новый текст одним сообщением — он заменит текущий (подпись и призыв бот добавит сам).")
