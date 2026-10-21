@@ -249,8 +249,8 @@ def match(a: tuple, b: tuple) -> int:
 # SFace int8 (OpenCV Zoo, бесплатно, ~10 МБ, +~46 МБ памяти). Лицо → 128 чисел; сходство лиц — косинус (1 — одно лицо).
 # Модель лежит на сервере (качает задача xotira-scan); нет модели — бот работает как раньше, без этой проверки.
 FACE_MODEL = os.environ.get("XOTIRA_FACE_MODEL", "/var/lib/papa-xotira/models/face_recognition_sface_2021dec_int8.onnx")
-SAME_FACE = 0.55     # пороги уточнены на реальном канале — см. docs/STATE.md
-MAYBE_FACE = 0.45
+SAME_FACE = 0.70     # по реальному каналу 21.10: настоящие повторы 0.66–1.00, чужие лица — до ~0.62
+MAYBE_FACE = 0.58    # 0.58–0.70 — «похоже, проверьте»: редкие ложные (старые мелкие фото)
 MAX_FACES = 3        # на фото бывает пара (муж и жена) — помним до 3 лиц
 _rec = None
 
