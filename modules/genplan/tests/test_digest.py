@@ -250,3 +250,13 @@ class VideoDigest(unittest.TestCase):
         res = asyncio.run(digest.publish_live_davra(db2, cfg, {}, Bot(), now, self.d, vget=NOVID))
         self.assertIn("вышел текст", res)
         self.assertEqual(out, [("text", "@kattadavrauz")])
+
+
+class WeatherTrigger(unittest.TestCase):
+    def test_trigger_pushes_weather_req_on_main(self):
+        d = Path(tempfile.mkdtemp()); key = d / "k"; key.write_text("x")
+        orig = digest.DEPLOY_KEY; digest.DEPLOY_KEY = str(key); self.addCleanup(lambda: setattr(digest, "DEPLOY_KEY", orig))
+        calls = []
+        self.assertEqual(digest.trigger_weather(NOW.date(), run=lambda a, c, e: calls.append(a)), "ok")
+        self.assertIn(["git", "checkout", "-q", "-b", "weather-req", "FETCH_HEAD"], calls)
+        self.assertEqual(calls[-1][-1], "weather-req")

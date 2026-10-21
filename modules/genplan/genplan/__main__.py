@@ -239,6 +239,19 @@ async def run() -> None:
                         service.ERRORS.append(pub)
                 except Exception as e:  # noqa: BLE001
                     service.ERRORS.append(f"⚠️ Кечки дайжест не вышел в группу: {type(e).__name__}: {str(e)[:150]}")
+                try:                                          # 🎬 05:00–06:30: заказать утренний ролик погоды (раз в день)
+                    _now = dt.datetime.now(plan.TZ)
+                    _f = f"weather_req_{_now.date()}"
+                    if "05:00" <= _now.strftime("%H:%M") < "06:30" and not store.kv_get(db, _f):
+                        from . import digest as _dg
+                        _r = await asyncio.to_thread(_dg.trigger_weather, _now.date())
+                        if _r == "ok":
+                            store.kv_set(db, _f, "ok")
+                        elif _now.strftime("%H:%M") >= "06:00":
+                            service.ERRORS.append(f"⚠️ Ролик погоды не заказан ({_r}) — в 07:00 выйдет текст, если GitHub не соберёт сам")
+                            store.kv_set(db, _f, "fail")
+                except Exception as e:  # noqa: BLE001
+                    print(f"weather-req: {e}", flush=True)
                 try:                                          # 🎉 Кечки дайжест → КАТТА ДАВРА (20:30, решение 20.10)
                     from . import digest as _dg
                     pub = await _dg.publish_live_davra(db, c, env, pubs["bot"])

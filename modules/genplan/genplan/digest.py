@@ -575,7 +575,7 @@ def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=No
     return report
 
 
-def push_video_data(day: dt.date, payloads: dict, run=None) -> str:
+def push_video_data(day: dt.date, payloads: dict, run=None, branch: str = "digest-data") -> str:
     """Данные роликов → ветка digest-data на GitHub (push запускает рендер в Actions). Ключ — deploy-key владельца."""
     if not payloads:
         return "нет данных"
@@ -591,19 +591,25 @@ def push_video_data(day: dt.date, payloads: dict, run=None) -> str:
         with tempfile.TemporaryDirectory() as tmp:
             # Коммит поверх main: GitHub запускает Actions по файлу workflow ИЗ ПРИСЛАННОГО коммита (в пустой ветке его нет)
             for args in (["git", "init", "-q"], ["git", "fetch", "-q", "--depth", "1", REPO_SSH, "main"],
-                         ["git", "checkout", "-q", "-b", "digest-data", "FETCH_HEAD"]):
+                         ["git", "checkout", "-q", "-b", branch, "FETCH_HEAD"]):
                 run(args, tmp, env)
             (Path(tmp) / "data").mkdir(exist_ok=True)
             for name, data in payloads.items():
                 (Path(tmp) / "data" / f"{name}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
             for args in (["git", "add", "data"],
                          ["git", "-c", "user.name=papa-frankfurt", "-c", "user.email=papa@localhost", "commit", "-q", "-m", f"digest {day}"],
-                         ["git", "push", "-q", "-f", REPO_SSH, "digest-data"]):
+                         ["git", "push", "-q", "-f", REPO_SSH, branch]):
                 run(args, tmp, env)
         return "ok"
     except Exception as e:  # noqa: BLE001
         err = getattr(e, "stderr", b"") or b""
         return f"{type(e).__name__}: {err.decode(errors='replace')[-160:] if isinstance(err, bytes) else err}"
+
+
+def trigger_weather(day: dt.date, run=None) -> str:
+    """🎬 21.10: утренний ролик запускает наш сервер (расписание GitHub 21.10 не сработало). Коммит поверх main
+    в ветку weather-req → Actions motion-weather (on push)."""
+    return push_video_data(day, {"weather-request": {"day": day.isoformat()}}, run=run, branch="weather-req")
 
 
 def motion_video(name: str, get=None, folder: str | None = None) -> Path:

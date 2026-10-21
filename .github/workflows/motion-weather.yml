@@ -8,7 +8,7 @@ on:
     - cron: "5 1 * * *"       # 06:05 — повтор, если первый запуск опоздал/упал (готовый файл не пересобирается)
   workflow_dispatch:
   push:
-    branches: [motion-test]
+    branches: [motion-test, weather-req]   # weather-req — заказ с Франкфурта 05:00 (21.10: расписание GitHub не сработало)
 permissions:
   contents: write
 concurrency: { group: motion-branch, cancel-in-progress: false }
@@ -25,7 +25,7 @@ jobs:
           echo "day=$D" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code origin refs/heads/motion >/dev/null && \
              git fetch -q --depth 1 origin motion && git cat-file -e FETCH_HEAD:xojaobod-weather-$D.mp4 2>/dev/null \
-             && [ "${{ github.event_name }}" = "schedule" ]; then echo "done=1" >> "$GITHUB_OUTPUT"; fi
+             && [ "${{ github.ref_name }}" != "motion-test" ]; then echo "done=1" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@v4
         if: steps.chk.outputs.done != '1'
         with: { node-version: "20" }
