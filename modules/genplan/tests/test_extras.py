@@ -184,6 +184,25 @@ class T(unittest.TestCase):
         self.assertEqual(extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, 23))), [])
         self.assertIn("✅ Разовая", hub.card(self.db, CFG, mid, at("08:00"))[0])
 
+    def test_once_button_answers_when_already_once(self):
+        mid = store.add_material(self.db, -100777, 65, "Реклама", True)
+        store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())
+
+        class Bot:
+            calls = []
+
+            def __call__(self, method, **p):
+                if method == "editMessageText":
+                    raise RuntimeError("Bad Request: message is not modified")
+                self.calls.append((method, p))
+                return {}
+        b = Bot()
+        q = {"id": "q", "from": {"id": 42}, "data": f"p1:{mid}", "message": {"chat": {"id": 42}, "message_id": 5}}
+        self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "p1")
+        self.assertIn("Уже разовая", b.calls[-1][1]["text"])
+        q["data"] = f"bk:{mid}"
+        self.assertEqual(hub.callback(b, self.db, CFG, {42}, q, at("08:00")), "bk")   # «не изменилось» не ломает
+
     def test_busy_day_moves_to_ad_window(self):
         mid = store.add_material(self.db, -100777, 63, "Реклама", True)
         store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())

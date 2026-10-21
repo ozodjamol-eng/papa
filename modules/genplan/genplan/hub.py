@@ -861,8 +861,12 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
 
     def show(markup=None, text=None):
         t, kb = card(db, cfg, mid, now)
-        bot("editMessageText", chat_id=chat, message_id=msg_id, text=text or t, reply_markup=markup or kb,
-            disable_web_page_preview=True)
+        try:
+            bot("editMessageText", chat_id=chat, message_id=msg_id, text=text or t, reply_markup=markup or kb,
+                disable_web_page_preview=True)
+        except Exception as e:  # noqa: BLE001 — 21.10: «ничего не изменилось» не должно ломать кнопку
+            if "not modified" not in str(e):
+                raise
 
     if kind in ("sm", "tm", "nx"):
         t = dt.datetime.fromtimestamp(int(arg[0]), plan.TZ) if arg and arg[0] else None
@@ -965,9 +969,14 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
             show(kb_days(m), t + "\n\n📅 До какого дня крутить рекламу (каждый день в это же время)?")
     elif kind == "p1":                                  # ✅ Разовая — повторы снимаем
         from . import extras
-        n = extras.campaign_stop(db, mid)
-        note = "✅ Разовая" + (f" — убрано повторов: {n}" if n else "")
-        show()
+        c = extras.campaign_of(db, mid)
+        if c is None or c["status"] == "stopped" or int(c["days"]) <= 1:
+            when = smart.fmt(dt.datetime.fromisoformat(m["scheduled_at"]), now) if m["scheduled_at"] else "—"
+            note = f"✅ Уже разовая — выйдет один раз: {when}"
+        else:
+            n = extras.campaign_stop(db, mid)
+            note = "✅ Разовая — повторы сняты" + (f" (убрано: {n})" if n else "")
+            show()
     elif kind == "pk":                                  # 📅 рекламный пакет на N дней
         from . import extras
         try:
