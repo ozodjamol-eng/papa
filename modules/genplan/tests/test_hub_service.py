@@ -419,6 +419,44 @@ class TestPanel(Base):
         self.assertEqual(store.get(self.db, 1)["rubric"], "Реклама")
 
 
+class TestAdButton(Base):
+    """21.10 владелец: «📣 Реклама» прямо на карточке (только Хўжаобод); альбом после 📣 РЕКЛАМА — тоже реклама."""
+
+    def flat(self, kb):
+        return [b for row in kb["inline_keyboard"] for b in row]
+
+    def test_card_has_ad_button_only_where_ads(self):
+        self.h(dm(90, "Скидка! Тел +998901234567", photo_uid="z1"))
+        now = at("09:00")
+        store.update(self.db, 1, channel="xojaobod")
+        _, kb = hub.card(self.db, CFG, 1, now)
+        self.assertIn("📣 Реклама", [b["text"] for b in self.flat(kb)])
+        store.update(self.db, 1, channel="davra")
+        _, kb = hub.card(self.db, CFG, 1, now)
+        self.assertNotIn("📣 Реклама", [b["text"] for b in self.flat(kb)])
+
+    def test_ad_button_then_ad_window(self):
+        self.h(dm(91, "Скидка! Тел +998901234567", photo_uid="z2"))
+        store.update(self.db, 1, channel="xojaobod")
+        now = at("09:00")
+        self.tap("ad:1", now)
+        self.assertEqual(store.get(self.db, 1)["rubric"], "Реклама")
+        c = self.last_card()
+        self.assertIn("📣 Реклама — выберите время", c["text"])
+        first = self.flat(c["reply_markup"])[0]
+        self.assertTrue(first["text"].startswith("📣 "))                    # первым — рекламное окно
+        self.tap(first["callback_data"], now)
+        m = store.get(self.db, 1)
+        self.assertEqual((m["status"], m["rubric"]), ("queued", "Реклама"))
+
+    def test_album_after_panel_ads(self):
+        self.h(dm(92, menu.P_ADS))
+        self.assertEqual(self.h(dm(93, "Скидка!", photo_uid="z3", gid="g1")), "album")
+        self.h(dm(94, "", photo_uid="z4", gid="g1"))
+        hub.flush_albums(self.bot, self.db, CFG, ENV, now_ts=10**12)
+        self.assertEqual(store.get(self.db, 1)["rubric"], "Реклама")
+
+
 class TestAutopilotButton(Base):
     def test_owner_allows_once(self):
         q = cb("ap:abc123def:y")["callback_query"]

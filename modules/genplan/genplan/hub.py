@@ -153,6 +153,8 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
             else (f"🧠 Умное время · {st[0]:%d.%m %H:%M}" if st else "🧠 Умное время"),
             "callback_data": f"sm:{mid}:{int(st[0].timestamp())}" if st else f"sm:{mid}"}
     kb = picker.root_kb(mid, "Якуний пост" in rs, sbtn)
+    if has_ads(cfg, m["channel"]):                    # 21.10 владелец: «📣 Реклама» — прямо на карточке, как раньше
+        kb.append([{"text": "📣 Реклама", "callback_data": f"ad:{mid}"}])
     kb += [[{"text": "📦 В запас", "callback_data": f"sr:{mid}"}],
            [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"}, {"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}],
            [{"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}, {"text": "⬅️ Отмена", "callback_data": f"del:{mid}"}]]
@@ -212,6 +214,39 @@ def kb_times(db, cfg, mid: int, now: dt.datetime) -> dict:
     btn = [{"text": smart.fmt(t, now), "callback_data": f"tm:{mid}:{int(t.timestamp())}"} for t in ts]
     rows = [btn[i:i + 2] for i in range(0, len(btn), 2)]
     return {"inline_keyboard": rows + [[{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]}
+
+
+def has_ads(cfg: dict, channel: str | None) -> bool:
+    """Реклама — только там, где в сетке есть рекламные окна (решение 20.10: только Хўжаобод)."""
+    ch = cfg["channels"].get(channel or "") or {}
+    return any(s.get("kind") == "ad" for s in ch.get("slots", []))
+
+
+def ad_times(db, cfg, mid: int, now: dt.datetime, n: int = 10) -> list[dt.datetime]:
+    """Время для рекламы: сначала свободные рекламные окна сетки (сегодня/завтра), потом остальное свободное время."""
+    m = store.get(db, mid)
+    ch = cfg["channels"][m["channel"]]
+    busy = smart.occupied(db, m["channel"], now, exclude=mid)
+    out: list[dt.datetime] = []
+    for d in (0, 1):
+        day = now.date() + dt.timedelta(days=d)
+        for t, s in smart.grid(ch, day):
+            if s["kind"] == "ad" and t >= now + smart.LEAD and smart.allowed(ch, t, "Реклама") and smart.is_free(ch, t, busy + out) \
+                    and not smart.blocked(db, m["channel"], t):
+                out.append(t)
+    rest = [t for t in smart.other_times(db, cfg, m["channel"], m["rubric"], now, n=n, exclude=mid) if t not in out]
+    return (sorted(out) + rest)[:max(n, len(out))]
+
+
+def ad_screen(db, cfg, mid: int, now: dt.datetime) -> tuple[str, dict]:
+    """Материал → реклама: рубрика «Реклама» (текст рекламодателя не трогаем) и выбор времени."""
+    store.update(db, mid, rubric="Реклама", guessed=0, stock=0, tag=None, topic=None)
+    t, _ = card(db, cfg, mid, now)
+    windows = {s["t"] for s in cfg["channels"][store.get(db, mid)["channel"]].get("slots", []) if s.get("kind") == "ad"}
+    btn = [{"text": ("📣 " if f"{x:%H:%M}" in windows else "") + smart.fmt(x, now),
+            "callback_data": f"tm:{mid}:{int(x.timestamp())}"} for x in ad_times(db, cfg, mid, now)]
+    rows = [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]
+    return "📣 Реклама — выберите время (📣 — рекламное окно):\n\n" + t, {"inline_keyboard": rows}
 
 
 def kb_rubric(cfg: dict, mid: int, channel: str) -> dict:
@@ -399,7 +434,9 @@ def flush_albums(bot, db, cfg: dict, env: dict, now_ts: float | None = None) -> 
         try:
             if a["dm"]:
                 from . import bots
-                direct(bots.for_channel(a.get("channel"), bot), db, cfg, owners, hub, a["msgs"], channel=a.get("channel"))
+                b = bots.for_channel(a.get("channel"), bot)
+                direct(b, db, cfg, owners, hub, a["msgs"], channel=a.get("channel"))
+                special_mode(b, db, cfg, bots.key_of(b), a["msgs"][0]["chat"]["id"])   # 21.10: альбом после 📣 РЕКЛАМА
             elif a.get("hub"):                           # альбом из ХАБа канала → в запас, через бота канала
                 from . import bots
                 msgs = sorted(a["msgs"], key=lambda x: x["message_id"])
@@ -450,10 +487,9 @@ def special_mode(bot, db, cfg: dict, key: str, chat: int) -> str | None:
         bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text="🚨 Срочно — выходит сейчас\n\n" + t, reply_markup=kb)
         return "ur"
     if mode == "ad":
-        store.update(db, m["id"], rubric="Реклама", guessed=0)
-        t, _ = card(db, cfg, m["id"], now)
-        bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text="📣 Реклама — выберите время:\n\n" + t,
-            reply_markup=kb_times(db, cfg, m["id"], now))
+        t, kb = ad_screen(db, cfg, m["id"], now)
+        bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text=t[:4096], reply_markup=kb,
+            disable_web_page_preview=True)
         return "ad"
     return None
 
@@ -788,6 +824,9 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
                     store.update(db, mid, **upd)
                     t, _ = card(db, cfg, mid, now)
                     show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
+    elif kind == "ad":                                  # 📣 Реклама на карточке
+        t, kb = ad_screen(db, cfg, mid, now)
+        show(kb, t)
     elif kind == "sr":                                  # 📦 В запас: выбрать рубрику
         rs = rubrics(cfg, m["channel"])
         icons = cfg["channels"][m["channel"]].get("icons") or {}
