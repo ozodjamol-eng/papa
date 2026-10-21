@@ -172,6 +172,8 @@ hub_title = "ХЎЖАОБОД · ХАБ"     # свой ХАБ группы. 20.
 digest = { live = true, at = "20:30", until = "22:00" }   # 18.10 владелец: Кечки дайжест PAPA — в рабочую группу с сегодняшнего. Откат: live = false
 title = "Хўжаобод Сити 24"
 username = "xojaobodcity24"
+mode = "live"                    # 21.10 06:15 GENPLAN 5 остановлен владельцем (genplan5-stop) — Хўжаобод в PAPA в работе. Откат: удалить строку + Лондон genplan5-start
+bot_token_env = "XOJAOBOD_BOT_TOKEN"   # свой бот-пульт XOJAOBODCITYAVTOPOST24 (каждый бот — своё); публикует в группе аккаунт PAPA
 publisher = "account"            # группа: новый аккаунт как анонимный админ — пост от имени группы
 signature = "👉 @XOJAOBODCITY24"
 signatures = ["📍 Хўжаободдаги энг тезкор хабарлар 👉 @XOJAOBODCITY24", "🏘 Хўжаобод ҳаёти — ҳар куни биз билан 👉 @XOJAOBODCITY24", "📢 Хўжаобод янгиликлари биринчи бўлиб 👉 @XOJAOBODCITY24"]   # 17.10 утверждено владельцем, по очереди
