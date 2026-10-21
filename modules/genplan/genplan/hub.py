@@ -190,9 +190,30 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
              [{"text": "🤖 ИИ-текст", "callback_data": f"ai:{mid}"}, {"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}],
              [{"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]
     if (m["rubric"] or "").lower().startswith("реклама") and not m["urgent"]:
-        # 20.10 (как кампании GENPLAN 5): реклама на N дней — каждый день в это же время
-        rows.insert(0, [{"text": f"🔁 {n} кун", "callback_data": f"pk:{mid}:{n}"} for n in (3, 6, 10)])
+        # 21.10 владелец: вместо 🔁 3/6/10 кун — ✅ Разовая / 📅 Несколько дней (дни недели от даты рекламы, до 7)
+        from . import extras
+        c = extras.campaign_of(db, int(mid))
+        if c is None or int(c["material_id"]) == int(mid):      # показы следующих дней пакета — без этих кнопок
+            multi = c is not None and c["status"] != "stopped" and int(c["days"]) > 1
+            if multi:
+                end = dt.date.fromisoformat(c["start_day"]) + dt.timedelta(days=int(c["days"]) - 1)
+                many = f"✅ 📅 до {extras.WD[end.weekday()]} · {c['days']} {extras.days_word(int(c['days']))}"
+            else:
+                many = "📅 Несколько дней"
+            rows.insert(0, [{"text": "Разовая" if multi else "✅ Разовая", "callback_data": f"p1:{mid}"},
+                            {"text": many, "callback_data": f"pd:{mid}"}])
     return rows
+
+
+def kb_days(m) -> dict:
+    """📅 Несколько дней: «до Чт · 2 дня» … до 7 дней, считая от дня первого выхода рекламы."""
+    from . import extras
+    start = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ).date()
+    btn = []
+    for n in range(2, 8):
+        d = start + dt.timedelta(days=n - 1)
+        btn.append({"text": f"до {extras.WD[d.weekday()]} · {n} {extras.days_word(n)}", "callback_data": f"pk:{m['id']}:{n}"})
+    return {"inline_keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"bk:{m['id']}"}]]}
 
 
 def options_screen(db, cfg: dict, mid: int, now: dt.datetime) -> tuple[str, dict]:
@@ -936,7 +957,18 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         else:
             t, _ = card(db, cfg, mid, now)
             show(kb_times(db, cfg, mid, now), t + "\n\n⚠️ Свободного времени в ближайшие дни нет — выберите вручную:")
-    elif kind == "pk":                                  # 🔁 рекламный пакет на N дней
+    elif kind == "pd":                                  # 📅 Несколько дней — выбор дня окончания
+        if not m["scheduled_at"]:
+            note = "Сначала выберите время рекламы"
+        else:
+            t, _ = card(db, cfg, mid, now)
+            show(kb_days(m), t + "\n\n📅 До какого дня крутить рекламу (каждый день в это же время)?")
+    elif kind == "p1":                                  # ✅ Разовая — повторы снимаем
+        from . import extras
+        n = extras.campaign_stop(db, mid)
+        note = "✅ Разовая" + (f" — убрано повторов: {n}" if n else "")
+        show()
+    elif kind == "pk":                                  # 📅 рекламный пакет на N дней
         from . import extras
         try:
             c = extras.campaign_from(db, m, int(arg[0]))

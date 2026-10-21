@@ -339,7 +339,7 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
     """20.10 (перенос из GENPLAN 5): ☀️ погода и курс 07:00, 🌙 Якуний пост 22:00, 📣 рекламные пакеты на N дней."""
     import asyncio
     from . import extras
-    extras.ensure_campaigns(db, now)
+    extras.ensure_campaigns(db, now, cfg)
     extras.ensure_day(db, cfg, now.date(), now)
     ready, late = extras.due(db, now)
     for r in late:

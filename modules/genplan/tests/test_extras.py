@@ -147,7 +147,7 @@ class T(unittest.TestCase):
         mid = store.add_material(self.db, -100777, 60, "🔥 ЎТИНЛАР СОТИЛАДИ!", True)
         store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())
         c = extras.campaign_from(self.db, store.get(self.db, mid), 3)
-        self.assertIn("3 кун · ҳар куни 17:30 · 21.10–23.10", extras.campaign_note(c))
+        self.assertIn("Ср–Пт · 3 дня · каждый день 17:30 (21.10–23.10)", extras.campaign_note(c))
         self.assertEqual(extras.ensure_campaigns(self.db, at("08:00")), [])          # день 1 — сам исходный пост
         for d in (22, 23):
             made = extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, d)))
@@ -163,8 +163,36 @@ class T(unittest.TestCase):
         mid = store.add_material(self.db, -100777, 61, "Реклама матни", True)
         store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())
         _, kb = hub.card(self.db, CFG, mid, at("08:00"))
-        self.assertIn("pk:", json.dumps(kb))
+        flat = [b for row in kb["inline_keyboard"] for b in row]
+        self.assertEqual([b["text"] for b in flat[:2]], ["✅ Разовая", "📅 Несколько дней"])
+        self.assertNotIn("кун", json.dumps(kb, ensure_ascii=False))
+        days = [b["text"] for row in hub.kb_days(store.get(self.db, mid))["inline_keyboard"] for b in row]
+        self.assertEqual(days[:6], ["до Чт · 2 дня", "до Пт · 3 дня", "до Сб · 4 дня", "до Вс · 5 дней",
+                                    "до Пн · 6 дней", "до Вт · 7 дней"])
         self.assertIn("Якуний пост", hub.rubrics(CFG, "xojaobod"))
+
+    def test_once_cancels_package(self):
+        mid = store.add_material(self.db, -100777, 62, "Реклама матни", True)
+        store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())
+        extras.campaign_from(self.db, store.get(self.db, mid), 4)
+        _, kb = hub.card(self.db, CFG, mid, at("08:00"))
+        flat = [b["text"] for row in kb["inline_keyboard"] for b in row]
+        self.assertEqual(flat[:2], ["Разовая", "✅ 📅 до Сб · 4 дня"])
+        made = extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, 22)))
+        self.assertEqual(extras.campaign_stop(self.db, mid), 1)
+        self.assertEqual(store.get(self.db, made[0])["status"], "rejected")
+        self.assertEqual(extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, 23))), [])
+        self.assertIn("✅ Разовая", hub.card(self.db, CFG, mid, at("08:00"))[0])
+
+    def test_busy_day_moves_to_ad_window(self):
+        mid = store.add_material(self.db, -100777, 63, "Реклама", True)
+        store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at("17:30").isoformat())
+        extras.campaign_from(self.db, store.get(self.db, mid), 2)
+        other = store.add_material(self.db, -100777, 64, "Бошқа пост", True)
+        store.update(self.db, other, channel="xojaobod", rubric="Янгилик", status="queued",
+                     scheduled_at=at("17:30", dt.date(2026, 10, 22)).isoformat())
+        made = extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, 22)), CFG)
+        self.assertEqual(store.get(self.db, made[0])["scheduled_at"][11:16], "15:10")   # 17:40 вплотную к посту — ближайшее свободное окно
 
 
 if __name__ == "__main__":

@@ -154,13 +154,53 @@ def campaign_from(db, m, days: int, name: str = "") -> dict:
     return dict(c)
 
 
+WD = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+
+def days_word(n: int) -> str:
+    return "день" if n % 10 == 1 and n % 100 != 11 else ("дня" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else "дней")
+
+
 def campaign_note(c) -> str:
+    """21.10 владелец: «📅 Реклама: Ср–Сб · 4 дня · каждый день 15:10» — дни недели вместо «3/6/10 кун»."""
     start = dt.date.fromisoformat(c["start_day"])
     end = start + dt.timedelta(days=int(c["days"]) - 1)
-    return f"🔁 Пакет: {c['days']} кун · ҳар куни {c['at']} · {start:%d.%m}–{end:%d.%m}"
+    if c["status"] == "stopped" or int(c["days"]) <= 1:
+        return "✅ Разовая реклама"
+    return (f"📅 Реклама: {WD[start.weekday()]}–{WD[end.weekday()]} · {c['days']} {days_word(int(c['days']))} · "
+            f"каждый день {c['at']} ({start:%d.%m}–{end:%d.%m})")
 
 
-def ensure_campaigns(db, now: dt.datetime) -> list[int]:
+def campaign_stop(db, material_id: int) -> int:
+    """✅ Разовая: пакет снят; уже созданные будущие показы (не исходный пост) — убираем. Возвращает число убранных."""
+    c = campaign_of(db, material_id)
+    if c is None:
+        return 0
+    db.execute("UPDATE ad_campaigns SET status='stopped', days=1 WHERE id=?", (c["id"],))
+    rows = db.execute("SELECT d.material_id FROM ad_campaign_days d JOIN materials m ON m.id=d.material_id "
+                      "WHERE d.campaign_id=? AND d.material_id IS NOT NULL AND d.material_id<>? AND m.status='queued'",
+                      (c["id"], c["material_id"])).fetchall()
+    for r in rows:
+        db.execute("UPDATE materials SET status='rejected' WHERE id=?", (r[0],))
+    db.commit()
+    return len(rows)
+
+
+def shift_time(db, cfg: dict | None, channel: str, at: dt.datetime, now: dt.datetime) -> dt.datetime:
+    """Время показа занято или в тихом окне (Жума) → ближайшее свободное рекламное окно того же дня."""
+    if not cfg or channel not in cfg.get("channels", {}):
+        return at
+    from . import smart
+    ch = cfg["channels"][channel]
+    busy = smart.occupied(db, channel, now)
+    ok = lambda t: t >= now + smart.LEAD and smart.is_free(ch, t, busy) and not smart.blocked(db, channel, t)  # noqa: E731
+    if ok(at):
+        return at
+    wins = sorted((t for t, s in smart.grid(ch, at.date()) if s["kind"] == "ad" and ok(t)), key=lambda t: abs(t - at))
+    return wins[0] if wins else at
+
+
+def ensure_campaigns(db, now: dt.datetime, cfg: dict | None = None) -> list[int]:
     """Сегодняшний показ каждого активного пакета → материал в плане (если время ещё не прошло)."""
     made = []
     today = now.date()
@@ -181,6 +221,7 @@ def ensure_campaigns(db, now: dt.datetime) -> list[int]:
         src = store.get(db, c["material_id"])
         if src is None:
             continue
+        at = shift_time(db, cfg, c["channel"], at, now)
         cols = ("hub_chat", "hub_msg", "text", "has_media", "media", "hub_msgs", "channel", "rubric", "tag", "topic", "via")
         vals = [src[k] if k in src.keys() else None for k in cols]
         mid = db.execute(f"INSERT INTO materials({','.join(cols)},status,urgent,created_at,scheduled_at,locked,guessed,stock) "
