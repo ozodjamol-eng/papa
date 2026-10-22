@@ -148,6 +148,14 @@ class AccountPublisher:
             raise PublishError(f"{type(e).__name__}: {e}") from None
         return int(m.id)
 
+    async def publish_photo(self, chat: str, path: str, caption: str = "") -> int:
+        """Локальная картинка (баннер намаза) → группа от имени группы, обычным фото (не файлом)."""
+        try:
+            m = await self.c.send_file(chat, path, caption=caption[:1024], force_document=False)
+        except Exception as e:  # noqa: BLE001
+            raise PublishError(f"{type(e).__name__}: {e}") from None
+        return int(m.id)
+
     async def publish_album(self, chat: str, hub_chat: int, hub_ids: list[int], caption: str) -> int:
         try:
             msgs = [m for m in await self.c.get_messages(hub_chat, ids=hub_ids) if m and m.media]

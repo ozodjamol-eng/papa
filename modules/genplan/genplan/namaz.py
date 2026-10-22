@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS namaz_locks (channel TEXT NOT NULL, day TEXT NOT NULL
 
 def setup(db) -> None:
     db.executescript(SCHEMA)
+    # 22.10 владелец: готовый пост намаза (баннер + его текст) на неделю — колонки добавляются, старое не трогаем
+    for table, col in (("namaz_schedule", "photo"), ("namaz_schedule", "caption"), ("namaz_posts", "photo")):
+        if col not in {r[1] for r in db.execute(f"PRAGMA table_info({table})")}:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
+    db.commit()
 
 
 def opts(ch: dict) -> dict | None:
@@ -117,12 +122,53 @@ def parse(text: str, today: dt.date) -> list[tuple[dt.date, dict]]:
     return out
 
 
-def save(db, items: list[tuple[dt.date, dict]], now: dt.datetime) -> None:
+MONTHS = ("январ", "феврал", "март", "апрел", "май", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
+RANGE_RE = re.compile(r"(?<!\d)(\d{1,2})\s*[–—\-]\s*\d{1,2}\s+([а-яўқғҳё]+)", re.I)
+MONTH_RE = re.compile(r"(?<!\d)(\d{1,2})\s+([а-яўқғҳё]+)", re.I)
+
+
+def start_date(text: str, today: dt.date) -> dt.date:
+    """С какого дня действует готовый пост: «23–29 октябр» / «23 октябр» / «23.10.2026» → 23.10; прошедшая дата или
+    даты нет — с сегодняшнего дня. Готовый пост на следующую неделю, брошенный в четверг, не трогает сегодняшний намаз."""
+    day = None
+    for rx in (RANGE_RE, MONTH_RE):
+        for m in rx.finditer(text or ""):
+            mon = next((i + 1 for i, w in enumerate(MONTHS) if m.group(2).lower().startswith(w)), None)
+            if mon:
+                try:
+                    day = dt.date(today.year, mon, int(m.group(1)))
+                except ValueError:
+                    continue
+                break
+        if day:
+            break
+    if day is None:
+        m = re.search(r"(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)", text or "")
+        if m:
+            try:
+                day = dt.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            except ValueError:
+                day = None
+    if day and day < today - dt.timedelta(days=180):          # «5 январ», брошенный в декабре, — следующий год
+        day = day.replace(year=day.year + 1)
+    return day if day and day > today else today
+
+
+def parse_post(caption: str, today: dt.date) -> tuple[dt.date, dict]:
+    """Готовый пост намаза (баннер + текст): время — из текста поста, начало — из даты в тексте."""
+    return start_date(caption, today), _parse_block([ln for ln in (caption or "").splitlines() if ln.strip()])
+
+
+def save(db, items: list[tuple[dt.date, dict]], now: dt.datetime, photo: str | None = None,
+         caption: str | None = None) -> None:
+    """photo/caption — готовый пост владельца: выходит как есть вместо нашей таблицы. Ввод одним текстом их снимает."""
     for day, t in items:
-        db.execute("INSERT INTO namaz_schedule(day,bomdod,peshin,asr,shom,xufton,saved_at) VALUES (?,?,?,?,?,?,?) "
+        db.execute("INSERT INTO namaz_schedule(day,bomdod,peshin,asr,shom,xufton,saved_at,photo,caption) "
+                   "VALUES (?,?,?,?,?,?,?,?,?) "
                    "ON CONFLICT(day) DO UPDATE SET bomdod=excluded.bomdod, peshin=excluded.peshin, asr=excluded.asr, "
-                   "shom=excluded.shom, xufton=excluded.xufton, saved_at=excluded.saved_at",
-                   (day.isoformat(), *[t[n] for n in NAMES], now.isoformat()))
+                   "shom=excluded.shom, xufton=excluded.xufton, saved_at=excluded.saved_at, "
+                   "photo=excluded.photo, caption=excluded.caption",
+                   (day.isoformat(), *[t[n] for n in NAMES], now.isoformat(), photo, caption))
     # ещё не вышедшие посты на эти дни пересоздаются по новому времени; вышедшие не трогаем
     for day, _ in items:
         db.execute("DELETE FROM namaz_posts WHERE day>=? AND status='pending'", (day.isoformat(),))
@@ -155,10 +201,16 @@ def ensure_day(db, cfg: dict, channel: str, day: dt.date, now: dt.datetime) -> i
         return 0
     sig = ch.get("signature", "")
     tail = f"\n\n{sig}" if sig else ""
-    posts = [("table", _at(day, s["bomdod"], o["table_before"]),
-              f"🕌 НАМОЗ ВАҚТЛАРИ\n📅 {day:%d.%m.%Y} · {WEEKDAY[day.weekday()]}\n\n"
-              + "\n".join(f"{ICON[n]} {LABEL[n]} — {s[n]}" for n in NAMES)
-              + "\n\n🤲 Намозларингиз қабул бўлсин." + tail)]
+    photo = s["photo"] if "photo" in s.keys() else None
+    if photo and channel != "xojaobod":
+        photo = None                                          # готовый пост намаза — только Хўжаобод (решение 15.10)
+    if photo:                                                 # 22.10: готовый пост владельца — как есть, без лишних слов
+        table = s["caption"] or ""
+    else:
+        table = (f"🕌 НАМОЗ ВАҚТЛАРИ\n📅 {day:%d.%m.%Y} · {WEEKDAY[day.weekday()]}\n\n"
+                 + "\n".join(f"{ICON[n]} {LABEL[n]} — {s[n]}" for n in NAMES)
+                 + "\n\n🤲 Намозларингиз қабул бўлсин." + tail)
+    posts = [("table", _at(day, s["bomdod"], o["table_before"]), table)]
     for n in NAMES:
         posts.append((f"alert_{n}", _at(day, s[n], o["alert_before"]),
                       f"🕌 {LABEL[n]} намозига {o['alert_before']} дақиқа қолди ({s[n]})." + tail))
@@ -173,9 +225,10 @@ def ensure_day(db, cfg: dict, channel: str, day: dt.date, now: dt.datetime) -> i
     n_new = 0
     for key, at, text in posts:
         late = now - at > dt.timedelta(minutes=o["grace"])
-        cur = db.execute("INSERT OR IGNORE INTO namaz_posts(channel,day,key,at,text,status,error) VALUES (?,?,?,?,?,?,?)",
+        cur = db.execute("INSERT OR IGNORE INTO namaz_posts(channel,day,key,at,text,status,error,photo) "
+                         "VALUES (?,?,?,?,?,?,?,?)",
                          (channel, day.isoformat(), key, at.isoformat(), text, "skipped" if late else "pending",
-                          "опоздание — не публикуем поздно" if late else None))
+                          "опоздание — не публикуем поздно" if late else None, photo if key == "table" else None))
         n_new += cur.rowcount
     db.commit()
     return n_new

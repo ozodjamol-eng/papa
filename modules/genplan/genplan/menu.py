@@ -90,9 +90,30 @@ def panel_reply(db, cfg: dict, channel: str, button: str, now: dt.datetime | Non
                 f"Публикации: {r['window'][0]}–{r['window'][1]}, между постами ≥ {r['gap']} мин\n"
                 f"Мест в сетке дня: {sum(1 for s in ch['slots'] if s['kind'] in ('content', 'music'))}\n"
                 f"Хэштеги рубрик: {tags} · подпись: {ch.get('signature', '—')}\n"
-                f"Утро: {(ch.get('morning') or {}).get('greeting', '—')} / {(ch.get('morning') or {}).get('day_post', '—')}\n\n"
-                "Изменить что-то — напишите мне (ассистенту), поменяю в настройках.")
+                f"Утро: {(ch.get('morning') or {}).get('greeting', '—')} / {(ch.get('morning') or {}).get('day_post', '—')}\n"
+                + _namaz_line(db, ch, now) +
+                "\nИзменить что-то — напишите мне (ассистенту), поменяю в настройках.")
     return None
+
+
+def _namaz_line(db, ch: dict, now: dt.datetime) -> str:
+    from . import namaz
+    if not namaz.opts(ch):
+        return ""
+    s = namaz.schedule_for(db, now.date() + dt.timedelta(days=1)) or namaz.schedule_for(db, now.date())
+    if not s:
+        return "Намоз: ⚠️ время не задано — нажмите «🕌 Намоз — новый пост»\n"
+    kind = "готовый пост (баннер)" if ("photo" in s.keys() and s["photo"]) else "таблица бота"
+    return (f"Намоз: {kind} с {dt.date.fromisoformat(s['day']):%d.%m} · "
+            + " · ".join(s[n] for n in namaz.NAMES) + "\n")
+
+
+def panel_markup(cfg: dict, channel: str, button: str) -> dict:
+    """⚙️ НАСТРОЙКИ канала с намазом — кнопка «🕌 Намоз — новый пост» (22.10 владелец); остальное — постоянная панель."""
+    from . import namaz
+    if button == P_SETTINGS and namaz.opts(cfg["channels"][channel]):
+        return {"inline_keyboard": [[{"text": "🕌 Намоз — новый пост", "callback_data": "nz:set"}]]}
+    return PANEL
 
 
 def _mode(cfg, ch):

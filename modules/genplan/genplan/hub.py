@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+from pathlib import Path
 import re
 import time
 
@@ -657,6 +658,10 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if wt:                                                        # бросил новый пост — ожидание времени снимаем
             store.kv_set(db, "await_time", "")
         from . import namaz
+        if "photo" in msg and cap and (namaz_waiting(db) or (namaz.looks_like_schedule(cap) and "намоз" in cap.lower())):
+            r = namaz_draft(bot, db, env, msg, cap, cfg=cfg)          # 22.10: 🕌 готовый пост намаза на неделю → карточка ✅/✏️/❌
+            if r != "not_namaz":
+                return r
         if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):   # 🕌 время намаза
             r = save_namaz(bot, db, cfg, msg, txt)
             if r != "not_namaz":
@@ -843,6 +848,8 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         return morning.callback(bot, db, cq)
     if cq["data"].startswith("ap:"):                      # автопилот просит разрешения на задачу (Франкфурт)
         return autopilot_answer(bot, db, cq)
+    if cq["data"].startswith("nz:"):                      # 🕌 готовый пост намаза: ✅ / ✏️ / ❌
+        return namaz_callback(bot, db, cfg, cq)
     chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
     data = cq["data"]
     confirmed = data.startswith("ok:")                    # 21.10 владелец: выбор вступает в силу только после «✅ Утверждаю»
@@ -1198,3 +1205,114 @@ def confirm_text(db, cfg: dict, m, kind: str, arg: list, now: dt.datetime) -> st
     if when is None:
         return None
     return f"❓ Проверьте и утвердите:\n📍 Канал: {name}\n📂 Рубрика: {rub}\n🕐 Время: {when}\n\nУтверждаете?"
+
+
+# ---------- 🕌 готовый пост намаза на неделю (22.10 владелец) ----------
+# Владелец бросает баннер с текстом → карточка «✅ Утверждаю / ✏️ Изменить / ❌ Отказ».
+# После ✅ пост заменяет прежний и выходит каждое утро как есть (за table_before минут до Бомдода),
+# напоминания — за alert_before минут до каждого намаза. Время берётся из текста поста.
+
+NZ_WAIT_MIN = 10
+
+
+def namaz_waiting(db) -> bool:
+    at = store.kv_get(db, "namaz_wait", "")
+    return bool(at) and _now() - dt.datetime.fromisoformat(at) < dt.timedelta(minutes=NZ_WAIT_MIN)
+
+
+def namaz_kb() -> dict:
+    return {"inline_keyboard": [[{"text": "✅ Утверждаю", "callback_data": "nz:ok"}],
+                                [{"text": "✏️ Изменить", "callback_data": "nz:ed"},
+                                 {"text": "❌ Отказ", "callback_data": "nz:no"}]]}
+
+
+def namaz_card(cfg: dict | None, d: dict) -> str:
+    from . import namaz
+    o = {**namaz.DEFAULTS, **(((cfg or {}).get("channels", {}).get("xojaobod") or {}).get("namaz") or {})}
+    day = dt.date.fromisoformat(d["day"])
+    t = d["times"]
+    post = (dt.datetime.combine(day, dt.time.fromisoformat(t["bomdod"])) - dt.timedelta(minutes=o["table_before"]))
+    return ("🕌 Намоз — новый пост на неделю\n\n"
+            f"С {day:%d.%m} ({namaz.WEEKDAY[day.weekday()]}) каждый день, до нового поста:\n"
+            f"• {post:%H:%M} — этот баннер и текст, как есть (за {o['table_before']} мин до Бомдода)\n"
+            f"• за {o['alert_before']} мин до каждого намаза — напоминание\n\n"
+            + " · ".join(f"{namaz.LABEL[n]} {t[n]}" for n in namaz.NAMES))
+
+
+def _download(bot, env: dict, file_id: str, dest: Path) -> None:
+    import urllib.request
+    from . import bots
+    info = bot("getFile", file_id=file_id)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(f"https://api.telegram.org/file/bot{bots.token_of(bot, env)}/{info['file_path']}",
+                                timeout=60) as r:
+        dest.write_bytes(r.read())
+
+
+def namaz_draft(bot, db, env: dict, msg: dict, cap: str, download=None, cfg: dict | None = None) -> str:
+    from . import namaz
+    from .fabrika import STATE
+    forced = namaz_waiting(db)
+    chat = msg["chat"]["id"]
+    try:
+        day, times = namaz.parse_post(cap, _now().date())
+    except ValueError as e:
+        if not forced:
+            return "not_namaz"                       # обычный пост с фото, где упомянуты намазы, — идёт своим путём
+        bot("sendMessage", chat_id=chat, reply_to_message_id=msg["message_id"],
+            text=f"⚠️ Не понял время в тексте: {e}.\nИсправьте текст и бросьте пост ещё раз — ничего не изменено.")
+        return "namaz_error"
+    store.kv_set(db, "namaz_wait", "")
+    old = store.kv_get(db, "namaz_draft", "")
+    if old:                                          # прежний черновик заменён новым постом — его картинку убираем
+        Path(json.loads(old)["photo"]).unlink(missing_ok=True)
+    path = STATE / "namaz" / f"draft-{msg['message_id']}.jpg"
+    (download or _download)(bot, env, msg["photo"][-1]["file_id"], path)
+    d = {"photo": str(path), "caption": cap, "day": day.isoformat(), "times": times}
+    r = bot("sendMessage", chat_id=chat, reply_to_message_id=msg["message_id"],
+            text=namaz_card(cfg, d), reply_markup=namaz_kb())
+    d["card"] = r["message_id"]
+    store.kv_set(db, "namaz_draft", json.dumps(d, ensure_ascii=False))
+    return "namaz_draft"
+
+
+def namaz_callback(bot, db, cfg: dict, cq: dict) -> str:
+    from . import namaz
+    from .fabrika import STATE
+    chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
+    act = cq["data"][3:]
+    bot("answerCallbackQuery", callback_query_id=cq["id"])
+    if act == "set":                                 # ⚙️ НАСТРОЙКИ → 🕌 Намоз: ждём готовый пост
+        store.kv_set(db, "namaz_wait", _now().isoformat())
+        bot("sendMessage", chat_id=chat, text="🕌 Бросьте готовый пост намаза — баннер с текстом.\n"
+                                              "Время бот возьмёт из текста, дату начала — тоже из текста.")
+        return "namaz_wait"
+    raw = store.kv_get(db, "namaz_draft", "")
+    d = json.loads(raw) if raw else None
+    if not d or int(d.get("card", 0)) != int(msg_id):
+        _edit(bot, chat, msg_id, (cq["message"].get("text") or "") + "\n\n⚠️ Карточка устарела — бросьте пост ещё раз.", None)
+        return "namaz_stale"
+    card_text = namaz_card(cfg, d)
+    if act == "no":
+        store.kv_set(db, "namaz_draft", "")
+        Path(d["photo"]).unlink(missing_ok=True)
+        _edit(bot, chat, msg_id, card_text + "\n\n❌ Отказ — ничего не изменено.", None)
+        return "namaz_no"
+    if act == "ed":
+        store.kv_set(db, "namaz_wait", _now().isoformat())
+        _edit(bot, chat, msg_id, card_text + "\n\n✏️ Бросьте исправленный пост (баннер с текстом) — он заменит этот.",
+              {"inline_keyboard": [[{"text": "❌ Отказ", "callback_data": "nz:no"}]]})
+        return "namaz_edit"
+    # ✅ Утверждаю
+    now = _now()
+    day = dt.date.fromisoformat(d["day"])
+    final = STATE / "namaz" / f"banner-{day.isoformat()}-{msg_id}.jpg"
+    Path(d["photo"]).replace(final)
+    namaz.save(db, [(day, d["times"])], now, photo=str(final), caption=d["caption"])
+    for c in cfg["channels"]:
+        for x in (now.date(), now.date() + dt.timedelta(days=1)):
+            namaz.ensure_day(db, cfg, c, x, now)
+    store.kv_set(db, "namaz_draft", "")
+    store.kv_set(db, "namaz_wait", "")
+    _edit(bot, chat, msg_id, card_text + f"\n\n✅ Принято — с {day:%d.%m} выходит этот пост.", None)
+    return "namaz_ok"

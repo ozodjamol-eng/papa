@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from pathlib import Path
 
 from . import plan, smart, store, text
 from .publish import PublishError
@@ -399,8 +400,16 @@ async def tick_namaz(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log
         for r in namaz.due(db, channel, now, o["grace"]):
             p = pubs[ch["publisher"]]
             to = target(cfg, env, channel)
+            photo = r["photo"] if "photo" in r.keys() else None
+            if photo and not Path(photo).exists():              # баннер пропал с диска — намаз всё равно выходит, текстом
+                ERRORS.append(f"⚠️ {ch['title']}: баннер намаза не найден — вышел только текст. Бросьте пост ещё раз.")
+                photo = None
             try:
-                if ch["publisher"] == "account":
+                if photo:                                       # 22.10: готовый пост владельца (баннер + его текст)
+                    mid = p.publish_photo(to, photo, r["text"])
+                    if ch["publisher"] == "account":
+                        mid = await mid
+                elif ch["publisher"] == "account":
                     mid = await p.publish(to, r["text"], None, None, False)
                 else:
                     mid = p.publish(to, r["text"], None, None, False)

@@ -179,7 +179,8 @@ async def run() -> None:
                 chan = bots.channel_of(b) or c.get("default_channel") or "davra"
                 ans = menu.panel_reply(db, c, chan, r[6:])
                 if ans:
-                    b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096], reply_markup=menu.PANEL)
+                    b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096],
+                      reply_markup=menu.panel_markup(c, chan, r[6:]))
             if r and r.startswith("cmd:"):
                 ans = menu.reply(db, c, msg.get("text", ""))
                 if ans:
