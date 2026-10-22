@@ -141,7 +141,22 @@ class T(unittest.TestCase):
         self.assertEqual(len(self.pubs["account"].sent), 2)
         chat, body, hub_chat, hub_msg, media = self.pubs["account"].sent[1]
         self.assertEqual((chat, hub_chat, hub_msg, media), ("@xojaobodcity24", -100777, 55, True))
-        self.assertTrue(body.startswith("#муфтий_минбари"))
+        self.assertTrue(body.startswith("#МУФТИЙ_МИНБАРИ\n"))
+        self.assertEqual(body.count("#"), 1)                                   # 22.10: один хэштег
+
+    def test_final_post_cleaned_and_signed(self):
+        """22.10 аудит: Якуний пост — с юзернеймом канала, рубрика кириллицей, чужой призыв убран."""
+        src = "#muftiy_minbari\n\nRahmonning bandalari\n🎙 Shayx Nuriddin Xoliqnazar hazratlari\n\n📲 OBUNA BO'LING ✅ VA ULASHING"
+        mid = store.add_material(self.db, -100777, 56, src, True)
+        store.update(self.db, mid, channel="xojaobod")
+        extras.final_set(self.db, "xojaobod", store.get(self.db, mid))
+        self.assertEqual(self.tick(at("22:00")), 1)
+        body = self.pubs["account"].sent[0][1]
+        self.assertTrue(body.startswith("#МУФТИЙ_МИНБАРИ\n"), body)
+        self.assertIn("Раҳмоннинг бандалари", body)
+        self.assertNotIn("muftiy", body)
+        self.assertIn("@XOJAOBODCITY24", body.upper())
+        self.assertEqual(body.count("#"), 1)
 
     def test_ad_package_daily_same_time(self):
         mid = store.add_material(self.db, -100777, 60, "🔥 ЎТИНЛАР СОТИЛАДИ!", True)

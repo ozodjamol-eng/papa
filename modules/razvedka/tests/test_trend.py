@@ -1,4 +1,5 @@
 import datetime as dt
+import os
 import json
 import tempfile
 import unittest
@@ -83,3 +84,29 @@ class TestBotSend(unittest.TestCase):
         def bad(url, data=None, timeout=30):
             raise OSError("boom")
         self.assertFalse(telegram.bot_send("T", -1001, "hi", urlopen=bad))
+
+
+class TestGemini(unittest.TestCase):
+    """22.10 аудит: Anthropic владельца заблокирован — разведка идёт через Gemini с поиском Google."""
+    def test_gemini_path_and_cost(self):
+        seen = {}
+
+        def gpost(model, body, key, timeout=300):
+            seen["model"], seen["body"], seen["key"] = model, body, key
+            return {"candidates": [{"content": {"parts": [{"text": "🎬 ТРЕНДЫ ДНЯ\nТЕМЫ: a; b"}]},
+                                    "groundingMetadata": {"webSearchQueries": ["q1", "q2"]}}],
+                    "usageMetadata": {"promptTokenCount": 1000, "candidatesTokenCount": 500}}
+        os.environ["GEMINI_API_KEY"] = "g-test"
+        try:
+            text, u = trend.ask("x", "claude-haiku-5-5", 6, gpost=gpost)
+        finally:
+            del os.environ["GEMINI_API_KEY"]
+        self.assertIn("ТРЕНДЫ", text)
+        self.assertEqual((u["searches"], u["model"], seen["key"]), (2, "gemini", "g-test"))
+        self.assertEqual(seen["body"]["tools"], [{"google_search": {}}])
+        self.assertLess(trend.cost(u, "gemini"), 0.01)
+
+    def test_gemini_no_key(self):
+        os.environ.pop("GEMINI_API_KEY", None)
+        with self.assertRaises(trend.TrendError):
+            trend.gemini_ask("x")

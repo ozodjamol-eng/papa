@@ -519,6 +519,21 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
                     extras.mark(db, r, status="skipped", error="Якуний пост не задан")
                     continue
                 body, hub_chat, hub_msg, media, ids = f["text"], f["hub_chat"], f["hub_msg"], f["has_media"], f.get("hub_msgs") or []
+                # 22.10 аудит: Якуний пост выходил как есть — без юзернейма канала, с чужим латинским хэштегом
+                # (#muftiy_minbari). Теперь та же чистка, что у обычных постов: чужие подписи/хэштеги прочь,
+                # латиница → кириллица, внизу наша подпись. Рубрику владельца (первая строка-хэштег) оставляем —
+                # одну, кириллицей, заглавными (#МУФТИЙ_МИНБАРИ).
+                from . import translit
+                first = (body or "").strip().split("\n", 1)[0].strip()
+                tag = ""
+                if first.startswith("#") and " " not in first and len(first) > 2:
+                    tag = "#" + translit.to_cyrillic(first[1:]).upper()
+                own = tuple(c["username"] for c in cfg["channels"].values())
+                sigs = tuple(ch.get("signatures") or ())
+                sig = sigs[now.date().toordinal() % len(sigs)] if sigs else ch.get("signature", "")
+                body = text.finalize(body, sig, own=own, tag=tag,
+                                     signatures=sigs + ((ch.get("signature"),) if ch.get("signature") else ()),
+                                     limit=1024 if media else 4096)
                 if ch["publisher"] == "account":           # 21.10: в PAPA HUB — только на секунды публикации
                     staged = stage(db, env, pubs, f.get("via"), hub_chat, ids or [hub_msg], bool(media))
                     if staged:

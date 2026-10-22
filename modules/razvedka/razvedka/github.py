@@ -41,7 +41,7 @@ CONTEXT = """Контекст: PAPA — система владельца (Оз�
 (КАТТА ДАВРА, PaparazziUZ, Xo'jaobod City 24) и дохода с рекламы. Модули: Razvedka (анализ конкурентов, тренды),
 Voronka (Instagram комментарий → директ → Telegram), GENPLAN (боты-пульты, автопостинг по расписанию, ИИ-хуки),
 Reklama, Fabrika (ИИ-контент, монтаж видео на Python+ffmpeg, клипы на заказ), Pult (управление).
-Стек: Python, Telegram Bot API и Telethon, серверы DigitalOcean по 1 ГБ RAM, Anthropic (Haiku) для текстов.
+Стек: Python, Telegram Bot API и Telethon, серверы DigitalOcean по 1 ГБ RAM, Gemini (Flash) для текстов.
 Бюджет маленький. Правило «Копилки фишек»: не копируем — оцениваем, берём как есть / дорабатываем / берём часть, честно."""
 
 TASK = """Ниже кандидаты с GitHub (сегодня {today}). Оцени, какие РЕАЛЬНО полезны PAPA прямо сейчас.
@@ -180,12 +180,18 @@ def run(out_dir: Path, now: dt.datetime | None = None, get=_get, post=_post) -> 
     if not cands:
         return plain_report([], today_s) + err_line
     key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
+    use_gemini = post is _post and bool(os.environ.get("GEMINI_API_KEY"))   # 22.10: Anthropic заблокирован → Gemini
+    if not key and not use_gemini:
         text = plain_report(cands, today_s, "нет ключа ИИ")
     else:
         try:
-            text, usage = ask(TASK.format(today=today_s, items=items_text(cands)), key, post)
-            text += f"\n\n💲 расход отчёта ≈ ${cost(usage, MODEL)} · кандидатов: {len(cands)}"
+            prompt = TASK.format(today=today_s, items=items_text(cands))
+            if use_gemini:
+                from .trend import gemini_ask
+                text, usage = gemini_ask(f"{CONTEXT}\n\n{prompt}", search=False)
+            else:
+                text, usage = ask(prompt, key, post)
+            text += f"\n\n💲 расход отчёта ≈ ${cost(usage, usage.get('model', MODEL))} · кандидатов: {len(cands)}"
         except TrendError as e:
             text = plain_report(cands, today_s, f"ИИ: {e}")
     # показанных кандидатов больше не предлагаем (даже если ИИ их отсеял) — история на 600 названий

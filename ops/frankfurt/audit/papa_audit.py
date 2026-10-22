@@ -231,6 +231,11 @@ class Audit:
         res = []
         for mod, extra in (("genplan", {"POOL_VISION_GAP": "0"}), ("razvedka", {})):
             env = {**os.environ, **extra, "PAPA_GENPLAN_STATE": sh("mktemp", "-d")}
+            # 22.10 аудит: тесты не должны ходить в сеть и тратить боевые ключи (раньше зависали > 300 с).
+            for k in ("GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"):
+                env.pop(k, None)
+            env.update({"HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9",
+                        "http_proxy": "http://127.0.0.1:9", "https_proxy": "http://127.0.0.1:9", "NO_PROXY": "", "no_proxy": ""})
             p = subprocess.run([PY, "-m", "unittest", "discover", "-q", "-s", "tests"], cwd=REPO / "modules" / mod,
                                capture_output=True, text=True, env=env, timeout=300)
             ran = re.search(r"Ran (\d+)", p.stderr)

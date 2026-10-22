@@ -6,7 +6,8 @@
   market — раз в неделю (понедельник): блогеры и студии с «панелями» (кодовое слово → ссылка → панель с шаблонами),
            чья партнёрка или какой API под капотом, цены, сильные/слабые стороны, что берём себе; цены API-моделей.
 
-Работает через Anthropic API с серверным веб-поиском (ключ ANTHROPIC_API_KEY из /etc/papa-genplan/ai.env).
+Работает через Gemini с поиском Google (ключ GEMINI_API_KEY из /etc/papa-genplan/ai.env). 22.10: аккаунт Anthropic
+владельца заблокирован — Anthropic остаётся только запасным путём (если когда-то вернётся ключ, а Gemini нет).
 История тем (history.json) — чтобы не повторять одни и те же тренды каждый день.
 Расход: daily (Haiku, ≤ 6 поисков) ~ $0.05–0.10; market (Sonnet, ≤ 12 поисков) ~ $0.3–0.6. Итого ~ $3–5 в месяц."""
 from __future__ import annotations
@@ -80,8 +81,55 @@ def _post(body: dict, key: str, timeout: int = 300) -> dict:
         raise TrendError(f"Anthropic недоступен: {e}") from None
 
 
-def ask(prompt: str, model: str, max_searches: int, key: str | None = None, post=_post) -> tuple[str, dict]:
-    """Один запрос с веб-поиском; продолжаем, если API вернул pause_turn. Возвращает (текст, usage)."""
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
+
+
+def _gpost(model: str, body: dict, key: str, timeout: int = 300) -> dict:
+    req = urllib.request.Request(GEMINI_URL.format(m=model), data=json.dumps(body).encode(), method="POST",
+                                 headers={"content-type": "application/json", "x-goog-api-key": key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise TrendError(f"Gemini HTTP {e.code}: {e.read()[:300]!r}") from None
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise TrendError(f"Gemini недоступен: {e}") from None
+
+
+def gemini_ask(prompt: str, search: bool = True, key: str | None = None, gpost=_gpost) -> tuple[str, dict]:
+    """Запрос к Gemini (с поиском Google, если search). Возвращает (текст, usage) в том же виде, что ask()."""
+    key = (key or os.environ.get("GEMINI_API_KEY", "")).strip().strip('"').strip("'")
+    if not key:
+        raise TrendError("нет GEMINI_API_KEY (задача genplan-gemini-key)")
+    body = {"systemInstruction": {"parts": [{"text": CONTEXT}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.4, "maxOutputTokens": 8192}}
+    if search:
+        body["tools"] = [{"google_search": {}}]
+    errs = []
+    for m in dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest").removeprefix("models/"), "gemini-flash-latest"]):
+        try:
+            d = gpost(m, body, key)
+        except TrendError as e:
+            errs.append(str(e)); continue
+        cand = (d.get("candidates") or [{}])[0]
+        text = "".join(p.get("text", "") for p in ((cand.get("content") or {}).get("parts") or []) if not p.get("thought")).strip()
+        if not text:
+            errs.append(f"пустой ответ ({cand.get('finishReason')})"); continue
+        u = d.get("usageMetadata") or {}
+        q = (cand.get("groundingMetadata") or {}).get("webSearchQueries") or []
+        return text, {"input_tokens": int(u.get("promptTokenCount", 0)),
+                      "output_tokens": int(u.get("candidatesTokenCount", 0)) + int(u.get("thoughtsTokenCount", 0)),
+                      "searches": len(q), "model": "gemini"}
+    raise TrendError("Gemini: " + "; ".join(errs[-2:]))
+
+
+def ask(prompt: str, model: str, max_searches: int, key: str | None = None, post=_post, gpost=_gpost) -> tuple[str, dict]:
+    """Один запрос с веб-поиском; продолжаем, если API вернул pause_turn. Возвращает (текст, usage).
+    22.10: основной путь — Gemini (Anthropic владельца заблокирован). Anthropic — только если ключа Gemini нет
+    или тест подставил свой post."""
+    if post is _post and os.environ.get("GEMINI_API_KEY"):
+        return gemini_ask(prompt, True, gpost=gpost)
     key = key or os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
         raise TrendError("нет ANTHROPIC_API_KEY (задача genplan-ai-key)")
@@ -132,6 +180,8 @@ def save_history(path: Path, old: list[str], new: list[str]) -> None:
 
 def cost(usage: dict, model: str) -> float:
     """Примерная цена запроса в $ (вход/выход за 1М токенов + $0.01 за поиск)."""
+    if "gemini" in model:                       # Gemini Flash: ~$0.30 вход / $2.50 выход за 1М; поиск в пределах бесплатной квоты
+        return round(usage["input_tokens"] / 1e6 * 0.3 + usage["output_tokens"] / 1e6 * 2.5, 3)
     rin, rout = (1.0, 5.0) if "haiku" in model else (3.0, 15.0)
     return round(usage["input_tokens"] / 1e6 * rin + usage["output_tokens"] / 1e6 * rout + usage["searches"] * 0.01, 3)
 
@@ -152,4 +202,4 @@ def run(mode: str, out_dir: Path, now: dt.datetime | None = None, post=_post) ->
     text, topics = split_topics(raw)
     save_history(hist_path, old, topics)
     (out_dir / f"latest-{mode}.txt").write_text(text, encoding="utf-8")
-    return f"{text}\n\n💲 расход отчёта ≈ ${cost(usage, model)} · поисков: {usage['searches']}"
+    return f"{text}\n\n💲 расход отчёта ≈ ${cost(usage, usage.get('model', model))} · поисков: {usage['searches']}"

@@ -564,12 +564,11 @@ def special_mode(bot, db, cfg: dict, key: str, chat: int) -> str | None:
         store.update(db, m["id"], status="queued", urgent=1, scheduled_at=now.isoformat(), stock=0,
                      rubric=m["rubric"] or "Срочно")
         t, kb = card(db, cfg, m["id"], now)
-        bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text="🚨 Срочно — выходит сейчас\n\n" + t, reply_markup=kb)
+        _edit(bot, chat, m["owner_msg"], "🚨 Срочно — выходит сейчас\n\n" + t, kb)   # 22.10: «not modified» не ошибка
         return "ur"
     if mode == "ad":
         t, kb = ad_screen(db, cfg, m["id"], now)
-        bot("editMessageText", chat_id=chat, message_id=m["owner_msg"], text=t[:4096], reply_markup=kb,
-            disable_web_page_preview=True)
+        _edit(bot, chat, m["owner_msg"], t, kb)
         return "ad"
     return None
 
@@ -825,7 +824,11 @@ def autopilot_answer(bot, db, cq: dict) -> str:
         return "dup"
     store.kv_set(db, k, "yes" if ans == "y" else "no")
     text = (cq["message"].get("text") or "") + ("\n\n✅ РАЗРЕШЕНО — выполняю" if ans == "y" else "\n\n❌ ОТКАЗАНО")
-    bot("editMessageText", chat_id=cq["message"]["chat"]["id"], message_id=cq["message"]["message_id"], text=text[:4096])
+    try:
+        bot("editMessageText", chat_id=cq["message"]["chat"]["id"], message_id=cq["message"]["message_id"], text=text[:4096])
+    except Exception as e:  # noqa: BLE001 — 22.10: «ничего не изменилось» (двойное нажатие) — не ошибка
+        if "not modified" not in str(e):
+            raise
     bot("answerCallbackQuery", callback_query_id=cq["id"])     # итог — постоянной строкой в сообщении
     return "ap_" + ans
 
