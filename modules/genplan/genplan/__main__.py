@@ -131,6 +131,17 @@ async def run() -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"menu: {e}", flush=True)
         store.kv_set(db, "menu_v", "5")
+    if bots.SHTAB and store.kv_get(db, "shtab_hello") != "1":   # 23.10: главный пульт подключён — один раз сказать, что он делает
+        for o in str(env.get("OWNER_IDS", "")).split(","):
+            try:
+                bots.shtab()("sendMessage", chat_id=int(o), text=(
+                    "🏛 PAPA ШТАБ подключён — главный пульт всех каналов.\n"
+                    "Сюда приходят: тревоги (что не вышло и почему), напоминания, проверка Жумы в четверг.\n"
+                    "Утренние видео в PAPA HUB теперь загружает он.\n"
+                    "Предпросмотр утра и кнопка 🗑 — в пульте своего канала (КАТТА ДАВРА, PaparazziUZ, Хўжаобод)."))
+                store.kv_set(db, "shtab_hello", "1")
+            except Exception as e:  # noqa: BLE001
+                print(f"shtab hello: {e}", flush=True)
     for k, b in reg.items():                          # новый бот-пульт: один раз показать панель и что он делает
         if k != "main" and store.kv_get(db, f"menu_v_{k}") != "2":
             title = c0["channels"][k]["title"] if (c0 := cfg())["channels"].get(k) else k
@@ -283,10 +294,14 @@ async def run() -> None:
                 rem = namaz.reminder(db, c, dt.datetime.now(plan.TZ))
                 if rem:
                     service.ERRORS.append(rem)
+                sb = bots.shtab(bot)                       # 23.10: тревоги и отчёты — в главный пульт PAPA ШТАБ
                 while service.ERRORS:
                     err = service.ERRORS.pop(0)
                     for o in owners:
-                        bot("sendMessage", chat_id=o, text=err)
+                        try:
+                            sb("sendMessage", chat_id=o, text=err)
+                        except Exception:  # noqa: BLE001 — штаб недоступен (не нажат «Старт») — главный бот
+                            bot("sendMessage", chat_id=o, text=err)
             except Exception as e:  # noqa: BLE001
                 print(f"tick: {type(e).__name__}: {e}", flush=True)
             state["next_tick"] = time.time() + 60

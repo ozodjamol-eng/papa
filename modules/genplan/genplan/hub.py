@@ -589,6 +589,18 @@ def to_hub(bot, db, mid: int) -> None:
     store.update(db, mid, hub_chat=HUB_ID, hub_msg=new[0], hub_msgs=json.dumps(new))
 
 
+def is_morning_upload(db, mid: int, wait: float = 4.0) -> bool:
+    """Пост в хабе — утреннее видео от PAPA ШТАБ? Пока идёт загрузка, отметка ставится через доли секунды после поста —
+    ждём несколько секунд и проверяем ещё раз (только в окне загрузки, иначе сразу)."""
+    if store.kv_get(db, f"hubmorning_{mid}"):
+        return True
+    until = store.kv_get(db, "hub_upload_until")
+    if not until or until < dt.datetime.now(plan.TZ).isoformat():
+        return False
+    time.sleep(wait)
+    return bool(store.kv_get(db, f"hubmorning_{mid}"))
+
+
 def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
     from . import bots
     global HUB_ID
@@ -606,6 +618,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
                 return None
             if store.kv_get(db, f"hubcopy_{post['message_id']}") or store.kv_get(db, "hub_staging"):
                 return None                          # служебная копия на секунды публикации (группа) — не новый материал
+            if is_morning_upload(db, post["message_id"]):
+                return None                          # 23.10: утреннее видео, которое загрузил PAPA ШТАБ, — не новый материал
             if _album(post, dm=False):
                 return "album"
             return intake(bot, db, cfg, owners, hub, [post["message_id"]], [post])

@@ -132,7 +132,7 @@ class TestMorning(unittest.TestCase):
         cap = morning.greeting_caption(ch, morning.opts(ch), FRI)
         # 17.10: шаблоны владельца (12 вариантов, у каналов разные в один день); юзернейм НАД хуком
         body, hook = morning.template_pick(ch, FRI)
-        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n" + body.split("\n")[0]))
+        self.assertTrue(cap.startswith("#ЖУМА_МУБОРАК\n" + body.split("\n")[0]))   # 23.10: пятница — Жума
         self.assertTrue(cap.endswith("🎉 @kattadavrauz\n" + hook))
         self.assertNotIn("{", cap)
         self.assertLessEqual(len(cap), 1024)
@@ -145,7 +145,7 @@ class TestMorning(unittest.TestCase):
         self.assertIn(f"📅 Бугун, {day0.day} {morning.MONTHS_UZ[day0.month - 1]}", morning.template_pick(ch, day0)[0])
         ai_ch = {**ch, "morning": {**ch["morning"], "ai_greeting": True}}      # старый путь (ИИ) — по флагу
         cap = morning.greeting_caption(ai_ch, morning.opts(ai_ch), FRI)
-        self.assertTrue(cap.startswith("#ХАЙРЛИ_ТОНГ\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
+        self.assertTrue(cap.startswith("#ЖУМА_МУБОРАК\n🕌🤲 ЖУМА ТОНГИ МУБОРАК БЎЛСИН!"))
         self.assertTrue(cap.endswith("🎉 @kattadavrauz"))
 
     def test_prepare_waits_until_evening(self):
@@ -195,7 +195,7 @@ class TestMorning(unittest.TestCase):
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:31", FRI), log=lambda s: None))
         greet = [s for s in pb.sent if s[2]]
         self.assertEqual(len(greet), 2)
-        self.assertTrue(all(s[1].startswith("#ХАЙРЛИ_ТОНГ") for s in greet))
+        self.assertTrue(all(s[1].startswith("#ЖУМА_МУБОРАК") for s in greet))   # 23.10: пятница
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:35", FRI), log=lambda s: None))
         asyncio.run(service.tick(self.db, CFG, ENV, {"bot": pb, "account": acc}, now=at("06:55", FRI), log=lambda s: None))
         x = self.rows("xojaobod")
@@ -254,10 +254,11 @@ class TestMorning(unittest.TestCase):
             self.assertIn("ЖУМА ТОНГИ МУБОРАК", seen[0])             # образец больших каналов передан ИИ
             self.assertIn("Жума куни муборак бўлсин, азизлар", seen[0])   # подпись этого же видео — главный ориентир
             self.assertNotIn("@begona", seen[0])
-            self.assertTrue(uploads[0][1].startswith("#ХАЙРЛИ_ТОНГ\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
+            self.assertTrue(uploads[0][1].startswith("#ЖУМА_МУБОРАК\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
             self.assertTrue(uploads[0][1].endswith("🎉 @kattadavrauz"))
             self.assertEqual(self.rows("davra")["greeting"]["source"], "pool:b")
-            self.assertIsNone(morning.pool_pick(self.db, FRI))      # одно видео не повторяется
+            self.assertIsNone(morning.pool_pick(self.db, FRI + dt.timedelta(days=7)))   # одно видео не повторяется (через неделю)
+            self.assertEqual(morning.pool_pick(self.db, FRI)["key"], "b")    # 23.10: но в ту же Жуму — и в другие каналы
 
     def test_pool_from_telegram_channel(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"PAPA_GENPLAN_STATE": tmp, "GEMINI_API_KEY": "x"}):
@@ -523,3 +524,115 @@ class OwnBotMorning(unittest.TestCase):
                                          now, log=lambda s: None))
         self.assertEqual(morning.get(self.db, rid)["status"], "failed")
         self.assertTrue(any("PaparazziUZ" in e for e in service.ERRORS))
+
+
+class Juma2310(unittest.TestCase):
+    """23.10 (владелец): Жума — во всех трёх каналах; штаб грузит утро в хаб; предпросмотр — в пульт своего канала;
+    вручную поставленное время не сбрасывается."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        env = mock.patch.dict(os.environ, {"PAPA_GENPLAN_STATE": tmp.name, "POOL_VISION_GAP": "0"})
+        env.start()
+        self.addCleanup(env.stop)
+        self.db = store.connect(":memory:")
+        morning.setup(self.db)
+        service.ERRORS.clear()
+
+    def test_friday_text_and_tag_in_all_channels(self):
+        texts = set()
+        for c in ("davra", "paparazzi", "xojaobod"):
+            ch = CFG["channels"][c]
+            cap = morning.greeting_caption(ch, morning.opts(ch), FRI)
+            self.assertTrue(cap.startswith("#ЖУМА_МУБОРАК\n"), c)
+            self.assertIn("ЖУМА МУБОРАК", cap.upper())
+            self.assertNotIn("{", cap)
+            self.assertLessEqual(len(cap), 1024)
+            texts.add(morning.template_pick(ch, FRI)[0])
+        self.assertEqual(len(texts), 3)                          # три канала — три разных пятничных текста
+        ch = CFG["channels"]["davra"]
+        self.assertTrue(morning.greeting_caption(ch, morning.opts(ch), THU).startswith("#ХАЙРЛИ_ТОНГ\n"))
+
+    def test_one_juma_video_goes_to_every_channel_today(self):
+        self.db.execute("INSERT INTO morning_pool(key,file,status,weekday,season,quality,views) VALUES "
+                        "('j','j.mp4','ok','Жума','autumn',5,10), ('g','g.mp4','ok',NULL,'autumn',5,10)")
+        fri = FRI
+        picks = []
+        for i, c in enumerate(("davra", "paparazzi", "xojaobod")):     # готовится накануне вечером, канал за каналом
+            morning.ensure_day(self.db, CFG, c, fri, at("18:00", THU))
+            k = morning.pool_pick(self.db, fri, salt=i)["key"]
+            self.db.execute("UPDATE fixed_posts SET source=? WHERE channel=? AND day=? AND key='greeting'",
+                            (f"pool:{k}", c, fri.isoformat()))
+            picks.append(k)
+        self.assertEqual(picks, ["j", "j", "j"])               # не «первому каналу — Жума, остальным — обычное»
+        sat = fri + dt.timedelta(days=1)
+        self.assertEqual(morning.pool_pick(self.db, sat)["key"], "g")   # в другой день правило старое
+
+    def test_pinned_time_is_not_reset(self):
+        now = at("04:00", FRI)
+        morning.ensure_day(self.db, CFG, "paparazzi", FRI, now)
+        r = self.db.execute("SELECT * FROM fixed_posts WHERE channel='paparazzi' AND key='greeting'").fetchone()
+        new = at("05:35", FRI).isoformat()
+        morning.update(self.db, r["id"], at=new, pinned=1)
+        morning.ensure_day(self.db, CFG, "paparazzi", FRI, now)
+        self.assertEqual(morning.get(self.db, r["id"])["at"], new)
+        morning.update(self.db, r["id"], pinned=0)
+        morning.ensure_day(self.db, CFG, "paparazzi", FRI, now)
+        self.assertNotEqual(morning.get(self.db, r["id"])["at"], new)   # без закрепления — как раньше, по расписанию
+
+    def test_thursday_check_warns_once_without_juma_video(self):
+        self.assertIsNone(morning.juma_check(self.db, at("17:00", THU)))
+        msg = morning.juma_check(self.db, at("18:05", THU))
+        self.assertIn("Жума", msg)
+        self.assertIsNone(morning.juma_check(self.db, at("19:00", THU)))   # один раз
+        self.assertIsNone(morning.juma_check(self.db, at("18:05", FRI)))
+
+    def test_thursday_check_quiet_when_video_ready(self):
+        (morning.pool_dir()).mkdir(parents=True, exist_ok=True)
+        (morning.pool_dir() / "j.mp4").write_bytes(b"x")
+        self.db.execute("INSERT INTO morning_pool(key,file,status,weekday) VALUES ('j','j.mp4','ok','Жума')")
+        self.assertIsNone(morning.juma_check(self.db, at("18:05", THU)))
+
+    def test_preview_goes_to_own_channel_pult(self):
+        from genplan import bots, fabrika
+        morning.ensure_day(self.db, CFG, "paparazzi", FRI, at("04:00", FRI))
+        rid = self.db.execute("SELECT id FROM fixed_posts WHERE channel='paparazzi' AND key='greeting'").fetchone()["id"]
+        morning.update(self.db, rid, prepared=1, hub_msg=5, text="#ЖУМА_МУБОРАК\nсалом")
+        f = morning.own_file(rid); f.parent.mkdir(parents=True, exist_ok=True); f.write_bytes(b"mp4")
+        main, own = Bot(), Bot()
+
+        def no_hub(m, **p):                                       # пульт PaparazziUZ не видит PAPA HUB
+            if m == "copyMessage":
+                raise RuntimeError("copyMessage: chat not found")
+            return own(m, **p)
+        ups = []
+        with mock.patch.dict(bots.REG, {"main": main, "paparazzi": no_hub}, clear=True), \
+                mock.patch.dict(bots.TOKENS, {"main": "t", "paparazzi": "own-token"}, clear=True), \
+                mock.patch.object(fabrika, "upload_video", lambda tok, chat, p, cap, kb=None: ups.append((tok, chat)) or {"message_id": 1}):
+            morning.preview(main, self.db, CFG, ENV, rid)
+        self.assertEqual(main.calls, [])                          # пульт КАТТА ДАВРА чужое утро не показывает
+        self.assertEqual(ups, [("own-token", 42)])               # видео — файлом из своего пульта
+
+    def test_shtab_uploads_and_main_bot_ignores_it_in_hub(self):
+        from genplan import bots
+        self.db.execute("INSERT INTO morning_pool(key,file,status,weekday,season,quality,views) VALUES "
+                        "('j','j.mp4','ok','Жума','autumn',5,10)")
+        (morning.pool_dir()).mkdir(parents=True, exist_ok=True)
+        (morning.pool_dir() / "j.mp4").write_bytes(b"x")
+        morning.ensure_day(self.db, CFG, "davra", FRI, at("04:00", THU))
+        r = self.db.execute("SELECT * FROM fixed_posts WHERE channel='davra' AND key='greeting'").fetchone()
+        tokens = []
+
+        def upload(tok, chat, path, cap):
+            tokens.append(tok); return {"message_id": 321}
+        from genplan import media
+        with mock.patch.dict(bots.SHTAB, {"bot": Bot(), "token": "shtab-token"}, clear=True), \
+                mock.patch.object(media, "text_logo", lambda *a, **k: self.tmp / "l.png"), \
+                mock.patch.object(media, "watermark_video", lambda src, logo, dst, **k: (dst.parent.mkdir(parents=True, exist_ok=True), dst.write_bytes(b"v"), dst)[2]), \
+                mock.patch.object(morning, "used_on", lambda *a: False):  # noqa
+            morning.prepare_one(Bot(), self.db, CFG, ENV, r, at("22:00", THU), self.tmp / "w", upload=upload)
+        self.assertEqual(tokens, ["shtab-token"])
+        self.assertTrue(hub.is_morning_upload(self.db, 321, wait=0))
+        self.assertFalse(hub.is_morning_upload(self.db, 999, wait=0))

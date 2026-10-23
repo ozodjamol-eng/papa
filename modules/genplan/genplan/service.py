@@ -433,6 +433,9 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
     rep = curator_report(db, cfg, now)
     if rep:
         ERRORS.append(rep)
+    jc = morning.juma_check(db, now)                   # 23.10: четверг вечером — есть ли видео «Жума» на завтра
+    if jc:
+        ERRORS.append(jc)
     for channel, ch in cfg["channels"].items():
         o = morning.opts(ch)
         if not o:

@@ -72,6 +72,8 @@ def setup(db) -> None:
         db.execute("ALTER TABLE fixed_posts ADD COLUMN source TEXT")        # откуда видео: pool:<key> / pixabay:<id>
     if "approved" not in fp:
         db.execute("ALTER TABLE fixed_posts ADD COLUMN approved INTEGER NOT NULL DEFAULT 0")   # ✅ владелец одобрил
+    if "pinned" not in fp:          # 23.10: время поставлено вручную — расписание его больше не сдвигает
+        db.execute("ALTER TABLE fixed_posts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
     have = {r[1] for r in db.execute("PRAGMA table_info(morning_pool)")}
     for col in ("text TEXT", "pool_chat INTEGER", "msg_id INTEGER"):     # подпись источника; пост в NEXUS MORNING POOL
         if col.split()[0] not in have:
@@ -117,7 +119,8 @@ def ensure_day(db, cfg: dict, channel: str, day: dt.date, now: dt.datetime) -> i
                           "служба не работала в это время" if late else None))
         n += cur.rowcount
         if not cur.rowcount:                         # время намаза поправили — сдвигаем ещё не вышедший пост
-            db.execute("UPDATE fixed_posts SET at=? WHERE channel=? AND day=? AND key=? AND status='pending' AND at<>?",
+            db.execute("UPDATE fixed_posts SET at=? WHERE channel=? AND day=? AND key=? AND status='pending' AND at<>? "
+                       "AND coalesce(pinned,0)=0",
                        (at.isoformat(), channel, day.isoformat(), key, at.isoformat()))
     db.commit()
     return n
@@ -407,12 +410,38 @@ GREETING_VARIANTS = [                                   # 17.10: 11 вариан
 ]
 
 
+JUMA_VARIANTS = [                 # 23.10 владелец: в пятницу во ВСЕХ каналах — «Жума муборак» (его шаблон, пятничные строки)
+    ("🕌 Ассалому алайкум ва раҳматуллоҳи ва барокатуҳ!\n\n📅 Бугун, {date}\n🤲 ЖУМА МУБОРАК БЎЛСИН, {address}!\n\n"
+     "🌙 Ҳафтанинг энг табаррук куни — дуолар ижобат бўладиган, барака ва раҳмат ёғиладиган кун. Шу муборак кун ҳурматидан "
+     "Аллоҳ барчамизни мағфират қилсин!\n\n✨ Хонадонларимизга тинчлик, яқинларимизга саломатлик, дастурхонимизга барака берсин!"
+     "\n\n💫 Ризқингиз кенг, ҳар бир босган қадамингиз тавфиқли, тавбаларингиз қабул, дуоларингиз ижобат бўлсин!\n\n"
+     "🕊 Аллоҳ паноҳида бўлинг!", "❤️ Яқинларингизни шу дуолар билан йўқланг."),
+    ("🕌 ЖУМА МУБОРАК, {address}!\n\nАссалому алайкум ва раҳматуллоҳи ва барокатуҳ!\n📅 Бугун, {date} — ҳафтанинг энг "
+     "табаррук куни.\n\n🤲 Аллоҳим, шу муборак Жума ҳурматидан дуоларимизни ижобат, тавбаларимизни қабул айлагин. Қалбимизга "
+     "хотиржамлик, хонадонимизга файзу барака бергин!\n\n✨ Кўнглингиздаги эзгу ниятларингиз ушалсин, бугун сизни фақат "
+     "хушхабарлар кутиб турсин!\n\n🕊 Аллоҳ паноҳида бўлинг!", "❤️ Дўстларга ҳам улашинг"),
+    ("🤲 ЖУМА МУБОРАК, азизлар! АЛЛОҲ ДУОЛАРИМИЗНИ ИЖОБАТ ҚИЛСИН!\n\nАссалому алайкум ва раҳматуллоҳи ва барокатуҳ!\n\n"
+     "📅 {date} — Жума тонги муборак бўлсин, {address}!\n\n🌿 Бу табаррук кунда ота-онамизни, яқинларимизни дуо қилайлик. "
+     "Аллоҳ хонадонларимиздан тинчлик, дастурхонимиздан барака, қалбимиздан шукр аримасин!\n\n💫 Тавбаларимиз қабул, "
+     "дуоларимиз ижобат бўлсин!\n\n🕊 Аллоҳ ўз паноҳида асрасин!", "❤️ Эзгу тилакларни яқинларингизга ҳам улашинг."),
+]
+JUMA_TAG = "#ЖУМА_МУБОРАК"
+
+
+def is_juma(day: dt.date) -> bool:
+    return day.weekday() == 4
+
+
 def template_pick(ch: dict, day: dt.date) -> tuple[str, str]:
     """(текст, хук) на этот день. 12 вариантов владельца; у каждого канала свой сдвиг (variant_offset) —
     в один день три канала выходят с РАЗНЫМИ текстами, вариант повторяется в канале раз в 12 дней."""
     m = ch.get("morning") or {}
     wd = WEEKDAY[day.weekday()]
     date = f"{day.day} {MONTHS_UZ[day.month - 1]}"
+    if is_juma(day):                                      # каналы в один день — с разными пятничными текстами
+        j = (day.toordinal() // 7 + int(m.get("variant_offset", 0)) // 4) % len(JUMA_VARIANTS)
+        body, hook = JUMA_VARIANTS[j]
+        return body.format(date=date, address=m.get("address", "азизларим")), hook
     n = len(GREETING_VARIANTS) + 1
     i = (day.toordinal() + int(m.get("variant_offset", 0))) % n
     if i == 0:
@@ -481,7 +510,7 @@ def greeting_caption(ch: dict, o: dict, day: dt.date, body: str | None = None) -
             body = "\n\n".join(x.format(wd=WEEKDAY[day.weekday()]) for x in t)
         else:
             body = template_body(ch, day)
-    tag = o.get("tag") or ""
+    tag = JUMA_TAG if is_juma(day) else (o.get("tag") or "")
     sig = ch.get("signature", "")
     if not m.get("ai_greeting"):                              # 17.10: наш юзернейм НАД хуком, хук — последней строкой
         sig = (sig + "\n" if sig else "") + template_pick(ch, day)[1]
@@ -678,9 +707,13 @@ def pool_pick(db, day: dt.date, salt: int = 0):
     wd = WEEKDAY[day.weekday()]
     s = season(day)
     for cond, args in (("weekday=?", (wd,)), ("weekday IS NULL", ())):
-        rows = [r for r in db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND season IN (?, 'neutral') "
-                                      "ORDER BY quality DESC, views DESC", (*args, s)).fetchall()
-                if not used(db, "pool", r["key"])]
+        rows = db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND season IN (?, 'neutral') "
+                          "ORDER BY quality DESC, views DESC", (*args, s)).fetchall()
+        fresh = [r for r in rows if not used(db, "pool", r["key"])]
+        if not fresh and is_juma(day) and cond.startswith("weekday="):
+            # 23.10 владелец: Жума — во ВСЕХ каналах; видео «Жума» одно — оно же уходит и в другие каналы сегодня
+            fresh = [r for r in rows if used_on(db, r["key"], day)]
+        rows = fresh
         if rows:
             r = random.Random(day.toordinal() * 17 + salt).choice(rows[:5])
             mark_used(db, "pool", r["key"])
@@ -765,7 +798,8 @@ FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
 
 
-def overlay_png(w: int, h: int, day: dt.date, username: str, dst: Path) -> Path:
+def overlay_png(w: int, h: int, day: dt.date, username: str, dst: Path, title: str = "ХАЙРЛИ ТОНГ!",
+                sub: str | None = None) -> Path:
     """Прозрачная картинка размера видео: мягкая тень по центру + «ХАЙРЛИ ТОНГ!» + день недели; внизу — значок и @юзернейм."""
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
     from . import media
@@ -773,8 +807,7 @@ def overlay_png(w: int, h: int, day: dt.date, username: str, dst: Path) -> Path:
     base = min(w, h)
     big = ImageFont.truetype(FONT_SERIF, int(base * 0.13))
     small = ImageFont.truetype(FONT, int(base * 0.055))
-    title = "ХАЙРЛИ ТОНГ!"
-    sub = f"{WEEKDAY[day.weekday()].upper()} ТОНГИ МУБОРАК"
+    sub = sub if sub is not None else f"{WEEKDAY[day.weekday()].upper()} ТОНГИ МУБОРАК"
     while big.getlength(title) > w * 0.9:
         big = ImageFont.truetype(FONT_SERIF, int(big.size * 0.92))
     cy = int(h * 0.40)
@@ -810,7 +843,8 @@ def render_greeting(src: Path, day: dt.date, username: str, dst: Path, seconds: 
     portrait = (info["h"] or 720) > (info["w"] or 1280)
     w, h = (720, 1280) if portrait else (1280, 720)
     dur = max(6.0, min(info["dur"] or float(seconds), float(seconds)))
-    ov = overlay_png(w, h, day, username, dst.with_suffix(".overlay.png"))
+    ov = overlay_png(w, h, day, username, dst.with_suffix(".overlay.png"),
+                     *(("ЖУМА МУБОРАК!", "ХАЙРЛИ ТОНГ") if is_juma(day) else ()))
     flt = (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,fps=30[v];"
            f"[1:v]format=rgba,fade=t=in:st=0.6:d=1.2:alpha=1[o];[v][o]overlay=0:0,format=yuv420p")
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-loop", "1", "-framerate", "30", "-i", str(ov),
@@ -820,6 +854,47 @@ def render_greeting(src: Path, day: dt.date, username: str, dst: Path, seconds: 
     if r.returncode != 0 or not dst.exists():
         raise RuntimeError(f"ffmpeg: {(r.stderr or '').strip()[-200:]}")
     return dst
+
+
+def juma_overlay(src: Path, day: dt.date, username: str, dst: Path) -> Path:
+    """23.10: в пятницу нет видео «Жума» — обычное утреннее видео с крупной надписью «ЖУМА МУБОРАК!» (звук сохраняется)."""
+    from . import media
+    info = media.probe(src)
+    w, h = int(info["w"] or 720) // 2 * 2, int(info["h"] or 1280) // 2 * 2
+    ov = overlay_png(w, h, day, username, dst.with_suffix(".overlay.png"), "ЖУМА МУБОРАК!", "ХАЙРЛИ ТОНГ")
+    flt = (f"[0:v]scale={w}:{h},setsar=1[v];[1:v]format=rgba,fade=t=in:st=0.6:d=1.2:alpha=1[o];"
+           "[v][o]overlay=0:0,format=yuv420p[out]")
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-loop", "1", "-framerate", "30", "-i", str(ov),
+           "-filter_complex", flt, "-map", "[out]", "-map", "0:a?", "-shortest", "-c:v", "libx264", "-preset", "veryfast",
+           "-crf", "24", "-threads", "2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(dst)]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    if r.returncode != 0 or not dst.exists():
+        raise RuntimeError(f"ffmpeg: {(r.stderr or '').strip()[-200:]}")
+    return dst
+
+
+def used_on(db, key: str, day: dt.date) -> bool:
+    """Это видео из пула уже стоит утренним постом на этот день в другом канале (готовится заранее, накануне вечером)."""
+    return db.execute("SELECT 1 FROM fixed_posts WHERE day=? AND key='greeting' AND source=?",
+                      (day.isoformat(), f"pool:{key}")).fetchone() is not None
+
+
+def juma_check(db, now: dt.datetime, at: str = "18:00") -> str | None:
+    """Четверг вечером, один раз: есть ли на завтра видео «Жума». Нет — сказать владельцу (в PAPA ШТАБ)."""
+    from . import store
+    if now.weekday() != 3 or now.strftime("%H:%M") < at:
+        return None
+    k = f"juma_check_{now.date().isoformat()}"
+    if store.kv_get(db, k):
+        return None
+    store.kv_set(db, k, "1")
+    rows = [r for r in db.execute("SELECT * FROM morning_pool WHERE status IN ('ok','new') AND weekday='Жума'").fetchall()
+            if not used(db, "pool", r["key"]) and (pool_dir() / r["file"]).exists()]
+    if rows:
+        return None
+    return ("🕌 Завтра Жума, а готового видео «Жума муборак» в запасе нет.\n"
+            "Бросьте видео в NEXUS MORNING POOL до утра. Если не будет — в 05:00 во всех каналах выйдет "
+            "обычное утреннее видео с крупной надписью «ЖУМА МУБОРАК!» и пятничный текст.")
 
 
 # ---------- подготовка (Fabrika) ----------
@@ -862,9 +937,14 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
         caption = greeting_caption(ch, o, day, body)
         if p and (pool_dir() / p["file"]).exists():
             from . import media
-            logo = media.text_logo("@" + ch["username"], work / "wm.png")
-            out = media.watermark_video(pool_dir() / p["file"], logo, work / "out.mp4", style="rise")
+            if is_juma(day) and p["weekday"] != "Жума":           # нет видео «Жума» — надпись «ЖУМА МУБОРАК!» на обычном
+                out = juma_overlay(pool_dir() / p["file"], day, ch["username"], work / "out.mp4")
+            else:
+                logo = media.text_logo("@" + ch["username"], work / "wm.png")
+                out = media.watermark_video(pool_dir() / p["file"], logo, work / "out.mp4", style="rise")
             src_note = f"🎬 Готовое видео ({p['weekday'] or 'Хайрли тонг'}) из «{p['channel']}», {int(p['duration'] or 0)} с, с музыкой"
+            if is_juma(day) and p["weekday"] != "Жума":
+                src_note += " + надпись «ЖУМА МУБОРАК!»"
             source = f"pool:{p['key']}"
         else:
             key = env.get("PIXABAY_API_KEY") or os.environ.get("PIXABAY_API_KEY")
@@ -875,7 +955,12 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
             out = render_greeting(src, day, ch["username"], work / "out.mp4", int(o["max_seconds"]))
             src_note = f"🎬 Pixabay #{v['id']} («{v['query']}», {v['duration']} с) — под этот день готового видео нет"
             source = f"pixabay:{v['id']}"
-        res = upload(env["GENPLAN_BOT_TOKEN"], int(env["HUB_CHAT_ID"]), out, caption)
+        from . import bots, store
+        tok = bots.shtab_token(env)                       # 23.10: в склад грузит PAPA ШТАБ
+        if tok != env["GENPLAN_BOT_TOKEN"]:               # главный бот увидит этот пост в хабе — пусть не берёт как материал
+            store.kv_set(db, "hub_upload_until", (dt.datetime.now(plan.TZ) + dt.timedelta(minutes=10)).isoformat())
+        res = upload(tok, int(env["HUB_CHAT_ID"]), out, caption)
+        store.kv_set(db, f"hubmorning_{int(res['message_id'])}", "1")
         if ch.get("bot_token_env"):                      # «пульт = канал»: свой бот канала публикует этот файл сам
             keep = own_file(r["id"])
             keep.parent.mkdir(parents=True, exist_ok=True)
@@ -911,14 +996,24 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
         head += "\n🤖 Выйдет сам — 🗑, если не нужно"
     owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
     from . import bots
-    bot = bots.REG.get("main", bot)                            # утро лежит в хабе — показывает главный бот
+    # 23.10 владелец: «каждый бот — свой сектор» — предпросмотр утра приходит в пульт СВОЕГО канала (и 🗑 там же).
+    # Пульт без доступа к PAPA HUB (PaparazziUZ) отправляет своё готовое видео файлом.
+    bot = bots.for_channel(r["channel"], bots.REG.get("main", bot))
+    cap = (head + "\n—\n" + (r["text"] or ""))[:1024]
+    f = own_file(rid)
     for o in owners:
         if r["hub_msg"]:
-            bot("copyMessage", chat_id=o, from_chat_id=int(env["HUB_CHAT_ID"]), message_id=r["hub_msg"],
-                caption=(head + "\n—\n" + (r["text"] or ""))[:1024], reply_markup=kb)
-        else:
-            bot("sendMessage", chat_id=o, text=(head + "\n—\n" + (r["text"] or ""))[:4096], reply_markup=kb,
-                disable_web_page_preview=True)
+            try:
+                bot("copyMessage", chat_id=o, from_chat_id=int(env["HUB_CHAT_ID"]), message_id=r["hub_msg"],
+                    caption=cap, reply_markup=kb)
+                continue
+            except Exception:  # noqa: BLE001 — бот канала не видит хаб
+                if f.exists() and r["channel"] in bots.TOKENS:
+                    from .fabrika import upload_video
+                    upload_video(bots.TOKENS[r["channel"]], o, f, cap, kb)
+                    continue
+        bot("sendMessage", chat_id=o, text=(head + "\n—\n" + (r["text"] or ""))[:4096], reply_markup=kb,
+            disable_web_page_preview=True)
     update(db, rid, preview_sent=1)
 
 
