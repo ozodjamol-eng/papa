@@ -158,9 +158,13 @@ class TestMorning(unittest.TestCase):
             src = Path(tmp) / "src.mp4"
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=orange:s=1280x720:d=7",
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(src)], check=True)
-            hits = {"hits": [hit(i) for i in range(1, 6)]}
-            for h in hits["hits"]:
-                h["videos"]["small"]["url"] = src.as_uri()
+            hits = {"hits": []}                                     # 23.10: Pixabay не используется — только пул
+            morning.pool_dir().mkdir(parents=True, exist_ok=True)
+            for k in ("p1", "p2", "p3", "p4"):
+                __import__("shutil").copyfile(src, morning.pool_dir() / f"{k}.mp4")
+                self.db.execute("INSERT INTO morning_pool(key,file,status,weekday,season,quality,views) "
+                                "VALUES (?,?,'ok',NULL,'autumn',4,10)", (k, f"{k}.mp4"))
+            self.db.commit()
             uploads = []
 
             def upload(token, chat, path, caption):
@@ -202,6 +206,34 @@ class TestMorning(unittest.TestCase):
         self.assertEqual(x["greeting"]["status"], "done")                    # «Хайрли тонг» вышел сам (цикл как в Хўжаободе)
         self.assertEqual(x["day"]["status"], "done")                         # 20.10: «Бугун — … куни» тоже сам, без ✅
         self.assertFalse(any("не одобрен" in e for e in service.ERRORS))
+
+    def test_no_pool_video_no_pixabay(self):
+        """23.10: в пуле пусто — никаких Pixabay-шаблонов: ошибка подготовки (владелец увидит), а не дешёвка."""
+        morning.ensure_day(self.db, CFG, "davra", FRI, at("18:00", THU))
+        r = self.rows("davra")["greeting"]
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(RuntimeError):
+            morning.prepare_one(Bot(), self.db, CFG, ENV, r, at("22:00", THU), Path(tmp) / "w",
+                                fetch=lambda u: self.fail("Pixabay не должен вызываться"),
+                                upload=lambda *a: self.fail("загрузки быть не должно"))
+
+    def test_video_goes_as_is(self):
+        """23.10: готовое видео из пула уходит как есть — без надписи и метки (тот же файл)."""
+        morning.pool_dir().mkdir(parents=True, exist_ok=True)
+        (morning.pool_dir() / "v.mp4").write_bytes(b"ORIGINAL-VIDEO")
+        self.db.execute("INSERT INTO morning_pool(key,file,status,weekday,season,quality,views) VALUES "
+                        "('v','v.mp4','ok',NULL,'autumn',5,10)")
+        morning.ensure_day(self.db, CFG, "davra", THU, at("04:00", THU - dt.timedelta(days=1)))
+        r = self.rows("davra", THU)["greeting"]
+        got = []
+
+        def upload(tok, chat, path, cap):
+            got.append(path.read_bytes()); return {"message_id": 1}
+        from genplan import media
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(media, "watermark_video", side_effect=AssertionError("метки быть не должно")):
+            morning.prepare_one(Bot(), self.db, CFG, ENV, r, at("22:00", THU - dt.timedelta(days=1)), Path(tmp) / "w",
+                                upload=upload)
+        self.assertEqual(got, [b"ORIGINAL-VIDEO"])
 
     def make_pool(self, tmp):
         root = Path(tmp) / "pool"
@@ -257,7 +289,8 @@ class TestMorning(unittest.TestCase):
             self.assertTrue(uploads[0][1].startswith("#ЖУМА_МУБОРАК\n🕌 ЖУМА ТОНГИ МУБОРАК!"))
             self.assertTrue(uploads[0][1].endswith("🎉 @kattadavrauz"))
             self.assertEqual(self.rows("davra")["greeting"]["source"], "pool:b")
-            self.assertIsNone(morning.pool_pick(self.db, FRI + dt.timedelta(days=7)))   # одно видео не повторяется (через неделю)
+            # 23.10: свежего нет — давно не выходившее видео (повтор лучше дешёвого шаблона Pixabay)
+            self.assertIsNotNone(morning.pool_pick(self.db, FRI + dt.timedelta(days=7)))
             self.assertEqual(morning.pool_pick(self.db, FRI)["key"], "b")    # 23.10: но в ту же Жуму — и в другие каналы
 
     def test_pool_from_telegram_channel(self):

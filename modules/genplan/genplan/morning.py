@@ -4,10 +4,11 @@
    - есть проверенный день в days.json → пост о нём (ИИ пишет текст только по данным календаря, без выдумок);
    - нет → ИИ придумывает «свой день», но ТОЛЬКО как приглашение («Бугунни … кунига айлантирайлик!»),
      никогда не выдаёт его за официальный.
-2) «Хайрли тонг» (06:30; в Хўжаободе — Бомдод+45):
-   - сезонное видео с Pixabay (берём только видео; текст всегда наш);
-   - на видео наша надпись «ХАЙРЛИ ТОНГ!», «<день недели> ТОНГИ МУБОРАК» и @юзернейм;
-   - осень (сен–ноя) → зима с 1 декабря автоматически; одно видео не повторяется 60 дней.
+2) «Хайрли тонг»:
+   - 23.10 владелец: только готовое видео из NEXUS MORNING POOL (охота Разведки + проверка кадров), КАК ЕСТЬ —
+     без надписей и метки; наш текст — в подписи поста; в трёх каналах — три разных видео;
+   - Pixabay и шаблоны с надписью больше не используются («дёшево»);
+   - осень (сен–ноя) → зима с 1 декабря автоматически; одно видео не повторяется ~месяц (повтор — лучше шаблона).
 
 Кто что делает:
 - Fabrika (в свободное время) готовит посты на завтра с prepare_from (18:00), кладёт видео в PAPA HUB
@@ -611,8 +612,9 @@ def pool_enough(db, cfg: dict, day: dt.date, days: int = AHEAD_DAYS) -> bool:
     """Годных неиспользованных видео хватает на ближайшие дни (по одному на канал с утром в день) — Gemini не тратим."""
     need = sum(1 for c in cfg["channels"].values() if opts(c)) * days
     wds = _ahead(day, days)
-    rows = db.execute(f"SELECT key FROM morning_pool WHERE status='ok' AND (weekday IS NULL OR weekday IN "
-                      f"({','.join('?' * len(wds))}))", wds).fetchall()
+    # 23.10: летние/зимние видео не в счёт — иначе «хватает», проверка новых стоит, а утро уходит в шаблон
+    rows = db.execute(f"SELECT key FROM morning_pool WHERE status='ok' AND coalesce(season,'neutral') IN (?, 'neutral') "
+                      f"AND (weekday IS NULL OR weekday IN ({','.join('?' * len(wds))}))", (season(day), *wds)).fetchall()
     return sum(1 for r in rows if not used(db, "pool", r["key"])) >= need
 
 
@@ -702,23 +704,50 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
     return True
 
 
-def pool_pick(db, day: dt.date, salt: int = 0):
-    """Видео под день недели (сезон совпадает или нейтральный), не повторялось 60 дней; иначе — общее «Хайрли тонг»."""
+def pool_pick(db, day: dt.date, salt: int = 0, avail=None):
+    """Готовое видео из пула под этот день (сезон совпадает или нейтральный).
+    23.10 владелец: в трёх каналах — три РАЗНЫХ видео; видео идёт как есть, текст — в подписи; никаких шаблонов.
+    Порядок: свежее под день недели → свежее общее «Хайрли тонг» → (Жума, если видео «Жума» меньше, чем каналов) то же
+    видео, что сегодня в другом канале → давно не выходившее (повтор лучше дешёвого шаблона). avail(r) — файл доступен."""
     wd = WEEKDAY[day.weekday()]
     s = season(day)
-    for cond, args in (("weekday=?", (wd,)), ("weekday IS NULL", ())):
-        rows = db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND season IN (?, 'neutral') "
+    ok = avail or (lambda r: True)
+
+    def rows_for(cond, args):
+        return db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND coalesce(season,'neutral') IN (?, 'neutral') "
                           "ORDER BY quality DESC, views DESC", (*args, s)).fetchall()
-        fresh = [r for r in rows if not used(db, "pool", r["key"])]
-        if not fresh and is_juma(day) and cond.startswith("weekday="):
-            # 23.10 владелец: Жума — во ВСЕХ каналах; видео «Жума» одно — оно же уходит и в другие каналы сегодня
-            fresh = [r for r in rows if used_on(db, r["key"], day)]
-        rows = fresh
-        if rows:
-            r = random.Random(day.toordinal() * 17 + salt).choice(rows[:5])
-            mark_used(db, "pool", r["key"])
+
+    def take(rows):
+        rnd = random.Random(day.toordinal() * 17 + salt)
+        rows = list(rows[:5]) + list(rows[5:])
+        head = rows[:5]
+        rnd.shuffle(head)
+        for r in head + rows[5:]:
+            if ok(r):
+                mark_used(db, "pool", r["key"])
+                return r
+        return None
+
+    def fresh(rows):
+        return [r for r in rows if not used(db, "pool", r["key"]) and not used_on(db, r["key"], day)]
+
+    mine, common = rows_for("weekday=?", (wd,)), rows_for("weekday IS NULL", ())
+    r = take(fresh(mine))
+    if r:
+        return r
+    if is_juma(day):
+        r = take([x for x in mine if used_on(db, x["key"], day)])
+        if r:
             return r
-    return None
+    r = take(fresh(common))
+    if r:
+        return r
+
+    def last(x):
+        row = db.execute("SELECT max(used_at) FROM stock_used WHERE source='pool' AND item_id=?", (str(x["key"]),)).fetchone()
+        return (row[0] if row else None) or ""
+    old = sorted((x for x in [*mine, *common] if not used_on(db, x["key"], day)), key=last)
+    return take(old) if old else None
 
 
 def _curl(url: str, dst: Path | None = None, timeout: int = 30, limit: int | None = None) -> bytes:
@@ -893,8 +922,8 @@ def juma_check(db, now: dt.datetime, at: str = "18:00") -> str | None:
     if rows:
         return None
     return ("🕌 Завтра Жума, а готового видео «Жума муборак» в запасе нет.\n"
-            "Бросьте видео в NEXUS MORNING POOL до утра. Если не будет — в 05:00 во всех каналах выйдет "
-            "обычное утреннее видео с крупной надписью «ЖУМА МУБОРАК!» и пятничный текст.")
+            "Бросьте видео в NEXUS MORNING POOL до утра. Если не будет — в 05:00 выйдут обычные утренние видео "
+            "(в каждом канале своё, без надписей) с пятничным текстом «Жума муборак».")
 
 
 # ---------- подготовка (Fabrika) ----------
@@ -932,29 +961,28 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
         from .fabrika import upload_video as upload
     work = work_root / f"morning-{r['id']}-{r['tries']}"
     try:
-        p = pool_pick(db, day, salt=r["id"] * 7 + r["tries"])
-        body, note = greeting_body(db, ch, day, fresh=bool(r["redo"]), source_text=p["text"] if p else None)
+        def avail(row) -> bool:                           # файла нет на сервере — бот берёт его из NEXUS MORNING POOL
+            f = pool_dir() / row["file"]
+            if f.exists():
+                return True
+            if not row["msg_id"]:
+                return False
+            try:
+                tg_fetch(bot, env, row, f)
+                return f.exists()
+            except Exception as e:  # noqa: BLE001 — пост удалён из пула и т.п.
+                print(f"morning: {row['key']}: {e}", flush=True)
+                return False
+        p = pool_pick(db, day, salt=r["id"] * 7 + r["tries"], avail=avail)
+        if not p:                                         # 23.10: никаких Pixabay-шаблонов — лучше сказать владельцу
+            raise RuntimeError("в NEXUS MORNING POOL нет годного видео под этот день — охота пополнит запас")
+        body, note = greeting_body(db, ch, day, fresh=bool(r["redo"]), source_text=p["text"])
         caption = greeting_caption(ch, o, day, body)
-        if p and (pool_dir() / p["file"]).exists():
-            from . import media
-            if is_juma(day) and p["weekday"] != "Жума":           # нет видео «Жума» — надпись «ЖУМА МУБОРАК!» на обычном
-                out = juma_overlay(pool_dir() / p["file"], day, ch["username"], work / "out.mp4")
-            else:
-                logo = media.text_logo("@" + ch["username"], work / "wm.png")
-                out = media.watermark_video(pool_dir() / p["file"], logo, work / "out.mp4", style="rise")
-            src_note = f"🎬 Готовое видео ({p['weekday'] or 'Хайрли тонг'}) из «{p['channel']}», {int(p['duration'] or 0)} с, с музыкой"
-            if is_juma(day) and p["weekday"] != "Жума":
-                src_note += " + надпись «ЖУМА МУБОРАК!»"
-            source = f"pool:{p['key']}"
-        else:
-            key = env.get("PIXABAY_API_KEY") or os.environ.get("PIXABAY_API_KEY")
-            if not key:
-                raise RuntimeError("нет готовых видео и нет PIXABAY_API_KEY")
-            v = pick_video(db, key, day, salt=r["id"] * 7 + r["tries"] + (r["video_id"] or 0), fetch=fetch)
-            src = download_file(v["url"], work / "src.mp4")
-            out = render_greeting(src, day, ch["username"], work / "out.mp4", int(o["max_seconds"]))
-            src_note = f"🎬 Pixabay #{v['id']} («{v['query']}», {v['duration']} с) — под этот день готового видео нет"
-            source = f"pixabay:{v['id']}"
+        work.mkdir(parents=True, exist_ok=True)
+        out = work / "out.mp4"                            # 23.10 владелец: видео как есть — без надписей и метки
+        shutil.copyfile(pool_dir() / p["file"], out)
+        src_note = f"🎬 Готовое видео ({p['weekday'] or 'Хайрли тонг'}) из «{p['channel']}», {int(p['duration'] or 0)} с"
+        source = f"pool:{p['key']}"
         from . import bots, store
         tok = bots.shtab_token(env)                       # 23.10: в склад грузит PAPA ШТАБ
         if tok != env["GENPLAN_BOT_TOKEN"]:               # главный бот увидит этот пост в хабе — пусть не берёт как материал
