@@ -71,7 +71,8 @@ def panel_reply(db, cfg: dict, channel: str, button: str, now: dt.datetime | Non
         from . import hub
         lst, _ = hub.ads_screen(db, cfg, channel, now)
         return (f"📣 Реклама в {name}\n\n➕ Новая кампания: бросьте рекламный пост как есть — текст рекламодателя не трогаю "
-                "(контакты остаются), сверху ставлю #РЕКЛАМА. Потом название и время.\n\n" + lst)
+                "(контакты остаются), сверху ставлю #РЕКЛАМА. Потом название и время.\n\n"
+                + lst.replace("\n\n➕ Новая кампания — просто бросьте рекламный пост сюда.", ""))
     if button == P_TODAY:
         return plan_one(db, cfg, channel, now)
     if button == P_CONTENT:
