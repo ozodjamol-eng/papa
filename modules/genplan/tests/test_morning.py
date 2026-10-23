@@ -636,3 +636,46 @@ class Juma2310(unittest.TestCase):
         self.assertEqual(tokens, ["shtab-token"])
         self.assertTrue(hub.is_morning_upload(self.db, 321, wait=0))
         self.assertFalse(hub.is_morning_upload(self.db, 999, wait=0))
+
+
+class Shtab2310(unittest.TestCase):
+    """23.10 (владелец): схема «штаб — общее, пульт — свой канал»."""
+
+    def setUp(self):
+        self.db = store.connect(":memory:")
+
+    def test_shtab_overview_and_buttons(self):
+        b = Bot()
+        r = hub.shtab_handle(b, self.db, CFG, ENV, {"message": {"chat": {"id": 42, "type": "private"}, "from": {"id": 42},
+                                                             "text": "/start"}})
+        self.assertEqual(r, "overview")
+        self.assertIn("Сегодня по всем каналам", b.calls[0][1]["text"])
+        r = hub.shtab_handle(b, self.db, CFG, ENV, {"message": {"chat": {"id": 42, "type": "private"}, "from": {"id": 42},
+                                                             "photo": [{"file_id": "x"}]}})
+        self.assertEqual(r, "help")                                # пост в штаб — не публикуется, подсказка куда
+        cq = {"id": "1", "from": {"id": 42}, "data": "ap:abc123:y",
+              "message": {"chat": {"id": 42}, "message_id": 7, "text": "🤖 разрешить?"}}
+        self.assertEqual(hub.shtab_handle(b, self.db, CFG, ENV, {"callback_query": cq}), "ap_y")
+        self.assertEqual(store.kv_get(self.db, "autopilot_abc123"), "yes")
+        self.assertIsNone(hub.shtab_handle(b, self.db, CFG, ENV, {"message": {"chat": {"id": -100777, "type": "channel"}}}))
+        self.assertEqual(hub.shtab_handle(b, self.db, CFG, ENV, {"callback_query": {**cq, "from": {"id": 5}}}), "denied")
+
+    def test_papa_hub_is_only_storage(self):
+        self.assertIs(CFG.get("papa_hub_intake"), False)
+        post = {"channel_post": {"chat": {"id": -100777, "title": "PAPA HUB"}, "message_id": 55, "text": "янги пост"}}
+        from genplan import bots
+        b = Bot()
+        with mock.patch.dict(bots.REG, {"main": b}, clear=True):
+            self.assertIsNone(hub.handle(b, self.db, CFG, ENV, post))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM materials").fetchone()[0], 0)
+
+    def test_digest_preview_goes_to_own_pults(self):
+        from genplan import bots, digest
+        main, xo, sh = Bot(), Bot(), Bot()
+        with mock.patch.dict(bots.REG, {"main": main, "xojaobod": xo}, clear=True), \
+                mock.patch.dict(bots.SHTAB, {"bot": sh, "token": "s"}, clear=True):
+            digest.preview(ENV, {"status": "READY", "news": 5}, main, {"status": "READY", "news": 4}, "ok")
+        self.assertIn("выйдет сам", xo.calls[0][1]["text"])
+        self.assertNotIn("КАТТА ДАВРА", xo.calls[0][1]["text"])
+        self.assertIn("КАТТА ДАВРА", main.calls[0][1]["text"])
+        self.assertIn("Ролики", sh.calls[0][1]["text"])

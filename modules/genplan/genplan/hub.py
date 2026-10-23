@@ -589,6 +589,43 @@ def to_hub(bot, db, mid: int) -> None:
     store.update(db, mid, hub_chat=HUB_ID, hub_msg=new[0], hub_msgs=json.dumps(new))
 
 
+SHTAB_HELP = ("🏛 PAPA ШТАБ — главный пульт. Сюда приходят: «✅ Разрешить» для задач сервера, тревоги, отчёты, готовые видео.\n"
+              "Посты сюда не бросают — ШТАБ в каналы не публикует. Пост — в пульт своего канала "
+              "(КАТТА ДАВРА, PaparazziUZ, Хўжаобод) или в ХАБ канала.\n"
+              "Любое слово сюда — обзор «сегодня» по всем каналам.")
+
+
+def shtab_handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
+    """23.10 владелец: штаб — общее для всех каналов, в каналы не публикует. Кнопки (разрешения, утро) и обзор."""
+    owners = {int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()}
+    cq = upd.get("callback_query")
+    if cq:
+        if int(cq["from"]["id"]) not in owners:
+            bot("answerCallbackQuery", callback_query_id=cq["id"], text="Нет доступа")
+            return "denied"
+        if cq["data"].startswith("ap:"):
+            return autopilot_answer(bot, db, cq)
+        if cq["data"].startswith("mo:"):
+            from . import morning
+            return morning.callback(bot, db, cq)
+        bot("answerCallbackQuery", callback_query_id=cq["id"], text="Эта кнопка — в пульте канала")
+        return "foreign"
+    msg = upd.get("message")
+    if not msg or msg.get("chat", {}).get("type") != "private":
+        return None                                       # посты в PAPA HUB и группах штаб не берёт
+    if int((msg.get("from") or {}).get("id", 0)) not in owners:
+        return None
+    if any(k in msg for k in ("photo", "video", "document", "audio", "animation", "voice")) or msg.get("forward_origin"):
+        bot("sendMessage", chat_id=msg["chat"]["id"], text=SHTAB_HELP)
+        return "help"
+    from . import service
+    txt = service.today_text(db, cfg)
+    bot("sendMessage", chat_id=msg["chat"]["id"], text=(("" if (msg.get("text") or "") != "/start" else SHTAB_HELP + "\n\n")
+                                                        + "📅 Сегодня по всем каналам\n\n" + txt)[:4096],
+        disable_web_page_preview=True)
+    return "overview"
+
+
 def is_morning_upload(db, mid: int, wait: float = 4.0) -> bool:
     """Пост в хабе — утреннее видео от PAPA ШТАБ? Пока идёт загрузка, отметка ставится через доли секунды после поста —
     ждём несколько секунд и проверяем ещё раз (только в окне загрузки, иначе сразу)."""
@@ -615,6 +652,8 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
     if post:
         if int(post["chat"]["id"]) == hub:
             if own:                                  # пост в хабе видят все боты — принимает только главный
+                return None
+            if cfg.get("papa_hub_intake") is False:  # 23.10 владелец: PAPA HUB — только склад штаба, в каналы оттуда ничего
                 return None
             if store.kv_get(db, f"hubcopy_{post['message_id']}") or store.kv_get(db, "hub_staging"):
                 return None                          # служебная копия на секунды публикации (группа) — не новый материал

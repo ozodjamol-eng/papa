@@ -47,7 +47,7 @@ class TestFlow(unittest.TestCase):
         c.close()
         self.sent = []
         ap.in_window = lambda now: ""          # тесты не зависят от времени запуска
-        ap.notify = lambda text, markup=None: self.sent.append((text, markup)) or [(1, 1)]
+        ap.notify = lambda text, markup=None, dual=False: self.sent.append((text, markup)) or [(1, 1)]
 
     def new(self, task):
         return self.store.create("ai", "papa_task", {"task": task, "reason": "тест"}, "frankfurt")["id"]
@@ -121,7 +121,7 @@ class TestLondon(unittest.TestCase):
         c.close()
         self.sent = []
         ap.in_window = lambda now: ""
-        ap.notify = lambda text, markup=None: self.sent.append((text, markup)) or [(1, 1)]
+        ap.notify = lambda text, markup=None, dual=False: self.sent.append((text, markup)) or [(1, 1)]
 
     def new(self, task):
         return self.store.create("ai", "papa_task", {"task": task, "reason": "тест"}, "london")["id"]
@@ -222,6 +222,24 @@ class TestWindow(unittest.TestCase):
         self.assertEqual(ap.in_window(datetime(2026, 10, 16, 15, 0, tzinfo=timezone.utc)), "19:00–22:00")  # 20:00
         self.assertEqual(ap.in_window(datetime(2026, 10, 16, 8, 0, tzinfo=timezone.utc)), "")              # 13:00
 
+
+
+class TestShtab(unittest.TestCase):
+    """23.10 владелец: «✅ Разрешить» — в PAPA ШТАБ; на время переезда — и в старый пульт."""
+
+    def test_tokens(self):
+        import tempfile
+        d = Path(tempfile.mkdtemp())
+        (d / "g.env").write_text("GENPLAN_BOT_TOKEN=main\nOWNER_IDS=1\n"); (d / "b.env").write_text("SHTAB_BOT_TOKEN=shtab\n")
+        old = ap.GP_ENV, ap.BOTS_ENV
+        try:
+            ap.GP_ENV, ap.BOTS_ENV = d / "g.env", d / "b.env"
+            self.assertEqual(ap.tokens(), ["shtab"])
+            self.assertEqual(ap.tokens(dual=True), ["shtab", "main"])
+            ap.BOTS_ENV = d / "none.env"
+            self.assertEqual(ap.tokens(dual=True), ["main"])      # штаба нет — всё как раньше
+        finally:
+            ap.GP_ENV, ap.BOTS_ENV = old
 
 if __name__ == "__main__":
     unittest.main()

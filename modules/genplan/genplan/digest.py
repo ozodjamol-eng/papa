@@ -723,8 +723,16 @@ def preview(env: dict, report: dict, bot, davra: dict | None = None, push: str |
                  else "\n❌ КАТТА ДАВРА: не готов — " + "; ".join(davra.get("errors", [])[:3]))
     if push is not None:
         head += "\n🎬 Ролики: собираются на GitHub" if push == "ok" else f"\n🎬 Ролики не запущены ({push}) — выйдут картинка/текст"
-    for o in owners:
-        bot("sendMessage", chat_id=o, text=head, disable_web_page_preview=True)
+    # 23.10 владелец: предпросмотр дайджеста — в пульт СВОЕГО канала; общее (ролики) — в PAPA ШТАБ
+    from . import bots
+    parts = [(bots.for_channel("xojaobod", bot), head.split("\n🎉")[0].split("\n🎬")[0])]
+    if davra is not None:
+        parts.append((bots.for_channel("davra", bot), "🌙 Кечки дайжест" + head[head.index("\n🎉"):].split("\n🎬")[0]))
+    if push is not None:
+        parts.append((bots.shtab(bot), head[head.index("\n🎬") + 1:]))
+    for b, t in parts:
+        for o in owners:
+            b("sendMessage", chat_id=o, text=t, disable_web_page_preview=True)
 
 
 def main(db, env: dict, bot) -> dict:

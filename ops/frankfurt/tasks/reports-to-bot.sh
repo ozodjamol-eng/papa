@@ -4,7 +4,10 @@
 # подключает его Разведке. Откат: rm /etc/papa-owner-bot.env (отчёты вернутся в «PAPA ОТЧЁТЫ»).
 set -Eeuo pipefail
 G=/etc/papa-genplan/genplan.env
-TOK=$(grep -E '^GENPLAN_BOT_TOKEN=' "$G" | cut -d= -f2- | tr -d '"'"'"); IDS=$(grep -E '^OWNER_IDS=' "$G" | cut -d= -f2- | tr -d '"'"'")
+TOK=$(grep -E '^GENPLAN_BOT_TOKEN=' "$G" | cut -d= -f2- | tr -d '"'"'")
+# 23.10 владелец: отчёты — в главный пульт PAPA ШТАБ (если его ключ есть)
+S=$(grep -sE '^SHTAB_BOT_TOKEN=' /etc/papa-genplan/bots.env | cut -d= -f2- | tr -d '"'"'"); [[ -n "$S" ]] && TOK=$S
+IDS=$(grep -E '^OWNER_IDS=' "$G" | cut -d= -f2- | tr -d '"'"'")
 [[ -n "$TOK" && -n "$IDS" ]] || { echo "НЕТ GENPLAN_BOT_TOKEN/OWNER_IDS в $G"; exit 1; }
 ( umask 027; printf 'OWNER_BOT_TOKEN=%s\nOWNER_IDS=%s\n' "$TOK" "$IDS" > /etc/papa-owner-bot.env )
 chown root:papa-razvedka /etc/papa-owner-bot.env; chmod 640 /etc/papa-owner-bot.env
@@ -12,6 +15,6 @@ install -m 644 /opt/papa/ops/frankfurt/systemd/papa-razvedka@.service /etc/syste
 systemctl daemon-reload
 for o in ${IDS//,/ }; do
   curl -s -o /dev/null -w "сообщение владельцу $o: HTTP %{http_code}\n" "https://api.telegram.org/bot$TOK/sendMessage" \
-    --data-urlencode chat_id="$o" --data-urlencode text="📊 С сегодняшнего дня все отчёты (аудит, Разведка, Страж) приходят сюда, в бот. Каналы отчётов больше не нужны."
+    --data-urlencode chat_id="$o" --data-urlencode text="🏛 PAPA ШТАБ: отчёты Разведки и Стража теперь приходят сюда."
 done
 echo "== REPORTS_TO_BOT_DONE"

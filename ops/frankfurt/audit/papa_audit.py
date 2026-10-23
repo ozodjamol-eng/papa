@@ -54,13 +54,18 @@ SELF_RESTART = {"papa-autopilot"}
 REPORTS_ENV = ("/etc/papa-test/bot.env", "/etc/papa-reports.env")   # бот отчётов + id канала «PAPA ОТЧЁТЫ»
 
 
+def report_token(env: dict) -> str:
+    """23.10 владелец: отчёты и тревоги — в главный пульт PAPA ШТАБ; не подключён — главный бот, как раньше."""
+    return env.get("SHTAB_BOT_TOKEN") or env.get("GENPLAN_BOT_TOKEN", "")
+
+
 def deliver(env: dict, text: str, urgent: bool, send=None) -> list[str]:
     """20.10 владелец: отчёты — прямо в бот (главный пульт), отдельных каналов не нужно.
     Пульт не принял — запасной путь: бот отчётов в «PAPA ОТЧЁТЫ», чтобы не потерялось. Возвращает, куда ушло."""
     send = send or tg
     went = []
     for o in env.get("OWNER_IDS", "").split(","):
-        if o.strip() and send(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text=text[:4000],
+        if o.strip() and send(report_token(env), "sendMessage", chat_id=o.strip(), text=text[:4000],
                               disable_web_page_preview=True).get("ok"):
             went.append("pult")
     if not went:
@@ -501,7 +506,7 @@ def main(mode: str = "full", send: bool = True) -> int:
         if send and alerts:
             for o in env.get("OWNER_IDS", "").split(","):
                 if o.strip():
-                    tg(env.get("GENPLAN_BOT_TOKEN", ""), "sendMessage", chat_id=o.strip(), text="\n\n".join(alerts)[:4000])
+                    tg(report_token(env), "sendMessage", chat_id=o.strip(), text="\n\n".join(alerts)[:4000])
         return 0
     a = Audit()
     steps = [a.services, lambda: a.bots(cfg, env), lambda: a.genplan(cfg, now, quick)]

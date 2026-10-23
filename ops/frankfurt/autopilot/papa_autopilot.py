@@ -36,6 +36,10 @@ SERVER_NAME = {"frankfurt": "🖥 Франкфурт", "london": "🖥 Лонд�
 GW_DB = Path(os.environ.get("PAPA_AUTOPILOT_GW_DB", "/var/lib/nexus-private-control/control.sqlite3"))
 GP_DB = Path(os.environ.get("PAPA_GENPLAN_DB", "/var/lib/papa-genplan/genplan.sqlite3"))
 GP_ENV = Path(os.environ.get("PAPA_GENPLAN_ENV", "/etc/papa-genplan/genplan.env"))
+BOTS_ENV = Path(os.environ.get("PAPA_BOTS_ENV", "/etc/papa-genplan/bots.env"))
+# 23.10 владелец: «✅ Разрешить» и уведомления — в главный пульт PAPA ШТАБ. До DUAL_UNTIL кнопка дублируется
+# и в старый пульт (КАТТА ДАВРА), чтобы ничего не потерялось при переезде.
+DUAL_UNTIL = "2026-10-26"
 UPDATE = os.environ.get("PAPA_UPDATE", "/usr/local/bin/papa-update")
 TASK_TIMEOUT = int(os.environ.get("PAPA_AUTOPILOT_TIMEOUT", str(45 * 60)))
 APPROVAL_WAIT = int(os.environ.get("PAPA_AUTOPILOT_APPROVAL_WAIT", str(30 * 60)))
@@ -159,9 +163,9 @@ def env_file(p: Path) -> dict:
     return out
 
 
-def tg(method: str, **params) -> dict:
+def tg(method: str, token: str | None = None, **params) -> dict:
     e = env_file(GP_ENV)
-    tok = e.get("GENPLAN_BOT_TOKEN")
+    tok = token or e.get("GENPLAN_BOT_TOKEN")
     if not tok:
         return {}
     data = urllib.parse.urlencode({k: (json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v)
@@ -178,15 +182,24 @@ def owners() -> list[int]:
     return [int(x) for x in env_file(GP_ENV).get("OWNER_IDS", "").split(",") if x.strip().lstrip("-").isdigit()]
 
 
-def notify(text: str, markup: dict | None = None) -> list[tuple[int, int]]:
+def tokens(dual: bool = False) -> list[str]:
+    """Через какие боты писать владельцу: PAPA ШТАБ (если подключён); иначе — главный. dual — ещё и главный (переезд)."""
+    main = env_file(GP_ENV).get("GENPLAN_BOT_TOKEN")
+    shtab = env_file(BOTS_ENV).get("SHTAB_BOT_TOKEN")
+    out = [t for t in (shtab, main if (dual or not shtab) else None) if t]
+    return list(dict.fromkeys(out))
+
+
+def notify(text: str, markup: dict | None = None, dual: bool = False) -> list[tuple[int, int]]:
     sent = []
     for o in owners():
-        p = {"chat_id": o, "text": text[:4000], "disable_web_page_preview": True}
-        if markup:
-            p["reply_markup"] = markup
-        r = tg("sendMessage", **p)
-        if r.get("message_id"):
-            sent.append((o, r["message_id"]))
+        for tok in tokens(dual):
+            p = {"chat_id": o, "text": text[:4000], "disable_web_page_preview": True}
+            if markup:
+                p["reply_markup"] = markup
+            r = tg("sendMessage", token=tok, **p)
+            if r.get("message_id"):
+                sent.append((o, r["message_id"]))
     return sent
 
 
@@ -267,7 +280,8 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
         set_status(tid, "awaiting_owner", None, gw)
         msgs = notify(f"🤖 Автопилот просит разрешения ({where})\n\nЗадача: {task}\nЗачем: {reason or '—'}",
                       {"inline_keyboard": [[{"text": "✅ Разрешить", "callback_data": f"ap:{tid}:y"},
-                                            {"text": "❌ Нет", "callback_data": f"ap:{tid}:n"}]]})
+                                            {"text": "❌ Нет", "callback_data": f"ap:{tid}:n"}]]},
+                      dual=datetime.now(timezone.utc).date().isoformat() <= DUAL_UNTIL)
         if not msgs:
             set_status(tid, "failed", {"error": "no_owner_channel", "summary": "не смог спросить владельца в Telegram"}, gw)
             return "no_owner"

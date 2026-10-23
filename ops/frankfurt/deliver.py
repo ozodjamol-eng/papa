@@ -18,7 +18,7 @@ def send_video(token, chat, path: Path, caption: str) -> dict:
 
 
 def main(folder):
-    token = os.environ["GENPLAN_BOT_TOKEN"]
+    token = os.environ.get("SHTAB_BOT_TOKEN") or os.environ["GENPLAN_BOT_TOKEN"]   # 23.10: видео — из PAPA ШТАБ
     owners = [int(o) for o in os.environ.get("OWNER_IDS", "").split(",") if o.strip()]
     vids = sorted(Path(folder).glob("*.mp4"))
     if not vids:

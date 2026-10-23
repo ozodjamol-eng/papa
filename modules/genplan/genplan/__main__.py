@@ -306,7 +306,30 @@ async def run() -> None:
                 print(f"tick: {type(e).__name__}: {e}", flush=True)
             state["next_tick"] = time.time() + 60
 
-    await asyncio.gather(tick_loop(), album_loop(), *(bot_loop(k, b) for k, b in reg.items()))
+    async def shtab_loop():
+        """23.10: PAPA ШТАБ слушает только кнопки (разрешения, утро) и личные сообщения владельца — обзор."""
+        sb = bots.SHTAB.get("bot")
+        if not sb:
+            return
+        off = int(store.kv_get(db, "offset_shtab", "0"))
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                ups = await asyncio.to_thread(sb, "getUpdates", offset=off, timeout=20,
+                                              allowed_updates=["callback_query", "message"])
+            except Exception as e:  # noqa: BLE001
+                print(f"getUpdates shtab: {e}", flush=True)
+                await asyncio.sleep(10)
+                continue
+            for u in ups:
+                try:
+                    await loop.run_in_executor(work, lambda u=u: hub.shtab_handle(sb, hdb(), cfg(), env, u))
+                except Exception as e:  # noqa: BLE001
+                    print(f"shtab: {type(e).__name__}: {e}", flush=True)
+                off = u["update_id"] + 1
+                store.kv_set(db, "offset_shtab", off)
+
+    await asyncio.gather(tick_loop(), album_loop(), shtab_loop(), *(bot_loop(k, b) for k, b in reg.items()))
 
 
 def main(argv: list[str]) -> None:
