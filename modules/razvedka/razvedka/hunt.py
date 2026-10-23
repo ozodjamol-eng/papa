@@ -26,6 +26,10 @@ MAX_BYTES = 20 * 1024 * 1024
 PER_DAY = 25            # видео на каждый день недели (23.10: больше запас — без повторов и шаблонов)
 ANY = 60                # общие «Хайрли тонг» без дня
 POOL_TITLES = ("morning pool",)
+# 23.10 владелец: «пускай агенты ищут по каналам» — кроме папок, сам находим публичные каналы утренних поздравлений
+DISCOVER = ("хайрли тонг", "xayrli tong", "тонги муборак", "tongi muborak", "хайрли тонглар", "xayrli tonglar",
+            "тонг муборак", "субҳингиз хайрли")
+DISCOVER_MAX = 30       # новых каналов за запуск (бережно к Telegram)
 FORWARD_MAX = 150      # пересылок в пул за один запуск
 
 
@@ -69,6 +73,27 @@ def pick(cands: list[dict]) -> list[dict]:
     return out
 
 
+async def discover(client, known: set, log=print) -> list:
+    """Публичные каналы утренних поздравлений по поиску Telegram (по названию). Только чтение, без вступления."""
+    from telethon.tl.functions.contacts import SearchRequest
+    from telethon.tl.types import Channel
+    found = []
+    for q in DISCOVER:
+        try:
+            res = await client(SearchRequest(q=q, limit=20))
+        except Exception as e:  # noqa: BLE001 — лимит поиска и т.п.
+            log(f"  поиск «{q}»: {type(e).__name__}")
+            continue
+        for ch in res.chats:
+            if isinstance(ch, Channel) and ch.broadcast and ch.username and ch.id not in known:
+                known.add(ch.id)
+                found.append(ch)
+                if len(found) >= DISCOVER_MAX:
+                    return found
+        await asyncio.sleep(3)
+    return found
+
+
 async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict:
     from .telegram import TelethonSource
     from telethon.tl.types import InputMessagesFilterVideo
@@ -76,6 +101,10 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
     src = TelethonSource(client)
     chans = await src.channels(cfg)
     ents = [(c["title"], c["username"], src._entities[c["id"]], False) for c in chans]
+    known = {getattr(e, "id", None) for _, _, e, _ in ents}
+    for ch in await discover(client, known, log):
+        ents.append((ch.title, ch.username, ch, False))
+        log(f"найден канал поздравлений: {ch.title} (@{ch.username})")
     async for d in client.iter_dialogs():
         if d.is_channel and any(t in (d.title or "").lower() for t in POOL_TITLES):
             ents.append((d.title, getattr(d.entity, "username", None), d.entity, True))
