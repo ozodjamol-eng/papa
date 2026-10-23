@@ -73,12 +73,12 @@ def pick(cands: list[dict]) -> list[dict]:
     return out
 
 
-async def discover(client, known: set, log=print) -> list:
+async def discover(client, known: set, log=print, extra: tuple = ()) -> list:
     """Публичные каналы утренних поздравлений по поиску Telegram (по названию). Только чтение, без вступления."""
     from telethon.tl.functions.contacts import SearchRequest
     from telethon.tl.types import Channel
     found = []
-    for q in DISCOVER:
+    for q in (*extra, *DISCOVER):
         try:
             res = await client(SearchRequest(q=q, limit=20))
         except Exception as e:  # noqa: BLE001 — лимит поиска и т.п.
@@ -102,7 +102,8 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
     chans = await src.channels(cfg)
     ents = [(c["title"], c["username"], src._entities[c["id"]], False) for c in chans]
     known = {getattr(e, "id", None) for _, _, e, _ in ents}
-    for ch in await discover(client, known, log):
+    prio = tuple(t.lower() for t in cfg.get("morning_priority", []))
+    for ch in await discover(client, known, log, prio):
         ents.append((ch.title, ch.username, ch, False))
         log(f"найден канал поздравлений: {ch.title} (@{ch.username})")
     async for d in client.iter_dialogs():
@@ -114,10 +115,12 @@ async def hunt(client, cfg: dict, out: Path, days: int = 400, log=print) -> dict
     for title, uname, ent, is_pool in ents:
         n = 0
         # пул — наш собственный утренний склад: берём все видео (подпись может быть пустой); каналы — поиск по «тонг/tong»
+        # 23.10 владелец: большие каналы с ежедневными утренними видео (Тезкор…) — галерею листаем глубже
+        top = any(t in (title or "").lower() for t in prio)
         for q in ((None,) if is_pool else QUERIES):
             try:
                 async for m in client.iter_messages(ent, search=q, filter=InputMessagesFilterVideo,
-                                                    limit=300 if is_pool else 60, wait_time=1):
+                                                    limit=300 if is_pool else (400 if top else 150), wait_time=1):
                     if m.date < since:
                         break
                     text = m.message or ""

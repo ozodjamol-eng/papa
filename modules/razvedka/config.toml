@@ -1,5 +1,8 @@
 # PAPA Razvedka — что читать. Секретов здесь нет.
 
+# 23.10 владелец: главные источники готовых утренних видео («… тонги муборак» каждый день) — охота листает их глубже
+morning_priority = ["тезкор хабарлар", "tezkor yangiliklar"]
+
 # Папки Telegram (ссылка t.me/addlist/<slug>). Каждая папка = тема.
 [[folders]]
 slug = "YBPSRBlZyvI2NWJi"
@@ -7,6 +10,7 @@ topic = "XOJAOBODCITY (38)"
 
 # Свои каналы — для сравнения с лидерами
 own_channels = ["xojaobodcity24", "ozodjamoll", "kattadavrauz"]
+
 
 first_days = 7        # глубина первого сбора нового канала
 refresh_days = 3      # сколько дней назад обновлять просмотры при повторном сборе
