@@ -191,7 +191,7 @@ async def run() -> None:
                 ans = menu.panel_reply(db, c, chan, r[6:])
                 if ans:
                     b("sendMessage", chat_id=msg["chat"]["id"], text=ans[:4096],
-                      reply_markup=menu.panel_markup(c, chan, r[6:]))
+                      reply_markup=menu.panel_markup(c, chan, r[6:], db=db))
             if r and r.startswith("cmd:"):
                 ans = menu.reply(db, c, msg.get("text", ""))
                 if ans:

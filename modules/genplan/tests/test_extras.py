@@ -247,6 +247,115 @@ class T(unittest.TestCase):
         self.assertEqual(store.get(self.db, made[0])["scheduled_at"][11:16], "15:10")   # 17:40 вплотную к посту — ближайшее свободное окно
 
 
+class Campaigns(unittest.TestCase):
+    """23.10 владелец: «верни старую схему — ставишь кампанию, знаешь, какая стоит, название»."""
+    def setUp(self):
+        self.db = store.connect(str(Path(tempfile.mkdtemp()) / "g.db"))
+        self.calls = []
+
+    def bot(self, method, **p):
+        self.calls.append((method, p))
+        return {"message_id": 900 + len(self.calls)}
+
+    def ad(self, hub_msg, text, hm="17:30", day=dt.date(2026, 10, 21)):
+        mid = store.add_material(self.db, -100777, hub_msg, text, True)
+        store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued", scheduled_at=at(hm, day).isoformat())
+        return mid
+
+    def q(self, data):
+        return {"id": "q", "from": {"id": 42}, "data": data, "message": {"chat": {"id": 42}, "message_id": 5}}
+
+    def last_text(self):
+        return [p for m, p in self.calls if m in ("editMessageText", "sendMessage")][-1]["text"]
+
+    def test_name_numbering_and_card(self):
+        a = self.ad(70, "🔥 ИЖАРАГА УЙ БЕРИЛАДИ\nТел 90 123")
+        b = self.ad(71, "Утин сотилади", "18:30")
+        self.assertIn("🏷 Название: не задано", hub.card(self.db, CFG, a, at("08:00"))[0])
+        self.assertEqual(extras.ad_name_set(self.db, a, "  ижара "), (13, "ижара"))
+        self.assertEqual(extras.ad_name_set(self.db, b, "ЎТИН"), (14, "ЎТИН"))
+        self.assertEqual(extras.ad_name_set(self.db, a, "ИЖАРА"), (13, "ИЖАРА"))     # переименование — № тот же
+        t, kb = hub.card(self.db, CFG, a, at("08:00"))
+        self.assertIn("🏷 Кампания: №13 · ИЖАРА", t)
+        flat = [x["text"] for row in kb["inline_keyboard"] for x in row]
+        self.assertIn("🏷 Название", flat)
+        self.assertIn("📢 Мои кампании", flat)
+
+    def test_auto_name_on_approve(self):
+        a = self.ad(72, "#РЕКЛАМА\n🔥 Янги дўкон очилди! Марҳамат")
+        hub.callback(self.bot, self.db, CFG, {42}, self.q(f"p1y:{a}"), at("08:00"))
+        self.assertEqual(extras.ad_name(self.db, a), (13, "ЯНГИ ДЎКОН ОЧИЛДИ!"))
+        self.assertIn("№13 · ЯНГИ ДЎКОН ОЧИЛДИ!", self.last_text())
+
+    def test_typed_name_is_taken_only_when_waiting(self):
+        a = self.ad(73, "Реклама матни")
+        hub.callback(self.bot, self.db, CFG, {42}, self.q(f"an:{a}"), at("08:00"))
+        self.assertEqual(hub.name_waiting(self.db, at("08:05")), a)
+        self.assertFalse(hub.looks_like_name("Узун\nкўп қаторли пост"))
+        r = hub.take_name(self.bot, self.db, CFG, a, "ИЖАРА", 42, at("08:05"))
+        self.assertEqual(r, "ad_name")
+        self.assertIn("🏷 Название: №13 · ИЖАРА", self.last_text())
+        self.assertIsNone(hub.name_waiting(self.db, at("08:06")))
+        hub.name_wait(self.db, a, at("08:00"))
+        self.assertIsNone(hub.name_waiting(self.db, at("08:20")))                  # забытое ожидание истекает
+
+    def test_list_stop_extend(self):
+        a = self.ad(74, "Ижара", "17:30")
+        extras.campaign_from(self.db, store.get(self.db, a), 4)
+        extras.ad_name_set(self.db, a, "ИЖАРА")
+        b = self.ad(75, "Утин", "18:30", dt.date(2026, 10, 22))
+        extras.ad_name_set(self.db, b, "ЎТИН")
+        t, kb = hub.ads_screen(self.db, CFG, "xojaobod", at("08:00"))
+        self.assertIn("№13 ИЖАРА · 17:30 · день 1 из 4 (до Сб 24.10)", t)
+        self.assertIn("№14 ЎТИН · 18:30 · разовая", t)
+        self.assertNotIn("⚠️", t)
+        # ➕ день — только после «Утверждаю»
+        self.assertEqual(hub.ads_callback(self.bot, self.db, CFG, self.q(f"ax:{a}"), at("08:00")), "ax")
+        self.assertEqual(extras.campaign_of(self.db, a)["days"], 4)
+        hub.ads_callback(self.bot, self.db, CFG, self.q(f"axy:{a}"), at("08:00"))
+        self.assertEqual(extras.campaign_of(self.db, a)["days"], 5)
+        hub.ads_callback(self.bot, self.db, CFG, self.q(f"axy:{b}"), at("08:00"))      # разовая → 2 дня
+        self.assertEqual(extras.campaign_of(self.db, b)["days"], 2)
+        # ⏸ Стоп — показы убраны, пакет больше не создаёт новых
+        made = extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, 22)))
+        hub.ads_callback(self.bot, self.db, CFG, self.q(f"as:{a}"), at("09:00", dt.date(2026, 10, 22)))
+        self.assertEqual(extras.campaign_of(self.db, a)["status"], "active")           # без «Утверждаю» не трогаем
+        hub.callback(self.bot, self.db, CFG, {42}, self.q(f"asy:{a}"), at("09:00", dt.date(2026, 10, 22)))
+        self.assertIn("✅ Остановлено: «№13 · ИЖАРА»", self.last_text())
+        self.assertEqual(store.get(self.db, made[0])["status"], "rejected")
+        nxt = extras.ensure_campaigns(self.db, at("08:00", dt.date(2026, 10, 23)))      # только ЎТИН (день 2)
+        self.assertEqual([extras.ad_source(self.db, x) for x in nxt], [b])
+        t, _ = hub.ads_screen(self.db, CFG, "xojaobod", at("09:00", dt.date(2026, 10, 22)))
+        self.assertNotIn("ИЖАРА", t)
+        self.assertIn("ЎТИН", t)
+
+    def test_same_time_warning(self):
+        a = self.ad(76, "Бир", "17:30")
+        extras.campaign_from(self.db, store.get(self.db, a), 3)
+        self.ad(77, "Икки", "17:30", dt.date(2026, 10, 22))
+        t, _ = hub.ads_screen(self.db, CFG, "xojaobod", at("08:00"))
+        self.assertIn("⚠️ Две рекламы на одно время", t)
+
+    def test_panel_button_shows_list(self):
+        from genplan import menu
+        a = self.ad(78, "Ижара")
+        extras.ad_name_set(self.db, a, "ИЖАРА")
+        t = menu.panel_reply(self.db, CFG, "xojaobod", menu.P_ADS, at("08:00"))
+        self.assertIn("➕ Новая кампания", t)
+        self.assertIn("📢 Мои кампании", t)
+        self.assertIn("№13 ИЖАРА", t)
+        kb = menu.panel_markup(CFG, "xojaobod", menu.P_ADS, db=self.db, now=at("08:00"))
+        self.assertEqual(kb["inline_keyboard"][0][2]["callback_data"], f"as:{a}")
+        empty = store.connect(str(Path(tempfile.mkdtemp()) / "e.db"))
+        self.assertEqual(menu.panel_markup(CFG, "xojaobod", menu.P_ADS, db=empty), menu.PANEL)
+
+    def test_published_card_has_name(self):
+        a = self.ad(79, "Ижара")
+        extras.ad_name_set(self.db, a, "ИЖАРА")
+        store.update(self.db, a, status="published")
+        self.assertIn("Реклама «№13 · ИЖАРА» — опубликовано", hub.card(self.db, CFG, a, at("18:00"))[0])
+
+
 if __name__ == "__main__":
     unittest.main()
 

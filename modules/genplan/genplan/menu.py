@@ -67,9 +67,11 @@ def panel_reply(db, cfg: dict, channel: str, button: str, now: dt.datetime | Non
     if button == P_URGENT:
         return (f"🚨 Срочный пост в {name}\n\nБросьте пост — под ним появится карточка, нажмите «🚨 Срочный пост»: "
                 "выйдет сразу (соседние посты сдвинутся сами).")
-    if button == P_ADS:
-        return (f"📣 Реклама в {name}\n\nОтправьте рекламный пост как есть — текст рекламодателя не трогаю "
-                "(контакты остаются), сверху ставлю #РЕКЛАМА. Потом выберите время.")
+    if button == P_ADS:                              # 23.10 владелец: внутри — список кампаний, как в GENPLAN 5
+        from . import hub
+        lst, _ = hub.ads_screen(db, cfg, channel, now)
+        return (f"📣 Реклама в {name}\n\n➕ Новая кампания: бросьте рекламный пост как есть — текст рекламодателя не трогаю "
+                "(контакты остаются), сверху ставлю #РЕКЛАМА. Потом название и время.\n\n" + lst)
     if button == P_TODAY:
         return plan_one(db, cfg, channel, now)
     if button == P_CONTENT:
@@ -108,9 +110,15 @@ def _namaz_line(db, ch: dict, now: dt.datetime) -> str:
             + " · ".join(s[n] for n in namaz.NAMES) + "\n")
 
 
-def panel_markup(cfg: dict, channel: str, button: str) -> dict:
-    """⚙️ НАСТРОЙКИ канала с намазом — кнопка «🕌 Намоз — новый пост» (22.10 владелец); остальное — постоянная панель."""
+def panel_markup(cfg: dict, channel: str, button: str, db=None, now: dt.datetime | None = None) -> dict:
+    """⚙️ НАСТРОЙКИ канала с намазом — кнопка «🕌 Намоз — новый пост» (22.10 владелец); 📣 РЕКЛАМА — кнопки кампаний
+    (23.10); остальное — постоянная панель."""
     from . import namaz
+    if button == P_ADS and db is not None:
+        from . import hub
+        _, kb = hub.ads_screen(db, cfg, channel, (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ))
+        if kb["inline_keyboard"]:
+            return kb
     if button == P_SETTINGS and namaz.opts(cfg["channels"][channel]):
         return {"inline_keyboard": [[{"text": "🕌 Намоз — новый пост", "callback_data": "nz:set"}]]}
     return PANEL

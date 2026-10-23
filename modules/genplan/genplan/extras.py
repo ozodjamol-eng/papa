@@ -189,6 +189,140 @@ def campaign_stop(db, material_id: int) -> int:
     return len(rows)
 
 
+# ---------- 🏷 кампании с названием (23.10 владелец: «верни старую схему, как в GENPLAN 5» — №, название, список) ----------
+
+def ad_source(db, mid: int) -> int:
+    """Исходный рекламный пост кампании (показы следующих дней — копии)."""
+    c = campaign_of(db, mid)
+    return int(c["material_id"]) if c is not None else int(mid)
+
+
+def auto_name(text: str) -> str:
+    """Название по первым словам рекламы (если владелец не написал своё)."""
+    import re
+    for ln in (text or "").splitlines():
+        if ln.strip().startswith("#"):
+            continue
+        ln = re.sub(r"^[^\w«\"]+", "", ln.strip())
+        if ln:
+            words = ln.split()
+            out = ""
+            for w in words:
+                if len(out) + len(w) + 1 > 24:
+                    break
+                out = f"{out} {w}".strip()
+            return (out or ln[:24]).upper()
+    return "РЕКЛАМА"
+
+
+def ad_name(db, mid: int) -> tuple[int | None, str]:
+    """(№, название) кампании; № нет — название ещё не задано."""
+    src = ad_source(db, mid)
+    no = store.kv_get(db, f"ad_no_{src}", "")
+    return (int(no) if no else None), store.kv_get(db, f"ad_name_{src}", "")
+
+
+def ad_name_set(db, mid: int, name: str) -> tuple[int, str]:
+    """Название кампании; № выдаётся один раз, по порядку (в GENPLAN 5 последние были №11, №12 — продолжаем с №13)."""
+    src = ad_source(db, mid)
+    name = " ".join((name or "").split())[:40]
+    no = store.kv_get(db, f"ad_no_{src}", "")
+    if not no:
+        no = int(store.kv_get(db, "ad_seq", "12")) + 1
+        store.kv_set(db, "ad_seq", no)
+        store.kv_set(db, f"ad_no_{src}", no)
+    store.kv_set(db, f"ad_name_{src}", name)
+    db.execute("UPDATE ad_campaigns SET name=? WHERE material_id=?", (name, src))
+    db.commit()
+    return int(no), name
+
+
+def ad_name_ensure(db, mid: int) -> tuple[int, str]:
+    """При «✅ Утверждаю»: названия нет — берём первые слова рекламы."""
+    no, name = ad_name(db, mid)
+    if no and name:
+        return no, name
+    src = store.get(db, ad_source(db, mid))
+    return ad_name_set(db, mid, name or auto_name(src["text"] if src is not None else ""))
+
+
+def ad_label(db, mid: int) -> str:
+    no, name = ad_name(db, mid)
+    if not name:
+        return ""
+    return f"№{no} · {name}" if no else name
+
+
+def ad_rows(db, channel: str, now: dt.datetime) -> list[dict]:
+    """📢 Мои кампании: активные пакеты и разовые рекламы канала, которые ещё не вышли."""
+    out: dict[int, dict] = {}
+    today = now.date()
+    for c in db.execute("SELECT * FROM ad_campaigns WHERE status='active' AND channel=?", (channel,)).fetchall():
+        start = dt.date.fromisoformat(c["start_day"])
+        last = start + dt.timedelta(days=int(c["days"]) - 1)
+        if int(c["days"]) <= 1 or today > last:
+            continue
+        q = db.execute("SELECT m.id, m.scheduled_at FROM ad_campaign_days d JOIN materials m ON m.id=d.material_id "
+                       "WHERE d.campaign_id=? AND m.status='queued' ORDER BY m.scheduled_at LIMIT 1", (c["id"],)).fetchone()
+        if q:
+            nxt, show = dt.datetime.fromisoformat(q[1]).astimezone(plan.TZ), int(q[0])
+        else:
+            d = max(today, start)
+            if plan.slot_time(d, c["at"]) < now:
+                d += dt.timedelta(days=1)
+            if d > last:
+                continue
+            nxt, show = plan.slot_time(d, c["at"]), int(c["material_id"])
+        n = (min(max(today, start), last) - start).days + 1
+        out[int(c["material_id"])] = {"src": int(c["material_id"]), "show": show, "next": nxt, "at": c["at"],
+                                      "info": f"день {n} из {c['days']} (до {WD[last.weekday()]} {last:%d.%m})", "multi": True}
+    for m in db.execute("SELECT id, scheduled_at FROM materials WHERE channel=? AND status='queued' AND rubric LIKE 'Реклама%' "
+                        "AND scheduled_at IS NOT NULL ORDER BY scheduled_at", (channel,)).fetchall():
+        src = ad_source(db, int(m[0]))
+        if src in out:
+            continue
+        t = dt.datetime.fromisoformat(m[1]).astimezone(plan.TZ)
+        out[src] = {"src": src, "show": int(m[0]), "next": t, "at": f"{t:%H:%M}", "info": "разовая", "multi": False}
+    rows = sorted(out.values(), key=lambda r: r["next"])
+    for r in rows:
+        no, name = ad_name(db, r["src"])
+        if not name:
+            m = store.get(db, r["src"])
+            name = auto_name(m["text"] if m is not None else "") + " (без названия)"
+        r["no"], r["name"] = no, name
+        r["clash"] = sum(1 for x in rows if x["at"] == r["at"] and (x["multi"] or r["multi"] or x["next"] == r["next"])) > 1
+    return rows
+
+
+def ad_stop(db, src: int, now: dt.datetime) -> int:
+    """⏸ Стоп: кампания снята, все её невышедшие показы убраны. Возвращает число убранных показов."""
+    ids = {int(src)}
+    c = campaign_of(db, src)
+    if c is not None:
+        db.execute("UPDATE ad_campaigns SET status='stopped' WHERE id=?", (c["id"],))
+        ids |= {int(r[0]) for r in db.execute("SELECT material_id FROM ad_campaign_days WHERE campaign_id=? "
+                                               "AND material_id IS NOT NULL", (c["id"],))}
+    n = 0
+    for i in ids:
+        n += db.execute("UPDATE materials SET status='rejected' WHERE id=? AND status IN ('queued','draft')", (i,)).rowcount
+    db.commit()
+    return n
+
+
+def ad_extend(db, src: int) -> dict:
+    """➕ +1 день: пакет на день длиннее; у разовой — становится пакетом на 2 дня в то же время."""
+    c = campaign_of(db, src)
+    if c is not None and c["status"] == "active" and int(c["days"]) > 1:
+        db.execute("UPDATE ad_campaigns SET days=days+1 WHERE id=?", (c["id"],))
+        db.commit()
+        return dict(db.execute("SELECT * FROM ad_campaigns WHERE id=?", (c["id"],)).fetchone())
+    m = store.get(db, src)
+    days = 2
+    if c is not None:
+        db.execute("UPDATE ad_campaigns SET status='active' WHERE id=?", (c["id"],))
+    return campaign_from(db, m, days)
+
+
 def shift_time(db, cfg: dict | None, channel: str, at: dt.datetime, now: dt.datetime) -> dt.datetime:
     """Время показа занято или в тихом окне (Жума) → ближайшее свободное рекламное окно того же дня."""
     if not cfg or channel not in cfg.get("channels", {}):

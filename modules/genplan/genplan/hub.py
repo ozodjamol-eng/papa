@@ -118,7 +118,12 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
     dup = duplicate_note(db, m)
     dup = f"\n{dup}" if dup else ""
     if m["status"] == "published":
-        return f"{base}\n\n✔️ {name} · {m['rubric']} — опубликовано", {"inline_keyboard": []}
+        lbl = ""
+        if (m["rubric"] or "").lower().startswith("реклама"):
+            from . import extras
+            lbl = extras.ad_label(db, int(mid))
+            lbl = f" «{lbl}»" if lbl else ""
+        return f"{base}\n\n✔️ {name} · {m['rubric']}{lbl} — опубликовано", {"inline_keyboard": []}
     if m["status"] == "rejected":
         from . import extras
         f = extras.final_get(db, m["channel"]) if m["channel"] else None
@@ -137,6 +142,8 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
             c = extras.campaign_of(db, int(mid))
             if c is not None:
                 txt += "\n" + extras.campaign_note(c)
+            lbl = extras.ad_label(db, int(mid))
+            txt += f"\n🏷 Кампания: {lbl}" if lbl else "\n🏷 Название: не задано — напишите его одним сообщением (например: ИЖАРА)"
         return txt, {"inline_keyboard": kb_queued(db, cfg, m, now)}
     # черновик — экран «➕ ПОСТ» пульта Хўжаобода (GENPLAN 5): группы → подрубрика (= смысл и один хэштег) → умное время
     from . import picker
@@ -207,6 +214,8 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
             rows.insert(0, [{"text": "Разовая" if multi else ("✅ Разовая · утверждено" if ok else "✅ Разовая"),
                              "callback_data": f"p1:{mid}"},
                             {"text": many, "callback_data": f"pd:{mid}"}])
+            rows.insert(1, [{"text": "🏷 Название", "callback_data": f"an:{mid}"},
+                            {"text": "📢 Мои кампании", "callback_data": f"al:{m['channel']}"}])
     return rows
 
 
@@ -271,7 +280,14 @@ def ad_screen(db, cfg, mid: int, now: dt.datetime) -> tuple[str, dict]:
     """21.10 владелец: экран рекламы — 4 кнопки, как в GENPLAN 5: 🧠 Умное время · ЧЧ:ММ / 🕐 Другое время /
     ✍️ Своё время / ⬅️ Отмена. Текст рекламодателя не трогаем."""
     store.update(db, mid, rubric="Реклама", guessed=0, stock=0, tag=None, topic=None)
+    from . import extras
     t, _ = card(db, cfg, mid, now)
+    lbl = extras.ad_label(db, mid)
+    if lbl:
+        t += f"\n\n🏷 Кампания: {lbl}"
+    else:
+        name_wait(db, mid, now)
+        t += "\n\n🏷 Напишите название кампании одним сообщением (например: ИЖАРА) — можно и после выбора времени."
     ts = ad_times(db, cfg, mid, now, n=1)
     rows = []
     if ts:
@@ -291,6 +307,131 @@ def ad_list(db, cfg, mid: int, now: dt.datetime) -> tuple[str, dict]:
             "callback_data": f"tm:{mid}:{int(x.timestamp())}"} for x in ad_times(db, cfg, mid, now)]
     rows = [btn[i:i + 2] for i in range(0, len(btn), 2)] + [[{"text": "‹ Назад", "callback_data": f"ad:{mid}"}]]
     return "🕐 Выберите время (📣 — рекламное окно):\n\n" + t, {"inline_keyboard": rows}
+
+
+# ---------- 🏷 кампании: название и список (23.10 владелец — «как в GENPLAN 5: ставишь кампанию, видишь, какие стоят») ----------
+
+NAME_TTL = dt.timedelta(minutes=15)
+
+
+def name_wait(db, mid: int, now: dt.datetime | None = None) -> None:
+    store.kv_set(db, "await_name", f"{mid}|{(now or _now()).isoformat()}")
+
+
+def name_waiting(db, now: dt.datetime | None = None) -> int | None:
+    raw = store.kv_get(db, "await_name", "")
+    if not raw:
+        return None
+    mid, _, at = raw.partition("|")
+    if not at or (now or _now()) - dt.datetime.fromisoformat(at) > NAME_TTL:
+        store.kv_set(db, "await_name", "")
+        return None
+    return int(mid)
+
+
+def looks_like_name(txt: str) -> bool:
+    """Название — коротко и одной строкой. Длинный текст — это новый пост, а не название."""
+    return bool(txt) and "\n" not in txt.strip() and len(txt.strip()) <= 40 and not txt.strip().startswith("/")
+
+
+def take_name(bot, db, cfg, mid: int, txt: str, chat: int, now: dt.datetime | None = None) -> str:
+    from . import extras
+    store.kv_set(db, "await_name", "")
+    no, name = extras.ad_name_set(db, mid, txt)
+    t, kb = card(db, cfg, mid, now)
+    m = store.get(db, mid)
+    if m["status"] == "draft":                             # время ещё не выбрано — возвращаем экран рекламы
+        t, kb = ad_screen(db, cfg, mid, now or _now())
+    r = bot("sendMessage", chat_id=chat, text=f"🏷 Название: №{no} · {name}\n\n" + t[:4000], reply_markup=kb,
+            disable_web_page_preview=True)
+    store.update(db, mid, owner_msg=r["message_id"])
+    return "ad_name"
+
+
+def ads_screen(db, cfg, channel: str, now: dt.datetime) -> tuple[str, dict]:
+    """📢 Мои кампании — внутри кнопки 📣 РЕКЛАМА (23.10 владелец)."""
+    from . import extras
+    rows = extras.ad_rows(db, channel, now)
+    name = NAMES.get(channel, channel)
+    if not rows:
+        return f"📢 Мои кампании — {name}\n\nСейчас рекламы в плане нет.", {"inline_keyboard": []}
+    lines = [f"📢 Мои кампании — {name}", ""]
+    kb = []
+    for r in rows:
+        no = f"№{r['no']} " if r["no"] else ""
+        when = smart.fmt(r["next"], now)
+        lines.append(f"{'⚠️' if r['clash'] else '📣'} {no}{r['name']} · {r['at']} · {r['info']} · след. показ {when}")
+        short_name = (no + r["name"].replace(" (без названия)", ""))[:28]
+        kb.append([{"text": f"📂 {short_name}", "callback_data": f"ac:{r['src']}"},
+                   {"text": "➕ день", "callback_data": f"ax:{r['src']}"},
+                   {"text": "⏸ Стоп", "callback_data": f"as:{r['src']}"}])
+    if any(r["clash"] for r in rows):
+        lines += ["", "⚠️ Две рекламы на одно время — одна сдвинется. Поменяйте время в карточке (📂)."]
+    lines += ["", "➕ Новая кампания — просто бросьте рекламный пост сюда."]
+    kb.append([{"text": "🔄 Обновить", "callback_data": f"al:{channel}"}])
+    return "\n".join(lines), {"inline_keyboard": kb}
+
+
+def ads_callback(bot, db, cfg, cq: dict, now: dt.datetime | None = None) -> str:
+    """Кнопки списка кампаний: 📂 открыть · ➕ день · ⏸ Стоп (оба — только после «✅ Утверждаю») · 🔄."""
+    from . import extras
+    now = now or _now()
+    chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
+    kind, arg = cq["data"].split(":", 1)
+    note = ""
+    if kind == "al":
+        t, kb = ads_screen(db, cfg, arg, now)
+        _edit(bot, chat, msg_id, t, kb)
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
+        return "al"
+    src = int(arg)
+    m = store.get(db, src)
+    if m is None:
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
+        return "missing"
+    ch = m["channel"]
+    lbl = extras.ad_label(db, src) or extras.auto_name(m["text"])
+    back = [{"text": "‹ Назад", "callback_data": f"al:{ch}"}]
+    if kind == "ac":                                     # открыть карточку ближайшего показа
+        r = next((x for x in extras.ad_rows(db, ch, now) if x["src"] == src), None)
+        mid = r["show"] if r else src
+        t, kb = card(db, cfg, mid, now)
+        sent = bot("sendMessage", chat_id=chat, text=t[:4096], reply_markup=kb, disable_web_page_preview=True)
+        store.update(db, mid, owner_msg=sent["message_id"])
+    elif kind == "as":
+        _edit(bot, chat, msg_id, f"⏸ Остановить «{lbl}»?\nВсе её невышедшие показы будут убраны.",
+              {"inline_keyboard": [[{"text": "✅ Утверждаю", "callback_data": f"asy:{src}"}], back]})
+    elif kind == "asy":
+        n = extras.ad_stop(db, src, now)
+        t, kb = ads_screen(db, cfg, ch, now)
+        _edit(bot, chat, msg_id, f"{t}\n\n✅ Остановлено: «{lbl}» (убрано показов: {n})", kb)
+    elif kind == "ax":
+        c = extras.campaign_of(db, src)
+        if c is not None and c["status"] == "active" and int(c["days"]) > 1:
+            end = dt.date.fromisoformat(c["start_day"]) + dt.timedelta(days=int(c["days"]))
+        elif m["scheduled_at"]:
+            end = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ).date() + dt.timedelta(days=1)
+        else:
+            end = None
+        if end is None:
+            note = "⚠️ Сначала выберите время рекламы в карточке (📂)"
+            t, kb = ads_screen(db, cfg, ch, now)
+            _edit(bot, chat, msg_id, f"{t}\n\n{note}", kb)
+        else:
+            _edit(bot, chat, msg_id, f"➕ Продлить «{lbl}» на 1 день — до {extras.WD[end.weekday()]} {end:%d.%m}?",
+                  {"inline_keyboard": [[{"text": "✅ Утверждаю", "callback_data": f"axy:{src}"}], back]})
+    elif kind == "axy":
+        try:
+            c = extras.ad_extend(db, src)
+            extras.ad_name_ensure(db, src)
+            store.kv_set(db, f"ad_ok_{src}", "1")
+            note = "✅ Продлено: " + extras.campaign_note(c)
+        except ValueError as e:
+            note = f"⚠️ {e}"
+        t, kb = ads_screen(db, cfg, ch, now)
+        _edit(bot, chat, msg_id, f"{t}\n\n{note}", kb)
+    bot("answerCallbackQuery", callback_query_id=cq["id"])
+    return kind
 
 
 def parse_when(text: str, now: dt.datetime) -> dt.datetime | None:
@@ -698,6 +839,7 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if txt in PANEL_BUTTONS:                      # панель пульта: 🚨/📣 — следующий пост особый
             store.kv_set(db, "await_text", "")
             store.kv_set(db, "await_time", "")
+            store.kv_set(db, "await_name", "")
             mode = "ad" if txt == P_ADS else ""          # 17.10: 🚨 СРОЧНО больше не выпускает пост вслепую — выбор всегда на карточке
             store.kv_set(db, f"mode_{key}", f"{mode}|{_now().isoformat()}" if mode else "")
             return "panel:" + txt
@@ -710,6 +852,11 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
             return own_time(bot, db, cfg, int(wt), txt, msg["chat"]["id"])
         if wt:                                                        # бросил новый пост — ожидание времени снимаем
             store.kv_set(db, "await_time", "")
+        wn = name_waiting(db)
+        if wn and txt and not any(k in msg for k in MEDIA_KEYS) and looks_like_name(txt):   # 🏷 название кампании
+            return take_name(bot, db, cfg, wn, txt, msg["chat"]["id"])
+        if wn:                                                        # бросил новый пост — ожидание названия снимаем
+            store.kv_set(db, "await_name", "")
         from . import namaz
         if "photo" in msg and cap and (namaz_waiting(db) or (namaz.looks_like_schedule(cap) and "намоз" in cap.lower())):
             r = namaz_draft(bot, db, env, msg, cap, cfg=cfg)          # 22.10: 🕌 готовый пост намаза на неделю → карточка ✅/✏️/❌
@@ -903,6 +1050,8 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         return autopilot_answer(bot, db, cq)
     if cq["data"].startswith("nz:"):                      # 🕌 готовый пост намаза: ✅ / ✏️ / ❌
         return namaz_callback(bot, db, cfg, cq)
+    if cq["data"].split(":", 1)[0] in ("al", "ac", "as", "asy", "ax", "axy"):   # 📢 Мои кампании
+        return ads_callback(bot, db, cfg, cq, now)
     chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
     data = cq["data"]
     confirmed = data.startswith("ok:")                    # 21.10 владелец: выбор вступает в силу только после «✅ Утверждаю»
@@ -992,8 +1141,15 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     elif kind == "ao":                                  # 📣 → 🕐 Другое время
         t, kb = ad_list(db, cfg, mid, now)
         show(kb, t)
+    elif kind == "an":                                  # 🏷 Название кампании
+        store.kv_set(db, "await_text", "")
+        store.kv_set(db, "await_time", "")
+        name_wait(db, mid, now)
+        bot("sendMessage", chat_id=chat, reply_to_message_id=msg_id,
+            text="🏷 Напишите название кампании одним сообщением, например:\nИЖАРА")
     elif kind == "aw":                                  # 📣 → ✍️ Своё время
         store.kv_set(db, "await_text", "")
+        store.kv_set(db, "await_name", "")
         store.kv_set(db, "await_time", mid)
         bot("sendMessage", chat_id=chat, reply_to_message_id=msg_id,
             text="✍️ Напишите время одним сообщением, например:\n18:25\nзавтра 18:25\n23.10 18:25")
@@ -1042,14 +1198,16 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         from . import extras
         extras.campaign_stop(db, mid)
         store.kv_set(db, f"ad_ok_{mid}", "1")
-        note = "✅ Утверждено: разовая реклама"
+        no, nm = extras.ad_name_ensure(db, mid)
+        note = f"✅ Утверждено: разовая реклама «№{no} · {nm}»"
         show()
     elif kind == "pky":                                 # 📅 N дней — утверждено
         from . import extras
         try:
             c = extras.campaign_from(db, m, int(arg[0]))
             store.kv_set(db, f"ad_ok_{mid}", "1")
-            note = "✅ Утверждено: " + extras.campaign_note(c)
+            no, nm = extras.ad_name_ensure(db, mid)
+            note = f"✅ Утверждено «№{no} · {nm}»: " + extras.campaign_note(c)
         except ValueError as e:
             note = f"⚠️ {e}"
         show()
@@ -1128,6 +1286,7 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
                 store.update(db, cid, owner_msg=r["message_id"])
     elif kind == "ed":
         store.kv_set(db, "await_time", "")
+        store.kv_set(db, "await_name", "")
         store.kv_set(db, "await_text", mid)
         bot("sendMessage", chat_id=chat, reply_to_message_id=msg_id,
             text="✏️ Пришлите новый текст одним сообщением — он заменит текущий (подпись и призыв бот добавит сам).")
