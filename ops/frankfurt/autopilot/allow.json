@@ -38,7 +38,9 @@
     "bots-who",
     "xojaobod-check",
     "group-peek",
-    "voice"
+    "voice",
+    "shodiyona-bot-status",
+    "shodiyona-bot-restart"
   ],
   "approve": [
     "morning-pool-clear",

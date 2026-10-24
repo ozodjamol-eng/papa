@@ -25,7 +25,7 @@ GW_DB = Path(os.environ.get("PAPA_AUTOPILOT_GW_DB", "/var/lib/nexus-private-cont
 OUT = Path("/var/lib/papa-audit")
 BACKUPS = Path("/var/backups/papa")
 PY = "/opt/papa-venv/razvedka/bin/python"
-SERVICES = ["papa-genplan", "papa-fabrika", "papa-autopilot", "papa-voronka", "nexus-private-control-v2", "nexus-connect", "tailscaled"]
+SERVICES = ["papa-genplan", "papa-fabrika", "papa-autopilot", "papa-voronka", "papa-shodiyona", "nexus-private-control-v2", "nexus-connect", "tailscaled"]
 TIMERS = ["papa-curator.timer", "papa-razvedka-daily.timer"]
 ERR = re.compile(r"error|ошибк|failed|traceback|exception|не удалось|❌", re.I)
 

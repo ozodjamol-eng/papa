@@ -1,0 +1,36 @@
+[Unit]
+Description=PAPA SHODIYONA — @ShodiyonaMebelUzBot: каталог, заявки, замер, этапы заказа (клиент Shodiyona Mebel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-shodiyona
+Group=papa-shodiyona
+EnvironmentFile=/etc/papa-shodiyona/bot.env
+Environment=SHODIYONA_DB=/var/lib/papa-shodiyona/shodiyona.sqlite3 PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/shodiyona
+ExecStart=/usr/bin/python3 -m shodiyona
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-shodiyona
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0077
+MemoryMax=80M
+CPUQuota=20%
+TasksMax=8
+
+[Install]
+WantedBy=multi-user.target
