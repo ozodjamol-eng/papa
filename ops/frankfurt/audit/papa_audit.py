@@ -341,7 +341,41 @@ def watch(cfg: dict, env: dict, now: dt.datetime, state: dict) -> list[str]:
 # не застряла ли реклама/пост. Сломалось — СРАЗУ сообщение владельцу; что можно починить само — чинится
 # (права PAPA в группе — задача xojaobod-admin с кнопкой владельца). Повтор напоминания, пока не исправлено.
 AI_ENV = "/etc/papa-genplan/ai.env"
-REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600}
+REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600, "voronka": 3 * 3600}
+# 24.10 владелец: воронка молчала 2,5 суток (токен Instagram сбросился после смены пароля) — никто не заметил.
+VORONKAS = {"@paparazzi.uz": Path("/var/lib/papa-voronka/voronka.sqlite3"),
+            "GOLD WATER": Path("/var/lib/papa-voronka/goldwater.sqlite3")}
+VORONKA_STALE_MIN = 15          # проход раз в 2 минуты; 15 минут тишины = воронка стоит
+
+
+def voronka_last(db_path: Path) -> dt.datetime | None:
+    """Время последнего успешного прохода воронки (None — базы нет/не прочитать)."""
+    if not db_path.exists():
+        return None
+    try:
+        c = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
+        r = c.execute("SELECT v FROM kv WHERE k='last_run'").fetchone()
+        c.close()
+        return dt.datetime.fromisoformat(r[0][:19]).replace(tzinfo=dt.timezone.utc) if r else None
+    except (sqlite3.Error, ValueError):
+        return None
+
+
+def voronka_guard(now: dt.datetime, state: dict, dbs: dict = VORONKAS, last=voronka_last) -> list[str]:
+    alerts, t = [], now.timestamp()
+    for name, path in dbs.items():
+        lr = last(path)
+        if lr is None:
+            continue
+        key = f"voronka:{name}"
+        mins = int((now - lr).total_seconds() // 60)
+        if mins > VORONKA_STALE_MIN:
+            if due(state, key, "voronka", t):
+                alerts.append(f"🚨 Воронка {name} СТОИТ уже {mins // 60} ч {mins % 60} мин — комментарии остаются без ответа. "
+                              "Чаще всего слетел токен Instagram (смена пароля). Проверка: papa-update voronka-status")
+        elif ok_again(state, key):
+            alerts.append(f"✅ Воронка {name} снова работает")
+    return alerts
 
 
 def due(state: dict, key: str, kind: str, now: float) -> bool:
@@ -457,6 +491,8 @@ def guard(cfg: dict, env: dict, now: dt.datetime, state: dict, db_path: Path = G
                       "Проверьте console.anthropic.com → Billing / Appeal")
     elif not why and ok_again(state, "ai"):
         alerts.append("✅ ИИ (Anthropic) снова работает")
+    # 2б) воронки Instagram
+    alerts += voronka_guard(now, state)
     # 3) реклама и посты: время прошло — не вышли; ошибки публикации
     if db_path.exists():
         db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=15)

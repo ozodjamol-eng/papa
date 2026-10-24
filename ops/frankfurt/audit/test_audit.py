@@ -125,6 +125,14 @@ class TestGuard(unittest.TestCase):
         a = self.run_guard({}, ai=lambda e: "организация отключена (organization_on_hold)")
         self.assertTrue(any("Anthropic" in x for x in a), a)
 
+    def test_voronka_stale_alerts_once_and_recovers(self):
+        st, old = {}, self.now - dt.timedelta(hours=55)
+        a = pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: old)
+        self.assertTrue(any("Воронка X СТОИТ" in x for x in a), a)
+        self.assertEqual(pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: old), [])
+        b = pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: self.now - dt.timedelta(minutes=2))
+        self.assertTrue(any("снова работает" in x for x in b), b)
+
     def test_ai_alive_parsing(self):
         self.assertIsNone(pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (200, "")))
         self.assertIn("отключена", pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (400, '{"error_code":"organization_on_hold"}')))
