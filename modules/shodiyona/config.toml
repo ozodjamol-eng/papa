@@ -5,7 +5,8 @@
 name = "Shodiyona Mebel Markazi"
 phone = "+998 70 167 37 77"
 instagram = "https://www.instagram.com/shodiyona.mebel.uz/"
-telegram_channel = ""          # появится канал — вписать ссылку
+channel = "@ShodiyonaMebelMarkazi"   # канал клиента (создан 24.10); бот — админ с правом «Добавление участников»
+telegram_channel = "https://t.me/ShodiyonaMebelMarkazi"
 hours = ""                     # ответ шефа (г): например "Ҳар куни 09:00–19:00"
 delivery = ""                  # ответ шефа (б): например "Андижон бўйлаб етказиб бериш ва йиғиш"
 
@@ -28,6 +29,7 @@ room = true          # 🪄 Хонангизда кўринг: пока ИИ н�
 room_ai = false      # включается, когда шеф оплатит генерацию картинок
 measure = true       # 📏 Бепул ўлчов
 tracking = true      # 📦 Буюртмам қаерда?
+gate = false         # 🔒 жёсткая обязательная подписка — по умолчанию ВЫКЛ (владелец 24.10: не принуждать)
 
 [remind]
 minutes = 15         # заявку не взяли за 15 минут — напоминание

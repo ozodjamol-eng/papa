@@ -17,6 +17,7 @@ import sqlite3
 import time
 import tomllib
 import urllib.error
+import uuid
 import urllib.request
 from pathlib import Path
 
@@ -80,6 +81,27 @@ class Api:
     def __init__(self, token: str):
         self.base = f"https://api.telegram.org/bot{token}"
 
+    def upload(self, method: str, field: str, data: bytes, **p) -> dict:
+        """Отправка с файлом (multipart): фирменная картинка один раз, дальше — по file_id."""
+        b = uuid.uuid4().hex
+        out = []
+        for k, v in p.items():
+            v = json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)
+            out.append(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+        out.append(f'--{b}\r\nContent-Disposition: form-data; name="{field}"; filename="photo.jpg"\r\n'
+                   f"Content-Type: image/jpeg\r\n\r\n".encode() + data + b"\r\n")
+        out.append(f"--{b}--\r\n".encode())
+        req = urllib.request.Request(f"{self.base}/{method}", data=b"".join(out),
+                                     headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                res = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            res = json.loads(e.read() or b"{}")
+        if not res.get("ok"):
+            raise RuntimeError(f"{method}: {res.get('description')}")
+        return res["result"]
+
     def __call__(self, method: str, **p) -> dict:
         req = urllib.request.Request(f"{self.base}/{method}", data=json.dumps(p, ensure_ascii=False).encode(),
                                      headers={"Content-Type": "application/json"})
@@ -94,10 +116,42 @@ class Api:
 
 
 class Bot:
-    def __init__(self, api, db, admins: set[int], cfg: dict, clock=now):
-        self.api, self.db, self.admins, self.cfg, self.clock = api, db, admins, cfg, clock
-        self.f = cfg.get("features", {})
+    def __init__(self, api, db, admins: set[int], cfg: dict, clock=now, managers: set[int] | None = None):
+        """admins = владельцы (OWNER_IDS): всё, включая ⚙️ Созламалар. managers — получают заявки и ведут заказы."""
+        self.api, self.db, self.owners, self.cfg, self.clock = api, db, set(admins), cfg, clock
+        self.env_managers = set(managers or ())
         self.cats = [tuple(c) for c in cfg.get("categories", [])]
+
+    # ---------- настройки: ⚙️ Созламалар поверх config.toml ----------
+    def kv(self, k: str, default=None):
+        r = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
+        return r[0] if r else default
+
+    def kv_set(self, k: str, v) -> None:
+        if v is None:
+            self.db.execute("DELETE FROM kv WHERE k=?", (k,))
+        else:
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (k, str(v)))
+        self.db.commit()
+
+    def conf(self, key: str) -> str:
+        v = self.kv(f"set:{key}")
+        return v if v is not None else str(self.cfg.get(key, "") or "")
+
+    def feat(self, name: str) -> bool:
+        v = self.kv(f"feat:{name}")
+        return v == "1" if v is not None else bool(self.cfg.get("features", {}).get(name, name != "gate"))
+
+    def managers(self) -> dict:
+        return {int(k): v for k, v in json.loads(self.kv("managers", "{}")).items()}
+
+    @property
+    def admins(self) -> set[int]:
+        return self.owners | self.env_managers | set(self.managers())
+
+    def channel_url(self) -> str:
+        ch = self.conf("channel").lstrip("@")
+        return f"https://t.me/{ch}" if ch else self.conf("telegram_channel")
 
     # ---------- хранение ----------
     def user(self, uid: int) -> dict:
@@ -135,10 +189,10 @@ class Bot:
             return None
 
     def menu_kb(self) -> dict:
-        f = self.f
-        items = [(T.MENU_CATALOG, f.get("catalog", True)), (T.MENU_ORDER, f.get("order", True)),
-                 (T.MENU_CHEAPER, f.get("cheaper", True)), (T.MENU_ROOM, f.get("room", True)),
-                 (T.MENU_MEASURE, f.get("measure", True)), (T.MENU_TRACK, f.get("tracking", True)),
+        f = self.feat
+        items = [(T.MENU_CATALOG, f("catalog")), (T.MENU_ORDER, f("order")),
+                 (T.MENU_CHEAPER, f("cheaper")), (T.MENU_ROOM, f("room")),
+                 (T.MENU_MEASURE, f("measure")), (T.MENU_TRACK, f("tracking")),
                  (T.MENU_PLACES, True), (T.MENU_CONTACT, True)]
         btn = [{"text": t} for t, on in items if on]
         return {"keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)], "resize_keyboard": True,
@@ -163,7 +217,9 @@ class Bot:
 
     # ---------- вход ----------
     def handle(self, upd: dict) -> None:
-        if "message" in upd:
+        if "chat_join_request" in upd:
+            self.on_join(upd["chat_join_request"])
+        elif "message" in upd:
             self.on_message(upd["message"])
         elif "callback_query" in upd:
             self.on_callback(upd["callback_query"])
@@ -183,8 +239,9 @@ class Bot:
             payload = text[6:].strip().lower()
             src = "Instagram" if payload.startswith("insta") else (payload or u.get("src") or "Telegram")
             self.save(uid, src=src, step=None, data={})
-            self.send(uid, T.START.format(first=esc(fr.get("first_name") or ""), name=esc(self.cfg["name"])),
-                      self.menu_kb())
+            if self.gate_blocks(uid):
+                return
+            self.welcome(uid, fr.get("first_name") or "")
             return
         if text in ("/admin", "/a") and uid in self.admins:
             self.step(uid, None)
@@ -199,6 +256,8 @@ class Bot:
                 T.MENU_PLACES: self.places, T.MENU_CONTACT: self.contact}
         if text in menu:
             self.step(uid, None)
+            if uid not in self.admins and self.gate_blocks(uid):
+                return
             menu[text](uid)
             return
         st = u.get("step")
@@ -267,6 +326,15 @@ class Bot:
                 return
             self.save(uid, phone=phone)
             self.finish(uid)
+        elif st.startswith("set:") and uid in self.owners:
+            key = st[4:]
+            val = text.strip()
+            if key == "channel" and val and not val.startswith("@"):
+                val = "@" + val.rsplit("/", 1)[-1]
+            self.kv_set(f"set:{key}", "" if val in ("-", "—") else val)
+            self.step(uid, None)
+            self.send(uid, T.SET_SAVED, self.menu_kb())
+            self.settings(uid)
         elif st.startswith("add_") and uid in self.admins:
             self.admin_step(uid, st, msg, text, ph)
         elif st.startswith("ordphoto:") and uid in self.admins:
@@ -327,10 +395,11 @@ class Bot:
         if kind == "measure":
             self.send(uid, T.MEASURE_DONE.format(day=esc(d.get("day_label")), time=esc(d.get("time")), n=n,
                                                  phone=esc(u["phone"])), self.menu_kb())
-        elif kind == "room" and not self.f.get("room_ai"):
+        elif kind == "room" and not self.feat("room_ai"):
             self.send(uid, f"{T.ROOM_DONE_NO_AI}\n\nАриза №{n}.", self.menu_kb())
         else:
             self.send(uid, T.LEAD_DONE.format(n=n, phone=esc(u["phone"])), self.menu_kb())
+        self.offer_channel(uid)
 
     # ---------- заявки (менеджер) ----------
     def new_lead(self, uid: int, kind: str, phone: str, details: str, photos: list) -> int:
@@ -435,7 +504,7 @@ class Bot:
                               (lead["n"], lead["uid"], title, ts, ts))
         self.db.commit()
         n = cur.lastrowid
-        if self.f.get("tracking", True):
+        if self.feat("tracking"):
             self.send(lead["uid"], T.ORDER_CREATED_CLIENT.format(n=n))
         for a in self.admins:
             self.send(a, self.order_text(n), self.order_kb(n))
@@ -460,7 +529,7 @@ class Bot:
             return
         self.db.execute("UPDATE orders SET stage=?, updated=? WHERE n=?", (stage, self.clock().isoformat(), n))
         self.db.commit()
-        if self.f.get("tracking", True):
+        if self.feat("tracking"):
             self.send(o["uid"], T.STAGE_CLIENT.format(n=n, stage=T.STAGES[stage]))
         m = cq.get("message") or {}
         try:
@@ -495,9 +564,9 @@ class Bot:
 
     def go_kb(self) -> dict:
         row = []
-        if self.f.get("order", True):
+        if self.feat("order"):
             row.append({"text": T.MENU_ORDER, "callback_data": "g:order"})
-        if self.f.get("cheaper", True):
+        if self.feat("cheaper"):
             row.append({"text": T.MENU_CHEAPER, "callback_data": "g:cheaper"})
         return {"inline_keyboard": [row]} if row else None
 
@@ -513,7 +582,7 @@ class Bot:
 
     def product_view(self, uid: int, p, i: int, total: int) -> tuple[str, dict]:
         lines = "\n".join(esc(x) for x in (p["info"] or "").split("\n") if x.strip())
-        cap = T.PRODUCT_CAPTION.format(title=esc(p["title"]), lines=lines, phone=esc(self.cfg["phone"]))
+        cap = T.PRODUCT_CAPTION.format(title=esc(p["title"]), lines=lines, phone=esc(self.conf("phone")))
         nav = []
         if total > 1:
             nav = [{"text": "◀️", "callback_data": f"c:{p['cat']}:{(i - 1) % total}"},
@@ -521,7 +590,7 @@ class Bot:
                    {"text": "▶️", "callback_data": f"c:{p['cat']}:{(i + 1) % total}"}]
         rows = [nav] if nav else []
         rows.append([{"text": T.PRODUCT_ORDER, "callback_data": f"b:{p['id']}"}])
-        if self.f.get("room", True):
+        if self.feat("room"):
             rows.append([{"text": T.PRODUCT_ROOM, "callback_data": f"rm:{p['id']}"}])
         rows.append([{"text": T.BACK_CATS, "callback_data": "cats"}])
         if uid in self.admins:
@@ -547,7 +616,7 @@ class Bot:
 
     # ---------- адреса и контакты ----------
     def places(self, uid: int) -> None:
-        self.send(uid, T.PLACES + (f"\n🕐 {esc(self.cfg['hours'])}" if self.cfg.get("hours") else ""), self.menu_kb())
+        self.send(uid, T.PLACES + (f"\n🕐 {esc(self.conf('hours'))}" if self.conf("hours") else ""), self.menu_kb())
         for loc in self.cfg.get("locations", []):
             try:
                 self.api("sendVenue", chat_id=uid, latitude=loc["lat"], longitude=loc["lon"], title=loc["title"],
@@ -556,25 +625,184 @@ class Bot:
                 print(f"venue: {e}", flush=True)
 
     def contact(self, uid: int) -> None:
-        c = self.cfg
-        t = T.CONTACT.format(name=esc(c["name"]), phone=esc(c["phone"]))
-        if c.get("hours"):
-            t += f"\n🕐 {esc(c['hours'])}"
-        if c.get("delivery"):
-            t += f"\n🚚 {esc(c['delivery'])}"
+        c = self.conf
+        t = T.CONTACT.format(name=esc(c("name")), phone=esc(c("phone")))
+        if c("hours"):
+            t += f"\n🕐 {esc(c('hours'))}"
+        if c("delivery"):
+            t += f"\n🚚 {esc(c('delivery'))}"
         rows = []
-        if c.get("instagram"):
-            rows.append([{"text": "📸 Instagram", "url": c["instagram"]}])
-        if c.get("telegram_channel"):
-            rows.append([{"text": "📢 Telegram канал", "url": c["telegram_channel"]}])
+        if c("instagram"):
+            rows.append([{"text": "📸 Instagram", "url": c("instagram")}])
+        if self.channel_url():
+            rows.append([{"text": "📢 Telegram канал", "url": self.channel_url()}])
         self.send(uid, t, {"inline_keyboard": rows} if rows else self.menu_kb())
+
+    # ---------- фирменное приветствие и канал ----------
+    BANNER = HERE / "assets" / "welcome.jpg"
+
+    def welcome(self, uid: int, first: str) -> None:
+        """Фирменная картинка (кремовый фон, логотип, #1F3A28/#B8814A, Inter Display) + приветствие + меню."""
+        cap = T.START.format(first=esc(first), name=esc(self.conf("name")))
+        fid = self.kv("banner_id")
+        try:
+            if fid:
+                self.api("sendPhoto", chat_id=uid, photo=fid, caption=cap, parse_mode="HTML", reply_markup=self.menu_kb())
+                return
+            if self.BANNER.exists():
+                r = self.api.upload("sendPhoto", "photo", self.BANNER.read_bytes(), chat_id=uid, caption=cap,
+                                    parse_mode="HTML", reply_markup=self.menu_kb())
+                if r and r.get("photo"):
+                    self.kv_set("banner_id", r["photo"][-1]["file_id"])
+                return
+        except Exception as e:  # noqa: BLE001 — картинка не ушла: приветствие текстом
+            print(f"banner: {e}", flush=True)
+            self.kv_set("banner_id", None)
+        self.send(uid, cap, self.menu_kb())
+
+    def is_member(self, uid: int) -> bool | None:
+        ch = self.conf("channel")
+        if not ch:
+            return None
+        try:
+            r = self.api("getChatMember", chat_id=ch, user_id=uid)
+        except Exception as e:  # noqa: BLE001 — бот не админ / сеть: не мешаем человеку
+            print(f"getChatMember: {e}", flush=True)
+            return None
+        return r.get("status") in ("member", "administrator", "creator", "restricted")
+
+    def channel_kb(self, check: bool = False) -> dict:
+        rows = [[{"text": T.CHANNEL_BTN, "url": self.channel_url()}]]
+        if check:
+            rows.append([{"text": T.GATE_CHECK, "callback_data": "gate"}])
+        return {"inline_keyboard": rows}
+
+    def gate_blocks(self, uid: int) -> bool:
+        """🔒 Жёсткая подписка — только если владелец включил (по умолчанию выкл). Не узнали — пропускаем."""
+        if not self.feat("gate") or not self.channel_url():
+            return False
+        if self.is_member(uid) is False:
+            self.send(uid, T.GATE, self.channel_kb(check=True))
+            return True
+        return False
+
+    def offer_channel(self, uid: int) -> None:
+        """Мягко: после заявки, один раз, только тем, кто ещё не в канале."""
+        if not self.channel_url() or self.kv(f"offered:{uid}"):
+            return
+        if self.is_member(uid) is False:
+            self.send(uid, T.CHANNEL_OFFER, self.channel_kb())
+            self.kv_set(f"offered:{uid}", "1")
+
+    def on_join(self, j: dict) -> None:
+        """Заявка в канал (ссылка из Instagram): сразу пишем в личку (у бота 5 минут) и одобряем — человек в канале и в боте."""
+        fr = j.get("from") or {}
+        uid = fr.get("id")
+        chat = j.get("chat") or {}
+        if not uid:
+            return
+        ch = self.conf("channel").lstrip("@").lower()
+        if ch and (chat.get("username") or "").lower() != ch:
+            return
+        name = ((j.get("invite_link") or {}).get("name") or "").lower()
+        src = "Instagram" if name.startswith("insta") else "Канал"
+        u = self.user(uid)
+        self.save(uid, first=fr.get("first_name") or "", username=fr.get("username") or "", src=u.get("src") or src)
+        dm = j.get("user_chat_id") or uid
+        self.welcome(dm, fr.get("first_name") or "")
+        try:
+            self.api("approveChatJoinRequest", chat_id=chat["id"], user_id=uid)
+            self.kv_set("joins", int(self.kv("joins", "0")) + 1)
+        except Exception as e:  # noqa: BLE001
+            print(f"approve {uid}: {e}", flush=True)
+
+    def instagram_link(self) -> str | None:
+        link = self.kv("link:instagram")
+        if link or not self.conf("channel"):
+            return link
+        try:
+            r = self.api("createChatInviteLink", chat_id=self.conf("channel"), name="Instagram", creates_join_request=True)
+            link = r.get("invite_link")
+            if link:
+                self.kv_set("link:instagram", link)
+        except Exception as e:  # noqa: BLE001 — нет права «Добавление участников»
+            print(f"invite link: {e}", flush=True)
+        return link
+
+    # ---------- ⚙️ Созламалар и 📊 Статистика (владелец) ----------
+    def settings(self, uid: int) -> None:
+        e = lambda k: esc(self.conf(k)) or T.SET_EMPTY  # noqa: E731
+        mg = ", ".join(esc(v) for v in self.managers().values()) or T.SET_EMPTY
+        self.send(uid, T.SET_MENU.format(phone=e("phone"), hours=e("hours"), delivery=e("delivery"), channel=e("channel"),
+                                         managers=mg), {"inline_keyboard": [
+            [{"text": "☎️ Телефон", "callback_data": "set:e:phone"}, {"text": "🕐 Иш вақти", "callback_data": "set:e:hours"}],
+            [{"text": "🚚 Етказиб бериш", "callback_data": "set:e:delivery"}, {"text": "📢 Канал", "callback_data": "set:e:channel"}],
+            [{"text": "🔘 Тугмалар", "callback_data": "set:f"}, {"text": "👥 Менежерлар", "callback_data": "set:m"}],
+            [{"text": "🔗 Instagram ҳаволаси", "callback_data": "set:l"}, {"text": "📊 Статистика", "callback_data": "a:stats"}]]})
+
+    def features_kb(self) -> dict:
+        return {"inline_keyboard": [[{"text": ("✅ " if self.feat(k) else "⬜ ") + t, "callback_data": f"set:t:{k}"}]
+                                    for k, t in T.FEATURES] + [[{"text": "⬅️ Созламалар", "callback_data": "a:set"}]]}
+
+    def settings_cb(self, cq: dict, uid: int, part: list) -> None:
+        if part[1] == "e":
+            self.step(uid, f"set:{part[2]}", fresh=True)
+            self.send(uid, T.SET_ASK[part[2]] + "\n(ўчириш учун: -)", self.cancel_kb())
+        elif part[1] == "f":
+            self.send(uid, T.SET_FEATURES, self.features_kb())
+        elif part[1] == "t":
+            self.kv_set(f"feat:{part[2]}", "0" if self.feat(part[2]) else "1")
+            m = cq.get("message") or {}
+            try:
+                self.api("editMessageReplyMarkup", chat_id=m["chat"]["id"], message_id=m["message_id"],
+                         reply_markup=self.features_kb())
+            except Exception:  # noqa: BLE001
+                self.send(uid, T.SET_FEATURES, self.features_kb())
+            self.send(uid, T.SET_SAVED, self.menu_kb())
+        elif part[1] == "m":
+            rows = [[{"text": f"❌ {v}", "callback_data": f"set:mr:{k}"}] for k, v in self.managers().items()]
+            rows.append([{"text": "➕ Қўшиш", "callback_data": "set:mp"}])
+            self.send(uid, T.SET_MANAGERS, {"inline_keyboard": rows})
+        elif part[1] == "mp":
+            rows = self.db.execute("SELECT uid, first, username FROM users ORDER BY updated DESC LIMIT 15").fetchall()
+            btn = [[{"text": f"{r['first'] or ''} @{r['username'] or ''}".strip(), "callback_data": f"set:ma:{r['uid']}"}]
+                   for r in rows if r["uid"] not in self.admins][:8]
+            self.send(uid, T.SET_PICK if btn else "Ҳали ҳеч ким ёзмаган.", {"inline_keyboard": btn} if btn else None)
+        elif part[1] == "ma":
+            m = self.managers()
+            u = self.user(int(part[2]))
+            m[int(part[2])] = (u.get("first") or "") + (f" @{u['username']}" if u.get("username") else "")
+            self.kv_set("managers", json.dumps({str(k): v for k, v in m.items()}, ensure_ascii=False))
+            self.send(uid, T.SET_SAVED)
+            self.send(int(part[2]), "✅ Сиз Shodiyona менежери этиб тайинландингиз. Аризалар шу ерга келади. Бошқарув: /admin")
+        elif part[1] == "mr":
+            m = self.managers()
+            m.pop(int(part[2]), None)
+            self.kv_set("managers", json.dumps({str(k): v for k, v in m.items()}, ensure_ascii=False))
+            self.send(uid, T.SET_SAVED)
+        elif part[1] == "l":
+            self.send(uid, T.SET_LINK.format(link=esc(self.instagram_link() or "— (ботга каналда «Қўшиш» ҳуқуқини беринг)")))
+
+    def stats(self, uid: int) -> None:
+        t = self.clock()
+        d1 = t.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        d7 = (t - dt.timedelta(days=7)).isoformat()
+        q = lambda sql, *a: self.db.execute(sql, a).fetchall()  # noqa: E731
+        cnt = lambda since: q("SELECT COUNT(*) FROM leads WHERE created>=?", since)[0][0]  # noqa: E731
+        won = lambda since: q("SELECT COUNT(*) FROM orders WHERE created>=?", since)[0][0]  # noqa: E731
+        kinds = ", ".join(f"{T.KIND.get(k, k)} {n}" for k, n in q("SELECT kind, COUNT(*) FROM leads WHERE created>=? GROUP BY kind", d7)) or "—"
+        srcs = ", ".join(f"{k} {n}" for k, n in q("SELECT src, COUNT(*) FROM leads WHERE created>=? GROUP BY src", d7)) or "—"
+        self.send(uid, T.STATS.format(d1=cnt(d1), w1=won(d1), d7=cnt(d7), w7=won(d7), kinds=esc(kinds), srcs=esc(srcs),
+                                      joins=self.kv("joins", "0"), users=q("SELECT COUNT(*) FROM users")[0][0]))
 
     # ---------- админ: каталог ----------
     def admin_menu(self, uid: int) -> None:
-        self.send(uid, T.ADMIN_MENU, {"inline_keyboard": [
-            [{"text": "➕ Маҳсулот", "callback_data": "a:add"}],
-            [{"text": "📥 Очиқ аризалар", "callback_data": "a:leads"},
-             {"text": "📦 Буюртмалар", "callback_data": "a:orders"}]]})
+        rows = [[{"text": "➕ Маҳсулот", "callback_data": "a:add"}, {"text": "📊 Статистика", "callback_data": "a:stats"}],
+                [{"text": "📥 Очиқ аризалар", "callback_data": "a:leads"},
+                 {"text": "📦 Буюртмалар", "callback_data": "a:orders"}]]
+        if uid in self.owners:
+            rows.append([{"text": "⚙️ Созламалар", "callback_data": "a:set"}])
+        self.send(uid, T.ADMIN_MENU, {"inline_keyboard": rows})
 
     def admin_step(self, uid: int, st: str, msg: dict, text: str, ph: str | None) -> None:
         d = self.user(uid)["data"]
@@ -613,6 +841,15 @@ class Bot:
         part = data.split(":")
         admin = uid in self.admins
         if data == "noop":
+            return
+        if data == "gate":
+            if self.is_member(uid) is False:
+                self.send(uid, T.GATE_NOT_YET, self.channel_kb(check=True))
+            else:
+                self.welcome(uid, cq["from"].get("first_name") or "")
+            return
+        if part[0] == "set" and uid in self.owners:
+            self.settings_cb(cq, uid, part)
             return
         if part[0] == "o" and st == "order_cat":
             self.step(uid, "order_details", cat=part[1])
@@ -671,7 +908,11 @@ class Bot:
             self.admin_cb(uid, part)
 
     def admin_cb(self, uid: int, part: list) -> None:
-        if part[1] == "add":
+        if part[1] == "set" and uid in self.owners:
+            self.settings(uid)
+        elif part[1] == "stats":
+            self.stats(uid)
+        elif part[1] == "add":
             self.step(uid, "add_cat", fresh=True)
             self.send(uid, T.ADD_CAT, self.cats_kb("a:cat"))
         elif part[1] == "cat":
@@ -695,9 +936,8 @@ class Bot:
 def run() -> None:
     api = Api(os.environ["SHODIYONA_BOT_TOKEN"])
     db = connect(os.environ.get("SHODIYONA_DB", "/var/lib/papa-shodiyona/shodiyona.sqlite3"))
-    ids = os.environ.get("OWNER_IDS", "") + "," + os.environ.get("MANAGER_IDS", "")
-    admins = {int(x) for x in ids.split(",") if x.strip()}
-    bot = Bot(api, db, admins, load_cfg(os.environ.get("SHODIYONA_CONFIG")))
+    ids = lambda k: {int(x) for x in os.environ.get(k, "").split(",") if x.strip()}  # noqa: E731
+    bot = Bot(api, db, ids("OWNER_IDS"), load_cfg(os.environ.get("SHODIYONA_CONFIG")), managers=ids("MANAGER_IDS"))
     me = api("getMe")
     for m, p in (("setMyCommands", {"commands": [{"command": "start", "description": "Асосий меню"}]}),
                  ("setMyDescription", {"description": T.BOT_DESCRIPTION}),
@@ -706,7 +946,9 @@ def run() -> None:
             api(m, **p)
         except Exception as e:  # noqa: BLE001
             print(f"{m}: {e}", flush=True)
-    print(f"SHODIYONA @{me['username']} запущен, менеджеров {len(admins)}", flush=True)
+    link = bot.instagram_link()
+    print(f"SHODIYONA @{me['username']} запущен, менеджеров {len(bot.admins)}, канал {bot.conf('channel')}, "
+          f"ссылка для Instagram: {link or 'нет (нужно право «Добавление участников»)'}", flush=True)
     off = int((db.execute("SELECT v FROM kv WHERE k='offset'").fetchone() or [0])[0])
     last_tick = 0.0
     while True:
@@ -717,7 +959,7 @@ def run() -> None:
                 print(f"remind: {e}", flush=True)
             last_tick = time.time()
         try:
-            ups = api("getUpdates", offset=off, timeout=30, allowed_updates=["message", "callback_query"])
+            ups = api("getUpdates", offset=off, timeout=30, allowed_updates=["message", "callback_query", "chat_join_request"])
         except Exception as e:  # noqa: BLE001
             print(f"getUpdates: {e}", flush=True)
             time.sleep(10)

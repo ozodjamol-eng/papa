@@ -13,12 +13,20 @@ CFG = B.load_cfg()
 
 class FakeApi:
     def __init__(self):
-        self.calls, self.mid = [], 100
+        self.calls, self.mid, self.left = [], 100, set()
 
     def __call__(self, method, **p):
         self.calls.append((method, p))
         self.mid += 1
-        return {"message_id": self.mid}
+        if method == "getChatMember":
+            return {"status": "left" if p["user_id"] in self.left else "member"}
+        if method == "createChatInviteLink":
+            return {"invite_link": "https://t.me/+JOIN"}
+        return {"message_id": self.mid, "photo": [{"file_id": "BANNER"}]}
+
+    def upload(self, method, field, data, **p):
+        self.calls.append((method, dict(p, **{field: "<bytes>"})))
+        return {"message_id": 1, "photo": [{"file_id": "BANNER"}]}
 
     def sent(self, chat=None, method="sendMessage"):
         return [p for m, p in self.calls if m == method and (chat is None or p.get("chat_id") == chat)]
@@ -70,12 +78,12 @@ class Base(unittest.TestCase):
 class TestStart(Base):
     def test_menu_has_all_eight_buttons_and_source(self):
         self.u(msg("/start instagram"))
-        kb = self.api.sent(CLIENT)[-1]["reply_markup"]["keyboard"]
+        kb = self.api.sent(CLIENT, "sendPhoto")[-1]["reply_markup"]["keyboard"]
         flat = [b["text"] for row in kb for b in row]
         self.assertEqual(flat, [T.MENU_CATALOG, T.MENU_ORDER, T.MENU_CHEAPER, T.MENU_ROOM, T.MENU_MEASURE,
                                 T.MENU_TRACK, T.MENU_PLACES, T.MENU_CONTACT])
         self.assertEqual(self.bot.user(CLIENT)["src"], "Instagram")
-        self.assertIn("Алишер", self.api.last_text(CLIENT))
+        self.assertIn("Алишер", self.api.sent(CLIENT, "sendPhoto")[-1]["caption"])
 
     def test_phone_normalize(self):
         self.assertEqual(B.norm_phone("90 123 45 67"), "+998901234567")
@@ -217,6 +225,85 @@ class TestCatalog(Base):
         self.assertEqual(self.bot.counts(), {"bed": 1})
         self.u(cb("h:1", uid=ADMIN))
         self.assertEqual(self.bot.counts(), {})
+
+
+class TestBrandAndChannel(Base):
+    def test_start_sends_brand_banner_once_then_file_id(self):
+        self.u(msg("/start"))
+        first = self.api.sent(CLIENT, "sendPhoto")[-1]
+        self.assertEqual(first["photo"], "<bytes>")
+        self.assertIn("Алишер", first["caption"])
+        self.u(msg("/start"))
+        self.assertEqual(self.api.sent(CLIENT, "sendPhoto")[-1]["photo"], "BANNER")
+
+    def test_soft_offer_once_only_if_not_member(self):
+        self.api.left.add(CLIENT)
+        self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), msg("+998901234567"))
+        self.assertIn("каналимизда", self.api.last_text(CLIENT))
+        self.assertIn("№1", self.api.sent(CLIENT)[-2]["text"])            # сначала «раҳмат», потом канал
+        self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), cb("p:yes"))
+        self.assertNotIn("каналимизда", self.api.last_text(CLIENT))      # второй раз не навязываем
+
+    def test_member_gets_no_offer(self):
+        self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), msg("+998901234567"))
+        self.assertIn("№1", self.api.last_text(CLIENT))
+
+    def test_gate_off_by_default_on_by_switch(self):
+        self.api.left.add(CLIENT)
+        self.u(msg(T.MENU_CONTACT))
+        self.assertIn("+998 70 167 37 77", self.api.last_text(CLIENT))   # по умолчанию не принуждаем
+        self.u(msg("/admin", uid=ADMIN), cb("set:t:gate", uid=ADMIN))
+        self.u(msg(T.MENU_CONTACT))
+        self.assertIn("обуна бўлинг", self.api.last_text(CLIENT))
+        self.api.left.clear()
+        self.u(cb("gate"))
+        self.assertEqual(self.api.sent(CLIENT, "sendPhoto")[-1]["photo"], "<bytes>")
+
+    def test_join_request_dm_then_approve_source_instagram(self):
+        self.u({"chat_join_request": {"chat": {"id": -100, "username": "ShodiyonaMebelMarkazi"},
+                                      "from": {"id": 777, "first_name": "Нодира"}, "user_chat_id": 777,
+                                      "invite_link": {"name": "Instagram"}}})
+        methods = [m for m, _ in self.api.calls]
+        self.assertLess(methods.index("sendPhoto"), methods.index("approveChatJoinRequest"))
+        self.assertEqual(self.bot.user(777)["src"], "Instagram")
+        self.assertEqual(self.bot.kv("joins"), "1")
+
+    def test_join_request_other_chat_ignored(self):
+        self.u({"chat_join_request": {"chat": {"id": -5, "username": "other"}, "from": {"id": 9}}})
+        self.assertFalse(self.api.calls)
+
+
+class TestSettings(Base):
+    def test_owner_edits_phone_and_contact_shows_it(self):
+        self.u(msg("/admin", uid=ADMIN), cb("a:set", uid=ADMIN), cb("set:e:hours", uid=ADMIN),
+               msg("Ҳар куни 09:00–19:00", uid=ADMIN))
+        self.u(msg(T.MENU_CONTACT))
+        self.assertIn("09:00–19:00", self.api.last_text(CLIENT))
+
+    def test_toggle_hides_menu_button(self):
+        self.u(cb("set:t:measure", uid=ADMIN), msg("/start"))
+        kb = self.api.sent(CLIENT, "sendPhoto")[-1]["reply_markup"]["keyboard"]
+        self.assertNotIn(T.MENU_MEASURE, [b["text"] for row in kb for b in row])
+
+    def test_client_cannot_open_settings(self):
+        self.u(cb("set:t:measure"), cb("a:set"))
+        self.assertTrue(self.bot.feat("measure"))
+
+    def test_add_manager_gets_leads(self):
+        self.u(msg("/start", uid=42), cb("set:ma:42", uid=ADMIN))
+        self.assertIn(42, self.bot.admins)
+        self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), msg("+998901234567"))
+        self.assertTrue(any("Ариза №1" in p["text"] for p in self.api.sent(42)))
+        self.u(cb("a:set", uid=42))                                     # менеджер — не владелец
+        self.assertFalse(any("Созламалар" in p["text"] for p in self.api.sent(42)))
+        self.u(cb("set:mr:42", uid=ADMIN))
+        self.assertNotIn(42, self.bot.admins)
+
+    def test_instagram_link_and_stats(self):
+        self.u(cb("set:l", uid=ADMIN))
+        self.assertIn("https://t.me/+JOIN", self.api.last_text(ADMIN))
+        self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), msg("+998901234567"), cb("a:stats", uid=ADMIN))
+        self.assertIn("аризалар 1", self.api.last_text(ADMIN))
 
 
 class TestPlaces(Base):
