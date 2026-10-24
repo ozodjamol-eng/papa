@@ -1,0 +1,37 @@
+# Воронка Shodiyona Mebel (клиент OZOD DIGITAL). Утверждено владельцем 24.10.2026, вариант «Б»:
+# в директе — номер колл-центра и шоурум на карте; бот @ShodiyonaMebelUzBot добавим, когда будет каталог.
+own_username = "shodiyona.mebel.uz"
+mode = "all"
+keywords = []
+spam_words = ["vpn", "впн", "заработ", "zarabot", "крипт", "crypto", "invest", "инвест", "казино", "casino", "ставк", "bonus", "бонус", "промокод", "pul ishlash", "пул ишлаш"]
+dry_run = false
+
+posts = []
+only_users = []
+all_recent = true
+scan_recent = 10
+max_age_days = 7          # Meta: личный ответ — только 7 дней
+backlog = false
+backlog_since = "2026-10-20T19:00:00+00:00"   # вопросы клиентов за последние дни (например «Канчага урнатиб берасиз») не теряем
+comments_per_poll = 50
+poll_seconds = 120
+max_per_hour = 30
+pause_minutes = 60
+retention_days = 90
+
+page_url = "https://maps.google.com/?q=40.8088,72.3502"   # шоурум «Ko'rgazma zali»
+
+dm_text = """Ассалому алайкум 👋
+Shodiyona Mebel Markazi — мебель бевосита ишлаб чиқарувчидан, воситачисиз, нархи арзонроқ.
+Нарх ва буюртма учун: +998 70 167 37 77
+📍 Кўргазма зали: {page}"""
+
+dm_text_ru = """Здравствуйте 👋
+Shodiyona Mebel Markazi — мебель напрямую от производителя, без посредников, дешевле.
+Цены и заказ: +998 70 167 37 77
+📍 Шоурум: {page}"""
+
+dm_text_both = """Ассалому алайкум 👋
+Shodiyona Mebel Markazi — мебель бевосита ишлаб чиқарувчидан, воситачисиз, нархи арзонроқ.
+Нарх ва буюртма учун: +998 70 167 37 77
+📍 Кўргазма зали: {page}"""

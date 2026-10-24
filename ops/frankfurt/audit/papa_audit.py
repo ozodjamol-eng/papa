@@ -344,7 +344,8 @@ AI_ENV = "/etc/papa-genplan/ai.env"
 REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600, "voronka": 3 * 3600}
 # 24.10 владелец: воронка молчала 2,5 суток (токен Instagram сбросился после смены пароля) — никто не заметил.
 VORONKAS = {"@paparazzi.uz": Path("/var/lib/papa-voronka/voronka.sqlite3"),
-            "GOLD WATER": Path("/var/lib/papa-voronka/goldwater.sqlite3")}
+            "GOLD WATER": Path("/var/lib/papa-voronka/goldwater.sqlite3"),
+            "Shodiyona": Path("/var/lib/papa-voronka/shodiyona.sqlite3")}
 VORONKA_STALE_MIN = 15          # проход раз в 2 минуты; 15 минут тишины = воронка стоит
 
 

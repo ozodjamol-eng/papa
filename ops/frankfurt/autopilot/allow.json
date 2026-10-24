@@ -61,6 +61,8 @@
     "digest-install",
     "goldwater-voronka-install",
     "goldwater-voronka-restart",
+    "shodiyona-voronka-install",
+    "shodiyona-voronka-restart",
     "reports-to-bot",
     "namaz-import",
     "xojaobod-golive"

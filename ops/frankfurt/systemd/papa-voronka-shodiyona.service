@@ -1,0 +1,39 @@
+[Unit]
+Description=PAPA Voronka — Shodiyona Mebel: комментарии Instagram @shodiyona.mebel.uz → директ с номером и шоурумом
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-voronka
+Group=papa-voronka
+
+Environment=PAPA_VORONKA_CONFIG=/opt/papa/modules/voronka/shodiyona.toml PAPA_VORONKA_DB=/var/lib/papa-voronka/shodiyona.sqlite3 PAPA_VORONKA_IG_ENV=/etc/papa-voronka/shodiyona.env PAPA_VORONKA_PUB=/var/lib/papa-voronka/shodiyona-pub PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/voronka
+ExecStart=/usr/bin/python3 -m voronka loop
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-voronka
+StateDirectoryMode=0700
+ReadWritePaths=/etc/papa-voronka
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0077
+MemoryHigh=80M
+MemoryMax=120M
+CPUQuota=20%
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target
