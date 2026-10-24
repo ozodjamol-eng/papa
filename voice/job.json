@@ -8,15 +8,9 @@
    }
   },
   {
-   "do": "search",
-   "params": {
-    "search": "uzbek",
-    "page_size": 30
-   }
-  },
-  {
    "do": "tts",
-   "name": "K1_v3",
+   "name": "1_klon_spokoyno",
+   "caption": "1 — клон их голоса, спокойно (v3)",
    "voice_id": "iKTwRsaJmssqBJHugBsY",
    "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
    "model": "eleven_v3",
@@ -27,7 +21,8 @@
   },
   {
    "do": "tts",
-   "name": "K2_v3_energy",
+   "name": "2_klon_energiya",
+   "caption": "2 — клон, энергично (v3)",
    "voice_id": "iKTwRsaJmssqBJHugBsY",
    "text": "[excited] Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
    "model": "eleven_v3",
@@ -38,7 +33,8 @@
   },
   {
    "do": "tts",
-   "name": "K3_v2",
+   "name": "3_klon_reklama",
+   "caption": "3 — клон, рекламная подача (v2)",
    "voice_id": "iKTwRsaJmssqBJHugBsY",
    "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
    "model": "eleven_multilingual_v2",
@@ -51,7 +47,22 @@
   },
   {
    "do": "tts",
-   "name": "L1_Mirzabek",
+   "name": "4_klon_reklama_plus",
+   "caption": "4 — клон, ещё ярче (v2)",
+   "voice_id": "iKTwRsaJmssqBJHugBsY",
+   "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
+   "model": "eleven_multilingual_v2",
+   "settings": {
+    "stability": 0.25,
+    "similarity_boost": 0.9,
+    "style": 0.75,
+    "use_speaker_boost": true
+   }
+  },
+  {
+   "do": "tts",
+   "name": "5_Mirzabek",
+   "caption": "5 — готовый узбекский голос Mirzabek (библиотека)",
    "voice_id": "GcnlXfqDudh5dSQpZVll",
    "public_owner_id": "auto",
    "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
@@ -63,5 +74,7 @@
   {
    "do": "credits"
   }
- ]
+ ],
+ "telegram": true,
+ "hear": true
 }
