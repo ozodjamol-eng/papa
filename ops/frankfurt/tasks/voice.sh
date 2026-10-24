@@ -18,5 +18,5 @@ if ls "$T"/out/*.mp3 >/dev/null 2>&1; then
   export GIT_SSH_COMMAND="ssh -F /dev/null -i $K -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/root/.ssh/known_hosts"
   ( cd "$T/out" && git init -q && git checkout -q -b voice-out && git add . \
     && git -c user.name=papa-frankfurt -c user.email=papa@localhost commit -q -m "voice-out" \
-    && git push -q -f git@github.com:ozodjamol-eng/papa.git voice-out 2>&1 | tail -3 && echo "PUSHED voice-out" ) || echo "PUSH_FAIL"
+    && git push -q -f git@github.com:ozodjamol-eng/papa.git voice-out 2>&1 | tail -8 && echo "PUSHED voice-out" ) || echo "PUSH_FAIL"
 fi
