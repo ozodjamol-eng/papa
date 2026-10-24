@@ -7,7 +7,7 @@ git -C /opt/papa archive FETCH_HEAD | tar -x -C "$T"
 [[ -f "$T/voice/job.json" ]] || { echo "NO_JOB"; exit 1; }
 python3 -I /opt/papa/ops/frankfurt/voice.py "$T/voice" "$T/out"
 if ls "$T"/out/*.mp3 >/dev/null 2>&1; then
-  K=/etc/papa-motion/deploy_key; [[ -f $K ]] || { echo "NO_DEPLOY_KEY"; exit 1; }
+  mkdir -p -m 700 /root/.ssh; K=/etc/papa-motion/deploy_key; [[ -f $K ]] || { echo "NO_DEPLOY_KEY"; exit 1; }
   export GIT_SSH_COMMAND="ssh -F /dev/null -i $K -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=accept-new"
   cd "$T/out" && git init -q && git checkout -q -b voice-out && git add . \
     && git -c user.name=papa-frankfurt -c user.email=papa@localhost commit -q -m "voice-out" \
