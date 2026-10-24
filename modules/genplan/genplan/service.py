@@ -299,7 +299,7 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
     sig = sigs[int(m["id"]) % len(sigs)] if sigs else ch.get("signature", "")
     body = text.finalize(m["text"], sig, is_ad=is_ad, own=own, hook=hook_for(cfg, ch, m, db) if not is_ad else "", tag=tag,
                          junk=junk, signatures=sigs + ((ch.get("signature"),) if ch.get("signature") else ()),
-                         limit=1024 if m["has_media"] else 4096)
+                         limit=1024 if m["has_media"] else 4096, author_first=True)
     media = json.loads(m["media"] or "[]") if "media" in m.keys() else []
     hub_ids = json.loads(m["hub_msgs"] or "[]") if "hub_msgs" in m.keys() else []
     via = m["via"] if "via" in m.keys() else None

@@ -192,13 +192,43 @@ def clean_hashtags(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
+AD_TAG = re.compile(r"(?i)(reklama|реклама|ads?$|promo)")
+LEAD_TAG = re.compile(r"^\s*(#[\wЀ-ӿ]+)")
+
+
+def author_tag(text: str) -> tuple[str, str]:
+    """24.10 владелец: «верх поста — мой, низ чистим». Хэштег, с которого начинается пост (первая непустая строка),
+    поставил автор — его не убираем. Возвращает (хэштег, текст без него). Правило «один хэштег»: берём первый,
+    остальные хэштеги той же строки уходят обычной чисткой. Латиница → кириллица (каналы кириллические)."""
+    lines = (text or "").split("\n")
+    i = next((k for k, ln in enumerate(lines) if ln.strip()), None)
+    if i is None:
+        return "", text or ""
+    m = LEAD_TAG.match(lines[i])
+    if not m or len(m.group(1)) < 3:
+        return "", text or ""
+    tag = m.group(1)
+    if re.search(r"[A-Za-z]", tag):
+        tag = "#" + translit.to_cyrillic(tag[1:]).upper()
+    rest = lines[i][m.end():].strip()
+    lines[i] = rest
+    if not rest:
+        del lines[i]
+    return tag, "\n".join(lines)
+
+
 def finalize(text: str, signature: str, is_ad: bool = False, own: tuple[str, ...] = (),
-             hook: str = "", limit: int | None = None, tag: str = "", junk=(), signatures=()) -> str:
+             hook: str = "", limit: int | None = None, tag: str = "", junk=(), signatures=(),
+             author_first: bool = False) -> str:
     """Текст поста: чужие подписи и хэштеги убраны, первой строкой — наш хэштег рубрики, внизу — хук и наша подпись.
     При лимите (подпись к медиа — 1024) сокращается текст, а не подпись."""
     if is_ad:
         body = (text or "").strip()
         return f"{tag}\n{body}" if tag and not body.startswith(tag) else body
+    if author_first:                              # 24.10: пост из пульта — хэштег автора сверху важнее хэштега бота
+        atag, text = author_tag(text)
+        if atag and not AD_TAG.search(atag):
+            tag = atag
     body = strip_sources(human.clean(drop_lines(text, junk)), keep=own)
     body, _ = translit.auto(body)
     body = clean_hashtags(body)
