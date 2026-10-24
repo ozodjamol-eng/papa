@@ -148,6 +148,83 @@ def enhance(data: bytes) -> bytes:
     return encode(img)
 
 
+def _all_faces(img) -> list[tuple[int, int, int, int]]:
+    """Все лица (x, y, w, h) в координатах оригинала. Нет модели/лиц — пусто."""
+    try:
+        H, W = img.shape[:2]
+        k = min(1.0, 800 / max(H, W))
+        sm = cv2.resize(img, (round(W * k), round(H * k)), interpolation=cv2.INTER_AREA) if k < 1 else img
+        det = cv2.FaceDetectorYN.create(MODEL, "", (sm.shape[1], sm.shape[0]), 0.6, 0.3, 50)
+        _, faces = det.detect(sm)
+    except Exception:  # noqa: BLE001
+        return []
+    return [tuple(int(float(v) / k) for v in f[:4]) for f in (faces if faces is not None else [])]
+
+
+def restore(data: bytes) -> bytes:
+    """24.10 «🩹 Реставрация» — классическая чистка старого фото, БЕЗ ИИ: лицо не дорисовывается, черты не меняются.
+    1) пыль, точки, тонкие царапины — закрашиваются соседними пикселями (на лицах НЕ трогаем вообще);
+    2) шум/зерно — мягко; 3) выцветание и желтизна — растяжка уровней, старое Ч/Б → нейтральное;
+    4) лёгкая резкость. Всё слабо: родные знают лицо."""
+    img = decode(data)
+    H, W = img.shape[:2]
+    if max(H, W) > 1800:                                             # память сервера (220 МБ): огромные фото уменьшаем
+        k = 1800 / max(H, W)
+        img = cv2.resize(img, (round(W * k), round(H * k)), interpolation=cv2.INTER_AREA)
+        H, W = img.shape[:2]
+    # 1) пыль и царапины старых снимков — СВЕТЛЫЕ точки/тонкие линии светлее соседей. Тёмные штрихи (ресницы, брови,
+    #    текст, морщины) не трогаем никогда — это детали фото.
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.int16)
+    ksz = 5 if max(H, W) < 1400 else 7
+    lift = g - cv2.medianBlur(g.astype(np.uint8), ksz).astype(np.int16)
+    mask = (lift > 45).astype(np.uint8)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(mask, 8)
+    small = max(4, int(H * W * 0.00004))
+    keep = np.zeros(n, np.uint8)
+    for i in range(1, n):
+        a_, w_, h_ = st[i, cv2.CC_STAT_AREA], st[i, cv2.CC_STAT_WIDTH], st[i, cv2.CC_STAT_HEIGHT]
+        speck = a_ <= small and max(w_, h_) <= 6                         # пылинка
+        scratch = min(w_, h_) <= 3 and max(w_, h_) >= max(H, W) * 0.12   # длинная тонкая царапина
+        keep[i] = 1 if (speck or scratch) else 0
+    mask = keep[lab]
+    for x, y, w_, h_ in _all_faces(img):                               # лица — неприкосновенны
+        px, py = int(w_ * 0.15), int(h_ * 0.25)
+        mask[max(0, y - py):y + h_ + py, max(0, x - px):x + w_ + px] = 0
+    if mask.any() and mask.mean() < 0.01:                              # если «пыли» слишком много — это текстура, не трогаем
+        img = cv2.inpaint(img, cv2.dilate(mask, np.ones((3, 3), np.uint8)) * 255, 2, cv2.INPAINT_TELEA)
+    # 2) шум и зерно — очень мягко
+    img = cv2.fastNlMeansDenoisingColored(img, None, 3, 3, 7, 21)
+    # 3) выцветание: растяжка уровней по яркости (1–99 %), только если фото действительно блёклое
+    labc = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(labc)
+    lo, hi = np.percentile(l, (1, 99))
+    if 40 < hi - lo < 200:
+        lf = (l.astype(np.float32) - lo) * (255.0 / (hi - lo))
+        l = np.clip(0.5 * lf + 0.5 * l, 0, 255).astype(np.uint8)
+    af, bf = a.astype(np.float32), b.astype(np.float32)
+    if af.std() < 5 and bf.std() < 5:                                 # одноцветное (Ч/Б с желтизной/сепия) → нейтральное
+        a = np.full_like(a, 128)
+        b = np.full_like(b, 128)
+    else:                                                             # цветное: слабо убрать общий оттенок
+        a = np.clip(af - (af.mean() - 128) * 0.4, 0, 255).astype(np.uint8)
+        b = np.clip(bf - (bf.mean() - 128) * 0.4, 0, 255).astype(np.uint8)
+    img = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+    # 4) лёгкая резкость
+    blur = cv2.GaussianBlur(img, (0, 0), 1.0)
+    img = cv2.addWeighted(img, 1.15, blur, -0.15, 0)
+    return encode(img)
+
+
+def side_by_side(before: bytes, after: bytes) -> bytes:
+    """Картинка «до | после» для владельца."""
+    a, b = decode(before), decode(after)
+    h = min(900, a.shape[0], b.shape[0])
+    a = cv2.resize(a, (round(a.shape[1] * h / a.shape[0]), h), interpolation=cv2.INTER_AREA)
+    b = cv2.resize(b, (round(b.shape[1] * h / b.shape[0]), h), interpolation=cv2.INTER_AREA)
+    gap = np.full((h, 12, 3), 255, np.uint8)
+    return encode(np.hstack([a, gap, b]))
+
+
 # ---------- качество фото (19.10): размытое / нет лица → боту вежливо попросить другое ----------
 SHARP = 1.5        # «деталь» лица: чёткое ≈ 4–5, размытое ≈ 0.6–1.3
 MIN_FACE = 40      # лицо уже 40 px — слишком мелкое, не разглядеть

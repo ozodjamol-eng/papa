@@ -289,24 +289,30 @@ class PhotoFlow(unittest.TestCase):
     def submit(self):
         h = self.bot.handle
         h(msg(photo="SHOT"))
-        self.assertTrue(any("скриншот" in p["text"] for m, p in self.api.calls if m == "sendMessage"))
+        # 24.10: человеку про скриншот ничего не пишем — старый простой порядок
+        self.assertFalse(any("скриншот" in p.get("text", "") for m, p in self.api.calls if m == "sendMessage"))
         h(msg(text="Аскарова Гулмирахон 1975-2026"))
         self.assertEqual(h(cb("u:send")), "sent")
 
-    def test_screenshot_auto_cropped_and_published(self):
+    def test_no_auto_crop_owner_crops(self):
+        # 24.10 владелец: бот сам не режет — карточка с фото человека как есть, обрезка только кнопкой владельца
         self.submit()
-        card = self.api.ups[0][1]
-        self.assertIn("обрезано автоматически", card["caption"])
+        self.assertEqual(self.api.ups, [])
+        card = [p for m, p in self.api.calls if m == "sendPhoto" and p["chat_id"] == 42][0]
+        self.assertEqual(card["photo"], "SHOT")
+        self.assertNotIn("обрезано автоматически", card["caption"])
         texts = [b["text"] for row in card["reply_markup"]["inline_keyboard"] for b in row]
         self.assertIn("👤 По лицу", texts)
+        self.assertIn("🩹 Реставрация", texts)
+        self.assertEqual(self.bot.handle(cb("o:crop:1", uid=42)), "crop")
         self.assertEqual(self.bot.handle(cb("o:ok:1", uid=42)), "published")
-        self.assertEqual(self.channel()[0]["photo"], "CUT1")            # в канал ушло обрезанное
+        self.assertEqual(self.channel()[0]["photo"], "CUT1")            # в канал ушло обрезанное владельцем
 
     def test_original_and_own_photo(self):
         self.submit()
-        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "orig")
-        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "same")
+        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "same")      # уже оригинал — бот не резал
         self.assertEqual(self.bot.handle(cb("o:crop:1", uid=42)), "crop")
+        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "orig")
         self.assertEqual(self.bot.handle(cb("o:face:1", uid=7)), "denied")
         self.assertEqual(self.bot.handle(cb("o:own:1", uid=42)), "wait")
         self.assertEqual(self.bot.handle(msg(uid=42, photo="MINE")), "replaced")
@@ -336,6 +342,16 @@ class Enhance(PhotoFlow):
         self.assertEqual(self.bot.handle(cb("o:enh:1", uid=42)), "enh")
         self.assertEqual(self.bot.handle(cb("o:enh:1", uid=42)), "same")      # дважды не улучшаем
         self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "orig")
+
+    def test_restore_once_pair_then_orig(self):
+        self.submit()
+        self.assertEqual(self.bot.handle(cb("o:rst:1", uid=7)), "denied")      # только владелец
+        self.assertEqual(self.bot.handle(cb("o:rst:1", uid=42)), "rst")
+        self.assertTrue(any("слева — до" in p.get("caption", "") for m, p in self.api.ups))
+        self.assertEqual(self.bot.handle(cb("o:rst:1", uid=42)), "same")
+        self.assertEqual(self.bot.handle(cb("o:orig:1", uid=42)), "orig")
+        self.bot.handle(cb("o:ok:1", uid=42))
+        self.assertEqual(self.channel()[0]["photo"], "SHOT")
         self.bot.handle(cb("o:ok:1", uid=42))
         self.assertEqual(self.channel()[0]["photo"], "SHOT")
 
@@ -523,3 +539,24 @@ class FaceRepeat(unittest.TestCase):
         self.assertIn("ТОТ ЖЕ ЧЕЛОВЕК по лицу", card["caption"])
         self.assertNotIn("ЭТО ФОТО", card["caption"])
         self.assertIn("o:has:1", str(card["reply_markup"]))
+
+
+@unittest.skipIf(cv2 is None, "нет OpenCV")
+class Restore(unittest.TestCase):
+    """24.10: реставрация — пыль/царапины убираются, размер и общий вид те же, лицо не дорисовывается."""
+    def test_dust_removed_size_kept(self):
+        rng = np.random.default_rng(5)
+        base = cv2.GaussianBlur(rng.integers(60, 200, (400, 300, 3), dtype=np.uint8), (0, 0), 6)
+        dusty = base.copy()
+        for x, y in rng.integers(20, 280, (40, 2)):
+            cv2.circle(dusty, (int(x), int(y)), 1, (255, 255, 255), -1)
+        cv2.line(dusty, (10, 50), (10, 350), (250, 250, 250), 1)
+        out = PH.decode(PH.restore(PH.encode(dusty)))
+        self.assertEqual(out.shape, dusty.shape)
+        g = lambda i: cv2.cvtColor(i, cv2.COLOR_BGR2GRAY).astype(np.float32)  # noqa: E731
+        spots = g(dusty) > 245
+        self.assertLess(g(out)[spots].mean(), g(dusty)[spots].mean() - 40)     # белые точки ушли
+
+    def test_side_by_side(self):
+        a = PH.encode(np.zeros((300, 200, 3), np.uint8))
+        self.assertEqual(PH.decode(PH.side_by_side(a, a)).shape[0], 300)

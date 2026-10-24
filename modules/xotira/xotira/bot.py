@@ -114,7 +114,8 @@ def kb_owner(n: int, status: str = "pending", report: str | None = None) -> dict
                      {"text": "👤 По лицу", "callback_data": f"o:face:{n}"}])
         rows.append([{"text": "✨ Улучшить", "callback_data": f"o:enh:{n}"},
                      {"text": "↩️ Оригинал", "callback_data": f"o:orig:{n}"}])
-        rows.append([{"text": "📎 Своё фото", "callback_data": f"o:own:{n}"}])
+        rows.append([{"text": "🩹 Реставрация", "callback_data": f"o:rst:{n}"},
+                     {"text": "📎 Своё фото", "callback_data": f"o:own:{n}"}])
     else:
         rows.append([{"text": "↩️ Оригинал", "callback_data": f"o:orig:{n}"},
                      {"text": "📎 Своё фото", "callback_data": f"o:own:{n}"}])
@@ -326,7 +327,6 @@ class Bot:
             bad = self.try_photo(ph.quality, photo)
             if bad:                                        # сомнительное фото → решает владелец
                 return self.bad_photo(chat, msg, photo, bad)
-            self.warn_screenshot(chat, photo)
             cap = (msg.get("caption") or "").strip()
             people = u["people"]
             if cap:
@@ -384,9 +384,7 @@ class Bot:
         raw = self.fetch(u["photo"])
         dup, lines, links = self.check(people, raw)
         status = "duplicate" if dup and links else "pending"
-        cropped = self.safe(ph.auto, raw)                          # скриншот → лишнее срезаем сразу
-        if cropped:
-            lines.append(N_AUTO)
+        cropped = None                                             # 24.10 владелец: сам бот не режет — только кнопкой
         cur = self.db.execute("INSERT INTO subs(uid, who, photo, caption, created, status, report, photo_orig, people) "
                               "VALUES (?,?,?,?,?,?,?,?,?)",
                               (chat, who, u["photo"], cap, now(), status, "\n".join(lines), u["photo"], u["people"]))
@@ -731,6 +729,29 @@ class Bot:
             self.db.commit()
             say("✨ Готово")
             return "enh"
+        if act == "rst":                                          # 24.10: реставрация того, что сейчас в карточке
+            if self.db.execute("SELECT 1 FROM kv WHERE k=? AND v=?", (f"rst:{n}", s["photo"])).fetchone():
+                say("Уже отреставрировано. Не нравится — «↩️ Оригинал»")
+                return "same"
+            before = self.fetch(s["photo"])
+            out = self.safe(ph.restore, before)
+            if not out:
+                say("Не получилось обработать фото", True)
+                return "none"
+            fid = self.set_photo(n, data=out)
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"rst:{n}", fid or ""))
+            self.db.commit()
+            pair = self.safe(lambda d: ph.side_by_side(d, out), before)
+            if pair and hasattr(self.api, "upload"):
+                for o, mid in json.loads(s["owner_msgs"] or "{}").items():
+                    try:
+                        self.api.upload("sendPhoto", "photo", pair, chat_id=int(o), reply_to_message_id=mid,
+                                        caption=f"🩹 №{n}: слева — до, справа — после. В карточке уже «после». "
+                                                f"Не нравится — «↩️ Оригинал».")
+                    except Exception as e:  # noqa: BLE001
+                        print(f"pair {o}: {e}", flush=True)
+            say("🩹 Готово")
+            return "rst"
         out = self.try_photo(ph.auto if act == "crop" else ph.face, orig)
         if not out:
             say("Лишнего не найдено — фото и так чистое" if act == "crop" else "Лицо не найдено — попробуйте «📎 Своё фото»", True)
@@ -777,7 +798,7 @@ class Bot:
                 return self.decide(cq, False, int(n), bad=True)
             if act == "has":
                 return self.decide(cq, False, int(n), has=True)
-            if act in ("crop", "face", "orig", "own", "enh"):
+            if act in ("crop", "face", "orig", "own", "enh", "rst"):
                 return self.edit_photo(cq, act, int(n))
             return self.decide(cq, act == "ok", int(n))
         self.api("answerCallbackQuery", callback_query_id=cq["id"])
