@@ -61,6 +61,7 @@ def main(job_dir, out_dir):
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     job = json.loads((Path(job_dir) / "job.json").read_text())
     clones = {}
+    owners = {}  # voice_id → public_owner_id из поиска (id автора маскируется в выводе — берём отсюда)
     for st in job["steps"]:
         do = st["do"]
         print(f"===== {do} {st.get('name', '')} =====", flush=True)
@@ -75,6 +76,7 @@ def main(job_dir, out_dir):
             if err:
                 print(err); continue
             for v in d.get("voices", []):
+                owners[v.get("voice_id")] = v.get("public_owner_id")
                 print(json.dumps({x: v.get(x) for x in ("name", "voice_id", "public_owner_id", "language", "accent",
                                                        "gender", "age", "descriptive", "use_case", "category",
                                                        "cloned_by_count", "usage_character_count_1y")},
@@ -94,8 +96,11 @@ def main(job_dir, out_dir):
                 vid = clones.get(vid[7:]) or ""
                 if not vid:
                     print("NO_CLONE"); continue
-            if st.get("public_owner_id"):
-                _, err = call("POST", f"/v1/voices/add/{st['public_owner_id']}/{vid}", k,
+            owner = st.get("public_owner_id")
+            if owner == "auto":
+                owner = owners.get(vid)
+            if owner:
+                _, err = call("POST", f"/v1/voices/add/{owner}/{vid}", k,
                               {"new_name": f"PAPA-{st['name']}"})
                 if err and "already" not in err.lower():
                     print("add:", err)
