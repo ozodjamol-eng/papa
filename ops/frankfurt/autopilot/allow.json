@@ -37,7 +37,8 @@
     "hubs-check",
     "bots-who",
     "xojaobod-check",
-    "group-peek"
+    "group-peek",
+    "voice"
   ],
   "approve": [
     "morning-pool-clear",
