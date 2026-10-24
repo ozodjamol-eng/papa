@@ -140,7 +140,9 @@ class TestPublish(unittest.TestCase):
         db, ig = store.connect(":memory:"), FakeIG()
         engine.run_once(ig, db, CFG, NOW, log=lambda *_: None)
         ig.cm["M1"] = [c("2", "11", "a", "secret_user")]
-        engine.run_once(ig, db, CFG, dt.datetime.now(UTC), log=lambda *_: None)
+        later = dt.datetime.now(UTC)          # 24.10: пост «свежий» относительно сегодняшнего дня, иначе тест стареет через 7 дней
+        ig.media[0]["timestamp"] = (later - dt.timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%S+0000")
+        engine.run_once(ig, db, CFG, later, log=lambda *_: None)
         d = tempfile.mkdtemp()
         path = publish_stats(db, dict(CFG, page_url="https://x/"), ig.media[:1], d)
         raw = open(path, encoding="utf-8").read()
