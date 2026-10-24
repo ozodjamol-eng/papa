@@ -118,6 +118,9 @@ def main(job_dir, out_dir):
         elif do == "delete_voice":
             _, err = call("DELETE", f"/v1/voices/{st['voice_id']}", k)
             print(err or "deleted")
+    caps = {st["name"]: st["caption"] for st in job["steps"] if st.get("do") == "tts" and st.get("caption")}
+    if caps:
+        (Path(out_dir) / "captions.json").write_text(json.dumps(caps, ensure_ascii=False), encoding="utf-8")
     print("===== done =====")
 
 

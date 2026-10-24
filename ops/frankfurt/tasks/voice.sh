@@ -7,9 +7,16 @@ git -C /opt/papa archive FETCH_HEAD | tar -x -C "$T"
 [[ -f "$T/voice/job.json" ]] || { echo "NO_JOB"; exit 1; }
 python3 -I /opt/papa/ops/frankfurt/voice.py "$T/voice" "$T/out"
 if ls "$T"/out/*.mp3 >/dev/null 2>&1; then
-  mkdir -p -m 700 /root/.ssh; K=/etc/papa-motion/deploy_key; [[ -f $K ]] || { echo "NO_DEPLOY_KEY"; exit 1; }
-  export GIT_SSH_COMMAND="ssh -F /dev/null -i $K -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=accept-new"
-  cd "$T/out" && git init -q && git checkout -q -b voice-out && git add . \
+  if [[ "${VOICE_TG:-1}" == 1 ]] && grep -q '"telegram": *true' "$T/voice/job.json"; then
+    ( set -a; . /etc/papa-genplan/genplan.env; [ -f /etc/papa-genplan/bots.env ] && . /etc/papa-genplan/bots.env; set +a
+      python3 -I /opt/papa/ops/frankfurt/voice_send.py "$T/out" ) || echo "TG_SEND_FAIL"
+  fi
+  if grep -q '"hear": *true' "$T/voice/job.json"; then
+    ( set -a; . /etc/papa-genplan/ai.env; set +a; python3 -I /opt/papa/ops/frankfurt/hear.py "$T"/out/*.mp3 ) || echo "HEAR_FAIL"
+  fi
+  mkdir -p -m 700 /root/.ssh; K=/etc/papa-motion/deploy_key
+  export GIT_SSH_COMMAND="ssh -F /dev/null -i $K -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/root/.ssh/known_hosts"
+  ( cd "$T/out" && git init -q && git checkout -q -b voice-out && git add . \
     && git -c user.name=papa-frankfurt -c user.email=papa@localhost commit -q -m "voice-out" \
-    && git push -q -f git@github.com:ozodjamol-eng/papa.git voice-out && echo "PUSHED voice-out"
+    && git push -q -f git@github.com:ozodjamol-eng/papa.git voice-out 2>/dev/null && echo "PUSHED voice-out" ) || echo "PUSH_SKIP: deploy-key только для чтения"
 fi
