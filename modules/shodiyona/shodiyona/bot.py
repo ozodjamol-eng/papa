@@ -648,17 +648,24 @@ class Bot:
         try:
             if fid:
                 self.api("sendPhoto", chat_id=uid, photo=fid, caption=cap, parse_mode="HTML", reply_markup=self.menu_kb())
-                return
-            if self.BANNER.exists():
+            elif self.BANNER.exists():
                 r = self.api.upload("sendPhoto", "photo", self.BANNER.read_bytes(), chat_id=uid, caption=cap,
                                     parse_mode="HTML", reply_markup=self.menu_kb())
                 if r and r.get("photo"):
                     self.kv_set("banner_id", r["photo"][-1]["file_id"])
-                return
+            else:
+                self.send(uid, cap, self.menu_kb())
         except Exception as e:  # noqa: BLE001 — картинка не ушла: приветствие текстом
             print(f"banner: {e}", flush=True)
             self.kv_set("banner_id", None)
-        self.send(uid, cap, self.menu_kb())
+            self.send(uid, cap, self.menu_kb())
+        self.welcome_channel(uid)
+
+    def welcome_channel(self, uid: int) -> None:
+        """24.10 владелец: в приветствии сразу зовём в канал (публичный канал не даёт «одним нажатием в оба»)."""
+        if self.channel_url() and self.is_member(uid) is not True:
+            self.send(uid, T.CHANNEL_WELCOME, self.channel_kb())
+            self.kv_set(f"offered:{uid}", "1")
 
     def is_member(self, uid: int) -> bool | None:
         ch = self.conf("channel")

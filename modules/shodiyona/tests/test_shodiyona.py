@@ -236,10 +236,20 @@ class TestBrandAndChannel(Base):
         self.u(msg("/start"))
         self.assertEqual(self.api.sent(CLIENT, "sendPhoto")[-1]["photo"], "BANNER")
 
+    def test_welcome_invites_to_channel_if_not_member(self):
+        self.api.left.add(CLIENT)
+        self.u(msg("/start"))
+        last = self.api.sent(CLIENT)[-1]
+        self.assertIn("Каналимизга", last["text"])
+        self.assertEqual(last["reply_markup"]["inline_keyboard"][0][0]["url"], "https://t.me/ShodiyonaMebelMarkazi")
+        self.api.left.clear()
+        self.u(msg("/start", uid=CLIENT + 1))
+        self.assertFalse(self.api.sent(CLIENT + 1))                   # подписчику — только картинка и меню
+
     def test_soft_offer_once_only_if_not_member(self):
         self.api.left.add(CLIENT)
         self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), msg("+998901234567"))
-        self.assertIn("каналимизда", self.api.last_text(CLIENT))
+        self.assertIn("каналимизда", self.api.last_text(CLIENT))   # /start не было — предлагаем после заявки
         self.assertIn("№1", self.api.sent(CLIENT)[-2]["text"])            # сначала «раҳмат», потом канал
         self.u(msg(T.MENU_CHEAPER), msg(photo=PHOTO), cb("p:yes"))
         self.assertNotIn("каналимизда", self.api.last_text(CLIENT))      # второй раз не навязываем
