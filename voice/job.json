@@ -1,28 +1,23 @@
 {
  "steps": [
   {
-   "do": "credits"
+   "do": "search",
+   "params": {
+    "language": "uz",
+    "page_size": 50
+   }
   },
   {
    "do": "search",
    "params": {
-    "language": "uz",
-    "gender": "male",
-    "page_size": 40
+    "search": "uzbek",
+    "page_size": 30
    }
-  },
-  {
-   "do": "clone",
-   "name": "PAPA-ref",
-   "files": [
-    "ref.mp3"
-   ],
-   "description": "reference narrator"
   },
   {
    "do": "tts",
    "name": "K1_v3",
-   "voice_id": "$clone:PAPA-ref",
+   "voice_id": "iKTwRsaJmssqBJHugBsY",
    "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
    "model": "eleven_v3",
    "settings": {
@@ -33,7 +28,7 @@
   {
    "do": "tts",
    "name": "K2_v3_energy",
-   "voice_id": "$clone:PAPA-ref",
+   "voice_id": "iKTwRsaJmssqBJHugBsY",
    "text": "[excited] Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
    "model": "eleven_v3",
    "settings": {
@@ -44,7 +39,7 @@
   {
    "do": "tts",
    "name": "K3_v2",
-   "voice_id": "$clone:PAPA-ref",
+   "voice_id": "iKTwRsaJmssqBJHugBsY",
    "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
    "model": "eleven_multilingual_v2",
    "settings": {
@@ -52,6 +47,17 @@
     "similarity_boost": 0.9,
     "style": 0.45,
     "use_speaker_boost": true
+   }
+  },
+  {
+   "do": "tts",
+   "name": "L1_Mirzabek",
+   "voice_id": "GcnlXfqDudh5dSQpZVll",
+   "public_owner_id": "auto",
+   "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
+   "model": "eleven_v3",
+   "settings": {
+    "stability": 0.5
    }
   },
   {
