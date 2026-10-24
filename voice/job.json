@@ -1,0 +1,61 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "search",
+   "params": {
+    "language": "uz",
+    "gender": "male",
+    "page_size": 40
+   }
+  },
+  {
+   "do": "clone",
+   "name": "PAPA-ref",
+   "files": [
+    "ref.mp3"
+   ],
+   "description": "reference narrator"
+  },
+  {
+   "do": "tts",
+   "name": "K1_v3",
+   "voice_id": "$clone:PAPA-ref",
+   "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
+   "model": "eleven_v3",
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85
+   }
+  },
+  {
+   "do": "tts",
+   "name": "K2_v3_energy",
+   "voice_id": "$clone:PAPA-ref",
+   "text": "[excited] Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
+   "model": "eleven_v3",
+   "settings": {
+    "stability": 0.0,
+    "similarity_boost": 0.85
+   }
+  },
+  {
+   "do": "tts",
+   "name": "K3_v2",
+   "voice_id": "$clone:PAPA-ref",
+   "text": "Xo'jaobodliklar! Bir vaqtlar Buloqboshi ham Xo'jaobod tarkibida bo'lgan! Demak, 2026-yilda tuman tashkil topganiga roppa-rosa YUZ YIL!",
+   "model": "eleven_multilingual_v2",
+   "settings": {
+    "stability": 0.35,
+    "similarity_boost": 0.9,
+    "style": 0.45,
+    "use_speaker_boost": true
+   }
+  },
+  {
+   "do": "credits"
+  }
+ ]
+}
