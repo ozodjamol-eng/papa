@@ -31,7 +31,7 @@ def send_document(token, chat, path: Path, caption: str) -> dict:
     return json.loads(urllib.request.urlopen(req, timeout=300).read())
 
 
-DOC_EXT = {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".zip", ".svg", ".gif", ".mov"}
+DOC_EXT = {".mp3", ".wav", ".png", ".jpg", ".jpeg", ".webp", ".pdf", ".zip", ".svg", ".gif", ".mov"}
 
 
 def main(folder):
