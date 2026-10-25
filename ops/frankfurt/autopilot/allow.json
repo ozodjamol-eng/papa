@@ -40,7 +40,8 @@
     "group-peek",
     "voice",
     "shodiyona-bot-status",
-    "shodiyona-bot-restart"
+    "shodiyona-bot-restart",
+    "plan-today"
   ],
   "approve": [
     "morning-pool-clear",
