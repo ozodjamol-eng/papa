@@ -1,7 +1,7 @@
 import sys, numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 VAR=sys.argv[1]; W,H=map(int,sys.argv[2].split('x')); OUT=sys.argv[3]
-FPS=30;DUR=3.0;N=int(FPS*DUR);PORT=H>W
+FPS=30;DUR=3.2;N=int(FPS*DUR);PORT=H>W
 RED=(255,16,36)
 lay={p:Image.open(f'/home/claude/b3d/L_{p}.png').convert('RGBA') for p in ('O','band','J')}
 al=np.maximum.reduce([np.asarray(l)[...,3] for l in lay.values()]);ys,xs=np.nonzero(al>8)
@@ -26,7 +26,14 @@ def pill(size):
     dd.polygon([(cx-r,cy-0.03*r),(cx+r,cy-0.8*r),(cx+0.6*r,cy+0.9*r),(cx+0.05*r,cy+0.4*r),(cx-0.25*r,cy+0.8*r),(cx-0.2*r,cy+0.25*r)],fill=(255,255,255,255))
     dd.text((int(size*1.6),int(size*0.22)),'@Ozodjamol',font=f,fill=(255,255,255,255));return im
 k=W/1080 if PORT else H/1080
-WM=wordmark(int((96 if PORT else 80)*k));SUB=line('РЕКЛАМА ХИЗМАТЛАРИ',M5,int((40 if PORT else 34)*k),(200,200,200));PL=pill(int((44 if PORT else 36)*k))
+WM=wordmark(int((96 if PORT else 80)*k))
+def spaced(txt,font,size,fill,sp):
+    f=ImageFont.truetype(font,size);d=ImageDraw.Draw(Image.new('L',(1,1)));tw=sum(d.textlength(ch,font=f) for ch in txt)+sp*size*(len(txt)-1)
+    im=Image.new('RGBA',(int(tw)+10,int(size*1.5)),(0,0,0,0));dd=ImageDraw.Draw(im);x=0
+    for ch in txt: dd.text((x,0),ch,font=f,fill=fill+(255,));x+=d.textlength(ch,font=f)+sp*size
+    return im.crop(im.getbbox())
+SUB=spaced('MOTION GRAFIKA XIZMATLARI',U%400,int((34 if PORT else 28)*k),(205,205,205),0.28)
+PL=spaced('@Ozodjamol',U%400,int((46 if PORT else 38)*k),RED,0.06)
 yy,xx=np.mgrid[0:H,0:W].astype(np.float32)
 def eo(x): x=np.clip(x,0,1); return 1-(1-x)**3
 def eio(x): x=np.clip(x,0,1); return x*x*(3-2*x)
@@ -39,8 +46,13 @@ def put(c,im,cx,cy,a=1.0,s=1.0,rot=0):
 def reveal(im,p):
     m=Image.new('L',im.size,0);ImageDraw.Draw(m).rectangle((0,0,int(im.width*p*1.2),im.height),fill=255);m=m.filter(ImageFilter.GaussianBlur(im.height*0.3))
     o=im.copy();o.putalpha(ImageChops.multiply(im.getchannel('A'),m));return o
+def whiten(im,f):
+    if f<=0: return im
+    a=np.asarray(im).astype(np.float32);a[...,:3]=a[...,:3]*(1-f)+255*f;return Image.fromarray(a.astype(np.uint8))
+ang=None
 ga=np.asarray(full)[...,3].astype(np.float32)/255
-glowimg=Image.new('RGBA',full.size,RED+(0,));glowimg.putalpha(Image.fromarray((ga*255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(ew*0.06)))
+padw=int(ew*0.35);pa=Image.new('L',(ew+2*padw,eh+2*padw),0);pa.paste(Image.fromarray((ga*255).astype(np.uint8)),(padw,padw))
+glowimg=Image.new('RGBA',pa.size,RED+(0,));glowimg.putalpha(pa.filter(ImageFilter.GaussianBlur(ew*0.06)))
 r=np.sqrt(((xx-W/2)/max(W,H))**2+((yy-ECY)/max(W,H))**2)
 if VAR=='A':
     base=np.array([0.012,0.012,0.013]);BGA=base+(np.array([0.11,0.03,0.035])-base)*np.clip(1-r*1.9,0,1)[...,None]**1.5
@@ -78,6 +90,38 @@ for fi in range(N):
         if 0.9<=t<1.2:
             fa=np.exp(-(r/0.15)**2)*0.7*np.exp(-(t-0.9)*12);fl=np.zeros((H,W,4),np.uint8);fl[...,:3]=(255,215,215);fl[...,3]=(np.clip(fa,0,1)*255).astype(np.uint8);c.alpha_composite(Image.fromarray(fl))
         g0=1.25
+    elif VAR=='C':
+        base=np.array([0.008,0.008,0.009]);bg=base+(np.array([0.10,0.02,0.03])-base)*np.clip(1-r*2.0,0,1)[...,None]**1.5*eio(t/0.6)
+        dx=(xx-ECX)/max(W,H);dy=(yy-ECY)/max(W,H);rr=np.sqrt(dx**2+dy**2)
+        # pre-flash point + anamorphic streak (0-0.9)
+        pre=eio(t/0.85)*(t<1.0)
+        bg=bg+np.array([1.0,0.35,0.38])*(np.exp(-(rr/0.02)**2)*pre*1.2)[...,None]
+        bg=bg+np.array([1.0,0.25,0.3])*(np.exp(-(dy/0.0025)**2)*np.exp(-np.abs(dx)/(0.08+0.5*pre))*pre*0.9)[...,None]
+        imp=np.exp(-max(0,t-0.9)*3.2)*(t>=0.9)
+        if t>=0.9:
+            angm=np.arctan2(dy,dx)
+            rays=(0.5+0.5*np.sin(angm*22+t*1.5))**10*np.exp(-rr/0.30)*(0.35*imp+0.06)
+            ring=np.exp(-((rr-(t-0.9)*0.9)/0.012)**2)*imp
+            bg=bg+np.array([1.0,0.12,0.15])*rays[...,None]+np.array([1.0,0.2,0.25])*ring[...,None]*0.8
+        c=Image.fromarray((np.clip(bg,0,1)*255).astype(np.uint8)).convert('RGBA')
+        pO=eo((t-0.35)/0.55);pJ=eo((t-0.42)/0.48);pB=eo((t-0.30)/0.6);wf=float(np.clip(1-(t-0.9)/0.5,0,1)) if t>=0.9 else 1.0
+        gl=0.25+0.6*imp
+        if t>0.85: g=glowimg.copy();g.putalpha(g.getchannel('A').point(lambda v:int(min(255,v*gl*1.2))));put(c,g,ECX,ECY,1,1.08)
+        for sub in (3,2,1,0):
+            dt=sub*0.03;aa=(0.25 if sub else 1.0)
+            if t-dt>0.30: put(c,whiten(lay['band'],wf*0.8),ECX-(1-eo((t-dt-0.30)/0.6))*W*0.8,ECY+(1-eo((t-dt-0.30)/0.6))*W*0.8,a=aa*min(1,pB*2))
+            if t-dt>0.35: put(c,whiten(lay['O'],wf*0.8),ECX,ECY-(1-eo((t-dt-0.35)/0.55))*H*0.6,a=aa*min(1,pO*2))
+            if t-dt>0.42: put(c,whiten(lay['J'],wf*0.8),ECX,ECY+(1-eo((t-dt-0.42)/0.48))*H*0.6,a=aa*min(1,pJ*2))
+        if 0.9<=t<1.4:
+            fa=np.exp(-(r/(0.12+0.5*(t-0.9)))**2)*0.95*np.exp(-(t-0.9)*7);fl=np.zeros((H,W,4),np.uint8);fl[...,:3]=(255,235,235);fl[...,3]=(np.clip(fa,0,1)*255).astype(np.uint8);c.alpha_composite(Image.fromarray(fl))
+        if 0.9<=t<2.2:
+            d=ImageDraw.Draw(c);prng=np.random.default_rng(7);u=t-0.9
+            for i in range(70):
+                a0=prng.uniform(0,6.283);sp=prng.uniform(0.25,0.9)*max(W,H);L=prng.uniform(0.4,1.2)
+                if u>L: continue
+                px=ECX+np.cos(a0)*sp*u*(1-0.3*u);py=ECY+np.sin(a0)*sp*u*(1-0.3*u)+0.2*H*u*u;al=int(255*(1-u/L))
+                rad=max(1,int(prng.uniform(1.5,4)*k*2));d.ellipse((px-rad,py-rad,px+rad,py+rad),fill=(255,int(prng.uniform(60,200)),int(prng.uniform(60,120)),al))
+        g0=1.35
     else:
         # flicker on
         on=0.0
@@ -102,7 +146,7 @@ for fi in range(N):
         put(c,Image.fromarray(gm),ECX,ECY)
     # texts
     ty=ECY+eh/2+H*(0.05 if PORT else 0.07)
-    pw=eo((t-(1.05 if VAR=='A' else 1.0))/0.5)
+    pw=eo((t-(1.05 if VAR in 'AC' else 1.0))/0.5)
     if pw>0: put(c,reveal(WM,pw),ECX,ty+WM.height/2)
     ps=eo((t-1.35)/0.4)
     if ps>0: put(c,SUB,ECX,ty+WM.height+SUB.height*1.4+(1-ps)*10,a=ps)
