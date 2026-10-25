@@ -17,12 +17,38 @@ def send_video(token, chat, path: Path, caption: str) -> dict:
     return json.loads(urllib.request.urlopen(req, timeout=300).read())
 
 
+def send_document(token, chat, path: Path, caption: str) -> dict:
+    """25.10: картинки/архивы/PDF — документом, оригиналом без сжатия."""
+    b = uuid.uuid4().hex
+    parts = []
+    for k, v in (("chat_id", str(chat)), ("caption", caption[:1024])):
+        parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+    parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"document\"; filename=\"{path.name}\"\r\n"
+                 f"Content-Type: application/octet-stream\r\n\r\n".encode() + path.read_bytes() + b"\r\n")
+    parts.append(f"--{b}--\r\n".encode())
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendDocument", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+    return json.loads(urllib.request.urlopen(req, timeout=300).read())
+
+
+DOC_EXT = {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".zip", ".svg", ".gif", ".mov"}
+
+
 def main(folder):
     token = os.environ.get("SHTAB_BOT_TOKEN") or os.environ["GENPLAN_BOT_TOKEN"]   # 23.10: видео — из PAPA ШТАБ
     owners = [int(o) for o in os.environ.get("OWNER_IDS", "").split(",") if o.strip()]
     vids = sorted(Path(folder).glob("*.mp4"))
-    if not vids:
+    docs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() in DOC_EXT)
+    if not vids and not docs:
         sys.exit("NO_VIDEO")
+    for d in docs:
+        cap = d.with_suffix(".txt").read_text(encoding="utf-8").strip() if d.with_suffix(".txt").exists() else d.stem
+        size = d.stat().st_size / 1e6
+        if size > 49:
+            print(f"{d.name}: {size:.1f} МБ — больше 50 МБ, бот не может отправить"); continue
+        for o in owners:
+            r = send_document(token, o, d, "📦 " + cap)
+            print(f"{d.name} ({size:.1f} МБ) → владельцу: {'OK' if r.get('ok') else r}")
     for v in vids:
         cap = v.with_suffix(".txt").read_text(encoding="utf-8").strip() if v.with_suffix(".txt").exists() else v.stem
         size = v.stat().st_size / 1e6

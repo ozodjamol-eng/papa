@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Отправить готовые видео владельцу в Telegram (личка от бота PAPA). Видео — в ветке outbox (кладёт ассистент).
+# Отправить готовые видео и файлы (картинки, архивы — документом) владельцу в Telegram (личка от бота PAPA). Видео — в ветке outbox (кладёт ассистент).
 set -Eeuo pipefail
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 git -C /opt/papa fetch -q origin outbox 2>/dev/null || { echo "NO_OUTBOX"; exit 1; }
