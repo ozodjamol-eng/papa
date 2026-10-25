@@ -31,13 +31,13 @@ def send_document(token, chat, path: Path, caption: str) -> dict:
     return json.loads(urllib.request.urlopen(req, timeout=300).read())
 
 
-DOC_EXT = {".mp3", ".wav", ".png", ".jpg", ".jpeg", ".webp", ".pdf", ".zip", ".svg", ".gif", ".mov"}
+DOC_EXT = {".mp4", ".mp3", ".wav", ".png", ".jpg", ".jpeg", ".webp", ".pdf", ".zip", ".svg", ".gif", ".mov"}
 
 
 def main(folder):
     token = os.environ.get("SHTAB_BOT_TOKEN") or os.environ["GENPLAN_BOT_TOKEN"]   # 23.10: видео — из PAPA ШТАБ
     owners = [int(o) for o in os.environ.get("OWNER_IDS", "").split(",") if o.strip()]
-    vids = sorted(Path(folder).glob("*.mp4"))
+    vids = []  # 24.10 правило владельца: видео — документом, оригиналом без сжатия (идут через DOC_EXT)
     docs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() in DOC_EXT)
     if not vids and not docs:
         sys.exit("NO_VIDEO")
