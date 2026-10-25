@@ -261,7 +261,7 @@ def ad_times(db, cfg, mid: int, now: dt.datetime, n: int = 10) -> list[dt.dateti
     """Время для рекламы: сначала свободные рекламные окна сетки (сегодня/завтра), потом остальное свободное время."""
     m = store.get(db, mid)
     ch = cfg["channels"][m["channel"]]
-    busy = smart.occupied(db, m["channel"], now, exclude=mid)
+    busy = smart.occupied(db, m["channel"], now, exclude=mid, ch=ch, grid_posts=False)   # 25.10: пост сетки уступит рекламе
     out: list[dt.datetime] = []
     for d in (0, 1):
         day = now.date() + dt.timedelta(days=d)
@@ -269,7 +269,7 @@ def ad_times(db, cfg, mid: int, now: dt.datetime, n: int = 10) -> list[dt.dateti
             if s["kind"] == "ad" and t >= now + smart.LEAD and smart.allowed(ch, t, "Реклама") and smart.is_free(ch, t, busy + out) \
                     and not smart.blocked(db, m["channel"], t):
                 out.append(t)
-    rest = [t for t in smart.other_times(db, cfg, m["channel"], m["rubric"], now, n=n, exclude=mid) if t not in out]
+    rest = [t for t in smart.other_times(db, cfg, m["channel"], "Реклама", now, n=n, exclude=mid) if t not in out]
     return (sorted(out) + rest)[:max(n, len(out))]
 
 
@@ -472,7 +472,7 @@ def own_time(bot, db, cfg, mid: int, txt: str, chat: int, now: dt.datetime | Non
         err = f"Публикации только {w[0]}–{w[1]}."
     elif smart.blocked(db, m["channel"], t):
         err = "В это время тихое окно (Жума/намоз)."
-    elif not smart.is_free(ch, t, smart.occupied(db, m["channel"], now, exclude=mid)):
+    elif not smart.free_at(db, cfg, m["channel"], t, m["rubric"], now, exclude=mid):
         err = f"Рядом уже есть пост (нужно ≥ {smart.rules(ch)['gap']} мин между постами)."
     if err:
         bot("sendMessage", chat_id=chat, text=f"⚠️ {err}\nНапишите другое время.")
@@ -1087,9 +1087,9 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         if t is None:                                   # старая кнопка «⏰ Ближайший слот»
             st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid)
             t = st[0] if st else None
-        busy = smart.occupied(db, m["channel"], now, exclude=mid)
         ch = cfg["channels"][m["channel"]]
-        if (t and t >= now - dt.timedelta(minutes=1) and smart.is_free(ch, t, busy) and smart.allowed(ch, t, m["rubric"])
+        if (t and t >= now - dt.timedelta(minutes=1) and smart.free_at(db, cfg, m["channel"], t, m["rubric"], now, exclude=mid)
+                and smart.allowed(ch, t, m["rubric"])
                 and not smart.blocked(db, m["channel"], t)):
             store.update(db, mid, status="queued", scheduled_at=t.isoformat(), urgent=0, locked=int(kind == "tm"), stock=0)
         else:

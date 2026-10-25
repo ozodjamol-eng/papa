@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT))
 from genplan import extras, hub, plan, service, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+for _c in CFG["channels"].values():   # 25.10: здесь — прежняя сетка рубрик (PaparazziUZ); часовая — test_hourly.py
+    _c.pop("hourly", None)
 CFG["channels"]["xojaobod"]["mode"] = "live"
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "TEST_GROUP_ID": "-100111", "TEST_CHANNEL_ID": "-100222"}
 TZ = plan.TZ

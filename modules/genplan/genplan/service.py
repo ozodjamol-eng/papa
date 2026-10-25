@@ -337,10 +337,28 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
         unstage(db, env, staged, log)
 
 
+def hourly_migrate(db, cfg: dict) -> int:
+    """25.10: канал перешёл на часовую сетку — запланированные посты (не реклама, не срочные, не выбранные владельцем
+    вручную 🔒) один раз заново встают в часы сетки, по прежнему порядку. Откат: убрать hourly из config.toml."""
+    n = 0
+    for channel, ch in cfg["channels"].items():
+        k = f"hourly_v1:{channel}"
+        if not smart.hourly(ch) or store.kv_get(db, k):
+            continue
+        for m in store.scheduled(db, channel):
+            if smart.is_grid_post(m) and not m["locked"]:
+                db.execute("UPDATE materials SET scheduled_at=NULL WHERE id=?", (m["id"],))
+                n += 1
+        db.commit()
+        store.kv_set(db, k, "done")
+    return n
+
+
 def reconcile(db, cfg: dict, now: dt.datetime) -> int:
     """Посты из старой схемы (в очереди без точного времени) получают умное время."""
+    hourly_migrate(db, cfg)
     n = 0
-    for m in db.execute("SELECT * FROM materials WHERE status='queued' AND scheduled_at IS NULL").fetchall():
+    for m in db.execute("SELECT * FROM materials WHERE status='queued' AND scheduled_at IS NULL ORDER BY id").fetchall():
         if m["channel"] not in cfg["channels"]:
             continue
         st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=m["id"])
@@ -362,6 +380,7 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
         due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
         urgent = [m for m in due if m["urgent"]]
         regular = [m for m in due if not m["urgent"]]
+        regular.sort(key=lambda m: (not smart.is_ad_rubric(m["rubric"]), m["scheduled_at"]))   # 25.10: реклама — раньше поста сетки
         for m in urgent:                                     # срочные — все и сразу
             ok = await publish_one(db, cfg, env, pubs, channel, m, None, day, log, now)
             out["published" if ok else "failed"] += 1
@@ -378,6 +397,12 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
                     store.update(db, m["id"], scheduled_at=st[0].isoformat())
                     out["moved"] += 1
                     continue
+            later = smart.collision_defer(db, cfg, channel, m, now)   # ⏱ совпал с рекламой/срочным/протоколом — +10 мин
+            if later:
+                store.update(db, m["id"], scheduled_at=later.isoformat())
+                out["moved"] += 1
+                log(f"{channel} {t:%H:%M}: рядом другой пост — выйдет в {later:%H:%M}")
+                continue
             ok = await publish_one(db, cfg, env, pubs, channel, m, t.strftime("%H:%M"), day, log, now)
             out["published" if ok else "failed"] += 1
             out["ids"].append(m["id"])

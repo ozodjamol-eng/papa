@@ -329,7 +329,7 @@ def shift_time(db, cfg: dict | None, channel: str, at: dt.datetime, now: dt.date
         return at
     from . import smart
     ch = cfg["channels"][channel]
-    busy = smart.occupied(db, channel, now)
+    busy = smart.occupied(db, channel, now, ch=ch, grid_posts=False)   # 25.10: пост часовой сетки уступит рекламе сам
     ok = lambda t: t >= now + smart.LEAD and smart.is_free(ch, t, busy) and not smart.blocked(db, channel, t)  # noqa: E731
     if ok(at):
         return at

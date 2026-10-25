@@ -90,8 +90,10 @@ def panel_reply(db, cfg: dict, channel: str, button: str, now: dt.datetime | Non
         tags = "включены" if ch.get("hashtags") else "нет"
         return (f"⚙️ Настройки — {name}\n\n"
                 f"Режим: {_mode(cfg, channel)}\n"
-                f"Публикации: {r['window'][0]}–{r['window'][1]}, между постами ≥ {r['gap']} мин\n"
-                f"Мест в сетке дня: {sum(1 for s in ch['slots'] if s['kind'] in ('content', 'music'))}\n"
+                + (f"⏱ Часовая сетка: {smart.hourly(ch)['from']}–{smart.hourly(ch)['to']}, 1 пост в час ровно в :00; "
+                   f"совпал с рекламой/срочным/протоколом — через {smart.hourly(ch)['after']} мин\n" if smart.hourly(ch) else
+                   f"Публикации: {r['window'][0]}–{r['window'][1]}, между постами ≥ {r['gap']} мин\n"
+                   f"Мест в сетке дня: {sum(1 for s in ch['slots'] if s['kind'] in ('content', 'music'))}\n") +
                 f"Хэштеги рубрик: {tags} · подпись: {ch.get('signature', '—')}\n"
                 f"Утро: {(ch.get('morning') or {}).get('greeting', '—')} / {(ch.get('morning') or {}).get('day_post', '—')}\n"
                 + _namaz_line(db, ch, now) +

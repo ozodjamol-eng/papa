@@ -39,9 +39,13 @@ def allowed(ch: dict, t: dt.datetime, rubric: str | None) -> bool:
     return True
 
 
-def occupied(db, channel: str, now: dt.datetime, exclude: int | None = None) -> list[dt.datetime]:
+def occupied(db, channel: str, now: dt.datetime, exclude: int | None = None, ch: dict | None = None,
+             grid_posts: bool = True) -> list[dt.datetime]:
+    """Занятые моменты. grid_posts=False (часовая сетка): посты сетки не мешают рекламе — сдвигаются сами (+10 мин)."""
     from . import namaz
-    out = [dt.datetime.fromisoformat(m["scheduled_at"]) for m in store.scheduled(db, channel) if m["id"] != exclude]
+    skip = not grid_posts and ch is not None and hourly(ch) is not None
+    out = [dt.datetime.fromisoformat(m["scheduled_at"]) for m in store.scheduled(db, channel)
+           if m["id"] != exclude and not (skip and is_grid_post(m))]
     from . import morning
     since = now - dt.timedelta(hours=3)
     from . import extras
@@ -60,6 +64,81 @@ def is_free(ch: dict, t: dt.datetime, busy: list[dt.datetime]) -> bool:
     return all(abs(t - b) >= gap for b in busy)
 
 
+# ---------- ⏱ Часовая сетка (25.10 владелец) ----------
+# Посты из рубрик — по одному в час, ровно в :00. Протоколы (утро, намоз, погода, дайджест, Якуний пост) и реклама —
+# вне сетки, по своему времени. Срочный 🆘 — сразу. Совпало (реклама/срочный/протокол рядом) — плановый выходит
+# через `after` минут после него (по умолчанию 10), остальные часы сетки НЕ сдвигаются.
+
+HOURLY_DEFAULT = {"from": "07:00", "to": "22:00", "after": 10}
+
+
+def hourly(ch: dict) -> dict | None:
+    o = ch.get("hourly")
+    if not o or o.get("enabled") is False:
+        return None
+    return {**HOURLY_DEFAULT, **o}
+
+
+def is_ad_rubric(rubric: str | None) -> bool:
+    return (rubric or "").lower().startswith("реклама")
+
+
+def is_grid_post(m) -> bool:
+    """Пост сетки: обычный пост из рубрики — не срочный и не реклама."""
+    return not m["urgent"] and not is_ad_rubric(m["rubric"])
+
+
+def hour_slots(ch: dict, day: dt.date) -> list[dt.datetime]:
+    o = hourly(ch) or HOURLY_DEFAULT
+    a, b = hm(o["from"]).hour, hm(o["to"]).hour
+    return [plan.slot_time(day, f"{h:02d}:00") for h in range(a, b + 1)]
+
+
+def hour_taken(db, channel: str, t: dt.datetime, exclude: int | None = None) -> bool:
+    """Час уже занят постом сетки (в т.ч. сдвинутым на :10 после рекламы)."""
+    h0 = t.astimezone(plan.TZ).replace(minute=0, second=0, microsecond=0)
+    for m in store.scheduled(db, channel):
+        if m["id"] == exclude or not is_grid_post(m):
+            continue
+        x = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
+        if h0 <= x < h0 + dt.timedelta(hours=1):
+            return True
+    return False
+
+
+def free_hours(db, ch: dict, channel: str, rubric: str | None, now: dt.datetime, day: dt.date,
+               exclude: int | None = None, until: dt.datetime | None = None) -> list[dt.datetime]:
+    return [t for t in hour_slots(ch, day)
+            if t >= now + LEAD and (until is None or t < until) and allowed(ch, t, rubric)
+            and not blocked(db, channel, t) and not hour_taken(db, channel, t, exclude)]
+
+
+def free_at(db, cfg: dict, channel: str, t: dt.datetime, rubric: str | None, now: dt.datetime,
+            exclude: int | None = None) -> bool:
+    """Можно ли поставить пост на это время (промежуток / час сетки)."""
+    ch = cfg["channels"][channel]
+    if hourly(ch):
+        if is_ad_rubric(rubric):                 # реклама — своё время; пост сетки сам уступит (+10 мин)
+            return is_free(ch, t, occupied(db, channel, now, exclude, ch=ch, grid_posts=False))
+        return not hour_taken(db, channel, t, exclude)
+    return is_free(ch, t, occupied(db, channel, now, exclude))
+
+
+def collision_defer(db, cfg: dict, channel: str, m, now: dt.datetime) -> dt.datetime | None:
+    """Пост сетки наступил, а за последние `after` минут вышел другой пост (реклама, срочный, протокол, ручной) —
+    ждём: новое время = тот пост + after. Сдвигается только этот пост, сетка остаётся."""
+    ch = cfg["channels"][channel]
+    o = hourly(ch)
+    if not o or not is_grid_post(m):
+        return None
+    after = dt.timedelta(minutes=int(o["after"]))
+    recent = [p.astimezone(plan.TZ) for p in store.pulse_since(db, channel, now - after) if p <= now]
+    if not recent:
+        return None
+    t = max(recent) + after
+    return t if t > now else None
+
+
 def grid(ch: dict, day: dt.date) -> list[tuple[dt.datetime, dict]]:
     return [(plan.slot_time(day, s["t"]), s) for s in plan.day_slots(ch, day) if s["kind"] in ("content", "music", "ad")]
 
@@ -73,7 +152,13 @@ def smart_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime
                exclude: int | None = None) -> tuple[dt.datetime, str] | None:
     """Лучшее время: слот своей рубрики → слот, где рубрика запасная → (на следующий день то же) → ближайшее свободное."""
     ch = cfg["channels"][channel]
-    busy = occupied(db, channel, now, exclude)
+    if hourly(ch) and not is_ad_rubric(rubric):
+        for d in range(max(ttl(ch, rubric), 1) + 1):
+            hrs = free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)
+            if hrs:
+                return hrs[0], "часовая сетка"
+        return None
+    busy = occupied(db, channel, now, exclude, ch=ch, grid_posts=False)
     days = ttl(ch, rubric)
     for d in range(days + 1):
         day = now.date() + dt.timedelta(days=d)
@@ -92,7 +177,10 @@ def other_times(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetim
                 exclude: int | None = None) -> list[dt.datetime]:
     """Свободные моменты на сегодня и завтра: слоты сетки + каждые 30 минут, с соблюдением правил."""
     ch = cfg["channels"][channel]
-    busy = occupied(db, channel, now, exclude)
+    if hourly(ch) and not is_ad_rubric(rubric):
+        hrs = [t for d in (0, 1) for t in free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)]
+        return hrs[:n]
+    busy = occupied(db, channel, now, exclude, ch=ch, grid_posts=False)
     out: list[dt.datetime] = []
     for d in (0, 1):
         day = now.date() + dt.timedelta(days=d)
@@ -183,6 +271,8 @@ def _first_rubric(ch: dict) -> str:
 def shift_after_urgent(db, cfg: dict, channel: str, at: dt.datetime, now: dt.datetime) -> list[tuple[int, dt.datetime]]:
     """После срочного поста: автоматические посты, стоящие ближе промежутка, переносятся на новое умное время."""
     ch = cfg["channels"][channel]
+    if hourly(ch):                                   # часовая сетка не сдвигается: совпавший пост уступит сам (+10 мин)
+        return []
     gap = dt.timedelta(minutes=int(rules(ch)["gap"]))
     moved = []
     for m in store.scheduled(db, channel):
@@ -216,6 +306,13 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     if not pool:
         return []
     used: list[int] = []
+    if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
+        for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1)):
+            pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"])), None)
+            if pick:
+                store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
+                used.append(pick["id"])
+        return used
     for t, s in grid(ch, now.date()):
         if s["kind"] == "ad" or not (now + LEAD <= t <= now + STOCK_AHEAD):
             continue
@@ -258,7 +355,11 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         t = dt.datetime.fromisoformat(m["scheduled_at"])
         items.append((f"{t:%H:%M}", f"⏳ {t:%H:%M}  {m['rubric']} — {short(m['text'])}{' 🔒' if m['locked'] else ''}"))
     empty = 0
-    for t, s in grid(ch, day):
+    if hourly(ch):
+        for t in free_hours(db, ch, channel, None, now, day):
+            empty += 1
+            items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  час пустой — нет поста"))
+    for t, s in ([] if hourly(ch) else grid(ch, day)):
         if s["kind"] == "ad" or t < now or not is_free(ch, t, busy):
             continue
         empty += 1
@@ -360,7 +461,10 @@ def day_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime, 
     """Лучшее время именно в этот день (кнопки «📅 Сегодня» / «🌅 Завтра»): слот своей рубрики →
     слот, где рубрика запасная → ближайшее свободное. Окно, промежуток, музыка, Жума — соблюдаются."""
     ch = cfg["channels"][channel]
-    busy = occupied(db, channel, now, exclude)
+    if hourly(ch) and not is_ad_rubric(rubric):
+        hrs = free_hours(db, ch, channel, rubric, now, day, exclude, until)
+        return hrs[0] if hrs else None
+    busy = occupied(db, channel, now, exclude, ch=ch, grid_posts=False)
     ok = lambda t: (t >= now + LEAD and (until is None or t < until) and allowed(ch, t, rubric)  # noqa: E731
                     and is_free(ch, t, busy) and not blocked(db, channel, t))
     slots = [(t, s) for t, s in grid(ch, day) if s["kind"] != "ad" and ok(t)]

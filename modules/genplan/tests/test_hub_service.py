@@ -11,6 +11,8 @@ import json  # noqa: E402
 from genplan import hub, menu, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+for _c in CFG["channels"].values():   # 25.10: здесь — прежняя сетка рубрик (PaparazziUZ); часовая — test_hourly.py
+    _c.pop("hourly", None)
 CFG["channels"]["xojaobod"].pop("mode", None)   # 20.10 группа в работе; эти тесты проверяют режим теста
 CFG["auto_place"] = False          # эти тесты проверяют ручной выбор рубрики
 CFG["auto_channels"] = ["davra"]   # и канал по умолчанию
