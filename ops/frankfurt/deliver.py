@@ -43,16 +43,16 @@ def main(folder):
         sys.exit("NO_VIDEO")
     for d in docs:
         cap = d.with_suffix(".txt").read_text(encoding="utf-8").strip() if d.with_suffix(".txt").exists() else d.stem
-        size = d.stat().st_size / 1e6
-        if size > 49:
+        size = d.stat().st_size / 1048576
+        if size > 49.9:
             print(f"{d.name}: {size:.1f} МБ — больше 50 МБ, бот не может отправить"); continue
         for o in owners:
             r = send_document(token, o, d, "📦 " + cap)
             print(f"{d.name} ({size:.1f} МБ) → владельцу: {'OK' if r.get('ok') else r}")
     for v in vids:
         cap = v.with_suffix(".txt").read_text(encoding="utf-8").strip() if v.with_suffix(".txt").exists() else v.stem
-        size = v.stat().st_size / 1e6
-        if size > 49:
+        size = v.stat().st_size / 1048576
+        if size > 49.9:
             print(f"{v.name}: {size:.1f} МБ — больше 50 МБ, бот не может отправить"); continue
         for o in owners:
             r = send_video(token, o, v, "🎬 " + cap)
