@@ -129,6 +129,10 @@ def main(job_dir, out_dir):
                 name = f"{st['name']}_{i}"
                 (Path(out_dir) / f"{name}.mp3").write_bytes(base64.b64decode(pv["audio_base_64"]))
                 print(f"OK {name}.mp3 generated_voice_id={pv.get('generated_voice_id')} {pv.get('duration_secs')} с")
+        elif do == "save_design":  # сохранить голос из превью design в аккаунт (занимает слот голоса)
+            d, err = call("POST", "/v1/text-to-voice", k, {"voice_name": st["name"], "voice_description": st.get("description", ""),
+                                                          "generated_voice_id": st["generated_voice_id"]})
+            print(err or f"saved voice_id={d.get('voice_id')}")
         elif do == "delete_voice":
             _, err = call("DELETE", f"/v1/voices/{st['voice_id']}", k)
             print(err or "deleted")
