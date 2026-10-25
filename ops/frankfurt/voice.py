@@ -7,6 +7,7 @@ job.json:
   {"do": "credits"},
   {"do": "search", "params": {"language": "uz", "gender": "male", "page_size": 40}},
   {"do": "clone", "name": "PAPA-ref", "files": ["ref.mp3"], "description": "..."},
+  {"do": "design", "name": "D", "description": "...", "text": "(100–1000 знаков)", "model": "eleven_ttv_v3"},
   {"do": "tts", "name": "A", "voice_id": "...|$clone:PAPA-ref", "public_owner_id": "(для голоса из библиотеки)",
    "text": "...", "model": "eleven_v3", "settings": {"stability": 0.4, "similarity_boost": 0.8, "style": 0.3},
    "format": "mp3_44100_64"}
@@ -115,6 +116,19 @@ def main(job_dir, out_dir):
                 print(err); continue
             (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
             print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ voice_id={vid}")
+        elif do == "design":  # 25.10: дизайн голоса с нуля по описанию (не клон) — сохраняем превью mp3
+            import base64
+            body = {"voice_description": st["description"], "text": st["text"],
+                    "model_id": st.get("model", "eleven_ttv_v3"), "auto_generate_text": False}
+            if st.get("guidance_scale"):
+                body["guidance_scale"] = st["guidance_scale"]
+            d, err = call("POST", f"/v1/text-to-voice/design?output_format={st.get('format', 'mp3_44100_128')}", k, body, timeout=300)
+            if err:
+                print(err); continue
+            for i, pv in enumerate(d.get("previews", []), 1):
+                name = f"{st['name']}_{i}"
+                (Path(out_dir) / f"{name}.mp3").write_bytes(base64.b64decode(pv["audio_base_64"]))
+                print(f"OK {name}.mp3 generated_voice_id={pv.get('generated_voice_id')} {pv.get('duration_secs')} с")
         elif do == "delete_voice":
             _, err = call("DELETE", f"/v1/voices/{st['voice_id']}", k)
             print(err or "deleted")
