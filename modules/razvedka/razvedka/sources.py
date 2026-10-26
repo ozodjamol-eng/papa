@@ -106,6 +106,22 @@ def theme(cats: list[str], allowed=None) -> str | None:
     return None
 
 
+def _norm(name: str) -> str:
+    """Только буквы и цифры, без регистра: «🏙 XOJAOBOD  CITY 24» → «xojaobodcity24»."""
+    return re.sub(r"[\W_]+", "", str(name or "")).casefold()
+
+
+def folder_match(titles: list[str], names) -> str | None:
+    """Папка нашего канала: сначала точное имя, потом без эмодзи/пробелов, потом «начинается с» (XOJAOBOD CITY 24)."""
+    for test in (lambda t, n: curate._t(t) == curate._t(n), lambda t, n: _norm(t) == _norm(n),
+                 lambda t, n: _norm(n) and _norm(t).startswith(_norm(n))):
+        for n in names:
+            hit = [t for t in titles if test(t, n)]
+            if hit:
+                return min(hit, key=len)
+    return None
+
+
 def _ok(r: dict, ch: str, code: str) -> bool:
     return ((r.get("theme_by") or {}).get(ch) == code and r.get("clean") is not None and r["clean"] >= CLEAN_MIN
             and (r.get("username") or "").lower() not in BLOCK)
@@ -283,14 +299,15 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
     if os.environ.get("GEMINI_API_KEY"):              # темы и кадры — на «лёгкой» модели (свой дневной лимит)
         os.environ["GEMINI_MODEL"] = VISION_MODEL
     folders = await curate.folder_peers(client)
-    by = {curate._t(k): k for k in folders}
     found, plan = {}, []                              # 26.10 (2): только папки наших трёх каналов
     for ch, _, names, _ in PROFILES:
-        name = next((by[curate._t(n)] for n in names if curate._t(n) in by), None)
+        name = folder_match(list(folders), names)
         found[ch] = name
         if name:
             plan += [(ch, name, p) for p in folders[name]]
     log("папки: " + ", ".join(f"{ch}={found[ch] or 'НЕТ'}" for ch in found) + f" (всего у владельца {len(folders)})")
+    if not all(found.values()):
+        log("  все папки владельца: " + " | ".join(repr(k) for k in folders))
     rows, ents, media = [], {}, {}
     by_id: dict[int, dict] = {}
     for ch, fname, p in plan:

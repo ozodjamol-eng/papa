@@ -66,6 +66,13 @@ class TestSources(unittest.TestCase):
         self.assertEqual([r["id"] for r in sl["paparazzi"]["music"]["top"]], [40])
         self.assertEqual(sl["paparazzi"]["humor"]["top"], [])                 # юмор Давры Папарацци не берёт
 
+    def test_folder_match_emoji_and_spaces(self):
+        t = ["Все", "🏙 XOJAOBOD  CITY", "KATTA DAVRA", "Paparazzi UZ", "Новости"]
+        self.assertEqual(sources.folder_match(t, ("XOJAOBOD CITY",)), "🏙 XOJAOBOD  CITY")
+        self.assertEqual(sources.folder_match(["XOJAOBOD CITY 24"], ("XOJAOBOD CITY",)), "XOJAOBOD CITY 24")
+        self.assertEqual(sources.folder_match(t, ("katta davra",)), "KATTA DAVRA")
+        self.assertIsNone(sources.folder_match(t, ("PAPA·Шаҳар",)))
+
     def test_channel_in_two_folders_serves_both(self):
         sl = sources.shortlist([row(1, "humor", ch=("davra", "xojaobod"))])
         self.assertEqual([r["id"] for r in sl["davra"]["humor"]["top"]], [1])
