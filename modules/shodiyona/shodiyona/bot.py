@@ -265,6 +265,14 @@ class Bot:
         if st:
             self.on_step(uid, st, msg, text)
             return
+        ph = self.photo_id(msg)
+        if ph:  # 26.10: реклама «расмини ботга юборинг» — фото без кнопки = заявка «Арзонроқ топамиз»
+            if uid not in self.admins and self.gate_blocks(uid):
+                return
+            self.step(uid, "phone", fresh=True, kind="cheaper", details=text, photos=[ph])
+            self.send(uid, T.PHOTO_DIRECT)
+            self.ask_phone(uid)
+            return
         self.send(uid, T.UNKNOWN, self.menu_kb())
 
     @staticmethod

@@ -283,6 +283,21 @@ class TestBrandAndChannel(Base):
         self.assertFalse(self.api.calls)
 
 
+class TestDirectPhoto(Base):
+    def test_photo_without_button_becomes_cheaper_lead(self):
+        self.u(msg("/start"), msg(photo=PHOTO))
+        self.assertIn("Расм қабул қилинди", self.api.sent(CLIENT)[-2]["text"])
+        self.u(msg("+998901234567"))
+        lead = self.lead()
+        self.assertIsNotNone(lead)
+        self.assertEqual(lead["kind"], "cheaper")
+        self.assertIn("№1", self.api.last_text(CLIENT))
+
+    def test_photo_with_caption_keeps_text(self):
+        self.u(msg(photo=PHOTO, caption="шундай диван керак"), msg("+998901234567"))
+        self.assertIn("шундай диван", self.lead()["details"] or "")
+
+
 class TestSettings(Base):
     def test_contact_has_manager_button(self):
         self.u(msg(T.MENU_CONTACT))
