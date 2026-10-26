@@ -90,14 +90,27 @@ class TestMorning(unittest.TestCase):
         busy = smart.occupied(self.db, "davra", at("06:00", FRI))
         self.assertIn(at("06:30", FRI), busy)
 
-    def test_calendar_and_creative_fallback(self):
+    def test_calendar_and_no_invented_day(self):
         self.assertEqual(morning.calendar_day(FRI)["name"], "Бутунжаҳон озиқ-овқат куни")
         t, note = morning.day_text(self.db, "КАТТА ДАВРА", FRI)
         self.assertTrue(t.startswith("📅 БУГУН — БУТУНЖАҲОН ОЗИҚ-ОВҚАТ КУНИ!"))
         self.assertIn("шаблон", note)
-        t2, _ = morning.day_text(self.db, "КАТТА ДАВРА", dt.date(2026, 10, 18))
-        self.assertIn("КУНИГА АЙЛАНТИРАЙЛИК", t2)
-        self.assertNotIn("халқаро", t2.lower())
+        empty = dt.date(2026, 10, 18)
+        store.kv_set(self.db, f"morning_day_{empty.isoformat()}", "✨ БУГУННИ «ДЎСТЛИК» КУНИГА АЙЛАНТИРАЙЛИК!")
+        t2, note2 = morning.day_text(self.db, "КАТТА ДАВРА", empty)   # 26.10: выдуманных дней нет, старый кэш тоже
+        self.assertEqual(t2, "")
+        self.assertIn("не выходит", note2)
+
+    def test_invented_day_rows_dropped(self):
+        empty = dt.date(2026, 10, 18)
+        self.db.execute("INSERT INTO fixed_posts(channel,day,key,at,status,prepared,text) VALUES "
+                        "('davra',?,'day',?,'pending',1,'✨ БУГУННИ…')", (empty.isoformat(), f"{empty}T06:00:00+05:00"))
+        self.db.execute("INSERT INTO fixed_posts(channel,day,key,at,status) VALUES ('davra',?,'day',?,'pending')",
+                        (FRI.isoformat(), f"{FRI}T06:00:00+05:00"))
+        self.db.commit()
+        self.assertEqual(morning.drop_invented(self.db), 1)
+        st = dict(self.db.execute("SELECT day, status FROM fixed_posts WHERE key='day'").fetchall())
+        self.assertEqual((st[empty.isoformat()], st[FRI.isoformat()]), ("skipped", "pending"))
 
     def test_day_text_ai_prompt_and_cache(self):
         os.environ["GEMINI_API_KEY"] = "x"

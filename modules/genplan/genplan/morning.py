@@ -2,8 +2,8 @@
 
 1) «Бугун — … куни» (06:00; в Хўжаободе — Бомдод+20):
    - есть проверенный день в days.json → пост о нём (ИИ пишет текст только по данным календаря, без выдумок);
-   - нет → ИИ придумывает «свой день», но ТОЛЬКО как приглашение («Бугунни … кунига айлантирайлик!»),
-     никогда не выдаёт его за официальный.
+   - нет → поста НЕТ (26.10 владелец: «пустые тексты немедленно прекратить»; выдуманные «свои дни»
+     вроде «Дўстлик куни» запрещены навсегда; позже — готовый пост о реальном дне из белого списка источников).
 2) «Хайрли тонг»:
    - 23.10 владелец: только готовое видео из NEXUS MORNING POOL (охота Разведки + проверка кадров), КАК ЕСТЬ —
      без надписей и метки; наш текст — в подписи поста; в трёх каналах — три разных видео;
@@ -131,6 +131,17 @@ def ensure_all(db, cfg: dict, now: dt.datetime) -> None:
     for c in cfg["channels"]:
         for d in (now.date(), now.date() + dt.timedelta(days=1)):
             ensure_day(db, cfg, c, d, now)
+    drop_invented(db)
+
+
+def drop_invented(db) -> int:
+    """26.10: «Бугун — … куни» без реального дня в календаре не выходит — в том числе уже подготовленные раньше."""
+    n = 0
+    for r in db.execute("SELECT id, day FROM fixed_posts WHERE key='day' AND status='pending'").fetchall():
+        if not calendar_day(dt.date.fromisoformat(r["day"])):
+            update(db, r["id"], status="skipped", error=NO_DAY)
+            n += 1
+    return n
 
 
 def busy(db, channel: str, since: dt.datetime) -> list[dt.datetime]:
@@ -218,70 +229,34 @@ DAY_SYSTEM = """Сен — «{title}» Telegram-каналининг муҳар�
 4) Охирги қатор — реакция қолдириш ёки дўстларга улашишга чақириқ.
 Самимий ва илиқ ёз, қуруқ расмий тил эмас. Хатбошилар орасида бўш қатор. 400–700 белги. Фақат тайёр матнни қайтар."""
 
-CREATIVE_SYSTEM = """Сен — «{title}» Telegram-каналининг муҳарририсан. Бугун расмий нишонланадиган кун йўқ,
-шунинг учун эрталаб ўқувчиларга «бугунни ўзимиз бир ёқимли кунга айлантирайлик» деган таклиф ёзасан.
-Қоидалар:
-- Фақат ўзбек тилида, КИРИЛЛ алифбосида.
-- Мавзу оддий, ҳаётий, ҳамма бажара оладиган, самимий бўлсин (оила, меҳр, яхши сўз, саломатлик, табиат, ёрдам, илм, шукр).
-  Сиёсат, дин баҳслари, реклама, пул ваъдаси — йўқ.
-- МУҲИМ: бу кунни ҲЕЧ ҚАЧОН «расмий», «халқаро», «бутунжаҳон» кун деб атама ва ёлғон тарих тўқима.
-- Хэштег, @юзернейм, ҳавола, имзо ҚЎЙМА.
-Тузилма:
-1) Биринчи қатор: «✨ БУГУННИ «<НОМ>» КУНИГА АЙЛАНТИРАЙЛИК!» (НОМ — 2–4 сўз, бош ҳарфлар билан).
-2) 2 та қисқа хатбоши эмодзи билан: бугун нима қилишни таклиф қиламиз (аниқ, оддий иш).
-3) Охирги қатор — реакция ёки дўстларга улашишга чақириқ. Изоҳ ёзишни сўрама.
-Самимий ва илиқ ёз. Хатбошилар орасида бўш қатор. 400–700 белги. Фақат тайёр матнни қайтар."""
-
-CREATIVE_FALLBACK = [
-    ("ЯХШИ СЎЗ", "💬 Бугун камида уч кишига илиқ, самимий сўз айтайлик.", "🌷 Яхши сўз — энг арзон, лекин энг қимматли совға."),
-    ("ОТА-ОНАГА ҚЎНҒИРОҚ", "📞 Бугун ота-онамизга ёки кексаларимизга қўнғироқ қилиб, ҳол-аҳвол сўрайлик.", "🤲 Уларнинг дуоси — бизнинг энг катта бойлигимиз."),
-    ("ТАБАССУМ", "😊 Бугун учраган ҳар бир инсонга табассум ҳадя этайлик.", "☀️ Табассум юқумли — у бошқаларнинг ҳам кунини чиройли қилади."),
-    ("ШУКР", "🤲 Бугун бор неъматларимиз учун шукр қилайлик: соғлиқ, оила, тинчлик.", "🌿 Шукр қилган бандага неъмат зиёда бўлади."),
-    ("КИТОБ", "📖 Бугун камида 10 бет китоб ўқийлик.", "💡 Ҳар куни озгина ўқиш — йил охирида катта ўзгариш."),
-    ("ЯХШИЛИК", "🤝 Бугун биров учун кичик бўлса ҳам яхшилик қилайлик.", "❤️ Яхшилик ҳеч қачон изсиз кетмайди."),
-    ("САЙР", "🚶 Бугун 30 дақиқа очиқ ҳавода сайр қилайлик.", "🍃 Тоза ҳаво ва ҳаракат — кайфият учун энг яхши дори."),
-    ("ДЎСТЛИК", "👋 Бугун анчадан бери гаплашмаган дўстимизга хабар ёзайлик.", "🤗 Эски дўст — янги қувонч."),
-    ("ТЕЖАМКОРЛИК", "💡 Бугун ортиқча чироқ ва сувни ўчириб, исрофдан сақланайлик.", "🌍 Тежамкорлик — оилага ҳам, табиатга ҳам фойда."),
-    ("СОҒЛОМ НОНУШТА", "🍳 Бугун кунни соғлом ва тўйимли нонушта билан бошлайлик.", "💪 Яхши нонушта — бутун кун учун куч."),
-    ("ҚЎШНИЧИЛИК", "🏡 Бугун қўшниларимиз ҳолидан хабар олайлик.", "🤝 Яқин қўшни — узоқдаги қариндошдан яхши."),
-    ("ЭЗГУ НИЯТ", "✨ Бугун бир эзгу ният қилиб, унга биринчи қадамни ташлайлик.", "🌱 Катта ишлар кичик қадамдан бошланади."),
-]
-
-
 def calendar_day(day: dt.date, path: Path = DAYS_FILE) -> dict | None:
     data = json.loads(path.read_text(encoding="utf-8"))
     return data.get(f"{day:%m-%d}")
 
 
-def _fallback_day(day: dt.date, official: dict | None) -> str:
-    if official:
-        return (f"📅 БУГУН — {official['name'].upper()}!\n\n🌍 Бу кун ҳақида: {official['note']}.\n\n"
-                "🤝 Барчага хайрли ва баракали кун тилаймиз!")
-    name, a, b = CREATIVE_FALLBACK[day.toordinal() % len(CREATIVE_FALLBACK)]
-    return (f"✨ БУГУННИ «{name}» КУНИГА АЙЛАНТИРАЙЛИК!\n\n{a}\n\n{b}\n\n"
-            "👍 Қўшилсангиз — реакция қолдиринг ва дўстларингизга улашинг!")
+def _fallback_day(day: dt.date, official: dict) -> str:
+    return (f"📅 БУГУН — {official['name'].upper()}!\n\n🌍 Бу кун ҳақида: {official['note']}.\n\n"
+            "🤝 Барчага хайрли ва баракали кун тилаймиз!")
+
+
+NO_DAY = "нет реального дня — #БУГУН сегодня не выходит (выдумки запрещены 26.10)"
 
 
 def day_text(db, title: str, day: dt.date, fresh: bool = False, http=None) -> tuple[str, str]:
     """(текст, пометка). Один текст на дату для всех каналов (экономия ИИ); 🔄 — новый вариант."""
     from . import ai, store
+    official = calendar_day(day)
+    if not official:                                     # 26.10: никаких «свой день» — поста нет (и старый кэш не берём)
+        return "", NO_DAY
     k = f"morning_day_{day.isoformat()}"
     if not fresh:
         cached = store.kv_get(db, k)
         if cached:
             return cached, "из кэша"
-    official = calendar_day(day)
     wd = WEEKDAY[day.weekday()]
-    if official:
-        system = DAY_SYSTEM.format(title=title)
-        user = f"Сана: {day:%d.%m.%Y}, {wd}.\nКун: {official['name']}.\nМаълумот: {official['note']}."
-    else:
-        recent = [store.kv_get(db, f"morning_day_{(day - dt.timedelta(days=i)).isoformat()}") or "" for i in range(1, 15)]
-        heads = [t.splitlines()[0] for t in recent if t]
-        system = CREATIVE_SYSTEM.format(title=title)
-        user = (f"Сана: {day:%d.%m.%Y}, {wd}." + (" Бугун Жума — хайрли кун." if day.weekday() == 4 else "")
-                + ("\nЯқинда бўлган мавзуларни такрорлама:\n" + "\n".join(heads) if heads else ""))
-    note = "🤖 ИИ" + (" · календарь" if official else " · свой день")
+    system = DAY_SYSTEM.format(title=title)
+    user = f"Сана: {day:%d.%m.%Y}, {wd}.\nКун: {official['name']}.\nМаълумот: {official['note']}."
+    note = "🤖 ИИ · календарь"
     try:
         text = ai.generate(db, system, user, http) if ai.available() else ""
     except ai.AIError as e:
@@ -953,6 +928,9 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
     sig = ch.get("signature", "")
     if r["key"] == "day":
         body, note = day_text(db, ch["title"], day, fresh=bool(r["redo"]))
+        if not body:                                      # 26.10: реального дня нет — пост не выходит
+            update(db, r["id"], status="skipped", prepared=1, redo=0, error=note)
+            return note
         dtag = o.get("day_tag") or ""
         update(db, r["id"], text=(f"{dtag}\n" if dtag else "") + body + (f"\n\n{sig}" if sig else ""), prepared=1, redo=0,
                error=None, preview_sent=0)
@@ -1081,7 +1059,8 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
     r = rows[0]
     try:
         note = prepare_one(bot, db, cfg, env, r, now, work_root, fetch, upload)
-        preview(bot, db, cfg, env, r["id"], note)
+        if get(db, r["id"])["status"] != "skipped":
+            preview(bot, db, cfg, env, r["id"], note)
     except Exception as e:  # noqa: BLE001
         tries = r["tries"] + 1
         if r["key"] == "greeting" and tries >= MAX_TRIES:         # видео не получилось — выходит текстом
