@@ -3,7 +3,7 @@
 Владелец: «у нас есть готовые каналы-хабы, я собирал туда год; оттуда свободно брать, ставить нижний юзер и
 публиковать — схему упрощать». Склады — его закрытые каналы: отбор, конкурс по просмотрам и проверка кадров на лого
 им НЕ нужны. Каждый запуск куратора (08:00 / 12:30 / 17:00) профиль Разведки пересылает из складов в пульт канала
-несколько постов; пульт кладёт их в 📦 запас (config: sklad = …), и пост сам выходит в свободный час сетки —
+несколько постов (ФОЙДАЛИК — закреплённая норма FIXED, остальные склады — по кругу PER_DAY); пульт кладёт их в 📦 запас (config: sklad = …), и пост сам выходит в свободный час сетки —
 карточка с 🗑 в пульте даёт вето (выбрано владельцем: «сам по сетке, с вето»).
 
 Правила: только посты с видео/фото (голые ссылки — нет); каждый пост — один раз (журнал used); КАТТА ДАВРА берёт
@@ -31,7 +31,9 @@ SKLAD = {
     "РАЗВЛЕКАТЕЛЬНО": ("davra",),
 }
 FRESH_DAYS = {"NEWS INBOX": 2}                     # старые новости не публикуем
-PER_DAY = {"davra": 4, "xojaobod": 3, "paparazzi": 4}      # Paparazzi: Jonlik ijrolar 2 + ФОЙДАЛИК 2
+# 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
+FIXED = {"davra": {"ФОЙДАЛИК": 3}, "xojaobod": {"ФОЙДАЛИК": 3}, "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2}}
+PER_DAY = {"davra": 3, "xojaobod": 2, "paparazzi": 0}      # остальные склады канала — по кругу
 FROM_END = {"xojaobod"}                            # этот канал берёт архив с конца
 FROM_MIDDLE = {"paparazzi"}                        # этот — с середины (не повторяет Давру); остальные — с начала
 LOW = 10
@@ -48,10 +50,13 @@ def run_no(now: dt.datetime) -> int:
     return 1 if h < 10 else (2 if h < 15 else 3)
 
 
+def allowed(n: int, sent: int, now: dt.datetime) -> int:
+    """Сколько можно переслать сейчас: дневная норма делится на 3 запуска (3 → 1+1+1, 4 → 2+1+1)."""
+    return max(0, min(n - sent, math.ceil(n * run_no(now) / RUNS) - sent))
+
+
 def allowed_now(channel: str, sent_today: int, now: dt.datetime) -> int:
-    """Сколько можно переслать сейчас: дневная норма делится на 3 запуска (Давра 4 → 2+1+1)."""
-    n = PER_DAY.get(channel, 0)
-    return max(0, min(n - sent_today, math.ceil(n * run_no(now) / RUNS) - sent_today))
+    return allowed(PER_DAY.get(channel, 0), sent_today, now)
 
 
 def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
@@ -72,21 +77,28 @@ def order(items: list[dict], channel: str) -> list[dict]:
 
 
 def plan(stashes: dict[str, list[dict]], used: dict, sent_today: dict, now: dt.datetime) -> dict[str, list[tuple]]:
-    """Что переслать: канал → [(склад, пост)]. Склады канала — по кругу; один пост — один раз на канал."""
+    """Что переслать: канал → [(склад, пост, счётчик)]. Закреплённые склады — своя норма; остальные — по кругу.
+    Один пост — один раз на канал."""
     out: dict[str, list[tuple]] = {}
+    fresh = lambda ch, s: [x for x in order(stashes[s], ch) if eligible(x, s, ch, now)
+                           and str(x["id"]) not in used.get(f"{ch}|{s}", [])]
     for ch in PER_DAY:
-        n = allowed_now(ch, sent_today.get(ch, 0), now)
-        mine = [s for s, chs in SKLAD.items() if ch in chs and s in stashes]
-        queues = [[(s, x) for x in order(stashes[s], ch) if eligible(x, s, ch, now)
-                   and str(x["id"]) not in used.get(f"{ch}|{s}", [])] for s in mine]
+        pick: list[tuple] = []
+        for s, n in FIXED.get(ch, {}).items():
+            if s in stashes and ch in SKLAD.get(s, ()):
+                k = allowed(n, int(sent_today.get(f"{ch}|{s}", 0)), now)
+                pick += [(s, x, f"{ch}|{s}") for x in fresh(ch, s)[:k]]
+        n = allowed_now(ch, int(sent_today.get(ch, 0)), now)
+        mine = [s for s, chs in SKLAD.items() if ch in chs and s in stashes and s not in FIXED.get(ch, {})]
+        queues = [[(s, x, ch) for x in fresh(ch, s)] for s in mine]
         start = int(sent_today.get(f"rr_{ch}", 0))           # с какого склада начинать круг
         queues = queues[start % len(queues):] + queues[:start % len(queues)] if queues else []
-        pick: list[tuple] = []
-        while len(pick) < n and any(queues):
+        rr: list[tuple] = []
+        while len(rr) < n and any(queues):
             for q in queues:
-                if q and len(pick) < n:
-                    pick.append(q.pop(0))
-        out[ch] = pick
+                if q and len(rr) < n:
+                    rr.append(q.pop(0))
+        out[ch] = pick + rr
     return out
 
 
@@ -164,18 +176,19 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         if ch == "xojaobod" and not curate.XOJAOBOD_FLAG.exists():
             continue                                    # группа ещё не на PAPA — её бот не трогаем
         sent = 0
-        for stash, it in picks:
+        for stash, it, key in picks:
             try:                                        # подпись источника = название склада → пульт кладёт в 📦 запас
                 await client.forward_messages(routes[ch], it["ids"], from_peer=ents[stash])
             except Exception as e:  # noqa: BLE001
                 log(f"  склад → {ch}: {type(e).__name__}")
                 continue
             used.setdefault(f"{ch}|{stash}", []).append(str(it["id"]))
+            st["sent"][key] = int(st["sent"].get(key, 0)) + 1
+            if key == ch:
+                st["sent"][f"rr_{ch}"] = int(st["sent"].get(f"rr_{ch}", 0)) + 1
             sent += 1
             log(f"  📦 {stash} → {ch}: #{it['id']} {it['text'][:50]!r}")
             await asyncio.sleep(4)
-        st["sent"][ch] = st["sent"].get(ch, 0) + sent
-        st["sent"][f"rr_{ch}"] = int(st["sent"].get(f"rr_{ch}", 0)) + sent
         report[ch] = sent
     rest = left(stashes, used, now)
     report["осталось"] = rest
