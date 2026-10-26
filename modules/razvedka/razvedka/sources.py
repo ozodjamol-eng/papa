@@ -417,11 +417,11 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
         chosen = None
         if choice and (choice.get("channels") or {}).get(ch) is not None:
             chosen = set(ids_for(choice, ch))
-        cards.append(card(ch, cands[ch], rows, found[ch], gen, chosen))
+        cards.append((ch, *card(ch, cands[ch], rows, found[ch], gen, chosen)))
     keep = ("id", "title", "username", "folder", "for", "news_for", "theme_by", "posts", "per_day", "median_views",
             "ad_share", "media_share", "cyr_share", "why", "checked", "clean_n", "clean", "score", "subscribers")
     data = {"generated": gen, "candidates": {ch: {c: [r["id"] for r in rs] for c, rs in t.items()} for ch, t in cands.items()},
-            "rows": [{k: r.get(k) for k in keep} for r in rows], "cards": [c[0] for c in cards]}
+            "rows": [{k: r.get(k) for k in keep} for r in rows], "cards": [c[1] for c in cards]}
     tmp = out_dir / ".latest.json.tmp"
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, out_dir / "latest.json")

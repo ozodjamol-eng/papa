@@ -1058,6 +1058,9 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         return morning.callback(bot, db, cq)
     if cq["data"].startswith("ap:"):                      # автопилот просит разрешения на задачу (Франкфурт)
         return autopilot_answer(bot, db, cq)
+    if cq["data"].startswith("sw:"):                      # 26.10: выбор источников — карточка в пульте своего канала
+        from . import sources_choice
+        return sources_choice.callback(bot, cq)
     if cq["data"].startswith("nz:"):                      # 🕌 готовый пост намаза: ✅ / ✏️ / ❌
         return namaz_callback(bot, db, cfg, cq)
     if cq["data"].split(":", 1)[0] in ("al", "ac", "as", "asy", "ax", "axy"):   # 📢 Мои кампании

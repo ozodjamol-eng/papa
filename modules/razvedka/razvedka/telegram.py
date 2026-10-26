@@ -136,6 +136,14 @@ def bot_send(token: str, chat_id: int, text: str, urlopen=None) -> bool:
     return True
 
 
+def pult_bot(channel: str) -> tuple[str, list[int]]:
+    """26.10 владелец: «каждый пульт — свой выбор». Ключ пульта канала (/etc/papa-pult-bots.env: PULT_TOKEN_<канал>)
+    и id владельца; нет ключа — главный пульт (PAPA ШТАБ)."""
+    import os
+    tok, ids = owner_bot()
+    return os.environ.get(f"PULT_TOKEN_{channel}", "") or tok, ids
+
+
 def bot_send_kb(token: str, chat_id: int, text: str, markup: dict | None, urlopen=None) -> bool:
     """26.10: одно сообщение с кнопками (карточка выбора источников). Текст ≤ 4096."""
     import json

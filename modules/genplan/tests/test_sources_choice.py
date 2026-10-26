@@ -75,6 +75,11 @@ class TestSourcesChoice(unittest.TestCase):
         self.assertEqual(bot.calls[0][0], "editMessageReplyMarkup")
         self.assertEqual(sources_choice.callback(Bot(), cq("sw:ok:evil"), Path("/nonexistent/x.json")), "bad")
 
+    def test_channel_pult_routes_sw(self):
+        bot = Bot()
+        self.assertEqual(hub.callback(bot, None, {}, {7}, cq("sw:t:davra:news:111")), "sw_toggle")   # пульт канала
+        self.assertEqual(hub.callback(Bot(), None, {}, {8}, cq("sw:t:davra:news:111")), "denied")
+
     def test_shtab_routes_sw(self):
         bot = Bot()
         upd = {"callback_query": cq("sw:t:davra:news:111")}

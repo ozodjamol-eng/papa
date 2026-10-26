@@ -241,8 +241,13 @@ async def _curate() -> dict:
         from . import sklad                      # 26.10: 📦 склады владельца → 📦 запас пультов (сам по сетке, с вето)
         from .telegram import send_report
         try:
-            res["склад"] = await sklad.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True),
-                                           notify=lambda t: send_report(c, t))
+            from .telegram import bot_send, pult_bot
+
+            async def notify(text: str, channel: str) -> None:     # «склад почти пуст» — в пульт своего канала
+                tok, ids = pult_bot(channel)
+                if not (tok and ids and all(bot_send(tok, o, text) for o in ids)):
+                    await send_report(c, text)
+            res["склад"] = await sklad.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True), notify=notify)
         except Exception as e:  # noqa: BLE001 — склад не роняет куратора
             res["склад"] = f"ошибка: {type(e).__name__}: {e}"[:200]
         return res
@@ -265,16 +270,16 @@ async def _sources(inside_run: bool = False) -> dict:
     try:
         res = await sources.run(c, Path(PUB) / "sources", log=lambda s: print(s, flush=True))
         cards = res.pop("cards")
-        if cards:                                 # 26.10: карточки выбора — в PAPA ШТАБ (кнопки ловит genplan)
-            from .telegram import bot_send_kb, owner_bot
+        if cards:                                 # 26.10: карточка выбора — в пульт СВОЕГО канала (кнопки ловит genplan)
+            from .telegram import bot_send_kb, owner_bot, pult_bot
             tok, ids = owner_bot()
             if tok and ids:
-                res["отправлено"] = all(bot_send_kb(tok, o, t, kb) for t, kb in cards for o in ids)
+                res["отправлено"] = all(bot_send_kb(pult_bot(ch)[0], o, t, kb) for ch, t, kb in cards for o in ids)
             else:
-                for t, _ in cards:
-                    await send_report(c, t + "\n\n(кнопки выбора работают только в PAPA ШТАБ)")
+                for _, t, _ in cards:
+                    await send_report(c, t + "\n\n(кнопки выбора работают только в пультах)")
                 res["отправлено"] = "без кнопок — нет PAPA ШТАБ"
-            for t, _ in cards:
+            for _, t, _ in cards:
                 print(t, flush=True)
         else:
             res["отправлено"] = "нет — карточки на этой неделе уже были, кадры ещё проверяются"

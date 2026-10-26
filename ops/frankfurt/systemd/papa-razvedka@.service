@@ -11,6 +11,7 @@ EnvironmentFile=/etc/papa-razvedka/telegram.env
 EnvironmentFile=-/etc/papa-genplan/ai.env
 EnvironmentFile=-/etc/papa-test/bot.env
 EnvironmentFile=-/etc/papa-owner-bot.env
+EnvironmentFile=-/etc/papa-pult-bots.env
 Environment=PAPA_RAZVEDKA_DB=/var/lib/papa-razvedka/razvedka.sqlite3 PAPA_RAZVEDKA_PUB=/var/lib/papa-razvedka-pub PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/papa/modules/razvedka
 ExecStart=/opt/papa-venv/razvedka/bin/python -m razvedka %i

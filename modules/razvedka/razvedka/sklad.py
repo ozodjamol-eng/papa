@@ -175,9 +175,10 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         report[ch] = sent
     rest = left(stashes, used, now)
     report["осталось"] = rest
-    low = [f"{s}: {n}" for s, n in rest.items() if n < LOW and s not in FRESH_DAYS]
+    low = [(s, n) for s, n in rest.items() if n < LOW and s not in FRESH_DAYS]
     if low and notify and st.get("low_day") != today:
         st["low_day"] = today
-        await notify("📦 Склад почти пуст — " + ", ".join(low) + ". Пополните, когда будет время.")
+        for s, n in low:                              # в пульт основного канала склада (первый в SKLAD)
+            await notify(f"📦 Склад «{s}» почти пуст: осталось {n}. Пополните, когда будет время.", SKLAD[s][0])
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     return report
