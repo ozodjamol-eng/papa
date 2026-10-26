@@ -230,7 +230,7 @@ slots = [
 ]
 
 [channels.paparazzi]
-sklad = { "Jonlik ijrolar" = "Жонли ижро" }   # 📦 26.10 владелец: склады → запас, сам по сетке с вето 🗑. Откат: удалить строку
+sklad = { "Jonlik ijrolar" = "Жонли ижро", "ФОЙДАЛИК" = "Видео" }   # 📦 26.10 владелец: склады → запас, сам по сетке с вето 🗑. Откат: удалить строку
 title = "PaparazziUZ"
 hub_title = "PAPARAZZI · ХАБ"     # 18.10: свой ХАБ канала (частный, админ — только @PaparazziUZ_PultBot) → 📦 запас
 policy = { politics = "xojaobod", crime = "" }

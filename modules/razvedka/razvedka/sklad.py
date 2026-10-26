@@ -25,14 +25,15 @@ TZ = dt.timezone(dt.timedelta(hours=5))
 # склад → каким нашим каналам служит (26.10 владелец: «как в плане»)
 SKLAD = {
     "NEWS INBOX": ("davra", "xojaobod"),
-    "ФОЙДАЛИК": ("davra", "xojaobod"),
+    "ФОЙДАЛИК": ("davra", "xojaobod", "paparazzi"),   # 26.10 владелец: «там очень много полезного — во все три»
     "ФОЙДАЛИК ОВКАТ": ("xojaobod", "davra"),
     "Jonlik ijrolar": ("paparazzi",),
     "РАЗВЛЕКАТЕЛЬНО": ("davra",),
 }
 FRESH_DAYS = {"NEWS INBOX": 2}                     # старые новости не публикуем
-PER_DAY = {"davra": 4, "xojaobod": 3, "paparazzi": 2}
-FROM_END = {"xojaobod"}                            # этот канал берёт архив с конца, остальные — с начала
+PER_DAY = {"davra": 4, "xojaobod": 3, "paparazzi": 4}      # Paparazzi: Jonlik ijrolar 2 + ФОЙДАЛИК 2
+FROM_END = {"xojaobod"}                            # этот канал берёт архив с конца
+FROM_MIDDLE = {"paparazzi"}                        # этот — с середины (не повторяет Давру); остальные — с начала
 LOW = 10
 RUNS = 3                                           # запусков куратора в день
 
@@ -64,7 +65,10 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
 
 
 def order(items: list[dict], channel: str) -> list[dict]:
-    return sorted(items, key=lambda x: x["id"], reverse=channel in FROM_END)
+    xs = sorted(items, key=lambda x: x["id"], reverse=channel in FROM_END)
+    if channel in FROM_MIDDLE:
+        xs = xs[len(xs) // 2:] + xs[:len(xs) // 2]
+    return xs
 
 
 def plan(stashes: dict[str, list[dict]], used: dict, sent_today: dict, now: dt.datetime) -> dict[str, list[tuple]]:

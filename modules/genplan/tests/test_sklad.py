@@ -27,10 +27,13 @@ class Bot:
         return {"message_id": 900 + len(self.calls)}
 
 
-def fwd(mid, title, text="Фойдали маслаҳат: уйда нон"):
+def fwd(mid, title, text="Фойдали маслаҳат: уйда нон", chat_id=-1001, username=None):
+    chat = {"id": chat_id, "title": title, "type": "channel"}
+    if username:
+        chat["username"] = username
     return {"message_id": mid, "from": {"id": 42}, "chat": {"id": 42, "type": "private"},
             "photo": [{"file_id": f"f{mid}", "file_unique_id": f"u{mid}"}], "caption": text,
-            "forward_origin": {"type": "channel", "chat": {"id": -1001, "title": title, "type": "channel"}}}
+            "forward_origin": {"type": "channel", "chat": chat}}
 
 
 class T(unittest.TestCase):
@@ -61,6 +64,33 @@ class T(unittest.TestCase):
         bot = Bot()
         hub.intake(bot, self.db, self.cfg, {42}, 42, [11], [fwd(11, "BUGUNGI GAP")], reply_chat=42, channel="davra")
         self.assertEqual(store.get(self.db, 1)["stock"], 0)
+
+    def test_chosen_source_goes_to_stock_auto(self):
+        import json, tempfile
+        from genplan import sources_choice
+        f = Path(tempfile.mkdtemp()) / "choice.json"
+        f.write_text(json.dumps({"version": 2, "channels": {"davra": {"news": [{"id": 1234567890, "title": "BUGUNGI GAP"}]}}}))
+        old, sources_choice.CHOICE = sources_choice.CHOICE, f
+        try:
+            bot = Bot()
+            hub.intake(bot, self.db, self.cfg, {42}, 42, [12], [fwd(12, "BUGUNGI GAP", "Янгилик матни",
+                                                                    chat_id=-1001234567890, username="BugungiGap")],
+                       reply_chat=42, channel="davra")
+            r = store.get(self.db, 1)
+            self.assertEqual((r["stock"], r["auto"]), (1, 1))
+            self.assertIn("📡 Ваш источник @BugungiGap", bot.calls[-1][1]["text"])
+            hub.intake(Bot(), self.db, self.cfg, {42}, 42, [13], [fwd(13, "Чужой", "Бошқа", chat_id=-1009999)],
+                       reply_chat=42, channel="davra")
+            self.assertEqual(store.get(self.db, 2)["stock"], 0)                      # не выбран — карточка, как раньше
+            self.assertFalse(sources_choice.is_chosen("paparazzi", -1001234567890))  # выбран только для Давры
+        finally:
+            sources_choice.CHOICE = old
+
+    def test_chosen_source_stale_after_12h(self):
+        mid = store.add_material(self.db, 42, 3, "Эски янгилик", True)
+        store.update(self.db, mid, channel="davra", rubric="Янгиликлар", status="draft", stock=1, auto=1,
+                     source="@BugungiGap", created_at=(at("10:00") - dt.timedelta(hours=13)).isoformat())
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "davra", at("10:00")), [])
 
     def test_fill_respects_30_min_lead_and_notice(self):
         mid = store.add_material(self.db, 42, 1, "Склад пост", True)

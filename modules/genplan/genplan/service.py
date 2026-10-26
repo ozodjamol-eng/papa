@@ -379,7 +379,8 @@ def sklad_notice(db, cfg: dict, env: dict, channel: str, ids: list[int], now: dt
     n = 0
     for m in rows:
         t = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
-        txt = (f"⏳ 📦 Склад «{m['source']}» → {ch.get('title', channel)}: выйдет сам в {t:%H:%M}\n"
+        kind = f"📦 Склад «{m['source']}»" if smart.sklad_rubric(ch, m["source"]) else f"📡 Источник {m['source']}"
+        txt = (f"⏳ {kind} → {ch.get('title', channel)}: выйдет сам в {t:%H:%M}\n"
                f"{smart.short(m['text'], 80)}\n\nНе нужно — 🗑 Убрать.")
         kb = {"inline_keyboard": [[{"text": "🗑 Убрать", "callback_data": f"del:{m['id']}"}]]}
         for o in owners:

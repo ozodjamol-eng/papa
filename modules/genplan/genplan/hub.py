@@ -569,6 +569,13 @@ def source_of(msg: dict) -> str | None:
     return "@" + chat["username"] if chat.get("username") else (chat.get("title") or None)
 
 
+def origin_id(msg: dict) -> int | None:
+    """id канала, из которого переслан пост (Bot API: -100…)."""
+    o = msg.get("forward_origin") or {}
+    chat = o.get("chat") or msg.get("forward_from_chat") or {}
+    return chat.get("id")
+
+
 def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], msgs: list[dict],
            reply_chat: int | None = None, notes: list[str] | None = None, channel: str | None = None,
            stock: bool = False) -> str:
@@ -597,10 +604,16 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     if learned:
         notes = (notes or []) + [f"🧹 Запомнил подпись {src}: " + " · ".join(x[:40] for x in learned[:3])]
     sk = smart.sklad_rubric(cfg["channels"].get(channel) or {}, src)
+    from . import sources_choice
+    chosen = not sk and sources_choice.is_chosen(channel, origin_id(msgs[0]))
     if sk:                                         # 26.10 владелец: склад — доверенный, сам по сетке, с вето 🗑
-        store.update(db, mid, rubric=sk, guessed=0)
+        store.update(db, mid, rubric=sk, guessed=0, auto=1)
         stock = True
         notes = [f"📦 Склад «{src}» · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
+    elif chosen:                                   # 26.10 владелец: выбранный им источник — тоже сам, с вето 🗑
+        store.update(db, mid, auto=1)
+        stock = sk = True
+        notes = [f"📡 Ваш источник {src} · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
     elif src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)

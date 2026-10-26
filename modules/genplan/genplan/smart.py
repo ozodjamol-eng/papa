@@ -314,7 +314,18 @@ def sklad_rubric(ch: dict, source: str | None) -> str | None:
 
 
 def is_sklad(ch: dict, m) -> bool:
-    return bool(sklad_rubric(ch, m["source"] if "source" in m.keys() else None))
+    """Выходит сам, с вето 🗑: склад владельца или канал, выбранный владельцем (auto=1)."""
+    keys = m.keys()
+    return bool(("auto" in keys and m["auto"]) or sklad_rubric(ch, m["source"] if "source" in keys else None))
+
+
+AUTO_TTL = dt.timedelta(hours=12)        # пост выбранного чужого канала (часто новость) ждёт в запасе не дольше
+
+
+def _stale(ch: dict, m, now: dt.datetime) -> bool:
+    if not ("auto" in m.keys() and m["auto"]) or sklad_rubric(ch, m["source"]):
+        return False
+    return dt.datetime.fromisoformat(m["created_at"]) < now - AUTO_TTL
 
 
 def _fits(ch: dict, m, t: dt.datetime, now: dt.datetime) -> bool:
@@ -326,7 +337,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     ch = cfg["channels"][channel]
     pool = [m for m in store.stock(db, channel)
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
-            and not waits_text(cfg, m)]
+            and not waits_text(cfg, m) and not _stale(ch, m, now)]
     if not pool:
         return []
     used: list[int] = []

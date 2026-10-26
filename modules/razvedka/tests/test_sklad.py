@@ -23,7 +23,7 @@ class TestSklad(unittest.TestCase):
         self.assertEqual(sklad.allowed_now("davra", 2, NOON), 1)
         self.assertEqual(sklad.allowed_now("davra", 3, EVENING), 1)
         self.assertEqual(sklad.allowed_now("davra", 4, EVENING), 0)
-        self.assertEqual(sklad.allowed_now("paparazzi", 0, MORNING), 1)   # 2 → 1 + 1 + 0
+        self.assertEqual(sklad.allowed_now("paparazzi", 0, MORNING), 2)   # 4 → 2 + 1 + 1
         self.assertEqual(sklad.allowed_now("davra", 0, EVENING), 4)       # утром не вышло — вечером догоняем
 
     def test_eligible_media_fresh_policy(self):
@@ -42,7 +42,8 @@ class TestSklad(unittest.TestCase):
         self.assertEqual([(s, x["id"]) for s, x in p["davra"]],
                          [("ФОЙДАЛИК", 1), ("РАЗВЛЕКАТЕЛЬНО", 100), ("ФОЙДАЛИК", 2), ("РАЗВЛЕКАТЕЛЬНО", 101)])
         self.assertEqual([x["id"] for _, x in p["xojaobod"]], [10, 9, 8])     # Хўжаобод — с конца архива
-        self.assertEqual([x["id"] for _, x in p["paparazzi"]], [200, 201])
+        self.assertEqual([(s, x["id"]) for s, x in p["paparazzi"]],
+                         [("ФОЙДАЛИК", 6), ("Jonlik ijrolar", 202), ("ФОЙДАЛИК", 7), ("Jonlik ijrolar", 203)])  # с середины
         used = {"davra|ФОЙДАЛИК": ["1", "2"]}
         p2 = sklad.plan(stashes, used, {"rr_davra": 1}, EVENING)
         self.assertEqual(p2["davra"][0], ("РАЗВЛЕКАТЕЛЬНО", stashes["РАЗВЛЕКАТЕЛЬНО"][0]))   # круг продолжается

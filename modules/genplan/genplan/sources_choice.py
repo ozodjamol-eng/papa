@@ -21,6 +21,18 @@ _OK = re.compile(r"^sw:ok:([a-z]+)$")
 _NAME = re.compile(r"^[☑⬜]\s*\d+\.\s*")
 
 
+def is_chosen(channel: str | None, chat_id: int | None, path: Path | None = None) -> bool:
+    """Пост переслан из канала, который владелец отметил ☑ для этого нашего канала (Bot API id = -100<id>)."""
+    if not channel or not chat_id:
+        return False
+    try:
+        data = json.loads((path or CHOICE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    tg = -int(chat_id) - 1_000_000_000_000 if int(chat_id) < -1_000_000_000_000 else None
+    return any(x.get("id") in (tg, chat_id) for xs in ((data.get("channels") or {}).get(channel) or {}).values() for x in xs)
+
+
 def toggle(markup: dict, data: str) -> dict:
     """Переключить галочку у кнопки с этим callback_data."""
     rows = []
