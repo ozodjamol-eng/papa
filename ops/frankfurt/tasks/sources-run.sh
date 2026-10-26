@@ -7,6 +7,7 @@ PY=/opt/papa-venv/razvedka/bin/python
 ( cd /opt/papa/modules/razvedka && $PY -m unittest -q tests.test_sources 2>&1 | tail -1 )
 # свой прежний прогон отбора (старым кодом) — останавливаем и запускаем заново
 systemctl stop papa-razvedka@sources.service 2>/dev/null || true
+rm -f /var/lib/papa-razvedka-pub/sources/sent_week          # запуск вручную = владелец ждёт свежие карточки
 for u in collect run curate hunt pain; do
   if systemctl is-active -q "papa-razvedka@$u.service"; then echo "Сейчас работает Разведка ($u) — повторите позже"; exit 1; fi
 done
