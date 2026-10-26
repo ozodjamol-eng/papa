@@ -603,7 +603,9 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         store.update(db, mid, junk=json.dumps(junk, ensure_ascii=False))
     if learned:
         notes = (notes or []) + [f"🧹 Запомнил подпись {src}: " + " · ".join(x[:40] for x in learned[:3])]
-    sk = smart.sklad_rubric(cfg["channels"].get(channel) or {}, src)
+    n_src = db.execute("SELECT count(*) FROM materials WHERE channel=? AND source=? AND id<>?",
+                       (channel, src, mid)).fetchone()[0] if src else 0
+    sk = smart.sklad_rubric(cfg["channels"].get(channel) or {}, src, n_src)   # РЕТРО: рубрики по очереди
     from . import sources_choice
     chosen = not sk and sources_choice.is_chosen(channel, origin_id(msgs[0]))
     if sk:                                         # 26.10 владелец: склад — доверенный, сам по сетке, с вето 🗑

@@ -305,11 +305,12 @@ def _nrm(s) -> str:
     return re.sub(r"[\W_]+", "", str(s or "")).casefold()
 
 
-def sklad_rubric(ch: dict, source: str | None) -> str | None:
-    """Пост переслан из склада владельца (config: sklad = {название склада: рубрика}) → рубрика; иначе None."""
+def sklad_rubric(ch: dict, source: str | None, n: int = 0) -> str | None:
+    """Пост переслан из склада владельца (config: sklad = {название склада: рубрика или [рубрики по очереди]})
+    → рубрика (n — номер поста этого склада, для очереди); иначе None."""
     for name, rub in (ch.get("sklad") or {}).items():
         if source and _nrm(source) == _nrm(name):
-            return rub
+            return rub[n % len(rub)] if isinstance(rub, list) else rub
     return None
 
 

@@ -25,9 +25,9 @@ class TestSklad(unittest.TestCase):
         self.assertEqual(sklad.allowed(3, 3, EVENING), 0)
         self.assertEqual(sklad.allowed(2, 0, MORNING), 1)                  # 2 → 1 + 1 + 0
         self.assertEqual(sklad.allowed(3, 0, EVENING), 3)                  # утром не вышло — вечером догоняем
-        self.assertEqual(sum(sklad.FIXED["davra"].values()) + sklad.PER_DAY["davra"], 6)
-        self.assertEqual(sum(sklad.FIXED["xojaobod"].values()) + sklad.PER_DAY["xojaobod"], 5)
-        self.assertEqual(sum(sklad.FIXED["paparazzi"].values()) + sklad.PER_DAY["paparazzi"], 4)
+        self.assertEqual(sklad.FIXED["davra"]["ФОЙДАЛИК"], 3)
+        self.assertEqual(sklad.FIXED["xojaobod"]["ФОЙДАЛИК"], 3)
+        self.assertEqual(sklad.FIXED["paparazzi"]["РЕТРО КЛИПЛАР"], 4)
 
     def test_eligible_media_fresh_policy(self):
         self.assertTrue(sklad.eligible(it(1), "ФОЙДАЛИК", "davra", MORNING))
@@ -54,6 +54,18 @@ class TestSklad(unittest.TestCase):
         used = {"davra|ФОЙДАЛИК": ["1", "2", "3"]}
         p2 = sklad.plan(stashes, used, {"davra|ФОЙДАЛИК": 2}, EVENING)
         self.assertEqual([x["id"] for s, x, _ in p2["davra"] if s == "ФОЙДАЛИК"], [4])     # норма: осталась 1
+
+    def test_stale_words_and_juma_only_friday(self):
+        self.assertFalse(sklad.eligible(it(1, text="Бугун об-ҳаво иссиқ"), "ФОЙДАЛИК", "davra", MORNING))
+        self.assertFalse(sklad.eligible(it(1, text="2024 йил натижалари"), "ФОЙДАЛИК", "davra", MORNING))
+        self.assertFalse(sklad.eligible(it(1, text="Учрашув 12.05.2025 да"), "ФОЙДАЛИК", "davra", MORNING))
+        self.assertTrue(sklad.eligible(it(1, text="Бугунги кунда ҳам фойдали"), "ФОЙДАЛИК", "davra", MORNING))  # «бугунги» ≠ «бугун»
+        friday = dt.datetime(2026, 10, 30, 8, 0, tzinfo=TZ)
+        self.assertFalse(sklad.eligible(it(1, text="Жума муборак!"), "МАЪНАВИЯТ", "xojaobod", MORNING))   # понедельник
+        self.assertTrue(sklad.eligible(it(1, text="Жума муборак!"), "МАЪНАВИЯТ", "xojaobod", friday))
+        st = {"МАЪНАВИЯТ": [it(1, text="Дуо"), it(2, text="Жума муборак"), it(3, text="Ҳадис")]}
+        p = sklad.plan(st, {}, {}, friday.replace(hour=17))
+        self.assertEqual([x["id"] for s, x, _ in p["xojaobod"] if s == "МАЪНАВИЯТ"], [2, 3, 1])   # пятница: 3, «Жума» первой
 
     def test_left_counts_hungriest_channel(self):
         stashes = {"ФОЙДАЛИК": [it(i) for i in range(1, 6)]}

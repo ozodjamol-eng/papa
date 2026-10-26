@@ -45,7 +45,8 @@ class T(unittest.TestCase):
         for ch in ("davra", "xojaobod", "paparazzi"):
             c = self.cfg["channels"][ch]
             for rub in c["sklad"].values():
-                self.assertIn(rub, c["hashtags"], f"{ch}: {rub}")
+                for r in (rub if isinstance(rub, list) else [rub]):
+                    self.assertIn(r, c["hashtags"], f"{ch}: {r}")
         self.assertEqual(smart.sklad_rubric(self.cfg["channels"]["davra"], "📦 Фойдалик"), "Фойдали видео")
         self.assertIsNone(smart.sklad_rubric(self.cfg["channels"]["davra"], "@bugungi_gap"))
         self.assertIsNone(smart.sklad_rubric(self.cfg["channels"]["davra"], "Jonlik ijrolar"))  # не склад Давры
@@ -59,6 +60,14 @@ class T(unittest.TestCase):
         txt = bot.calls[-1][1]["text"]
         self.assertIn("📦 Склад «ФОЙДАЛИК»", txt)
         self.assertNotIn("Куратор нашёл", txt)
+
+    def test_retro_rubrics_rotate(self):
+        bot = Bot()
+        for i in range(4):
+            hub.intake(bot, self.db, self.cfg, {42}, 42, [20 + i], [fwd(20 + i, "РЕТРО КЛИПЛАР", f"Ретро {i}")],
+                       reply_chat=42, channel="paparazzi")
+        self.assertEqual([store.get(self.db, i)["rubric"] for i in range(1, 5)],
+                         ["Ретро хотира", "Кун қўшиғи", "Тунги қўшиқ", "Ретро хотира"])
 
     def test_ordinary_forward_not_stock(self):
         bot = Bot()

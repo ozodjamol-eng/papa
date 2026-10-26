@@ -29,10 +29,21 @@ SKLAD = {
     "ФОЙДАЛИК ОВКАТ": ("xojaobod", "davra"),
     "Jonlik ijrolar": ("paparazzi",),
     "РАЗВЛЕКАТЕЛЬНО": ("davra",),
+    # 26.10 владелец «делай»: склады под пустые рубрики (создаёт и наполняет сам)
+    "КУЛГИ": ("davra", "xojaobod", "paparazzi"),
+    "МАЪНАВИЯТ": ("xojaobod",),
+    "РЕТРО КЛИПЛАР": ("paparazzi",),
 }
 FRESH_DAYS = {"NEWS INBOX": 2}                     # старые новости не публикуем
 # 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
-FIXED = {"davra": {"ФОЙДАЛИК": 3}, "xojaobod": {"ФОЙДАЛИК": 3}, "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2}}
+FIXED = {"davra": {"ФОЙДАЛИК": 3, "КУЛГИ": 2},
+         "xojaobod": {"ФОЙДАЛИК": 3, "КУЛГИ": 1, "МАЪНАВИЯТ": 1},
+         "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "КУЛГИ": 2, "РЕТРО КЛИПЛАР": 4}}
+FRIDAY = {("xojaobod", "МАЪНАВИЯТ"): 3}                    # в пятницу маънавият — 3
+# вечный склад: пост со словами «сегодня/вчера/в этом году», годом или датой — устарел, не берём
+STALE = re.compile(r"(?<![\w'])(?:бугун|кеча|эртага|шу\s+йил|bugun|kecha|ertaga|shu\s+yil|сегодня|вчера|завтра)(?![\w'])"
+                   r"|(?<!\d)20[12]\d(?!\d)|(?<!\d)\d{1,2}[./]\d{1,2}[./]\d{2,4}(?!\d)", re.I)
+JUMA = re.compile(r"жума|juma|jum'a|пятниц", re.I)
 PER_DAY = {"davra": 3, "xojaobod": 2, "paparazzi": 0}      # остальные склады канала — по кругу
 FROM_END = {"xojaobod"}                            # этот канал берёт архив с конца
 FROM_MIDDLE = {"paparazzi"}                        # этот — с середины (не повторяет Давру); остальные — с начала
@@ -66,13 +77,19 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
     days = FRESH_DAYS.get(stash)
     if days and item["date"] < now - dt.timedelta(days=days):
         return False
+    if not days and STALE.search(item["text"] or ""):
+        return False                                   # «бугун», «шу йил», дата — для вечного склада устарел
+    if JUMA.search(item["text"] or "") and now.astimezone(TZ).weekday() != 4:
+        return False                                   # «Жума» — только в пятницу
     return not curate.off_policy(item["text"], channel)
 
 
-def order(items: list[dict], channel: str) -> list[dict]:
+def order(items: list[dict], channel: str, now: dt.datetime | None = None) -> list[dict]:
     xs = sorted(items, key=lambda x: x["id"], reverse=channel in FROM_END)
     if channel in FROM_MIDDLE:
         xs = xs[len(xs) // 2:] + xs[:len(xs) // 2]
+    if now is not None and now.astimezone(TZ).weekday() == 4:   # пятница: «Жума» — первыми
+        xs = sorted(xs, key=lambda x: not JUMA.search(x.get("text") or ""))
     return xs
 
 
@@ -80,11 +97,13 @@ def plan(stashes: dict[str, list[dict]], used: dict, sent_today: dict, now: dt.d
     """Что переслать: канал → [(склад, пост, счётчик)]. Закреплённые склады — своя норма; остальные — по кругу.
     Один пост — один раз на канал."""
     out: dict[str, list[tuple]] = {}
-    fresh = lambda ch, s: [x for x in order(stashes[s], ch) if eligible(x, s, ch, now)
+    fresh = lambda ch, s: [x for x in order(stashes[s], ch, now) if eligible(x, s, ch, now)
                            and str(x["id"]) not in used.get(f"{ch}|{s}", [])]
     for ch in PER_DAY:
         pick: list[tuple] = []
         for s, n in FIXED.get(ch, {}).items():
+            if now.astimezone(TZ).weekday() == 4:
+                n = FRIDAY.get((ch, s), n)
             if s in stashes and ch in SKLAD.get(s, ()):
                 k = allowed(n, int(sent_today.get(f"{ch}|{s}", 0)), now)
                 pick += [(s, x, f"{ch}|{s}") for x in fresh(ch, s)[:k]]
