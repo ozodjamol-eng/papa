@@ -1,0 +1,121 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:UB;font-weight:900;src:url(f/unbounded-latin-900-normal.woff2);unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:UB;font-weight:900;src:url(f/unbounded-cyrillic-900-normal.woff2);unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:UB;font-weight:900;src:url(f/unbounded-cyrillic-ext-900-normal.woff2);unicode-range:U+0460-052F,U+1C80-1C88,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
+@font-face{font-family:UL;font-weight:200;src:url(f/unbounded-latin-200-normal.woff2)}
+@font-face{font-family:MS;font-weight:500;src:url(f/montserrat-latin-500-normal.woff2);unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:MS;font-weight:500;src:url(f/montserrat-cyrillic-500-normal.woff2);unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:MS;font-weight:500;src:url(f/montserrat-cyrillic-ext-500-normal.woff2);unicode-range:U+0460-052F}
+@font-face{font-family:MS;font-weight:800;src:url(f/montserrat-latin-800-normal.woff2);unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:MS;font-weight:800;src:url(f/montserrat-cyrillic-800-normal.woff2);unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:MS;font-weight:800;src:url(f/montserrat-cyrillic-ext-800-normal.woff2);unicode-range:U+0460-052F}
+@font-face{font-family:MS;font-weight:900;src:url(f/montserrat-latin-900-normal.woff2);unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:MS;font-weight:900;src:url(f/montserrat-cyrillic-900-normal.woff2);unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:MS;font-weight:900;src:url(f/montserrat-cyrillic-ext-900-normal.woff2);unicode-range:U+0460-052F}
+html,body{margin:0;background:#000}canvas{display:block}
+</style></head><body><canvas id="c" width="1080" height="1920"></canvas><script>
+const W=1080,H=1920,c=document.getElementById('c'),x=c.getContext('2d');
+const RED='#FF1024',BLK='#000',GR='#1A1A1A',WH='#FFFFFF';
+const img={};const load=(k,src)=>new Promise(r=>{const i=new Image();i.onload=()=>{img[k]=i;r()};i.onerror=()=>r();i.src=src});
+const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),p=(t,a,b)=>cl((t-a)/(b-a));
+const eo3=k=>1-Math.pow(1-k,3),eo5=k=>1-Math.pow(1-k,5),eio=k=>k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+const back=(k,s=1.7)=>{const c3=s+1;return 1+c3*Math.pow(k-1,3)+s*Math.pow(k-1,2)};
+function rr(X,Y,w,h,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath()}
+function fit(txt,font,size,maxw){x.font=font.replace('%',size);const w=x.measureText(txt).width;return w>maxw?size*maxw/w:size}
+// --- background: graphite with drifting red light + diagonal stripes
+function bg(t){x.drawImage(img.bg,0,0,W,H);
+ x.save();x.globalCompositeOperation='screen';const gx=540+Math.sin(t*.5)*260,gy=700+Math.cos(t*.37)*300;
+ const g=x.createRadialGradient(gx,gy,0,gx,gy,900);g.addColorStop(0,'rgba(255,16,36,.22)');g.addColorStop(1,'rgba(255,16,36,0)');x.fillStyle=g;x.fillRect(0,0,W,H);x.restore();
+ // grain
+ x.save();x.globalAlpha=.05;for(let i=0;i<220;i++){const r=Math.sin(i*91.7+Math.floor(t*30)*13.1)*43758.5453;const v=r-Math.floor(r);x.fillStyle=v>.5?'#fff':'#000';x.fillRect((v*7919)%W,(v*104729)%H,2,2)}x.restore()}
+function stripe(t,t0,dur=.55){const k=p(t,t0,t0+dur);if(k<=0||k>=1)return;x.save();x.translate(540,960);x.rotate(-.5);
+ const w=900*(k<.5?eo3(k*2):1-eo3((k-.5)*2)),off=(eio(k)-.5)*2600;x.fillStyle=RED;x.fillRect(-1600+off,-w/2,3200,w);x.restore()}
+// --- text helpers
+function slam(t,t0,txt,Y,size,col=WH,font='900 %px MS'){const k=p(t,t0,t0+.35);if(k<=0)return;
+ const sz=fit(txt,font,size,960);const s=1.9-.9*eo5(k);x.save();x.globalAlpha=cl(k*3);x.translate(540,Y);x.scale(s,s);
+ x.font=font.replace('%',sz);x.textAlign='center';x.textBaseline='middle';x.fillStyle=col;x.fillText(txt,0,0);x.restore()}
+function line(t,t0,txt,Y,size,col=WH,font='800 %px MS',dy=30){const k=p(t,t0,t0+.45);if(k<=0)return;const sz=fit(txt,font,size,960);
+ x.save();x.globalAlpha=k;x.font=font.replace('%',sz);x.textAlign='center';x.textBaseline='middle';x.fillStyle=col;x.fillText(txt,540,Y+(1-eo3(k))*dy);x.restore()}
+function pill(t,t0,txt,Y,fill=RED,col=WH,size=40){const k=p(t,t0,t0+.4);if(k<=0)return;const e=back(k,2);
+ x.save();x.font='900 '+size+'px MS';const w=x.measureText(txt).width+80;x.translate(540,Y);x.scale(e,e);x.globalAlpha=cl(k*3);
+ rr(-w/2,-size*.95,w,size*1.9,size*.95);x.fillStyle=fill;x.fill();x.fillStyle=col;x.textAlign='center';x.textBaseline='middle';x.fillText(txt,0,3);x.restore()}
+// --- phone mockup with scrolling screenshot
+function phone(t,t0,t1,shot,sy0,sy1,opt={}){const kin=p(t,t0,t0+.5),kout=p(t,t1-.35,t1);if(kin<=0||kout>=1)return;
+ const PW=600,PH=1220,X=540,Y=opt.y||1130;const e=eo5(kin);
+ x.save();x.translate(X+(opt.dx||0)*(1-e)+ (kout>0?-1200*eio(kout):0),Y+(1-e)*500);x.rotate((opt.rot||0)*(1-e)+(opt.tilt||0));x.globalAlpha=cl(kin*2)*(1-kout);
+ // glow
+ x.shadowColor='rgba(255,16,36,.55)';x.shadowBlur=90;rr(-PW/2,-PH/2,PW,PH,78);x.fillStyle='#0c0c0c';x.fill();x.shadowColor='transparent';
+ rr(-PW/2,-PH/2,PW,PH,78);x.lineWidth=6;x.strokeStyle='#3a3a3a';x.stroke();
+ // screen
+ const SW=PW-36,SH=PH-36;x.save();rr(-SW/2,-SH/2,SW,SH,62);x.clip();
+ const im=img[shot];const sc=SW/im.width;const k=eio(p(t,t0+.6,t1-.5));const sy=(sy0+(sy1-sy0)*k)*im.height;
+ x.drawImage(im,0,sy,im.width,SH/sc,-SW/2,-SH/2,SW,SH);
+ if(opt.tap){const tk=p(t,opt.tap[0],opt.tap[0]+.6);if(tk>0&&tk<1){x.strokeStyle=`rgba(255,16,36,${1-tk})`;x.lineWidth=8;x.beginPath();x.arc(opt.tap[1]*SW-SW/2,opt.tap[2]*SH-SH/2,30+tk*90,0,7);x.stroke();
+   x.fillStyle=`rgba(255,255,255,${.5*(1-tk)})`;x.beginPath();x.arc(opt.tap[1]*SW-SW/2,opt.tap[2]*SH-SH/2,36,0,7);x.fill()}}
+ x.restore();
+ // notch
+ rr(-80,-PH/2+28,160,34,17);x.fillStyle='#0c0c0c';x.fill();
+ x.restore()}
+// --- poster clips in tilted frames
+function clip(t,t0,t1,key,X,rot){const kin=p(t,t0,t0+.45),kout=p(t,t1-.3,t1);if(kin<=0||kout>=1)return;const e=back(kin,1.4);
+ const n=Math.min(89,Math.floor((t-t0)*30));const im=img[key+n]||img[key+0];const w=430,h=765;
+ x.save();x.translate(X,1150+(1-cl(e))*700);x.rotate(rot);x.globalAlpha=1-kout;x.shadowColor='rgba(0,0,0,.6)';x.shadowBlur=50;x.shadowOffsetY=20;
+ rr(-w/2-10,-h/2-10,w+20,h+20,34);x.fillStyle='#111';x.fill();x.shadowColor='transparent';x.save();rr(-w/2,-h/2,w,h,26);x.clip();if(im)x.drawImage(im,-w/2,-h/2,w,h);x.restore();
+ rr(-w/2-10,-h/2-10,w+20,h+20,34);x.lineWidth=4;x.strokeStyle=RED;x.stroke();x.restore()}
+// --- chat
+function bubble(t,t0,t1,Y,side,draw,h,w=680){const k=p(t,t0,t0+.35),ko=p(t,t1-.3,t1);if(k<=0||ko>=1)return;const e=back(k,1.6);
+ const X=side>0?1080-80-w:80;x.save();x.globalAlpha=cl(k*3)*(1-ko);x.translate(X+w/2,Y+h/2);x.scale(e,e);x.translate(-w/2,-h/2);
+ rr(0,0,w,h,34);x.fillStyle=side>0?'#2b5278':'#1f1f1f';x.fill();if(side<0){x.lineWidth=3;x.strokeStyle='rgba(255,16,36,.6)';x.stroke()}draw(w,h);x.restore()}
+function txt(s,X,Y,size,col=WH,w=800){x.font='800 '+size+'px MS';x.fillStyle=col;x.textAlign='left';x.textBaseline='alphabetic';x.fillText(s,X,Y,w)}
+// --- services grid
+const SV=['Telegram бот — 24/7 ариза','Мини-илова — каталог','Реклама роликлари','Instagram воронка','Сайт-визитка','Логотип ва фирма услуби'];
+function services(t,t0,t1){const ko=p(t,t1-.3,t1);SV.forEach((s,i)=>{const k=p(t,t0+i*.18,t0+i*.18+.45);if(k<=0)return;const e=eo5(k);const Y=760+i*150;
+ x.save();x.globalAlpha=cl(k*2)*(1-ko);x.translate((1-e)*-900,0);rr(110,Y-58,860,116,58);x.fillStyle='rgba(255,255,255,.07)';x.fill();x.lineWidth=2;x.strokeStyle='rgba(255,255,255,.15)';x.stroke();
+ x.fillStyle=RED;x.beginPath();x.arc(178,Y,36,0,7);x.fill();x.strokeStyle=WH;x.lineWidth=8;x.lineCap='round';x.lineJoin='round';x.beginPath();x.moveTo(162,Y);x.lineTo(174,Y+13);x.lineTo(196,Y-13);x.stroke();
+ txt(s,240,Y+15,44,WH,700);x.restore()})}
+// --- OZOD JAMOL wordmark
+function wordmark(t,t0,Y,size){const k=p(t,t0,t0+.5);if(k<=0)return;x.save();x.globalAlpha=k;x.textBaseline='middle';
+ x.font='900 '+size+'px UB';const w1=x.measureText('OZOD').width;x.font='200 '+size+'px UL';const w2=x.measureText('JAMOL').width;const gap=size*.3,tw=w1+gap+w2;
+ let X=540-tw/2;x.textAlign='left';x.font='900 '+size+'px UB';x.fillStyle=WH;x.fillText('OZOD',X,Y);x.font='200 '+size+'px UL';x.fillText('JAMOL',X+w1+gap,Y);
+ x.font='500 '+size*.26+'px MS';x.textAlign='center';x.fillStyle='rgba(255,255,255,.7)';x.fillText('MEDIA • BUSINESS • CREATIVE',540,Y+size*.85);x.restore()}
+// --- labels per scene
+function label(t,t0,t1,kick,title){const ko=p(t,t1-.3,t1);x.save();x.globalAlpha=1-ko;pill(t,t0,kick,250,RED,WH,36);line(t,t0+.15,title,370,58,WH,'900 %px MS');x.restore()}
+const SC=[
+ [0,3.2],[3.2,8.8],[8.8,13.4],[13.4,16.8],[16.8,20.2],[20.2,23.4],[23.4,26]];
+window.render=function(t){x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;bg(t);
+ // S1 hook
+ if(t<3.2){const ko=p(t,2.85,3.2);x.save();x.globalAlpha=1-ko;
+  slam(t,.25,'БИЗНЕСИНГИЗ',760,120);slam(t,.75,"TELEGRAM'ДА",900,128,RED);slam(t,1.25,'СОТЯПТИМИ?',1040,120);
+  line(t,1.9,'Сотмаса — биз сотадиган қиламиз',1220,46,'rgba(255,255,255,.85)','800 %px MS');x.restore()}
+ stripe(t,3.0);
+ // S2 Shodiyona app
+ if(t>=3.2&&t<8.8){label(t,3.3,8.8,'МИНИ-ИЛОВА','Каталог — Telegram ичида');
+  if(t<6.6)phone(t,3.35,6.75,'shf',0,.32,{dx:0,rot:.15});else phone(t,6.45,8.8,'shd',0,0,{tap:[7.4,.5,.95]});
+  line(t,4.2,'Shodiyona Mebel',1830,40,'rgba(255,255,255,.75)','800 %px MS',10)}
+ stripe(t,8.6);
+ // S3 GOLD WATER app
+ if(t>=8.8&&t<13.4){label(t,8.9,13.4,'МИНИ-ИЛОВА','Акция, таймер, буюртма');phone(t,8.95,13.4,'gwf',.02,.28,{rot:-.15});
+  line(t,9.8,'GOLD WATER Андижон',1830,40,'rgba(255,255,255,.75)','800 %px MS',10)}
+ stripe(t,13.2);
+ // S4 posters
+ if(t>=13.4&&t<16.8){label(t,13.45,16.8,'РЕКЛАМА РОЛИКЛАРИ','Жонли постерлар');clip(t,13.5,16.8,'p1_',300,-.07);clip(t,13.75,16.8,'p2_',780,.07)}
+ stripe(t,16.6);
+ // S5 bot
+ if(t>=16.8&&t<20.2){label(t,16.85,20.2,'TELEGRAM БОТ','Ариза — 24/7, ўзи қабул қилади');
+  bubble(t,17.1,20.2,560,1,(w,h)=>{x.save();rr(20,20,w-40,h-40,22);x.clip();x.fillStyle='#f3ebdd';x.fillRect(20,20,w-40,h-40);const im=img.u10;const s=Math.min((w-80)/im.width,(h-80)/im.height);x.drawImage(im,(w-im.width*s)/2,(h-im.height*s)/2,im.width*s,im.height*s);x.restore()},420,560);
+  bubble(t,17.8,20.2,1020,-1,(w,h)=>{txt('📷 Расм қабул қилинди ✅',40,78,44);txt('Рақамингизни юборинг 👇',40,140,38,'rgba(255,255,255,.75)')},180,760);
+  bubble(t,18.6,20.2,1240,1,(w,h)=>{txt('📱 +998 90 *** ** 67',40,82,44)},120,560);
+  bubble(t,19.2,20.2,1400,-1,(w,h)=>{txt('🆕 Ариза №1 → менежерга',40,80,44,'#ffb3ba')},120,760)}
+ stripe(t,20.0);
+ // S6 services
+ if(t>=20.2&&t<23.4){const ko=p(t,23.1,23.4);x.save();x.globalAlpha=1-ko;slam(t,20.3,'БИЗ ҚИЛАМИЗ:',520,100);x.restore();services(t,20.6,23.4)}
+ // S7 CTA
+ if(t>=23.4){slam(t,23.5,'БУЮРТМА УЧУН',700,104);pill(t,23.9,'✈ @Ozodjamol',880,RED,WH,64);line(t,24.3,'Telegram орқали ёзинг',1030,44,'rgba(255,255,255,.85)','800 %px MS');wordmark(t,24.6,1420,92)}
+ // vignette
+ const vg=x.createRadialGradient(540,960,600,540,960,1300);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.45)');x.fillStyle=vg;x.fillRect(0,0,W,H);
+ const fi=1-p(t,0,.3);if(fi>0){x.fillStyle=`rgba(0,0,0,${fi})`;x.fillRect(0,0,W,H)}
+ return true};
+const L=[load('bg','a/BG01_grafit_9x16.png'),load('shf','a/sh_full.png'),load('shd','a/sh_detail.png'),load('gwf','a/gw_full.png'),load('u10','a/u10.png')];
+for(let i=0;i<90;i++){L.push(load('p1_'+i,`a/p1/${String(i+1).padStart(3,'0')}.jpg`));L.push(load('p2_'+i,`a/p2/${String(i+1).padStart(3,'0')}.jpg`))}
+window.ready=Promise.all(L).then(()=>Promise.all(['900 50px UB','200 50px UL','500 50px MS','800 50px MS','900 50px MS'].map(f=>document.fonts.load(f,'БИЗҚЎҒҲabc')))).then(()=>{render(0);return true});
+</script></body></html>
