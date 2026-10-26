@@ -276,7 +276,13 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     for channel, names in routes.items():
         since = dt.datetime.fromisoformat(st.get(f"last_{channel}", (now - dt.timedelta(hours=8)).isoformat()))
         since = max(since, now - dt.timedelta(hours=MAX_HOURS))
-        peers = peers_in(folders, names)
+        from . import sources                        # 26.10: есть белый список — материал только из него
+        wl_ids = sources.ids_for(sources.load_whitelist(state_dir.parent / "sources" / "whitelist.json"), channel)
+        if wl_ids:
+            from telethon.tl.types import PeerChannel
+            peers = [PeerChannel(i) for i in wl_ids]
+        else:
+            peers = peers_in(folders, names)
         if not peers:
             report[channel] = "нет папки " + " / ".join(names) + " · есть: " + ", ".join(sorted(folders)) [:200]
             continue

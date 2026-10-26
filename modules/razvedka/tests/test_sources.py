@@ -65,6 +65,22 @@ class TestSources(unittest.TestCase):
         self.assertIn("с чужим логотипом", t)
         self.assertIn("чистых каналов этой темы нет", t)                    # пустая тема видна владельцу
 
+    def test_whitelist_for_channels_and_block(self):
+        rows = [row(1, "news"), row(2, "music"), row(3, "faith"), row(4, "humor")]
+        rows[3]["username"] = "ShohonaKulgu"                                 # своё лого на всех видео — никогда
+        wl = sources.whitelist(sources.shortlist(rows), "26.10")
+        self.assertEqual(sources.ids_for(wl, "xojaobod"), [1, 3])
+        self.assertEqual(sources.ids_for(wl, "paparazzi"), [2])
+        self.assertEqual(sources.ids_for(wl, "davra"), [1])                  # Маънавият — только Хўжаобод
+        self.assertEqual(sources.ids_for(None, "davra"), [])                 # нет списка — куратор по папкам
+
+    def test_whitelist_file_roundtrip(self):
+        import tempfile
+        d = Path(tempfile.mkdtemp())
+        self.assertIsNone(sources.load_whitelist(d / "whitelist.json"))
+        (d / "whitelist.json").write_text('{"themes": {"news": [{"id": 7, "title": "T"}]}}', encoding="utf-8")
+        self.assertEqual(sources.ids_for(sources.load_whitelist(d / "whitelist.json"), "davra"), [7])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,9 @@
 set -Eeuo pipefail
 PY=/opt/papa-venv/razvedka/bin/python
 ( cd /opt/papa/modules/razvedka && $PY -m unittest -q tests.test_sources 2>&1 | tail -1 )
-for u in collect run curate hunt pain sources; do
+# свой прежний прогон отбора (старым кодом) — останавливаем и запускаем заново
+systemctl stop papa-razvedka@sources.service 2>/dev/null || true
+for u in collect run curate hunt pain; do
   if systemctl is-active -q "papa-razvedka@$u.service"; then echo "Сейчас работает Разведка ($u) — повторите позже"; exit 1; fi
 done
 systemctl start --no-block papa-razvedka@sources.service

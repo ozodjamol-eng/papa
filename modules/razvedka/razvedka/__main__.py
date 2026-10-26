@@ -242,9 +242,9 @@ async def _curate() -> dict:
         await c.disconnect()
 
 
-async def _sources() -> dict:
+async def _sources(inside_run: bool = False) -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "curate", "pain") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "curate", "pain") + (() if inside_run else ("run",)) if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:                                   # один профиль — одна задача за раз
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}
@@ -367,6 +367,7 @@ def main(argv: list[str]) -> None:
             if _dt.datetime.now(analyze.TZ).weekday() == 0:          # досье — раз в неделю, по понедельникам
                 asyncio.run(_send(dossier_text()))
                 print("DOSSIER_SENT")
+                print("SOURCES_DONE", asyncio.run(_sources(inside_run=True)))   # 26.10: белый список — обновить
     elif cmd == "dossier":
         text = dossier_text()
         print(text)

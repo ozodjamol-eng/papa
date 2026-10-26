@@ -6,7 +6,9 @@
   2) по каждому каналу за 7 дней считает: постов/день, обычные просмотры, долю рекламы, долю медиа, кириллицу;
   3) у сильных каналов Gemini смотрит 3 самых популярных медиа-поста: есть ли чужой логотип / @ / водяной знак;
   4) раскладывает по темам наших каналов (квоты ниже) и отдаёт владельцу таблицу в главный пульт.
-Галочку ставит владелец — выбранные станут белым списком. Ничего не публикует и не пересылает.
+26.10 владелец: «схема должна работать непрерывно, без моего участия» — список применяется САМ (whitelist.json),
+куратор берёт материал только из него, по понедельникам отбор повторяется. Владелец может лишь убрать канал (BLOCK).
+Сам отбор ничего не публикует и не пересылает.
 """
 from __future__ import annotations
 
@@ -31,6 +33,12 @@ SKIP_FOLDERS = {"papa"}                                            # служе�
 OWN = curate.OWN | {"kattadavrauz", "paparazziuz"}
 CYR = re.compile(r"[а-яёўқғҳ]", re.I)
 LAT = re.compile(r"[a-z]", re.I)
+
+# какие темы белого списка нужны каждому нашему каналу (политика docs/CHANNELS.md)
+FOR_CHANNEL = {"xojaobod": ("news", "useful", "humor", "food", "faith"),
+               "davra": ("news", "useful", "humor", "food"),
+               "paparazzi": ("music", "humor")}
+BLOCK = {"shohonakulgu"}           # 20.10 владелец: ставит своё лого на все видео; сюда же — убранные владельцем
 
 # тема белого списка: (код, название, сколько брать, темы сортировщика, для каких наших каналов)
 QUOTAS = [
@@ -92,6 +100,7 @@ def shortlist(rows: list[dict]) -> dict[str, dict]:
     out, used = {}, set()
     for code, name, n, _, who in QUOTAS:
         cand = sorted((r for r in rows if r.get("theme") == code and r.get("clean") is not None
+                       and (r.get("username") or "").lower() not in BLOCK
                        and r["clean"] >= CLEAN_MIN and r["id"] not in used), key=lambda r: -r["score"])
         top, spare = cand[:n], cand[n:n + 2]
         used |= {r["id"] for r in top}
@@ -142,8 +151,35 @@ def render(sl: dict[str, dict], rows: list[dict], generated: str, folders: int) 
     if unchecked:
         lines.append(f"⏳ Не успели проверить кадры (лимит Gemini): {len(unchecked)} — проверятся при следующем отборе.")
     lines += ["", "Конкурентов (Водий бозор, ANDIJON BUGUN) как источник не берём — только изучаем.",
-              "Напишите Claude номера, которые оставить/убрать — и список станет белым."]
+              "✅ Список применён сам: куратор берёт материал только из него, по понедельникам отбор обновляется.",
+              "Убрать канал — напишите Claude его номер."]
     return "\n".join(lines)
+
+
+def whitelist(sl: dict[str, dict], generated: str) -> dict:
+    """Белый список для куратора и утреннего блока: тема → каналы; канал → темы."""
+    themes = {c: [{"id": r["id"], "title": r["title"], "username": r.get("username")} for r in v["top"]]
+              for c, v in sl.items()}
+    return {"generated": generated, "themes": themes, "for_channel": {k: list(v) for k, v in FOR_CHANNEL.items()}}
+
+
+def load_whitelist(path: Path) -> dict | None:
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def ids_for(wl: dict | None, channel: str) -> list[int]:
+    """id каналов-источников белого списка для нашего канала; [] — списка нет (куратор работает по папкам)."""
+    if not wl:
+        return []
+    out = []
+    for t in (wl.get("for_channel") or {}).get(channel, FOR_CHANNEL.get(channel, ())):
+        for x in (wl.get("themes") or {}).get(t, []):
+            if x["id"] not in out and (x.get("username") or "").lower() not in BLOCK:
+                out.append(x["id"])
+    return out
 
 
 # ---------- Telegram (только чтение) ----------
@@ -257,4 +293,9 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
     tmp = out_dir / ".latest.json.tmp"
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, out_dir / "latest.json")
+    wl = whitelist(sl, gen)
+    if sum(len(v) for v in wl["themes"].values()) >= 5:          # явно неудачный прогон старый список не затирает
+        tmp = out_dir / ".whitelist.json.tmp"
+        tmp.write_text(json.dumps(wl, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, out_dir / "whitelist.json")
     return {"каналов": len(rows), "годных": len(good), "в списке": sum(len(v["top"]) for v in sl.values()), "text": text}
