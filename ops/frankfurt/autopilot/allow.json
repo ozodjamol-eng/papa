@@ -41,7 +41,8 @@
     "voice",
     "shodiyona-bot-status",
     "shodiyona-bot-restart",
-    "plan-today"
+    "plan-today",
+    "sources-run"
   ],
   "approve": [
     "morning-pool-clear",

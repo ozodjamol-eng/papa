@@ -1,0 +1,70 @@
+"""26.10: отбор каналов-источников — счёт, отсев, темы, квоты, таблица."""
+import datetime as dt
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from razvedka import sources  # noqa: E402
+
+NOW = dt.datetime(2026, 10, 26, 6, 0, tzinfo=dt.timezone.utc)
+
+
+def post(h, views=1000, text="Янгилик матни", media=True, ad=False):
+    return {"date": NOW - dt.timedelta(hours=h), "views": views, "text": text, "media": media, "ad": ad}
+
+
+def row(i, theme, views=20000, clean=1.0, ad=0.05, per_day=20):
+    return {"id": i, "title": f"Канал {i}", "username": f"k{i}", "theme": theme, "median_views": views, "per_day": per_day,
+            "ad_share": ad, "cyr_share": 0.9, "checked": 3, "clean_n": round(clean * 3), "clean": clean,
+            "score": sources.score({"median_views": views, "ad_share": ad, "per_day": per_day}, clean), "why": ""}
+
+
+class TestSources(unittest.TestCase):
+    def test_stats(self):
+        p = [post(5, 2000), post(30, 4000, ad=True), post(50, 6000, media=False, text="Yangilik matni lotinda"),
+             post(24 * 9, 99999)]                              # старше 7 дней — не считается
+        s = sources.stats(p, NOW)
+        self.assertEqual((s["posts"], s["median_views"], s["ad_share"]), (3, 4000, 0.33))
+        self.assertEqual((s["media_share"], s["cyr_share"]), (0.67, 0.67))
+
+    def test_eligible(self):
+        base = {"per_day": 5, "median_views": 3000, "ad_share": 0.1, "media_share": 0.8}
+        self.assertEqual(sources.eligible(base), "")
+        self.assertEqual(sources.eligible({**base, "ad_share": 0.5}), "много рекламы")   # Водий бозор и т.п.
+        self.assertEqual(sources.eligible({**base, "per_day": 0.2}), "редко пишет")
+        self.assertEqual(sources.eligible({**base, "median_views": 100}), "мало просмотров")
+
+    def test_score_clean_matters_most(self):
+        s = {"median_views": 90000, "ad_share": 0.05, "per_day": 60}
+        self.assertGreater(sources.score({**s, "median_views": 20000}, 1.0), sources.score(s, 1 / 3))
+        self.assertEqual(sources.score(s, None), 0.0)
+
+    def test_theme_priority(self):
+        self.assertEqual(sources.theme(["humor", "news"]), "news")
+        self.assertEqual(sources.theme(["live_music"]), "music")
+        self.assertEqual(sources.theme(["recipes"]), "food")
+        self.assertIsNone(sources.theme(["ads_market"]))
+
+    def test_shortlist_quota_dirty_out_and_15_total(self):
+        rows = [row(i, "news", 10000 + i) for i in range(10)] + [row(20, "news", 999999, clean=1 / 3)]
+        rows += [row(30 + i, "humor") for i in range(3)] + [row(40, "music"), row(41, "faith")]
+        sl = sources.shortlist(rows)
+        self.assertEqual(len(sl["news"]["top"]), 6)
+        self.assertNotIn(20, [r["id"] for r in sl["news"]["top"]])           # чужое лого — не в списке
+        self.assertEqual(len(sl["news"]["spare"]), 2)
+        self.assertEqual(len(sl["humor"]["top"]), 2)
+        self.assertEqual(sum(q[2] for q in sources.QUOTAS), 15)
+
+    def test_render(self):
+        rows = [row(1, "news"), row(2, "news", clean=0.0)]
+        rows[0]["subscribers"] = 1159335
+        t = sources.render(sources.shortlist(rows), rows, "26.10.2026 09:00", 5)
+        self.assertIn("1.16 млн", t)
+        self.assertIn("🧼 3/3", t)
+        self.assertIn("с чужим логотипом", t)
+        self.assertIn("чистых каналов этой темы нет", t)                    # пустая тема видна владельцу
+
+
+if __name__ == "__main__":
+    unittest.main()

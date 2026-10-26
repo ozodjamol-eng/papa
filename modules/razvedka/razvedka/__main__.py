@@ -11,6 +11,7 @@
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
   python -m razvedka github [--send] (github-auto — для таймера) — 🧭 GitHub-разведка: новые полезные инструменты (раз в неделю)
+  python -m razvedka sources          — 📡 отбор каналов-источников (белый список, 26.10) → таблица в главный пульт
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
 from __future__ import annotations
@@ -241,6 +242,27 @@ async def _curate() -> dict:
         await c.disconnect()
 
 
+async def _sources() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "curate", "pain") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:                                   # один профиль — одна задача за раз
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import sources
+    from .telegram import client_from_env, send_report
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    try:
+        res = await sources.run(c, Path(PUB) / "sources", log=lambda s: print(s, flush=True))
+        print(res["text"], flush=True)
+        res["отправлено"] = await send_report(c, res.pop("text"))
+        return res
+    finally:
+        await c.disconnect()
+
+
 async def _pain() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "curate") if subprocess.run(
@@ -312,6 +334,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "pain":
         print("PAIN_DONE", asyncio.run(_pain()))
+        return
+    if cmd == "sources":
+        print("SOURCES_DONE", asyncio.run(_sources()))
         return
     if cmd == "curate":
         print("CURATE_DONE", asyncio.run(_curate()))
