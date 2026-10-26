@@ -45,77 +45,67 @@ class TestSources(unittest.TestCase):
         self.assertGreater(sources.score({**s, "median_views": 20000}, 1.0), sources.score(s, 1 / 3))
         self.assertEqual(sources.score(s, None), 0.0)
 
-    def test_theme_priority_and_channel_rubrics(self):
+    def test_theme_rubrics_and_politics(self):
         self.assertEqual(sources.theme(["humor", "news"]), "news")
-        self.assertEqual(sources.theme(["live_music"]), "music")
-        self.assertEqual(sources.theme(["recipes"]), "food")
-        self.assertIsNone(sources.theme(["ads_market"]))
+        self.assertEqual(sources.theme(["interesting"]), "fun")
         pap = dict((x[0], x[3]) for x in sources.PROFILES)["paparazzi"]
         self.assertEqual(sources.theme(["news", "humor"], pap), "humor")      # новостей у PaparazziUZ нет
-        self.assertIsNone(sources.theme(["religion"], pap))
-
-    def test_shortlist_per_channel_only_own_folder(self):
-        rows = [row(i, "news", 10000 + i, ch="xojaobod") for i in range(8)] + [row(20, "news", 999999, clean=1 / 3, ch="xojaobod")]
-        rows += [row(30 + i, "humor", ch="davra") for i in range(5)] + [row(40, "music", ch="paparazzi")]
-        sl = sources.shortlist(rows)
-        self.assertEqual(len(sl["xojaobod"]["news"]["top"]), 4)
-        self.assertNotIn(20, [r["id"] for r in sl["xojaobod"]["news"]["top"]])  # чужое лого — не в списке
-        self.assertEqual(len(sl["xojaobod"]["news"]["spare"]), 2)
-        self.assertEqual(sl["davra"]["news"]["top"], [])                      # новости Хўжаобода Давре не идут
-        self.assertEqual(len(sl["davra"]["humor"]["top"]), 3)
-        self.assertEqual([r["id"] for r in sl["paparazzi"]["music"]["top"]], [40])
-        self.assertEqual(sl["paparazzi"]["humor"]["top"], [])                 # юмор Давры Папарацци не берёт
+        self.assertIsNone(sources.theme(["politics_official", "news"], None, politics=False))  # Давре — без пресс-служб
 
     def test_folder_match_emoji_and_spaces(self):
         t = ["Все", "🏙 XOJAOBOD  CITY", "KATTA DAVRA", "Paparazzi UZ", "Новости"]
         self.assertEqual(sources.folder_match(t, ("XOJAOBOD CITY",)), "🏙 XOJAOBOD  CITY")
-        self.assertEqual(sources.folder_match(["XOJAOBOD CITY 24"], ("XOJAOBOD CITY",)), "XOJAOBOD CITY 24")
-        self.assertEqual(sources.folder_match(t, ("katta davra",)), "KATTA DAVRA")
+        self.assertEqual(sources.folder_match(["XOJAOBODCITY"], ("XOJAOBOD CITY",)), "XOJAOBODCITY")
         self.assertIsNone(sources.folder_match(t, ("PAPA·Шаҳар",)))
 
-    def test_channel_in_two_folders_serves_both(self):
-        sl = sources.shortlist([row(1, "humor", ch=("davra", "xojaobod"))])
-        self.assertEqual([r["id"] for r in sl["davra"]["humor"]["top"]], [1])
-        self.assertEqual([r["id"] for r in sl["xojaobod"]["humor"]["top"]], [1])
+    def test_verdict(self):
+        self.assertEqual(sources.verdict(row(1, "news"))[0], 0)                       # ⭐
+        self.assertEqual(sources.verdict(row(1, "news", clean=1 / 3))[0], 3)          # 🚫 лого
+        self.assertEqual(sources.verdict({**row(1, "news"), "clean": None})[0], 2)    # ⚠️ не проверен
+        self.assertIn("латиница", sources.verdict({**row(1, "news"), "cyr_share": 0.2})[1])
 
-    def test_render(self):
-        rows = [row(1, "news", ch="xojaobod"), row(2, "news", clean=0.0, ch="xojaobod")]
-        rows[0]["subscribers"] = 1159335
-        t = sources.render(sources.shortlist(rows), rows, "26.10.2026 09:00", {**FOUND, "paparazzi": None})
-        self.assertIn("1.16 млн", t)
-        self.assertIn("🧼 3/3", t)
-        self.assertIn("с чужим логотипом", t.lower())
-        self.assertIn("чистых каналов нет", t)                               # пустая рубрика видна владельцу
-        self.assertIn("папка «XOJAOBOD CITY»", t)
-        self.assertIn("«Paparazzi UZ» не найдена", t)
+    def test_candidates_five_best_dirty_out_must_kept(self):
+        rows = [row(i, "news", 10000 + i * 1000) for i in range(8)] + [row(20, "news", 999999, clean=1 / 3)]
+        rows.append({**row(30, "news", 900, clean=1 / 3), "title": "Tezkor Yangiliklar ⚡", "username": "tezkor_y",
+                     "why": "мало просмотров"})
+        c = sources.candidates(rows, "davra", "news")
+        ids = [r["id"] for r in c]
+        self.assertEqual(len(c), 5)
+        self.assertNotIn(20, ids)                                                     # чужое лого — не предлагаем
+        self.assertIn(30, ids)                                                        # «обязательный» — всегда в пятёрке
 
-    def test_whitelist_v2_per_channel_and_block(self):
-        rows = [row(1, "news", ch="xojaobod"), row(2, "music", ch="paparazzi"), row(3, "faith", ch="xojaobod"),
-                row(4, "humor", ch="davra"), row(5, "useful", ch="davra")]
-        rows[3]["username"] = "ShohonaKulgu"                                 # своё лого на всех видео — никогда
-        wl = sources.whitelist(sources.shortlist(rows), "26.10")
-        self.assertEqual(sources.ids_for(wl, "xojaobod"), [1, 3])
-        self.assertEqual(sources.ids_for(wl, "paparazzi"), [2])
-        self.assertEqual(sources.ids_for(wl, "davra"), [5])
-        self.assertEqual(sources.ids_for(None, "davra"), [])                 # нет списка — куратор по своей папке
-        wl2 = sources.whitelist(sources.shortlist([row(9, "humor", ch="paparazzi")]), "26.10")
-        self.assertEqual(sources.ids_for(wl2, "paparazzi"), [])              # нет жонли ижро — Папарацци по папке
+    def test_card_buttons_and_preselect(self):
+        rows = [row(1, "news"), {**row(2, "news"), "clean": None}]
+        cands = sources.build(rows)
+        t, kb = sources.card("davra", cands["davra"], rows, "KATTA DAVRA", "26.10")
+        btn = [b for r in kb["inline_keyboard"] for b in r]
+        self.assertTrue(btn[0]["text"].startswith("☑"))                               # ⭐ отмечен сразу
+        self.assertTrue(btn[1]["text"].startswith("⬜"))
+        self.assertEqual(btn[0]["callback_data"], "sw:t:davra:news:1")
+        self.assertEqual(btn[-1]["callback_data"], "sw:ok:davra")
+        self.assertTrue(all(len(b["callback_data"].encode()) <= 64 for b in btn))
+        self.assertIn("⭐ Рекомендую", t)
+        self.assertIn("Мой совет", t)
+        t2, kb2 = sources.card("davra", cands["davra"], rows, "KATTA DAVRA", "26.10", chosen={2})
+        self.assertTrue(kb2["inline_keyboard"][1][0]["text"].startswith("☑"))       # уже выбранные владельцем
+        self.assertIsNone(sources.card("paparazzi", {}, rows, None, "26.10")[1])     # нет папки — без кнопок
 
-    def test_old_whitelist_ignored(self):
-        import tempfile
-        d = Path(tempfile.mkdtemp())
-        self.assertIsNone(sources.load_whitelist(d / "whitelist.json"))
-        (d / "whitelist.json").write_text('{"themes": {"news": [{"id": 7, "title": "T"}]}}', encoding="utf-8")
-        self.assertEqual(sources.ids_for(sources.load_whitelist(d / "whitelist.json"), "davra"), [])  # старый (все папки) — не берём
+    def test_choice_ids_and_main_empty(self):
+        ch = {"version": 2, "channels": {"davra": {"news": [{"id": 5, "title": "A"}], "humor": [{"id": 6, "title": "B"}]},
+                                          "paparazzi": {"humor": [{"id": 9, "title": "C"}]}}}
+        self.assertEqual(sources.ids_for(ch, "davra"), [5, 6])
+        self.assertEqual(sources.ids_for(ch, "xojaobod"), [])                        # не выбирал — по папке
+        self.assertEqual(sources.ids_for(None, "davra"), [])
+        self.assertTrue(sources.main_empty(ch, "paparazzi"))                         # нет жонли ижро — плюс папка
+        self.assertFalse(sources.main_empty(ch, "davra"))
 
-    def test_check_order_round_robin_and_complete(self):
-        good = [dict(row(i, "news", 1000 * i, ch="xojaobod"), clean=None) for i in range(1, 20)]
-        good += [dict(row(50, "humor", ch="davra"), clean=None)]
+    def test_check_order_must_first_round_robin(self):
+        good = [dict(row(i, "news", 1000 * i), clean=None) for i in range(1, 20)] + [dict(row(50, "humor"), clean=None)]
+        good.append({**row(60, "news", 10), "title": "Тезкор Хабарлар", "clean": None})
         order = sources.check_order(good)
-        self.assertEqual(order[0]["id"], 19)                                 # сильнейшие новости первыми
-        self.assertEqual(order[1]["id"], 50)                                 # и сразу другой канал/рубрика — по кругу
-        self.assertEqual(len([r for r in order if r["theme_by"].get("xojaobod") == "news"]), 10)  # квота×2+2
-        self.assertFalse(sources.complete_list(sources.shortlist([row(i, "news", ch="xojaobod") for i in range(6)])))
+        self.assertEqual(order[0]["id"], 60)                                         # обязательный — первым
+        self.assertEqual(order[1]["id"], 19)
+        self.assertEqual(order[2]["id"], 50)                                         # и сразу другая рубрика
 
 
 if __name__ == "__main__":

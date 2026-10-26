@@ -136,6 +136,24 @@ def bot_send(token: str, chat_id: int, text: str, urlopen=None) -> bool:
     return True
 
 
+def bot_send_kb(token: str, chat_id: int, text: str, markup: dict | None, urlopen=None) -> bool:
+    """26.10: одно сообщение с кнопками (карточка выбора источников). Текст ≤ 4096."""
+    import json
+    import urllib.parse
+    import urllib.request
+    urlopen = urlopen or urllib.request.urlopen
+    q = {"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": "true"}
+    if markup:
+        q["reply_markup"] = json.dumps(markup, ensure_ascii=False)
+    try:
+        with urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data=urllib.parse.urlencode(q).encode(),
+                     timeout=30) as r:
+            return bool(json.loads(r.read()).get("ok"))
+    except Exception as e:                      # токен в тексте ошибки не печатаем
+        print(f"BOT_SEND_FAIL: {type(e).__name__}", flush=True)
+        return False
+
+
 async def reports_channel_id(client: TelegramClient) -> int | None:
     """id канала «PAPA ОТЧЁТЫ» (ищем по названию среди чатов аккаунта) или PAPA_REPORTS_CHANNEL_ID."""
     import os

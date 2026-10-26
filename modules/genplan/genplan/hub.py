@@ -749,6 +749,9 @@ def shtab_handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if cq["data"].startswith("mo:"):
             from . import morning
             return morning.callback(bot, db, cq)
+        if cq["data"].startswith("sw:"):                   # 26.10: выбор источников — карточка Разведки
+            from . import sources_choice
+            return sources_choice.callback(bot, cq)
         bot("answerCallbackQuery", callback_query_id=cq["id"], text="Эта кнопка — в пульте канала")
         return "foreign"
     msg = upd.get("message")

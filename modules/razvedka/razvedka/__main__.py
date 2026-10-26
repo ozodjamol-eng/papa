@@ -256,12 +256,20 @@ async def _sources(inside_run: bool = False) -> dict:
         raise SystemExit("NOT_AUTHORIZED")
     try:
         res = await sources.run(c, Path(PUB) / "sources", log=lambda s: print(s, flush=True))
-        text = res.pop("text")
-        if text:                                  # 26.10: владельцу — только готовый список
-            print(text, flush=True)
-            res["отправлено"] = await send_report(c, text)
+        cards = res.pop("cards")
+        if cards:                                 # 26.10: карточки выбора — в PAPA ШТАБ (кнопки ловит genplan)
+            from .telegram import bot_send_kb, owner_bot
+            tok, ids = owner_bot()
+            if tok and ids:
+                res["отправлено"] = all(bot_send_kb(tok, o, t, kb) for t, kb in cards for o in ids)
+            else:
+                for t, _ in cards:
+                    await send_report(c, t + "\n\n(кнопки выбора работают только в PAPA ШТАБ)")
+                res["отправлено"] = "без кнопок — нет PAPA ШТАБ"
+            for t, _ in cards:
+                print(t, flush=True)
         else:
-            res["отправлено"] = "нет — список ещё не собран, продолжу в следующий прогон"
+            res["отправлено"] = "нет — карточки на этой неделе уже были, кадры ещё проверяются"
         return res
     finally:
         await c.disconnect()
@@ -373,7 +381,7 @@ def main(argv: list[str]) -> None:
                 print("DOSSIER_SENT")
             # 26.10: белый список — по понедельникам заново, в другие дни — пока не добран (лимит Gemini)
             if _dt.datetime.now(analyze.TZ).weekday() == 0 or (Path(PUB) / "sources" / "pending").exists() \
-                    or not (Path(PUB) / "sources" / "whitelist.json").exists():
+                    or not (Path(PUB) / "sources" / "sent_week").exists():
                 print("SOURCES_DONE", asyncio.run(_sources(inside_run=True)))
     elif cmd == "dossier":
         text = dossier_text()

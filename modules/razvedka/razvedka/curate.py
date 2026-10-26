@@ -272,24 +272,30 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     gemini_ok = bool(os.environ.get("GEMINI_API_KEY"))
     routes = dict(ROUTES)
     if XOJAOBOD_FLAG.exists():
-        routes["xojaobod"] = ("XOJAOBOD CITY", "PAPA·Шаҳар")
+        routes["xojaobod"] = ("XOJAOBOD CITY", "XOJAOBODCITY", "PAPA·Шаҳар")
     for channel, names in routes.items():
         since = dt.datetime.fromisoformat(st.get(f"last_{channel}", (now - dt.timedelta(hours=8)).isoformat()))
         since = max(since, now - dt.timedelta(hours=MAX_HOURS))
-        from . import sources                        # 26.10: есть белый список — материал только из него
-        wl_ids = sources.ids_for(sources.load_whitelist(state_dir.parent / "sources" / "whitelist.json"), channel)
+        from . import sources                        # 26.10: владелец выбрал источники в PAPA ШТАБ — только они
+        choice = sources.load_choice()
+        wl_ids = sources.ids_for(choice, channel)
         if wl_ids:
             from telethon.tl.types import PeerChannel
             peers = [PeerChannel(i) for i in wl_ids]
+            if sources.main_empty(choice, channel):     # главная рубрика не выбрана — плюс папка канала, как раньше
+                peers += peers_in(folders, names)
         else:
             peers = peers_in(folders, names)
         if not peers:
             report[channel] = "нет папки " + " / ".join(names) + " · есть: " + ", ".join(sorted(folders)) [:200]
             continue
-        cands = []
+        cands, seen_ids = [], set()
         for p in peers:
             try:
                 ent = await client.get_entity(p)
+                if ent.id in seen_ids:               # выбранный канал есть и в папке — читаем один раз
+                    continue
+                seen_ids.add(ent.id)
                 cands += await candidates(client, ent, since, now, channel, log)
             except Exception as e:  # noqa: BLE001 — один канал не роняет куратора
                 log(f"  {type(e).__name__}: {str(e)[:80]}")
