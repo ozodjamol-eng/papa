@@ -196,8 +196,11 @@ def ids_for(wl: dict | None, channel: str) -> list[int]:
     """id каналов-источников белого списка для нашего канала; [] — списка нет (куратор работает по папкам)."""
     if not wl:
         return []
+    themes = (wl.get("for_channel") or {}).get(channel, FOR_CHANNEL.get(channel, ()))
+    if themes and not (wl.get("themes") or {}).get(themes[0]):
+        return []                       # главная тема канала пуста (напр. жонли ижро) — куратор по папкам, как раньше
     out = []
-    for t in (wl.get("for_channel") or {}).get(channel, FOR_CHANNEL.get(channel, ())):
+    for t in themes:
         for x in (wl.get("themes") or {}).get(t, []):
             if x["id"] not in out and (x.get("username") or "").lower() not in BLOCK:
                 out.append(x["id"])

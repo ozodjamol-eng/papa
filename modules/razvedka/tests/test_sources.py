@@ -73,6 +73,8 @@ class TestSources(unittest.TestCase):
         self.assertEqual(sources.ids_for(wl, "paparazzi"), [2])
         self.assertEqual(sources.ids_for(wl, "davra"), [1])                  # Маънавият — только Хўжаобод
         self.assertEqual(sources.ids_for(None, "davra"), [])                 # нет списка — куратор по папкам
+        wl2 = sources.whitelist(sources.shortlist([row(1, "news"), row(5, "humor")]), "26.10")
+        self.assertEqual(sources.ids_for(wl2, "paparazzi"), [])              # нет жонли ижро — PaparazziUZ по папке
 
     def test_whitelist_file_roundtrip(self):
         import tempfile
