@@ -8,6 +8,7 @@ manager = "ShodiyonaMebelUz"   # аккаунт колл-центра: кноп�
 instagram = "https://www.instagram.com/shodiyona.mebel.uz/"
 channel = "@ShodiyonaMebelMarkazi"   # канал клиента (создан 24.10); бот — админ с правом «Добавление участников»
 telegram_channel = "https://t.me/ShodiyonaMebelMarkazi"
+webapp = "https://ozodjamol-eng.github.io/shodiyona/app/"   # 26.10: мини-приложение «🛋 Каталог» (витрина на GitHub Pages)
 hours = ""                     # ответ шефа (г): например "Ҳар куни 09:00–19:00"
 delivery = ""                  # ответ шефа (б): например "Андижон бўйлаб етказиб бериш ва йиғиш"
 

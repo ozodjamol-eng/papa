@@ -195,7 +195,8 @@ class Bot:
                  (T.MENU_CHEAPER, f("cheaper")), (T.MENU_ROOM, f("room")),
                  (T.MENU_MEASURE, f("measure")), (T.MENU_TRACK, f("tracking")),
                  (T.MENU_PLACES, True), (T.MENU_CONTACT, True)]
-        btn = [{"text": t} for t, on in items if on]
+        app = self.conf("webapp")
+        btn = [({"text": t, "web_app": {"url": app}} if t == T.MENU_CATALOG and app else {"text": t}) for t, on in items if on]
         return {"keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)], "resize_keyboard": True,
                 "is_persistent": True}
 
@@ -235,6 +236,9 @@ class Bot:
         if u.get("first") != fr.get("first_name") or u.get("username") != fr.get("username"):
             self.save(uid, first=fr.get("first_name") or "", username=fr.get("username") or "")
             u = self.user(uid)
+        if msg.get("web_app_data"):
+            self.on_webapp(uid, msg["web_app_data"].get("data") or "")
+            return
         text = (msg.get("text") or msg.get("caption") or "").strip()
         if text.startswith("/start"):
             payload = text[6:].strip().lower()
@@ -274,6 +278,28 @@ class Bot:
             self.ask_phone(uid)
             return
         self.send(uid, T.UNKNOWN, self.menu_kb())
+
+    def on_webapp(self, uid: int, raw: str) -> None:
+        """26.10: мини-приложение «🛋 Каталог»: заказ модели с витрины или «пришлю своё фото»."""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            d = {}
+        if d.get("a") == "photo" and self.feat("cheaper"):
+            self.cheaper_start(uid)
+            return
+        if d.get("a") != "order":
+            self.send(uid, T.UNKNOWN, self.menu_kb())
+            return
+        title = str(d.get("t") or "")[:120]
+        pid = str(d.get("id") or "")[:8]
+        img = "".join(ch for ch in str(d.get("img") or "") if ch.isalnum())[:20]
+        details = f"🛍 Витрина: {title}" + (f" (№{pid})" if pid else "")
+        if img and self.conf("webapp"):
+            details += f"\n🖼 {self.conf('webapp').rstrip('/')}/img/{img}.webp"
+        self.step(uid, "phone", fresh=True, kind="product", details=details)
+        self.send(uid, T.WEBAPP_ORDER.format(title=esc(title)))
+        self.ask_phone(uid)
 
     @staticmethod
     def photo_id(msg: dict) -> str | None:
@@ -580,6 +606,9 @@ class Bot:
         return {"inline_keyboard": [row]} if row else None
 
     def catalog(self, uid: int) -> None:
+        if self.conf("webapp"):  # старая текстовая кнопка у тех, кто давно не нажимал /start — обновляем клавиатуру
+            self.send(uid, T.WEBAPP_REFRESH, self.menu_kb())
+            return
         c = self.counts()
         if not c:
             self.send(uid, T.CATALOG_EMPTY, self.go_kb())

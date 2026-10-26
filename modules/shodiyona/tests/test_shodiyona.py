@@ -199,6 +199,11 @@ class TestOrders(Base):
 
 
 class TestCatalog(Base):
+    """Текстовый каталог в чате (когда мини-приложение выключено)."""
+    def setUp(self):
+        super().setUp()
+        self.bot.kv_set("set:webapp", "")
+
     def test_empty_catalog_offers_order(self):
         self.u(msg(T.MENU_CATALOG))
         self.assertIn("тез кунда", self.api.last_text(CLIENT))
@@ -296,6 +301,38 @@ class TestDirectPhoto(Base):
     def test_photo_with_caption_keeps_text(self):
         self.u(msg(photo=PHOTO, caption="шундай диван керак"), msg("+998901234567"))
         self.assertIn("шундай диван", self.lead()["details"] or "")
+
+
+class TestWebApp(Base):
+    def wa(self, data):
+        return msg(web_app_data={"data": data, "button_text": T.MENU_CATALOG})
+
+    def test_catalog_button_opens_webapp(self):
+        self.u(msg("/start"))
+        kb = self.api.sent(CLIENT, "sendPhoto")[-1]["reply_markup"]["keyboard"]
+        btn = [b for row in kb for b in row if b["text"] == T.MENU_CATALOG][0]
+        self.assertTrue(btn["web_app"]["url"].startswith("https://"))
+
+    def test_order_from_webapp_becomes_lead(self):
+        self.u(self.wa('{"a":"order","id":7,"t":"Стол ва 6 та кресло","img":"u01"}'))
+        self.assertIn("Стол ва 6 та кресло", self.api.sent(CLIENT)[-2]["text"])
+        self.u(msg("+998901234567"))
+        lead = self.lead()
+        self.assertEqual(lead["kind"], "product")
+        self.assertIn("Витрина: Стол ва 6 та кресло (№7)", lead["details"])
+        self.assertIn("/img/u01.webp", lead["details"])
+
+    def test_photo_action_starts_cheaper(self):
+        self.u(self.wa('{"a":"photo"}'), msg(photo=PHOTO), msg("+998901234567"))
+        self.assertEqual(self.lead()["kind"], "cheaper")
+
+    def test_old_text_button_refreshes_keyboard(self):
+        self.u(msg(T.MENU_CATALOG))
+        self.assertIn("янгиланди", self.api.last_text(CLIENT))
+
+    def test_bad_data_is_safe(self):
+        self.u(self.wa("not json"))
+        self.assertIsNone(self.lead())
 
 
 class TestSettings(Base):
