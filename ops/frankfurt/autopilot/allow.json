@@ -42,7 +42,8 @@
     "shodiyona-bot-status",
     "shodiyona-bot-restart",
     "plan-today",
-    "sources-run"
+    "sources-run",
+    "sources-status"
   ],
   "approve": [
     "morning-pool-clear",
