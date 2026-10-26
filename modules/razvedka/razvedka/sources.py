@@ -142,6 +142,15 @@ def theme(cats: list[str], allowed=None, politics: bool = True) -> str | None:
     return None
 
 
+RARE_OK = {"music"}             # 26.10 владелец: каналы артистов пишут раз в 2–3 дня — для жонли ижро это норма
+
+
+def relax_rare(r: dict) -> None:
+    """Жонли ижро: «редко пишет» не отсеивает (пост редкий, но ценный) — остаётся проверка кадров и просмотров."""
+    if r.get("why") == "редко пишет" and r.get("posts", 0) >= 1 and RARE_OK & set((r.get("theme_by") or {}).values()):
+        r["why"], r["rare"] = "", True
+
+
 def is_must(r: dict, code: str) -> bool:
     n = _norm(r.get("title")) + _norm(r.get("username"))
     return any(m in n for m in MUST.get(code, ()))
@@ -161,6 +170,8 @@ def verdict(r: dict) -> tuple[int, str]:
         notes.append("много рекламы — рекламу куратор не берёт")
     if r.get("why"):
         notes.append(r["why"])
+    if r.get("rare"):
+        notes.append("пишет редко — материал ценный, но его мало")
     if not notes and c >= 1 and r.get("median_views", 0) >= 3000:
         return 0, "⭐ Рекомендую: чистые кадры, живые просмотры"
     return 1, "👍 Можно" + (": " + ", ".join(notes) if notes else ": чистые кадры")
@@ -355,6 +366,8 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
             t = theme(r["cats"], allowed, ch not in NO_POLITICS)
             if t:
                 r["theme_by"][ch] = t
+    for r in rows:
+        relax_rare(r)
     good = [r for r in rows if not r["why"] or any(is_must(r, c) for c in MUST)]
     cache_f = out_dir / "checks.json"
     try:

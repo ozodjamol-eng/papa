@@ -90,6 +90,19 @@ class TestSources(unittest.TestCase):
         self.assertTrue(kb2["inline_keyboard"][1][0]["text"].startswith("☑"))       # уже выбранные владельцем
         self.assertIsNone(sources.card("paparazzi", {}, rows, None, "26.10")[1])     # нет папки — без кнопок
 
+    def test_rare_artist_channels_ok_for_live_music_only(self):
+        art = {**row(1, "music", ch="paparazzi"), "why": "редко пишет", "posts": 2, "per_day": 0.3}
+        sources.relax_rare(art)
+        self.assertEqual(art["why"], "")
+        self.assertIn("пишет редко", sources.verdict(art)[1])
+        self.assertEqual(sources.verdict(art)[0], 1)                                  # 👍, не ⭐
+        news = {**row(2, "news"), "why": "редко пишет", "posts": 2}
+        sources.relax_rare(news)
+        self.assertEqual(news["why"], "редко пишет")                                  # новостям порог остаётся
+        dead = {**row(3, "music", ch="paparazzi"), "why": "редко пишет", "posts": 0}
+        sources.relax_rare(dead)
+        self.assertEqual(dead["why"], "редко пишет")                                  # совсем молчит — нет
+
     def test_choice_ids_and_main_empty(self):
         ch = {"version": 2, "channels": {"davra": {"news": [{"id": 5, "title": "A"}], "humor": [{"id": 6, "title": "B"}]},
                                           "paparazzi": {"humor": [{"id": 9, "title": "C"}]}}}
