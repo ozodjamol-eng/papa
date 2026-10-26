@@ -13,7 +13,7 @@ const W=1080,H=1920,c=document.getElementById('c'),x=c.getContext('2d');
 const V=new URLSearchParams(location.search).get('v')||'1';
 const B=60/136; // beat
 const CREAM='#FBF8F1',GREEN='#1F3A28',OAK='#B8814A',WAL='#74421E',INK='#16241B';
-const PHONE='+998 77 923 01 91',ADDR='Андижон ш., 2-Андижон йўли · @ShodiyonaMebelUzBot';
+const PHONE='+998 77 923 01 91',ADDR='Андижон ш., 2-Андижон йўли · @ShodiyonaMebelUz · @ShodiyonaMebelUzBot';
 const img={};
 const load=n=>new Promise(r=>{const i=new Image();i.onload=()=>{img[n]=i;r()};i.src='src/'+n+'.png'});
 const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)), p=(t,a,b)=>cl((t-a)/(b-a));
