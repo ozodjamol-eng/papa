@@ -148,7 +148,8 @@ RARE_OK = {"music"}             # 26.10 владелец: каналы арти�
 def relax_rare(r: dict) -> None:
     """Жонли ижро: «редко пишет» не отсеивает (пост редкий, но ценный) — остаётся проверка кадров и просмотров."""
     if r.get("why") == "редко пишет" and r.get("posts", 0) >= 1 and RARE_OK & set((r.get("theme_by") or {}).values()):
-        r["why"], r["rare"] = "", True
+        r["why"] = eligible({**r, "per_day": MIN_PER_DAY})   # остальные проверки (просмотры, реклама, медиа) — как у всех
+        r["rare"] = not r["why"]
 
 
 def is_must(r: dict, code: str) -> bool:

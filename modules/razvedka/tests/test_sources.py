@@ -91,7 +91,7 @@ class TestSources(unittest.TestCase):
         self.assertIsNone(sources.card("paparazzi", {}, rows, None, "26.10")[1])     # нет папки — без кнопок
 
     def test_rare_artist_channels_ok_for_live_music_only(self):
-        art = {**row(1, "music", ch="paparazzi"), "why": "редко пишет", "posts": 2, "per_day": 0.3}
+        art = {**row(1, "music", ch="paparazzi"), "why": "редко пишет", "posts": 2, "per_day": 0.3, "media_share": 1.0}
         sources.relax_rare(art)
         self.assertEqual(art["why"], "")
         self.assertIn("пишет редко", sources.verdict(art)[1])
@@ -99,6 +99,9 @@ class TestSources(unittest.TestCase):
         news = {**row(2, "news"), "why": "редко пишет", "posts": 2}
         sources.relax_rare(news)
         self.assertEqual(news["why"], "редко пишет")                                  # новостям порог остаётся
+        weak = {**row(4, "music", 77, ch="paparazzi"), "why": "редко пишет", "posts": 1, "per_day": 0.1, "media_share": 1.0}
+        sources.relax_rare(weak)
+        self.assertEqual(weak["why"], "мало просмотров")                              # 77 просмотров — всё равно нет
         dead = {**row(3, "music", ch="paparazzi"), "why": "редко пишет", "posts": 0}
         sources.relax_rare(dead)
         self.assertEqual(dead["why"], "редко пишет")                                  # совсем молчит — нет
