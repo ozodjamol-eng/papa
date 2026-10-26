@@ -25,8 +25,11 @@ from . import curate, sortfolders
 
 DAYS = 7
 MIN_PER_DAY, MIN_VIEWS, MAX_AD_SHARE, MIN_MEDIA = 0.5, 500, 0.35, 0.3
-VISION_TOP = int(os.environ.get("SOURCES_VISION_TOP", "40"))      # сколько сильнейших проверять по кадрам
-SAMPLES = 3                                                        # медиа-постов на канал
+VISION_MAX = int(os.environ.get("SOURCES_VISION_MAX", "30"))      # каналов на проверку кадров за один прогон
+SAMPLES = 2                                                        # медиа-постов на канал (оба должны быть чистыми)
+CHECK_DAYS = 14                                                    # проверка кадров канала годна столько дней
+# 26.10: дневной лимит основной модели съедают куратор и охота — отбор проверяет кадры на «лёгкой» модели (свой лимит)
+VISION_MODEL = os.environ.get("SOURCES_GEMINI_MODEL", "gemini-flash-lite-latest")
 CLEAN_MIN = 2 / 3                                                  # минимум чистых кадров, чтобы попасть в список
 VIDEO_MAX_MB = 25
 SKIP_FOLDERS = {"papa"}                                            # служебная папка (HUB, СКЛАД, POOL, тест)
@@ -156,6 +159,25 @@ def render(sl: dict[str, dict], rows: list[dict], generated: str, folders: int) 
     return "\n".join(lines)
 
 
+def check_order(good: list[dict]) -> list[dict]:
+    """Кого проверять по кадрам: по каждой теме сильнейшие (квота×2+2), темы по кругу — все темы продвигаются."""
+    per = []
+    for code, _, n, _, _ in QUOTAS:
+        cand = sorted((r for r in good if r.get("theme") == code and (r.get("username") or "").lower() not in BLOCK),
+                      key=lambda r: -r["median_views"])[:n * 2 + 2]
+        per.append([r for r in cand if r.get("clean") is None])
+    out = []
+    while any(per):
+        for q in per:
+            if q:
+                out.append(q.pop(0))
+    return out
+
+
+def complete_list(sl: dict[str, dict]) -> bool:
+    return all(len(v["top"]) >= v["n"] for v in sl.values())
+
+
 def whitelist(sl: dict[str, dict], generated: str) -> dict:
     """Белый список для куратора и утреннего блока: тема → каналы; канал → темы."""
     themes = {c: [{"id": r["id"], "title": r["title"], "username": r.get("username")} for r in v["top"]]
@@ -222,6 +244,8 @@ async def _clean(client, msgs: list) -> tuple[int, int]:
 async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) -> dict:
     from telethon.tl.functions.channels import GetFullChannelRequest
     now = now or dt.datetime.now(dt.timezone.utc)
+    if os.environ.get("GEMINI_API_KEY"):              # темы и кадры — на «лёгкой» модели (свой дневной лимит)
+        os.environ["GEMINI_MODEL"] = VISION_MODEL
     folders = await curate.folder_peers(client)
     use = {k: v for k, v in folders.items() if curate._t(k) not in SKIP_FOLDERS}
     log(f"папок: {len(use)} — " + ", ".join(sorted(use)))
@@ -258,11 +282,24 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
     for r in good:
         r["cats"] = cats.get(str(r["id"])) or cats.get(r["id"]) or sortfolders.keyword_cats(r)
         r["theme"] = theme(r["cats"])
-    # кадры: сильнейшие в каждой теме, всего не больше VISION_TOP
+    # кадры: проверки прошлых прогонов (14 дней) + новые — по темам по кругу, не больше VISION_MAX за прогон
+    cache_f = out_dir / "checks.json"
+    try:
+        cache = json.loads(cache_f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    fresh = (now - dt.timedelta(days=CHECK_DAYS)).isoformat()
+    for r in good:
+        c = cache.get(str(r["id"]))
+        if c and c.get("at", "") >= fresh and c.get("checked"):
+            r["clean_n"], r["checked"] = c["clean_n"], c["checked"]
+            r["clean"] = r["clean_n"] / r["checked"]
+            r["score"] = score(r, r["clean"])
+    todo = check_order(good)
     gemini = bool(os.environ.get("GEMINI_API_KEY"))
-    order = sorted((r for r in good if r.get("theme")), key=lambda r: -r["median_views"])
-    for r in order[:VISION_TOP]:
-        if not gemini:
+    done = 0
+    for r in todo:
+        if not gemini or done >= VISION_MAX:
             break
         try:
             r["clean_n"], r["checked"] = await _clean(client, media[r["id"]])
@@ -270,9 +307,14 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
             log(f"  кадры: {e} — остальные в следующий раз")
             gemini = False
             continue
-        r["clean"] = r["clean_n"] / r["checked"] if r["checked"] else None
+        done += 1
+        if r["checked"]:
+            r["clean"] = r["clean_n"] / r["checked"]
+            cache[str(r["id"])] = {"clean_n": r["clean_n"], "checked": r["checked"], "at": now.isoformat()}
         r["score"] = score(r, r["clean"])
         log(f"  🧼 {r['title'][:30]}: {r['clean_n']}/{r['checked']}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cache_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
     for r in rows:
         r.setdefault("score", 0.0)
     sl = shortlist(rows)
@@ -294,8 +336,18 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, out_dir / "latest.json")
     wl = whitelist(sl, gen)
-    if sum(len(v) for v in wl["themes"].values()) >= 5:          # явно неудачный прогон старый список не затирает
+    n_in = sum(len(v) for v in wl["themes"].values())
+    if n_in >= 5:                                     # явно неудачный прогон старый список не затирает
         tmp = out_dir / ".whitelist.json.tmp"
         tmp.write_text(json.dumps(wl, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, out_dir / "whitelist.json")
-    return {"каналов": len(rows), "годных": len(good), "в списке": sum(len(v["top"]) for v in sl.values()), "text": text}
+    left = [r for r in check_order(good) if r.get("clean") is None]
+    complete = complete_list(sl) or not left
+    pending = out_dir / "pending"
+    if complete:
+        pending.unlink(missing_ok=True)
+    else:                                             # недобор — ежедневный прогон продолжит проверку сам
+        pending.write_text(now.isoformat(), encoding="utf-8")
+    # 26.10: владельцу — только готовый список; пустые/недобранные таблицы не шлём
+    return {"каналов": len(rows), "годных": len(good), "в списке": n_in, "осталось проверить": len(left),
+            "text": text if complete else None}

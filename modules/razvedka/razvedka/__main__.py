@@ -256,8 +256,12 @@ async def _sources(inside_run: bool = False) -> dict:
         raise SystemExit("NOT_AUTHORIZED")
     try:
         res = await sources.run(c, Path(PUB) / "sources", log=lambda s: print(s, flush=True))
-        print(res["text"], flush=True)
-        res["отправлено"] = await send_report(c, res.pop("text"))
+        text = res.pop("text")
+        if text:                                  # 26.10: владельцу — только готовый список
+            print(text, flush=True)
+            res["отправлено"] = await send_report(c, text)
+        else:
+            res["отправлено"] = "нет — список ещё не собран, продолжу в следующий прогон"
         return res
     finally:
         await c.disconnect()
@@ -367,7 +371,10 @@ def main(argv: list[str]) -> None:
             if _dt.datetime.now(analyze.TZ).weekday() == 0:          # досье — раз в неделю, по понедельникам
                 asyncio.run(_send(dossier_text()))
                 print("DOSSIER_SENT")
-                print("SOURCES_DONE", asyncio.run(_sources(inside_run=True)))   # 26.10: белый список — обновить
+            # 26.10: белый список — по понедельникам заново, в другие дни — пока не добран (лимит Gemini)
+            if _dt.datetime.now(analyze.TZ).weekday() == 0 or (Path(PUB) / "sources" / "pending").exists() \
+                    or not (Path(PUB) / "sources" / "whitelist.json").exists():
+                print("SOURCES_DONE", asyncio.run(_sources(inside_run=True)))
     elif cmd == "dossier":
         text = dossier_text()
         print(text)

@@ -81,6 +81,15 @@ class TestSources(unittest.TestCase):
         (d / "whitelist.json").write_text('{"themes": {"news": [{"id": 7, "title": "T"}]}}', encoding="utf-8")
         self.assertEqual(sources.ids_for(sources.load_whitelist(d / "whitelist.json"), "davra"), [7])
 
+    def test_check_order_round_robin_and_complete(self):
+        good = [dict(row(i, "news", 1000 * i), clean=None) for i in range(1, 20)] + [dict(row(50, "humor"), clean=None)]
+        order = sources.check_order(good)
+        self.assertEqual(order[0]["id"], 19)                                 # сильнейшие новости первыми
+        self.assertEqual(order[1]["id"], 50)                                 # и сразу другая тема — по кругу
+        self.assertEqual(len([r for r in order if r["theme"] == "news"]), 14)  # квота×2+2
+        sl = sources.shortlist([row(i, "news") for i in range(6)])
+        self.assertFalse(sources.complete_list(sl))                          # других тем нет — список не полный
+
 
 if __name__ == "__main__":
     unittest.main()
