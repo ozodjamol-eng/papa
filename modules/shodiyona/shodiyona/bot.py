@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import html
 import json
 import os
@@ -632,6 +633,8 @@ class Bot:
         if c("delivery"):
             t += f"\n🚚 {esc(c('delivery'))}"
         rows = []
+        if c("manager"):
+            rows.append([{"text": T.WRITE_MANAGER, "url": f"https://t.me/{c('manager').lstrip('@')}"}])
         if c("instagram"):
             rows.append([{"text": "📸 Instagram", "url": c("instagram")}])
         if self.channel_url():
@@ -641,10 +644,17 @@ class Bot:
     # ---------- фирменное приветствие и канал ----------
     BANNER = HERE / "assets" / "welcome.jpg"
 
+    def banner_key(self) -> str:
+        """file_id привязан к содержимому картинки: новая welcome.jpg — загружается заново (26.10: смена номера)."""
+        if not self.BANNER.exists():
+            return "banner_id"
+        return "banner_id:" + hashlib.sha1(self.BANNER.read_bytes()).hexdigest()[:10]
+
     def welcome(self, uid: int, first: str) -> None:
         """Фирменная картинка (кремовый фон, логотип, #1F3A28/#B8814A, Inter Display) + приветствие + меню."""
         cap = T.START.format(first=esc(first), name=esc(self.conf("name")))
-        fid = self.kv("banner_id")
+        key = self.banner_key()
+        fid = self.kv(key)
         try:
             if fid:
                 self.api("sendPhoto", chat_id=uid, photo=fid, caption=cap, parse_mode="HTML", reply_markup=self.menu_kb())
@@ -652,12 +662,12 @@ class Bot:
                 r = self.api.upload("sendPhoto", "photo", self.BANNER.read_bytes(), chat_id=uid, caption=cap,
                                     parse_mode="HTML", reply_markup=self.menu_kb())
                 if r and r.get("photo"):
-                    self.kv_set("banner_id", r["photo"][-1]["file_id"])
+                    self.kv_set(key, r["photo"][-1]["file_id"])
             else:
                 self.send(uid, cap, self.menu_kb())
         except Exception as e:  # noqa: BLE001 — картинка не ушла: приветствие текстом
             print(f"banner: {e}", flush=True)
-            self.kv_set("banner_id", None)
+            self.kv_set(key, None)
             self.send(uid, cap, self.menu_kb())
         self.welcome_channel(uid)
 

@@ -3,7 +3,8 @@
 # Пустая строка = пункт не показывается. Тексты для покупателей — узбекская кириллица.
 
 name = "Shodiyona Mebel Markazi"
-phone = "+998 70 167 37 77"
+phone = "+998 77 923 01 91"   # 26.10: новый номер колл-центра (Telegram @ShodiyonaMebelUz)
+manager = "ShodiyonaMebelUz"   # аккаунт колл-центра: кнопка «✍️ Менежерга ёзиш» в «📞 Алоқа»
 instagram = "https://www.instagram.com/shodiyona.mebel.uz/"
 channel = "@ShodiyonaMebelMarkazi"   # канал клиента (создан 24.10); бот — админ с правом «Добавление участников»
 telegram_channel = "https://t.me/ShodiyonaMebelMarkazi"

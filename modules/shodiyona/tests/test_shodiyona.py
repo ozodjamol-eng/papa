@@ -261,7 +261,7 @@ class TestBrandAndChannel(Base):
     def test_gate_off_by_default_on_by_switch(self):
         self.api.left.add(CLIENT)
         self.u(msg(T.MENU_CONTACT))
-        self.assertIn("+998 70 167 37 77", self.api.last_text(CLIENT))   # по умолчанию не принуждаем
+        self.assertIn("+998 77 923 01 91", self.api.last_text(CLIENT))   # по умолчанию не принуждаем
         self.u(msg("/admin", uid=ADMIN), cb("set:t:gate", uid=ADMIN))
         self.u(msg(T.MENU_CONTACT))
         self.assertIn("обуна бўлинг", self.api.last_text(CLIENT))
@@ -284,6 +284,11 @@ class TestBrandAndChannel(Base):
 
 
 class TestSettings(Base):
+    def test_contact_has_manager_button(self):
+        self.u(msg(T.MENU_CONTACT))
+        kb = self.api.sent(CLIENT)[-1]["reply_markup"]["inline_keyboard"]
+        self.assertEqual(kb[0][0]["url"], "https://t.me/ShodiyonaMebelUz")
+
     def test_owner_edits_phone_and_contact_shows_it(self):
         self.u(msg("/admin", uid=ADMIN), cb("a:set", uid=ADMIN), cb("set:e:hours", uid=ADMIN),
                msg("Ҳар куни 09:00–19:00", uid=ADMIN))
@@ -321,7 +326,7 @@ class TestPlaces(Base):
         self.u(msg(T.MENU_PLACES))
         self.assertEqual(len(self.api.sent(CLIENT, "sendVenue")), 2)
         self.u(msg(T.MENU_CONTACT))
-        self.assertIn("+998 70 167 37 77", self.api.last_text(CLIENT))
+        self.assertIn("+998 77 923 01 91", self.api.last_text(CLIENT))
 
 
 if __name__ == "__main__":
