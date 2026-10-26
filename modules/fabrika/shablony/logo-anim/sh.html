@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:SD;src:url(f/InterDisplay-ExtraBold.woff2);font-weight:800}
+@font-face{font-family:SI;src:url(f/Inter-SemiBold.woff2);font-weight:600}
+@font-face{font-family:SI;src:url(f/Inter-Bold.woff2);font-weight:700}
+html,body{margin:0;background:#fff}canvas{display:block}
+</style></head><body><canvas id="c" width="1080" height="1920"></canvas><script>
+const W=1080,H=1920,c=document.getElementById('c'),x=c.getContext('2d');
+const CREAM='#FBF8F1',GREEN='#1F3A28',OAK='#B8814A',WAL='#74421E';
+const img={};const load=(k,s)=>new Promise(r=>{const i=new Image();i.onload=()=>{img[k]=i;r()};i.src=s});
+const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),p=(t,a,b)=>cl((t-a)/(b-a));
+const eo3=k=>1-Math.pow(1-k,3),eo5=k=>1-Math.pow(1-k,5),eio=k=>k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+const back=(k,s=1.7)=>{const c3=s+1;return 1+c3*Math.pow(k-1,3)+s*Math.pow(k-1,2)};
+function blob(cx,cy,r,t,col,amp=1){x.beginPath();for(let i=0;i<=160;i++){const a=i/160*Math.PI*2;
+ const rr=r*(1+amp*(.045*Math.sin(5*a+t*4)+.03*Math.sin(9*a-t*6)+.02*Math.sin(13*a+t*9)));x[i?'lineTo':'moveTo'](cx+Math.cos(a)*rr,cy+Math.sin(a)*rr)}x.closePath();x.fillStyle=col;x.fill()}
+// drop that bounces and travels with the words
+const WORDS=[['Ўз ишлаб чиқаришимиз',.95],['Воситачисиз',1.65],['Арзонроқ',2.3]];
+function dropPos(t){ // returns x,y,squash
+ if(t<.5){const k=t/.5;return[540,-80+k*k*1040,1]}
+ // hop chain: 0.5..2.6, hops at word times
+ const hops=[[.5,540,960],[.95,330,960],[1.65,760,960],[2.3,540,960],[2.75,540,960]];
+ for(let i=0;i<hops.length-1;i++){const [t0,x0,y0]=hops[i],[t1,x1]=hops[i+1];if(t>=t0&&t<t1){const k=(t-t0)/(t1-t0);return[x0+(x1-x0)*eio(k),y0-Math.sin(k*Math.PI)*260,k<.08||k>.92?1.25:1]}}
+ return[540,960,1]}
+window.render=function(t){x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.fillStyle='#fff';x.fillRect(0,0,W,H);
+ // subtle warm vignette
+ const vg=x.createRadialGradient(540,960,300,540,960,1300);vg.addColorStop(0,'#fff');vg.addColorStop(1,'#F3EBDD');x.fillStyle=vg;x.fillRect(0,0,W,H);
+ // words
+ if(t<2.9){WORDS.forEach(([w,t0],i)=>{const t1=i<2?WORDS[i+1][1]:2.75;const k=p(t,t0,t0+.25),ko=p(t,t1-.12,t1);if(k<=0||ko>=1)return;
+   x.save();x.globalAlpha=k*(1-ko);x.font='800 92px SD';x.textAlign='center';x.textBaseline='middle';x.fillStyle=i==2?OAK:GREEN;
+   x.translate(540,1075+(1-eo3(k))*40-ko*30);x.fillText(w,0,0);x.restore()})}
+ // drop
+ if(t<2.95){const [dx,dy,sq]=dropPos(t);x.save();x.translate(dx,dy);x.scale(1/sq,sq);x.fillStyle=OAK;x.beginPath();x.arc(0,0,26,0,7);x.fill();x.restore()}
+ // green liquid grows from the drop
+ const g=p(t,2.75,3.45);if(g>0){const r=26+eio(g)*1500;blob(540,960,r,t,GREEN,g<1?1:.3)}
+ if(t>=3.3){
+  // icon badge rolls in
+  const k=p(t,3.35,4.15);const e=eo5(k);const bx=-260+(540+260)*e,rot=(1-e)*-Math.PI*2.2;const by=760;
+  if(k>0){x.save();x.translate(bx,by);x.rotate(rot);x.shadowColor='rgba(0,0,0,.35)';x.shadowBlur=40;x.shadowOffsetY=16;x.fillStyle=CREAM;x.beginPath();x.arc(0,0,185,0,7);x.fill();x.shadowColor='transparent';
+   x.strokeStyle=OAK;x.lineWidth=6;x.beginPath();x.arc(0,0,185,0,7);x.stroke();const im=img.icon,s=250/im.width;x.drawImage(im,-im.width*s/2,-im.height*s/2-6,im.width*s,im.height*s);x.restore();
+   // landing ring
+   const lr=p(t,4.1,4.7);if(lr>0&&lr<1){x.strokeStyle=`rgba(232,192,142,${1-lr})`;x.lineWidth=4;x.beginPath();x.arc(540,by,190+lr*140,0,7);x.stroke()}}
+  // letters
+  const word='SHODIYONA';x.font='800 150px SD';const total=x.measureText(word).width+8*(word.length-1);let X=540-total/2;
+  for(let i=0;i<word.length;i++){const ch=word[i],w=x.measureText(ch).width;const lk=p(t,4.25+i*.07,4.25+i*.07+.35);if(lk>0){x.save();x.globalAlpha=lk;x.fillStyle=CREAM;x.textBaseline='alphabetic';x.textAlign='left';
+    x.translate(X,1135+(1-eo3(lk))*70);x.fillText(ch,0,0);x.restore()}X+=w+8}
+  // shine
+  const sk=p(t,6.9,7.6);if(sk>0&&sk<1){x.save();x.globalCompositeOperation='source-atop';const sx=-200+sk*1500;const gr=x.createLinearGradient(sx-120,0,sx+120,0);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.5,'rgba(255,240,210,.55)');gr.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=gr;x.fillRect(0,1000,W,170);x.restore()}
+  // MEBEL MARKAZI with lines
+  const mk=p(t,5.05,5.6);if(mk>0){x.save();x.globalAlpha=mk;x.font='700 40px SI';x.fillStyle='#E7C08E';x.textAlign='center';x.textBaseline='middle';
+   const txt='M E B E L   M A R K A Z I';x.fillText(txt,540,1215);const tw=x.measureText(txt).width;const lw=170*eo3(mk);x.strokeStyle='#E7C08E';x.lineWidth=3;
+   x.beginPath();x.moveTo(540-tw/2-30,1215);x.lineTo(540-tw/2-30-lw,1215);x.moveTo(540+tw/2+30,1215);x.lineTo(540+tw/2+30+lw,1215);x.stroke();x.restore()}
+  // tagline
+  const tk=p(t,5.8,6.3);if(tk>0){x.save();x.globalAlpha=tk;x.font='600 50px SI';x.fillStyle=CREAM;x.textAlign='center';x.fillText('Мебель — ишлаб чиқарувчидан',540,1390+(1-eo3(tk))*30);
+   x.font='800 56px SD';x.fillStyle='#E7C08E';x.fillText('воситачисиз',540,1465+(1-eo3(tk))*30);x.restore()}
+ }
+ // cream wipe up (to white outro)
+ const wk=p(t,8.15,8.9);if(wk>0){const y=H-(H+200)*eio(wk);x.fillStyle=CREAM;x.beginPath();x.moveTo(0,H);for(let i=0;i<=40;i++){const xx=i/40*W;x.lineTo(xx,y+Math.sin(i*.6+t*8)*40)}x.lineTo(W,H);x.closePath();x.fill();
+  const y2=y+90;x.fillStyle='#fff';x.beginPath();x.moveTo(0,H);for(let i=0;i<=40;i++){const xx=i/40*W;x.lineTo(xx,y2+Math.sin(i*.5-t*7)*35)}x.lineTo(W,H);x.closePath();x.fill()}
+ return true};
+window.ready=Promise.all([load('icon','a/sh_icon.png')]).then(()=>Promise.all(['800 50px SD','600 50px SI','700 50px SI'].map(f=>document.fonts.load(f,'ЎҚSH')))).then(()=>{render(0);return true});
+</script></body></html>
