@@ -44,12 +44,14 @@ class TestSklad(unittest.TestCase):
         p = sklad.plan(stashes, {}, {}, EVENING)
         d = [(s, x["id"]) for s, x, _ in p["davra"]]
         self.assertEqual([x for s, x in d if s == "ФОЙДАЛИК"], [1, 2, 3])                  # ровно 3, с начала
-        self.assertEqual(len([1 for s, _ in d if s != "ФОЙДАЛИК"]), 3)                     # + 3 других по кругу
+        self.assertEqual([s for s, _ in d].count("РАЗВЛЕКАТЕЛЬНО"), 2)                       # юмор — 2
+        self.assertEqual([s for s, _ in d].count("ФОЙДАЛИК ОВКАТ"), 3)                      # + 3 других по кругу
         x = [(s, i) for s, i, _ in [(s, x["id"], k) for s, x, k in p["xojaobod"]]]
         self.assertEqual([i for s, i in x if s == "ФОЙДАЛИК"], [20, 19, 18])                # Хўжаобод — с конца
-        self.assertEqual(len(x), 5)
+        self.assertEqual(len(x), 6)                                                        # 3 + юмор 1 + 2 по кругу
         pp = [(s, x["id"]) for s, x, _ in p["paparazzi"]]
-        self.assertEqual(pp, [("ФОЙДАЛИК", 11), ("ФОЙДАЛИК", 12), ("Jonlik ijrolar", 202), ("Jonlik ijrolar", 203)])
+        self.assertEqual(pp[:4], [("ФОЙДАЛИК", 11), ("ФОЙДАЛИК", 12), ("Jonlik ijrolar", 202), ("Jonlik ijrolar", 203)])
+        self.assertEqual([s for s, _ in pp].count("РАЗВЛЕКАТЕЛЬНО"), 2)
         self.assertTrue(all(k == "davra|ФОЙДАЛИК" for s, _, k in p["davra"] if s == "ФОЙДАЛИК"))
         used = {"davra|ФОЙДАЛИК": ["1", "2", "3"]}
         p2 = sklad.plan(stashes, used, {"davra|ФОЙДАЛИК": 2}, EVENING)
@@ -70,6 +72,17 @@ class TestSklad(unittest.TestCase):
     def test_left_counts_hungriest_channel(self):
         stashes = {"ФОЙДАЛИК": [it(i) for i in range(1, 6)]}
         self.assertEqual(sklad.left(stashes, {"davra|ФОЙДАЛИК": ["1", "2", "3"]}, MORNING), {"ФОЙДАЛИК": 2})
+
+    def test_external_archive_quota_bad_and_fresh(self):
+        self.assertTrue(sklad.external("@AbduraxmonQiziq"))
+        self.assertFalse(sklad.external("ФОЙДАЛИК"))
+        self.assertNotIn("@ShohonaKulgu", sklad.SKLAD)                                     # своё лого — в блоке
+        st = {"@AbduraxmonQiziq": [it(i, text="Ҳажвия") for i in range(1, 6)]}
+        p = sklad.plan(st, {"bad|@AbduraxmonQiziq": ["1"]}, {}, EVENING)
+        self.assertEqual([x["id"] for _, x, _ in p["davra"]], [2])                         # 1 в день, «лого» пропущен
+        self.assertEqual([x["id"] for _, x, _ in p["xojaobod"]], [5])
+        old = {"@madaniyatvazirligi": [it(1, days=30), it(2, days=1)]}
+        self.assertEqual([x["id"] for _, x, _ in sklad.plan(old, {}, {}, EVENING)["paparazzi"]], [2])   # архив новостей — нет
 
     def test_titles_match_without_case_and_emoji(self):
         self.assertEqual(sklad._norm("📦 Фойдалик  овкат"), sklad._norm("ФОЙДАЛИК ОВКАТ"))

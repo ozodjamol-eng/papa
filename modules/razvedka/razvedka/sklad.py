@@ -28,17 +28,23 @@ SKLAD = {
     "ФОЙДАЛИК": ("davra", "xojaobod", "paparazzi"),   # 26.10 владелец: «там очень много полезного — во все три»
     "ФОЙДАЛИК ОВКАТ": ("xojaobod", "davra"),
     "Jonlik ijrolar": ("paparazzi",),
-    "РАЗВЛЕКАТЕЛЬНО": ("davra",),
-    # 26.10 владелец «делай»: склады под пустые рубрики (создаёт и наполняет сам)
-    "КУЛГИ": ("davra", "xojaobod", "paparazzi"),
+    "РАЗВЛЕКАТЕЛЬНО": ("davra", "xojaobod", "paparazzi"),   # 26.10 владелец: склад юмора — для всех трёх
+    # склады под пустые рубрики — подключатся, когда владелец назовёт свои каналы
     "МАЪНАВИЯТ": ("xojaobod",),
     "РЕТРО КЛИПЛАР": ("paparazzi",),
+    # 26.10 владелец: чужие каналы со старым материалом («@» = публичный). Не доверенные — КАЖДЫЙ пост перед
+    # отправкой проверяется на чужое лого (Gemini); с лого — пропуск навсегда. ShohonaKulgu — в блоке (своё лого).
+    "@AbduraxmonQiziq": ("davra", "xojaobod", "paparazzi"),
+    "@sanatdunyosi": ("paparazzi",),
+    "@madaniyat_marifat_tv": ("paparazzi",),
+    "@madaniyatvazirligi": ("paparazzi",),
 }
-FRESH_DAYS = {"NEWS INBOX": 2}                     # старые новости не публикуем
+FRESH_DAYS = {"NEWS INBOX": 2, "@madaniyatvazirligi": 2}   # новости: только свежие, архив не берём
 # 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
-FIXED = {"davra": {"ФОЙДАЛИК": 3, "КУЛГИ": 2},
-         "xojaobod": {"ФОЙДАЛИК": 3, "КУЛГИ": 1, "МАЪНАВИЯТ": 1},
-         "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "КУЛГИ": 2, "РЕТРО КЛИПЛАР": 4}}
+FIXED = {"davra": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1},
+         "xojaobod": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
+         "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "РАЗВЛЕКАТЕЛЬНО": 2, "РЕТРО КЛИПЛАР": 4,
+                       "@AbduraxmonQiziq": 1, "@sanatdunyosi": 2, "@madaniyat_marifat_tv": 2, "@madaniyatvazirligi": 1}}
 FRIDAY = {("xojaobod", "МАЪНАВИЯТ"): 3}                    # в пятницу маънавият — 3
 # вечный склад: пост со словами «сегодня/вчера/в этом году», годом или датой — устарел, не берём
 STALE = re.compile(r"(?<![\w'])(?:бугун|кеча|эртага|шу\s+йил|bugun|kecha|ertaga|shu\s+yil|сегодня|вчера|завтра)(?![\w'])"
@@ -49,6 +55,10 @@ FROM_END = {"xojaobod"}                            # этот канал бер�
 FROM_MIDDLE = {"paparazzi"}                        # этот — с середины (не повторяет Давру); остальные — с начала
 LOW = 10
 RUNS = 3                                           # запусков куратора в день
+
+
+def external(stash: str) -> bool:
+    return stash.startswith("@")
 
 
 def _norm(s: str) -> str:
@@ -98,7 +108,8 @@ def plan(stashes: dict[str, list[dict]], used: dict, sent_today: dict, now: dt.d
     Один пост — один раз на канал."""
     out: dict[str, list[tuple]] = {}
     fresh = lambda ch, s: [x for x in order(stashes[s], ch, now) if eligible(x, s, ch, now)
-                           and str(x["id"]) not in used.get(f"{ch}|{s}", [])]
+                           and str(x["id"]) not in used.get(f"{ch}|{s}", [])
+                           and str(x["id"]) not in used.get(f"bad|{s}", [])]
     for ch in PER_DAY:
         pick: list[tuple] = []
         for s, n in FIXED.get(ch, {}).items():
@@ -131,13 +142,20 @@ def left(stashes: dict[str, list[dict]], used: dict, now: dt.datetime) -> dict[s
 
 
 # ---------- Telegram ----------
-async def find(client) -> dict[str, object]:
-    """Склады среди чатов профиля по названию (регистр, эмодзи и пробелы не важны)."""
-    want = {_norm(k): k for k in SKLAD}
+async def find(client, log=print) -> dict[str, object]:
+    """Свои склады — среди чатов профиля по названию (регистр, эмодзи, пробелы не важны); чужие (@) — по username."""
+    want = {_norm(k): k for k in SKLAD if not external(k)}
     out = {}
     async for d in client.iter_dialogs():
         if d.is_channel and not d.is_group and _norm(d.title) in want and want[_norm(d.title)] not in out:
             out[want[_norm(d.title)]] = d.entity
+    for k in SKLAD:
+        if external(k):
+            try:
+                out[k] = await client.get_entity(k[1:])
+            except Exception as e:  # noqa: BLE001
+                log(f"  чужой архив {k}: {type(e).__name__}")
+            await asyncio.sleep(1)
     return out
 
 
@@ -157,7 +175,7 @@ async def read(client, ent, limit: int = 3000) -> list[dict]:
                 g["kind"] = g["kind"] or k
                 continue
         text = m.message or ""
-        it = {"id": m.id, "ids": [m.id], "kind": k, "text": text, "date": m.date,
+        it = {"id": m.id, "ids": [m.id], "kind": k, "text": text, "date": m.date, "msg": m,
               "ad": curate.is_ad(text, bool(getattr(m, "reply_markup", None)))}
         if m.grouped_id:
             groups[m.grouped_id] = it
@@ -179,23 +197,40 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     if st.get("day") != today:
         st["day"], st["sent"] = today, {k: v for k, v in (st.get("sent") or {}).items() if k.startswith("rr_")}
     used = st.setdefault("used", {})
-    ents = await find(client)
+    ents = await find(client, log)
     if not ents:
         return {"склады": "не найдены среди чатов профиля Разведки"}
     stashes = {}
     for name, ent in ents.items():
         try:
-            stashes[name] = await read(client, ent)
+            stashes[name] = await read(client, ent, 1500 if external(name) else 3000)
         except Exception as e:  # noqa: BLE001 — один склад не роняет остальные
             log(f"  склад {name}: {type(e).__name__}")
         await asyncio.sleep(1)
     routes = dict(curate.BOTS)
     report = {"найдено": sorted(ents)}
+    import os
+    gemini_ok = bool(os.environ.get("GEMINI_API_KEY"))
     for ch, picks in plan(stashes, used, st["sent"], now).items():
         if ch == "xojaobod" and not curate.XOJAOBOD_FLAG.exists():
             continue                                    # группа ещё не на PAPA — её бот не трогаем
         sent = 0
         for stash, it, key in picks:
+            if external(stash):                         # чужой архив: кадр — на чужое лого, перед каждой отправкой
+                if not gemini_ok:
+                    continue
+                try:
+                    ok = await curate.clean_frame(client, {"kind": it["kind"], "msg": it["msg"]})
+                except RuntimeError as e:               # лимит Gemini — остальные чужие в следующий раз
+                    log(f"  чужой архив: {e}")
+                    gemini_ok = False
+                    continue
+                if ok is None:
+                    continue
+                if not ok:
+                    used.setdefault(f"bad|{stash}", []).append(str(it["id"]))
+                    log(f"  🚫 {stash} #{it['id']}: чужое лого — пропуск навсегда")
+                    continue
             try:                                        # подпись источника = название склада → пульт кладёт в 📦 запас
                 await client.forward_messages(routes[ch], it["ids"], from_peer=ents[stash])
             except Exception as e:  # noqa: BLE001
@@ -211,7 +246,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         report[ch] = sent
     rest = left(stashes, used, now)
     report["осталось"] = rest
-    low = [(s, n) for s, n in rest.items() if n < LOW and s not in FRESH_DAYS]
+    low = [(s, n) for s, n in rest.items() if n < LOW and s not in FRESH_DAYS and not external(s)]
     if low and notify and st.get("low_day") != today:
         st["low_day"] = today
         for s, n in low:                              # в пульт основного канала склада (первый в SKLAD)
