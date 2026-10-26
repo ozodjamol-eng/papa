@@ -297,6 +297,30 @@ def waits_text(cfg: dict, m) -> bool:
     return bool(ch.get("stock_needs_text")) and not (m["text"] or "").strip()
 
 
+SKLAD_LEAD = dt.timedelta(minutes=30)     # 26.10 владелец: пост склада виден в пульте с 🗑 не меньше чем за 30 мин
+
+
+def _nrm(s) -> str:
+    import re
+    return re.sub(r"[\W_]+", "", str(s or "")).casefold()
+
+
+def sklad_rubric(ch: dict, source: str | None) -> str | None:
+    """Пост переслан из склада владельца (config: sklad = {название склада: рубрика}) → рубрика; иначе None."""
+    for name, rub in (ch.get("sklad") or {}).items():
+        if source and _nrm(source) == _nrm(name):
+            return rub
+    return None
+
+
+def is_sklad(ch: dict, m) -> bool:
+    return bool(sklad_rubric(ch, m["source"] if "source" in m.keys() else None))
+
+
+def _fits(ch: dict, m, t: dt.datetime, now: dt.datetime) -> bool:
+    return not is_sklad(ch, m) or t >= now + SKLAD_LEAD
+
+
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
@@ -308,7 +332,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     used: list[int] = []
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
         for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1)):
-            pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"])), None)
+            pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
             if pick:
                 store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
                 used.append(pick["id"])
@@ -319,7 +343,8 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
         if not is_free(ch, t, occupied(db, channel, now)) or blocked(db, channel, t):
             continue
         wanted = [s.get("rubric")] + list(s.get("fallback", []))
-        pick = next((m for r in wanted for m in pool if m["rubric"] == r and m["id"] not in used and allowed(ch, t, r)), None)
+        pick = next((m for r in wanted for m in pool if m["rubric"] == r and m["id"] not in used and allowed(ch, t, r)
+                     and _fits(ch, m, t, now)), None)
         if pick:
             store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
             used.append(pick["id"])

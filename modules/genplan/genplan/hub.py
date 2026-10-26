@@ -596,12 +596,19 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         store.update(db, mid, junk=json.dumps(junk, ensure_ascii=False))
     if learned:
         notes = (notes or []) + [f"🧹 Запомнил подпись {src}: " + " · ".join(x[:40] for x in learned[:3])]
-    if src:
+    sk = smart.sklad_rubric(cfg["channels"].get(channel) or {}, src)
+    if sk:                                         # 26.10 владелец: склад — доверенный, сам по сетке, с вето 🗑
+        store.update(db, mid, rubric=sk, guessed=0)
+        stock = True
+        notes = [f"📦 Склад «{src}» · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
+    elif src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
     if pol:
         notes = (notes or []) + [pol]
-    if stock:                                      # 18.10: пост из ХАБа канала — в 📦 запас, выйдет сам в пустой слот
+    if stock and sk:
+        store.update(db, mid, stock=1)
+    elif stock:                                    # 18.10: пост из ХАБа канала — в 📦 запас, выйдет сам в пустой слот
         store.update(db, mid, stock=1)
         # 20.10 владелец: «каждый бот — своё». ХАБ группы читает только её бот; копию в PAPA HUB он кладёт
         # только в момент публикации и сразу убирает (21.10: PAPA HUB — не свалка).

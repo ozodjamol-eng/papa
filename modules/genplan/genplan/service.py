@@ -367,6 +367,30 @@ def reconcile(db, cfg: dict, now: dt.datetime) -> int:
     return n
 
 
+def sklad_notice(db, cfg: dict, env: dict, channel: str, ids: list[int], now: dt.datetime, log=print, bot=None) -> int:
+    """26.10 владелец: «сам по сетке, с вето». Пост склада встал в час → строка в пульт канала с 🗑 (за 30+ мин)."""
+    ch = cfg["channels"][channel]
+    rows = [m for m in (store.get(db, i) for i in ids) if m is not None and smart.is_sklad(ch, m)]
+    if not rows:
+        return 0
+    from . import bots
+    b = bot or bots.for_channel(channel, bots.REG.get("main"))
+    owners = [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]
+    n = 0
+    for m in rows:
+        t = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
+        txt = (f"⏳ 📦 Склад «{m['source']}» → {ch.get('title', channel)}: выйдет сам в {t:%H:%M}\n"
+               f"{smart.short(m['text'], 80)}\n\nНе нужно — 🗑 Убрать.")
+        kb = {"inline_keyboard": [[{"text": "🗑 Убрать", "callback_data": f"del:{m['id']}"}]]}
+        for o in owners:
+            try:
+                b("sendMessage", chat_id=o, text=txt, reply_markup=kb, disable_web_page_preview=True)
+                n += 1
+            except Exception as e:  # noqa: BLE001 — уведомление не останавливает публикации
+                log(f"sklad notice: {type(e).__name__}: {e}")
+    return n
+
+
 async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = None, log=print) -> dict:
     now = (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ)
     day = now.date().isoformat()
@@ -376,7 +400,9 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
     out["morning"] = await tick_morning(db, cfg, env, pubs, now, log)
     out["extras"] = await tick_extras(db, cfg, env, pubs, now, log)
     for channel in cfg["channels"]:
-        out["ids"] += smart.fill_from_stock(db, cfg, channel, now)        # 📦 запас → в пустые слоты
+        placed = smart.fill_from_stock(db, cfg, channel, now)            # 📦 запас → в пустые слоты
+        out["ids"] += placed
+        sklad_notice(db, cfg, env, channel, placed, now, log)
         due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
         urgent = [m for m in due if m["urgent"]]
         regular = [m for m in due if not m["urgent"]]

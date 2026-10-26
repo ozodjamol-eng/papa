@@ -237,7 +237,15 @@ async def _curate() -> dict:
     if not await c.is_user_authorized():
         raise SystemExit("NOT_AUTHORIZED")
     try:
-        return await run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+        res = await run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+        from . import sklad                      # 26.10: 📦 склады владельца → 📦 запас пультов (сам по сетке, с вето)
+        from .telegram import send_report
+        try:
+            res["склад"] = await sklad.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True),
+                                           notify=lambda t: send_report(c, t))
+        except Exception as e:  # noqa: BLE001 — склад не роняет куратора
+            res["склад"] = f"ошибка: {type(e).__name__}: {e}"[:200]
+        return res
     finally:
         await c.disconnect()
 

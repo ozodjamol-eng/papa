@@ -337,9 +337,11 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
             r = by_id[ent.id]
             (r["news_for"] if news_only else r["for"]).append(ch)
             continue
+        from .sklad import SKLAD
         if (not getattr(ent, "broadcast", False) or (getattr(ent, "username", "") or "").lower() in OWN
-                or any(w in title.upper() for w in ("ХАБ", "XАБ", "HUB", "PAPA", "NEXUS", "ПУЛЬТ", "PULT"))):
-            continue                                  # наши каналы, ХАБы, пульты, группы — не источники
+                or any(w in title.upper() for w in ("ХАБ", "XАБ", "HUB", "PAPA", "NEXUS", "ПУЛЬТ", "PULT"))
+                or _norm(title) in {_norm(k) for k in SKLAD}):
+            continue                                  # наши каналы, ХАБы, пульты, группы, 📦 склады — не в отборе
         try:
             posts, mm = await _channel_posts(client, ent, now)
         except Exception as e:  # noqa: BLE001 — один канал не роняет отбор
