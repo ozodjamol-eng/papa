@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#050505}
+body{font-family:Inter,"Inter Display",sans-serif;color:#fff}
+#stage{position:absolute;inset:0;transform-origin:50% 45%}
+.abs{position:absolute}
+.glow1{width:900px;height:900px;border-radius:50%;background:#ff6a00;filter:blur(220px);left:-300px;top:-250px}
+.glow2{width:800px;height:800px;border-radius:50%;background:#7b2cff;filter:blur(220px);right:-320px;top:700px}
+.day{left:70px;top:100px;font-size:34px;font-weight:700;letter-spacing:6px}
+.huge{left:52px;top:150px;font-family:"Inter Display",Inter;font-weight:900;font-size:262px;letter-spacing:-12px;line-height:.85;white-space:nowrap}
+.huge span{display:inline-block}
+.huge2{left:58px;top:400px;font-family:"Inter Display",Inter;font-weight:900;font-size:128px;letter-spacing:-4px;-webkit-text-stroke:3px #fff;color:transparent;white-space:nowrap}
+.huge2b{left:58px;top:400px;font-family:"Inter Display",Inter;font-weight:900;font-size:128px;letter-spacing:-4px;color:#fff;white-space:nowrap}
+.pill{display:flex;align-items:center;gap:22px;background:#fff;color:#050505;border-radius:999px;padding:24px 44px;font-weight:800;white-space:nowrap}
+.p1{left:70px;top:610px;font-size:64px;transform-origin:0 50%}.p1 small{font-size:34px;font-weight:600;color:#777}
+.p2{right:70px;top:740px;font-size:36px;background:linear-gradient(90deg,#ff6a00,#ff2d6f);color:#fff;transform-origin:100% 50%}
+.tile{top:880px;width:300px;height:140px;border:2px solid rgba(255,255,255,.25);border-radius:28px;text-align:center;padding-top:26px}
+.tile b{display:block;font-size:44px;font-weight:800}.tile small{font-size:24px;color:rgba(255,255,255,.6);letter-spacing:3px}
+.nc{left:70px;width:940px;background:rgba(255,255,255,.08);border-radius:34px;padding:34px 40px 34px 50px;overflow:hidden}
+.nc .bar{position:absolute;left:0;top:0;bottom:0;width:10px}
+.nc p{font-size:40px;font-weight:700;line-height:1.24}.nc small{display:block;font-size:24px;color:rgba(255,255,255,.55);margin-top:12px;letter-spacing:2px}
+.foot{left:70px;right:70px;bottom:90px;display:flex;justify-content:space-between;align-items:center;font-size:34px;font-weight:800}
+.foot span{font-size:26px;color:rgba(255,255,255,.6);font-weight:600;letter-spacing:3px}
+.end{left:0;right:0;top:820px;text-align:center}
+.end b{display:block;font-family:"Inter Display",Inter;font-weight:900;font-size:96px;letter-spacing:-2px}
+.end span{display:block;margin-top:24px;font-size:34px;letter-spacing:8px;color:rgba(255,255,255,.7);font-weight:700}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+</style></head><body>
+<div id="stage">
+ <div class="abs glow1" id="g1"></div><div class="abs glow2" id="g2"></div>
+ <div id="content">
+  <div class="abs day" id="day"></div>
+  <div class="abs huge" id="huge"></div>
+  <div class="abs huge2" id="h2"></div>
+  <div class="abs pill p1" id="p1"><svg id="cloud" width="80" height="54" viewBox="0 0 80 54"><path d="M20 52h42a16 16 0 0 0 2-31.9A22 22 0 0 0 22.4 15 18.5 18.5 0 0 0 20 52z" fill="#cfd6e4"/><path d="M24 52h38a13 13 0 0 0 0-26" fill="#e9edf4"/></svg><span id="tHi">+18°</span><small id="tLo">/ +5°</small></div>
+  <div class="abs pill p2" id="p2"></div>
+  <div class="abs tile" id="r0" style="left:70px"><b></b><small>USD</small></div>
+  <div class="abs tile" id="r1" style="left:390px"><b></b><small>EUR</small></div>
+  <div class="abs tile" id="r2" style="left:710px"><b></b><small>RUB</small></div>
+  <div class="abs nc" id="n0" style="top:1070px"><div class="bar" style="background:#ff6a00"></div><p></p><small></small></div>
+  <div class="abs nc" id="n1" style="top:1300px"><div class="bar" style="background:#ff2d6f"></div><p></p><small></small></div>
+  <div class="abs nc" id="n2" style="top:1530px"><div class="bar" style="background:#7b2cff"></div><p></p><small></small></div>
+  <div class="abs foot" id="foot"><b id="u1"></b><span id="t1"></span></div>
+ </div>
+ <div class="abs end" id="end"><b id="u2"></b><span id="t2"></span></div>
+</div>
+<div id="flash"></div>
+<script>
+const D={day:"27.10 · СЕШАНБА",hi:18,lo:5,sky:"Эртага: қисман булутли",
+ rates:[12650,13780,156],
+ news:[["Андижонда янги боғ очилди — дам олиш куни оилалар учун бепул","DARYO.UZ"],
+       ["Вилоятда кузги экин ишлари режадан олдин якунланди","GAZETA.UZ"],
+       ["Ўзбекистон терма жамоаси навбатдаги ўйинга тайёрланмоқда","KUN.UZ"]],
+ user:"@xojaobodcity24",title:"ХЎЖАОБОД СИТИ 24"};
+const $=id=>document.getElementById(id);
+$("day").textContent=D.day;$("p2").textContent=D.sky;
+$("huge").innerHTML=[..."КЕЧКИ"].map(c=>`<span>${c}</span>`).join("");
+$("h2").textContent="ДАЙЖЕСТ";
+const h2b=document.createElement("div");h2b.className="abs huge2b";h2b.id="h2b";h2b.textContent="ДАЙЖЕСТ";$("content").insertBefore(h2b,$("p1"));
+D.news.forEach((n,i)=>{$("n"+i).querySelector("p").textContent=n[0];$("n"+i).querySelector("small").textContent=n[1]});
+$("u1").textContent=$("u2").textContent=D.user;$("t1").textContent=$("t2").textContent=D.title;
+const L=[...$("huge").children];
+const cl=(v,a=0,b=1)=>Math.min(b,Math.max(a,v)),p=(t,a,b)=>cl((t-a)/(b-a));
+const eo=t=>1-Math.pow(1-t,3),eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const back=t=>{const s=1.3;return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
+const spr=t=>t>=1?1:1-Math.exp(-6*t)*Math.cos(10*t);
+const fmt=n=>Math.round(n).toLocaleString("ru-RU").replace(/ /g," ");
+const st=(e,o)=>Object.assign(e.style,o);
+const T={day:.8,lt:2.0,ls:.12,h2:3.0,p1:4.5,p2:5.6,r:[7.0,7.4,7.8],n:[10,13,16],end:19.3,DUR:22};
+window.DUR=T.DUR;
+function render(t,V){
+ const shake=V==3?[.0,2.0,2.12,2.24,2.36,2.48,3.0,4.5,10,13,16].reduce((s,h)=>{const k=p(t,h,h+.25);return s+(k>0&&k<1?(1-k)*10:0)},0):0;
+ const push=V==2?1+0.05*eio(p(t,0,T.end)):1;
+ st($("stage"),{transform:`translate(${shake?Math.sin(t*90)*shake:0}px,${shake?Math.cos(t*77)*shake:0}px) scale(${push})`});
+ const g=eo(p(t,0,2.2));
+ st($("g1"),{opacity:.55*g,transform:`translate(${Math.sin(t*.4)*40}px,${Math.cos(t*.3)*30}px) scale(${.6+.4*g})`});
+ st($("g2"),{opacity:.5*eo(p(t,.6,2.8)),transform:`translate(${Math.cos(t*.35)*40}px,${Math.sin(t*.45)*30}px)`});
+ // дата
+ let k=p(t,T.day,T.day+.8);
+ if(V==1)st($("day"),{opacity:eo(k),transform:`translateY(${(1-eo(k))*30}px)`});
+ if(V==2)st($("day"),{opacity:eo(k),filter:`blur(${(1-k)*12}px)`,letterSpacing:`${6+(1-eo(k))*20}px`});
+ if(V==3)st($("day"),{clipPath:`inset(0 ${100-eo(p(t,T.day,T.day+.35))*100}% 0 0)`});
+ // КЕЧКИ
+ L.forEach((e,i)=>{const a=T.lt+i*T.ls;
+  if(V==1){const q=p(t,a,a+.5);st(e,{opacity:q>0?1:0,transform:`translateY(${(1-back(q)*1)*260}px)`,transformOrigin:'50% 100%'})}
+  if(V==2){const q=p(t,a+i*.06,a+1.2);st(e,{opacity:eo(q),filter:`blur(${(1-q)*25}px)`,transform:`translateY(${(1-eo(q))*60}px)`})}
+  if(V==3){const q=p(t,a,a+.22),s=i%2?1:-1;st(e,{opacity:q>0?1:0,transform:`translateX(${(1-eo(q))*s*700}px) skewX(${(1-q)*s*-25}deg)`})}
+ });
+ // ДАЙЖЕСТ: контур прорисовывается, у В3 — вспышка заливки
+ k=p(t,T.h2,T.h2+(V==2?1.6:1.0));
+ st($("h2"),{clipPath:`inset(0 ${100-eio(k)*100}% 0 0)`,opacity:V==2?eo(k):1});
+ st($("h2b"),{opacity:V==3?Math.max(0,1-p(t,T.h2+.9,T.h2+1.6))*(t>T.h2+.9?1:0):(V==1?Math.max(0,1-p(t,T.h2+.95,T.h2+1.5))*(t>T.h2+.95?.9:0):0)});
+ // погода
+ k=p(t,T.p1,T.p1+(V==2?1.0:.6));
+ if(V==1)st($("p1"),{opacity:k>0?1:0,transform:`scale(${spr(k)})`});
+ if(V==2)st($("p1"),{opacity:eo(k),filter:`blur(${(1-k)*16}px)`,transform:`translateY(${(1-eo(k))*50}px)`});
+ if(V==3)st($("p1"),{clipPath:`inset(0 ${100-eo(p(t,T.p1,T.p1+.3))*100}% 0 0 round 999px)`});
+ $("tHi").textContent="+"+Math.round(D.hi*eo(p(t,T.p1+.2,T.p1+1.2)))+"°";
+ $("tLo").textContent="/ +"+Math.round(D.lo*eo(p(t,T.p1+.5,T.p1+1.3)))+"°";
+ st($("cloud"),{transform:`translateX(${Math.sin(t*1.6)*6}px) rotate(${Math.sin(t*1.2)*4}deg)`});
+ k=p(t,T.p2,T.p2+.7);
+ if(V==1)st($("p2"),{opacity:k>0?1:0,transform:`translateX(${(1-back(k))*500}px)`});
+ if(V==2)st($("p2"),{opacity:eo(k),filter:`blur(${(1-k)*14}px)`,transform:`translateX(${(1-eo(k))*80}px)`});
+ if(V==3)st($("p2"),{clipPath:`inset(0 0 0 ${100-eo(p(t,T.p2,T.p2+.3))*100}% round 999px)`});
+ // курс
+ [0,1,2].forEach(i=>{const a=T.r[i],e=$("r"+i);k=p(t,a,a+.6);
+  if(V==1)st(e,{opacity:k>0?1:0,transform:`translateY(${(1-spr(k))*120}px) scale(${.7+.3*spr(k)})`});
+  if(V==2)st(e,{opacity:eo(k),filter:`blur(${(1-k)*12}px)`,transform:`translateY(${(1-eo(k))*40}px)`});
+  if(V==3)st(e,{clipPath:`inset(${100-eo(p(t,a,a+.25))*100}% 0 0 0 round 28px)`});
+  e.querySelector("b").textContent=fmt(D.rates[i]*eo(p(t,a+.1,a+1.4)));
+ });
+ // новости
+ [0,1,2].forEach(i=>{const a=T.n[i],e=$("n"+i),bar=e.querySelector(".bar"),tx=[e.querySelector("p"),e.querySelector("small")];
+  k=p(t,a,a+.8);
+  if(V==1){st(e,{opacity:k>0?1:0,transform:`translateX(${(1-spr(k))*1100}px)`});st(bar,{transform:`scaleY(${eo(p(t,a+.4,a+.9))})`});
+   tx.forEach((x,j)=>st(x,{opacity:eo(p(t,a+.5+j*.2,a+1.1+j*.2))}))}
+  if(V==2){st(e,{opacity:eo(p(t,a,a+1.1)),filter:`blur(${(1-p(t,a,a+1.1))*14}px)`,transform:`translateY(${(1-eo(p(t,a,a+1.1)))*70}px)`});
+   st(bar,{transform:`scaleY(${eo(p(t,a+.3,a+1.2))})`});tx.forEach(x=>st(x,{opacity:1}))}
+  if(V==3){const w=eo(p(t,a+.12,a+.45));st(e,{opacity:t>a?1:0,clipPath:`inset(0 ${100-w*100}% 0 0 round 34px)`});
+   st(bar,{transform:`scaleY(${eo(p(t,a,a+.15))})`});tx.forEach((x,j)=>st(x,{opacity:eo(p(t,a+.35+j*.12,a+.55+j*.12))}))}
+ });
+ // финал
+ k=p(t,T.end,T.end+(V==3?.5:1.0));
+ st($("content"),{opacity:1-eo(k),transform:`scale(${1-.08*eo(k)})`,filter:V==2?`blur(${eo(k)*14}px)`:"none",transformOrigin:"50% 50%"});
+ const e2=p(t,T.end+(V==3?.4:.75),T.end+(V==3?1.1:1.6));
+ st($("end"),{opacity:eo(e2),transform:`scale(${V==1?.7+.3*spr(e2):V==3?1+.25*(1-eo(e2)):1}) translateY(${V==2?(1-eo(e2))*40:0}px)`,filter:V==2?`blur(${(1-e2)*12}px)`:"none"});
+ // вспышки (В3)
+ let fl=0;if(V==3)[2.0,3.0,4.5,10,13,16,T.end].forEach(h=>{const q=p(t,h,h+.12);if(q>0&&q<1)fl=Math.max(fl,(1-q)*.35)});
+ st($("flash"),{opacity:fl});
+}
+window.render=render;
+</script></body></html>
