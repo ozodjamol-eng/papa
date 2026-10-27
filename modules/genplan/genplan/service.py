@@ -41,7 +41,7 @@ def target(cfg: dict, env: dict, channel: str) -> str | int:
 
 
 def hook_for(cfg: dict, ch: dict, m, db=None) -> str:
-    """Нижний хук (под юзернеймом). Решение владельца 17.10: по смыслу текста — ИИ (Anthropic).
+    """Нижний хук (под юзернеймом). Решение владельца 17.10: по смыслу текста — ИИ (с 27.10 — Gemini).
     Печальная тема или свой призыв в конце текста — без нашего хука (как раньше). ИИ недоступен — хук рубрики из config."""
     body, _ = text.translit.auto(text.strip_sources(m["text"] or ""))
     topics = [] if ch.get("topics") is False else cfg.get("topics", [])

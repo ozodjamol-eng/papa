@@ -10,7 +10,7 @@ class T(unittest.TestCase):
         self.db = store.connect(str(Path(tempfile.mkdtemp()) / "g.db"))
         ai._DOWN.clear()
         self.env = dict(os.environ)
-        os.environ.update({"AI_PRIMARY": "claude", "ANTHROPIC_API_KEY": "k", "GEMINI_API_KEY": "g"})
+        os.environ.update({"AI_PRIMARY": "claude-force", "ANTHROPIC_API_KEY": "k", "GEMINI_API_KEY": "g"})
         self.addCleanup(lambda: (os.environ.clear(), os.environ.update(self.env), ai._DOWN.clear()))
         self.calls = []
         self.orig = (ai._claude, ai._gemini)

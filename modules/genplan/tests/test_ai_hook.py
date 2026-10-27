@@ -15,7 +15,7 @@ def fake(answer):
 class AiHook(unittest.TestCase):
     def setUp(self):
         self.db = store.connect(":memory:")
-        self.env = mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x", "AI_PRIMARY": "claude"}, clear=False)
+        self.env = mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x", "AI_PRIMARY": "claude-force"}, clear=False)
         self.env.start()
         os.environ.pop("GEMINI_API_KEY", None)
 

@@ -122,20 +122,26 @@ class TestGuard(unittest.TestCase):
         self.assertTrue(any("снова в порядке" in x for x in b), b)
 
     def test_ai_disabled_alerts(self):
-        a = self.run_guard({}, ai=lambda e: "организация отключена (organization_on_hold)")
-        self.assertTrue(any("Anthropic" in x for x in a), a)
+        a = self.run_guard({}, ai=lambda e: "ключ не принят (истёк или удалён)")
+        self.assertTrue(any("Gemini" in x for x in a), a)
 
     def test_voronka_stale_alerts_once_and_recovers(self):
         st, old = {}, self.now - dt.timedelta(hours=55)
-        a = pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: old)
+        on = lambda n: True
+        a = pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: old, enabled=on)
         self.assertTrue(any("Воронка X СТОИТ" in x for x in a), a)
-        self.assertEqual(pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: old), [])
-        b = pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: self.now - dt.timedelta(minutes=2))
+        self.assertEqual(pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: old, enabled=on), [])
+        b = pa.voronka_guard(self.now, st, dbs={"X": None}, last=lambda p: self.now - dt.timedelta(minutes=2), enabled=on)
         self.assertTrue(any("снова работает" in x for x in b), b)
 
+    def test_voronka_disabled_is_silent(self):
+        old = self.now - dt.timedelta(hours=5)
+        self.assertEqual(pa.voronka_guard(self.now, {}, dbs={"X": None}, last=lambda p: old, enabled=lambda n: False), [])
+
     def test_ai_alive_parsing(self):
-        self.assertIsNone(pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (200, "")))
-        self.assertIn("отключена", pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (400, '{"error_code":"organization_on_hold"}')))
+        self.assertIsNone(pa.ai_alive({"GEMINI_API_KEY": "k"}, get=lambda: (200, "")))
+        self.assertIn("не принят", pa.ai_alive({"GEMINI_API_KEY": "k"}, get=lambda: (400, '{"reason":"API_KEY_INVALID"}')))
+        self.assertIsNone(pa.ai_alive({"ANTHROPIC_API_KEY": "k"}, get=lambda: (400, "organization_on_hold")))
         self.assertIsNone(pa.ai_alive({}, get=lambda: (401, "")))
 
 

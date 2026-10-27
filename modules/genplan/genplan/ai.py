@@ -1,5 +1,6 @@
 """ИИ-редактор (Fabrika): переводит и переписывает подпись к посту так, как владелец делал вручную через ChatGPT.
-Основной (с 17.10, AI_PRIMARY=claude) — Anthropic Claude (ANTHROPIC_API_KEY); запасной — Google Gemini (GEMINI_API_KEY).
+Основной (с 27.10) — Google Gemini (GEMINI_API_KEY): аккаунт Anthropic заблокирован. Claude (ANTHROPIC_API_KEY) — только запасной,
+и то если владелец явно вернёт AI_PRIMARY=claude.
 Если основной недоступен — пробуем запасной, иначе остаётся оригинал + кнопка ✏️.
 Ключи — в /etc/papa-genplan/ai.env (вводит владелец на сервере). Дневной лимит вызовов — AI_DAILY_LIMIT."""
 from __future__ import annotations
@@ -101,10 +102,10 @@ def _mark_down(e) -> None:
 
 
 def _order():
-    """Порядок ИИ для текста. Решение владельца 17.10: основной — Anthropic Claude (AI_PRIMARY=claude),
-    Gemini — запасной. Без AI_PRIMARY — как раньше (Gemini → Claude). Просмотр кадров (vision) — только Gemini."""
+    """Порядок ИИ для текста. 27.10 (решение владельца): Anthropic заблокирован → основной Gemini, Claude — запасной.
+    Старая строка AI_PRIMARY=claude в ai.env больше не действует; вернуть Claude первым — AI_PRIMARY=claude-force."""
     g, c = ("Gemini", _gemini, "GEMINI_API_KEY"), ("Claude", _claude, "ANTHROPIC_API_KEY")
-    return (c, g) if os.environ.get("AI_PRIMARY", "").strip().lower() == "claude" else (g, c)
+    return (c, g) if os.environ.get("AI_PRIMARY", "").strip().lower() == "claude-force" else (g, c)
 
 
 def _count(db) -> int:

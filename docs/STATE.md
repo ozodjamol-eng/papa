@@ -82,3 +82,4 @@
 - 2026-10-24: **Воронки**: @paparazzi.uz — новый токен (старый сброшен сменой пароля 22.10); GOLD WATER — новый токен; **Shodiyona** — служба `papa-voronka-shodiyona` (токен `/etc/papa-voronka/shodiyona.env`). Все смотрят посты за 7 дней. Страж (watch) тревожит в PAPA ШТАБ, если воронка молчит >15 мин.
 - 2026-10-25: **Воронка GOLD WATER ОСТАНОВЛЕНА** (`goldwater-voronka-stop`) — ограничение Instagram на ссылки до 23.11.2026.
 - 2026-10-24: **Бот Shodiyona Mebel** @ShodiyonaMebelUzBot — модуль `modules/shodiyona`, служба `papa-shodiyona` (Франкфурт), токен `/etc/papa-shodiyona/bot.env` (`papa-update shodiyona-bot-token`, только владелец). Состояние: `shodiyona-bot-status`; обновление: `shodiyona-bot-restart`.
+- 2026-10-27: **ИИ → Gemini основной** (Anthropic заблокирован, organization_on_hold); страж проверяет Gemini. **Воронка Shodiyona выключена** (`papa-voronka-shodiyona` inactive/disabled) — пауза для нового профиля; включение: `shodiyona-voronka-start`.

@@ -346,6 +346,8 @@ REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600
 VORONKAS = {"@paparazzi.uz": Path("/var/lib/papa-voronka/voronka.sqlite3"),
             "GOLD WATER": Path("/var/lib/papa-voronka/goldwater.sqlite3"),
             "Shodiyona": Path("/var/lib/papa-voronka/shodiyona.sqlite3")}
+VORONKA_UNITS = {"@paparazzi.uz": "papa-voronka", "GOLD WATER": "papa-voronka-goldwater",
+                 "Shodiyona": "papa-voronka-shodiyona"}
 VORONKA_STALE_MIN = 15          # проход раз в 2 минуты; 15 минут тишины = воронка стоит
 
 
@@ -362,9 +364,25 @@ def voronka_last(db_path: Path) -> dt.datetime | None:
         return None
 
 
-def voronka_guard(now: dt.datetime, state: dict, dbs: dict = VORONKAS, last=voronka_last) -> list[str]:
+def unit_enabled(name: str) -> bool:
+    """27.10: воронку, выключенную владельцем (systemctl disable), страж не трогает — это не авария."""
+    unit = VORONKA_UNITS.get(name)
+    if not unit:
+        return True
+    try:
+        r = subprocess.run(["systemctl", "is-enabled", unit], capture_output=True, text=True, timeout=10)
+        return r.stdout.strip() in ("enabled", "enabled-runtime")
+    except (subprocess.SubprocessError, OSError):
+        return True
+
+
+def voronka_guard(now: dt.datetime, state: dict, dbs: dict = VORONKAS, last=voronka_last,
+                  enabled=unit_enabled) -> list[str]:
     alerts, t = [], now.timestamp()
     for name, path in dbs.items():
+        if not enabled(name):
+            state.setdefault("guard_seen", {}).pop(f"voronka:{name}", None)
+            continue
         lr = last(path)
         if lr is None:
             continue
@@ -422,13 +440,14 @@ def enqueue(task: str, reason: str, key: str, gw: Path = GW_DB) -> bool:
 
 
 def ai_alive(env_ai: dict, get=None) -> str | None:
-    """None — ключ жив (или не задан); иначе текст беды."""
-    key = env_ai.get("ANTHROPIC_API_KEY", "")
+    """27.10: проверяем Gemini — основной ИИ PAPA (аккаунт Anthropic заблокирован, он больше не проверяется).
+    None — ключ жив (или не задан); иначе текст беды."""
+    key = env_ai.get("GEMINI_API_KEY", "").strip().strip('"').strip("'")
     if not key:
         return None
     def _get():
-        req = urllib.request.Request("https://api.anthropic.com/v1/models?limit=1",
-                                     headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
+        req = urllib.request.Request("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
+                                     headers={"x-goog-api-key": key})
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 return r.status, ""
@@ -437,11 +456,10 @@ def ai_alive(env_ai: dict, get=None) -> str | None:
         except Exception as e:  # noqa: BLE001 — сеть: не тревожим
             return 0, type(e).__name__
     code, body = (get or _get)()
-    if code in (200, 0, 429, 500, 502, 503, 529):
+    if code in (200, 0, 429, 500, 502, 503):
         return None
-    why = "организация отключена (organization_on_hold)" if "on_hold" in body or "disabled" in body else \
-          "ключ не принят (401)" if code == 401 else "нет денег на счёте" if "credit" in body.lower() else f"HTTP {code}"
-    return why
+    return "ключ не принят (истёк или удалён)" if code in (400, 401, 403) and ("API_KEY" in body or "key" in body.lower()) \
+        else f"HTTP {code}"
 
 
 def guard(cfg: dict, env: dict, now: dt.datetime, state: dict, db_path: Path = GP_DB, rights=account_rights,
@@ -488,10 +506,10 @@ def guard(cfg: dict, env: dict, now: dt.datetime, state: dict, db_path: Path = G
     # 2) ключ ИИ
     why = ai_check(envf(AI_ENV))
     if why and due(state, "ai", "ai", t):
-        alerts.append(f"🚨 ИИ (Anthropic): {why}. ИИ-тексты и Тренд-разведка не работают — посты выходят без ИИ-хука. "
-                      "Проверьте console.anthropic.com → Billing / Appeal")
+        alerts.append(f"🚨 ИИ (Gemini): {why}. ИИ-хуки и Тренд-разведка не работают — посты выходят без ИИ-хука. "
+                      "Новый ключ: papa-update genplan-gemini-key (Франкфурт)")
     elif not why and ok_again(state, "ai"):
-        alerts.append("✅ ИИ (Anthropic) снова работает")
+        alerts.append("✅ ИИ (Gemini) снова работает")
     # 2б) воронки Instagram
     alerts += voronka_guard(now, state)
     # 3) реклама и посты: время прошло — не вышли; ошибки публикации
