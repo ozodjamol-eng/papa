@@ -84,3 +84,5 @@
 - 2026-10-24: **Бот Shodiyona Mebel** @ShodiyonaMebelUzBot — модуль `modules/shodiyona`, служба `papa-shodiyona` (Франкфурт), токен `/etc/papa-shodiyona/bot.env` (`papa-update shodiyona-bot-token`, только владелец). Состояние: `shodiyona-bot-status`; обновление: `shodiyona-bot-restart`.
 - 2026-10-27: **ИИ → Gemini основной** (Anthropic заблокирован, organization_on_hold); страж проверяет Gemini. **Воронка Shodiyona выключена** (`papa-voronka-shodiyona` inactive/disabled) — пауза для нового профиля; включение: `shodiyona-voronka-start`.
 - 2026-10-27: **«Эрталабки / Кечки дайжест» (стиль iPhone)** в Хўжаобод Сити 24: 07:00 (`motion-weather`, заказ Франкфурта 05:00 с курсом) и 20:30 (`motion-digest`, данные 19:50 с курсом и Бомдодом). Модуль `modules/fabrika/motion/dayjest`. Workflow закреплены на ubuntu-24.04 (на 26.04 Playwright не ставится — утром 27.10 ролик не собрался). КАТТА ДАВРА — пока прежний ролик.
+
+- 🆘 27.10: во всех трёх пультах «Срочно» — одним нажатием, без «Утверждаю»; под вышедшим срочным — «🗑 Удалить из канала». Выложено (eae11db), papa-genplan active.
