@@ -23,7 +23,7 @@ const composition = await selectComposition({serveUrl, id: 'Digest', inputProps,
 let last = -1;
 await renderMedia({composition, serveUrl, codec: 'h264', crf: 18, x264Preset: 'medium', pixelFormat: 'yuv420p',
   outputLocation: raw, inputProps, browserExecutable, concurrency: Number(process.env.CONCURRENCY || 2),
-  chromiumOptions: {gl: 'swangle'},
+  chromiumOptions: process.env.GL ? {gl: process.env.GL} : {},  // swangle на CPU в 16 раз медленнее
   onProgress: ({progress}) => { const p = Math.floor(progress * 10); if (p !== last) { last = p; console.log(`рендер ${p * 10}%`); } }});
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', raw, '-i', wav, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
   '-shortest', '-movflags', '+faststart', out], {stdio: 'inherit'});
