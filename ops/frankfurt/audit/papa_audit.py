@@ -341,7 +341,8 @@ def watch(cfg: dict, env: dict, now: dt.datetime, state: dict) -> list[str]:
 # не застряла ли реклама/пост. Сломалось — СРАЗУ сообщение владельцу; что можно починить само — чинится
 # (права PAPA в группе — задача xojaobod-admin с кнопкой владельца). Повтор напоминания, пока не исправлено.
 AI_ENV = "/etc/papa-genplan/ai.env"
-REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600, "voronka": 3 * 3600}
+REPEAT = {"rights": 2 * 3600, "ai": 12 * 3600, "post": 10 ** 9, "heal": 2 * 3600, "voronka": 3 * 3600,
+          "unit": 6 * 3600, "saver": 10 ** 9}
 # 24.10 владелец: воронка молчала 2,5 суток (токен Instagram сбросился после смены пароля) — никто не заметил.
 VORONKAS = {"@paparazzi.uz": Path("/var/lib/papa-voronka/voronka.sqlite3"),
             "GOLD WATER": Path("/var/lib/papa-voronka/goldwater.sqlite3"),
@@ -387,14 +388,108 @@ def voronka_guard(now: dt.datetime, state: dict, dbs: dict = VORONKAS, last=voro
         if lr is None:
             continue
         key = f"voronka:{name}"
+        paused = state.setdefault("guard_paused", {})
         mins = int((now - lr).total_seconds() // 60)
+        if mins > VORONKA_STALE_MIN and name in paused:
+            continue                                  # сам поставил на паузу и уже сообщил — ждём новый токен
         if mins > VORONKA_STALE_MIN:
+            # 27.10 рецепт: умер токен Instagram → пауза (не долбить Instagram ошибками) и одна понятная просьба владельцу
+            unit = VORONKA_UNITS.get(name)
+            if unit and token_dead(unit):
+                stop(unit)
+                paused[name] = t
+                state.setdefault("guard_seen", {})[key] = t
+                alerts.append(f"🛠 Воронка {name}: токен Instagram больше не действует (сменили пароль?). "
+                              f"Поставил на паузу сам. Новый токен — на Франкфурте: papa-update {TOKEN_TASK.get(name, 'voronka-token')}")
+                continue
             if due(state, key, "voronka", t):
                 alerts.append(f"🚨 Воронка {name} СТОИТ уже {mins // 60} ч {mins % 60} мин — комментарии остаются без ответа. "
                               "Чаще всего слетел токен Instagram (смена пароля). Проверка: papa-update voronka-status")
         elif ok_again(state, key):
+            state.setdefault("guard_paused", {}).pop(name, None)
             alerts.append(f"✅ Воронка {name} снова работает")
     return alerts
+
+
+TOKEN_TASK = {"@paparazzi.uz": "voronka-token", "GOLD WATER": "goldwater-voronka-token", "Shodiyona": "shodiyona-voronka-token"}
+
+
+def token_dead(unit: str) -> bool:
+    out = sh("journalctl", "-u", unit, "--since", "1 hour ago", "--no-pager", "-o", "cat", timeout=30)
+    return "Error validating access token" in out or "session has been invalidated" in out
+
+
+def stop(unit: str) -> None:
+    sh("systemctl", "stop", unit, timeout=60)        # enabled остаётся: новый токен (задача *-token) сам её запустит
+
+
+# 27.10 рецепт: упавшая служба — сам перезапуск, не больше 2 раз за 6 часов; не поднялась — зовём владельца
+UNITS = ["papa-genplan", "papa-fabrika", "papa-shodiyona", "papa-xotira", "papa-assistant",
+         "papa-voronka", "papa-voronka-goldwater", "papa-voronka-shodiyona"]
+UNIT_TRIES = 2
+
+
+def unit_state(unit: str) -> tuple[bool, bool]:
+    """(включена в автозапуск, работает)."""
+    en = sh("systemctl", "is-enabled", unit, timeout=10) in ("enabled", "enabled-runtime")
+    return en, sh("systemctl", "is-active", unit, timeout=10) == "active"
+
+
+def unit_guard(now: dt.datetime, state: dict, units=UNITS, st=unit_state, restart=None) -> list[str]:
+    restart = restart or (lambda u: sh("systemctl", "restart", u, timeout=90))
+    alerts, t = [], now.timestamp()
+    tries = state.setdefault("unit_tries", {})
+    skip = {VORONKA_UNITS[n] for n in state.get("guard_paused", {}) if n in VORONKA_UNITS}
+    for u in units:
+        if u in skip:
+            continue
+        en, up = st(u)
+        if not en:
+            continue                                  # выключена владельцем — не трогаем
+        recent = [x for x in tries.get(u, []) if t - x < REPEAT["unit"]]
+        if up:
+            if recent and ok_again(state, f"unit:{u}"):
+                alerts.append(f"✅ {u} снова работает")
+            tries[u] = recent
+            continue
+        if len(recent) < UNIT_TRIES:
+            restart(u)
+            recent.append(t)
+            state.setdefault("guard_seen", {})[f"unit:{u}"] = t
+            alerts.append(f"🛠 {u} упала — перезапустил сам (попытка {len(recent)} из {UNIT_TRIES})")
+        elif due(state, f"unitfail:{u}", "unit", t):
+            alerts.append(f"🚨 {u} не поднимается после {UNIT_TRIES} перезапусков — нужен ассистент. "
+                          f"Проверка на Франкфурте: systemctl status {u}")
+        tries[u] = recent
+    return alerts
+
+
+# 27.10 рецепт: Gemini упёрся в дневной лимит → до конца дня выключаем проверку утренних видео (самое прожорливое),
+# чтобы бесплатного лимита хватило на хуки. Флаг читает genplan/ai.vision; завтра сам перестаёт действовать.
+SAVER = Path("/var/lib/papa-genplan/gemini-saver")
+
+
+def gemini_limit_hit() -> bool:
+    out = sh("journalctl", "-u", "papa-genplan", "-u", "papa-fabrika", "--since", "1 hour ago",
+             "--no-pager", "-o", "cat", timeout=30)
+    return "лимит Gemini исчерпан" in out or ("Gemini" in out and "429" in out) or "Gemini: лимит исчерпан" in out
+
+
+def saver_guard(now: dt.datetime, state: dict, hit=gemini_limit_hit, flag: Path = SAVER) -> list[str]:
+    today = now.date().isoformat()
+    try:
+        on = flag.read_text().strip() == today
+    except OSError:
+        on = False
+    if on or not hit():
+        return []
+    try:
+        flag.write_text(today)
+        flag.chmod(0o644)
+    except OSError:
+        return []
+    return ["🛠 Gemini упёрся в дневной лимит — до конца дня выключил проверку утренних видео, "
+            "чтобы хватило на ИИ-хуки. Завтра включится сама."]
 
 
 def due(state: dict, key: str, kind: str, now: float) -> bool:
@@ -512,6 +607,8 @@ def guard(cfg: dict, env: dict, now: dt.datetime, state: dict, db_path: Path = G
         alerts.append("✅ ИИ (Gemini) снова работает")
     # 2б) воронки Instagram
     alerts += voronka_guard(now, state)
+    alerts += unit_guard(now, state)
+    alerts += saver_guard(now, state)
     # 3) реклама и посты: время прошло — не вышли; ошибки публикации
     if db_path.exists():
         db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=15)

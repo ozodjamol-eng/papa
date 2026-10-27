@@ -138,6 +138,50 @@ class TestGuard(unittest.TestCase):
         old = self.now - dt.timedelta(hours=5)
         self.assertEqual(pa.voronka_guard(self.now, {}, dbs={"X": None}, last=lambda p: old, enabled=lambda n: False), [])
 
+    def test_unit_restart_twice_then_alert(self):
+        st, done = {}, []
+        down = lambda u: (True, False)
+        a = pa.unit_guard(self.now, st, units=["papa-x"], st=down, restart=done.append)
+        b = pa.unit_guard(self.now, st, units=["papa-x"], st=down, restart=done.append)
+        c = pa.unit_guard(self.now, st, units=["papa-x"], st=down, restart=done.append)
+        self.assertEqual(done, ["papa-x", "papa-x"])
+        self.assertTrue(any("перезапустил" in x for x in a + b), a + b)
+        self.assertTrue(any("не поднимается" in x for x in c), c)
+        self.assertEqual(pa.unit_guard(self.now, st, units=["papa-x"], st=down, restart=done.append), [])  # без спама
+        ok = pa.unit_guard(self.now, st, units=["papa-x"], st=lambda u: (True, True), restart=done.append)
+        self.assertTrue(any("снова работает" in x for x in ok), ok)
+
+    def test_unit_disabled_untouched(self):
+        done = []
+        self.assertEqual(pa.unit_guard(self.now, {}, units=["papa-x"], st=lambda u: (False, False), restart=done.append), [])
+        self.assertEqual(done, [])
+
+    def test_voronka_dead_token_paused_once(self):
+        st, old = {}, self.now - dt.timedelta(hours=1)
+        orig = pa.token_dead, pa.stop
+        stopped = []
+        pa.token_dead, pa.stop = (lambda u: True), stopped.append
+        try:
+            a = pa.voronka_guard(self.now, st, dbs={"Shodiyona": None}, last=lambda p: old, enabled=lambda n: True)
+            self.assertTrue(any("паузу" in x and "shodiyona-voronka-token" in x for x in a), a)
+            self.assertEqual(stopped, ["papa-voronka-shodiyona"])
+            self.assertEqual(pa.voronka_guard(self.now, st, dbs={"Shodiyona": None}, last=lambda p: old, enabled=lambda n: True), [])
+            r = pa.voronka_guard(self.now, st, dbs={"Shodiyona": None}, last=lambda p: self.now, enabled=lambda n: True)
+            self.assertTrue(any("снова работает" in x for x in r), r)
+            self.assertNotIn("Shodiyona", st["guard_paused"])
+        finally:
+            pa.token_dead, pa.stop = orig
+
+    def test_gemini_saver_flag(self):
+        import tempfile
+        from pathlib import Path
+        f = Path(tempfile.mkdtemp()) / "saver"
+        a = pa.saver_guard(self.now, {}, hit=lambda: True, flag=f)
+        self.assertTrue(a and "лимит" in a[0], a)
+        self.assertEqual(f.read_text(), self.now.date().isoformat())
+        self.assertEqual(pa.saver_guard(self.now, {}, hit=lambda: True, flag=f), [])   # один раз в день
+        self.assertEqual(pa.saver_guard(self.now, {}, hit=lambda: False, flag=Path(str(f) + "2")), [])
+
     def test_ai_alive_parsing(self):
         self.assertIsNone(pa.ai_alive({"GEMINI_API_KEY": "k"}, get=lambda: (200, "")))
         self.assertIn("не принят", pa.ai_alive({"GEMINI_API_KEY": "k"}, get=lambda: (400, '{"reason":"API_KEY_INVALID"}')))

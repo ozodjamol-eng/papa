@@ -177,6 +177,16 @@ def hook(db, text: str, title: str, http=None) -> str:
 
 
 VISION_LIMIT = int(os.environ.get("AI_VISION_LIMIT", "300"))
+SAVER = os.environ.get("GEMINI_SAVER_FILE", "/var/lib/papa-genplan/gemini-saver")
+
+
+def saver_on() -> bool:
+    """27.10: страж ставит флаг (дата), когда Gemini упёрся в лимит — проверка кадров ждёт до завтра."""
+    try:
+        with open(SAVER, encoding="utf-8") as f:
+            return f.read().strip() == dt.datetime.now(dt.timezone(dt.timedelta(hours=5))).date().isoformat()
+    except OSError:
+        return False
 
 
 def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
@@ -185,6 +195,8 @@ def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
     from . import store
     if not os.environ.get("GEMINI_API_KEY"):
         raise AIError("нет ключа Gemini")
+    if saver_on():
+        raise AIError("экономия Gemini: лимит на сегодня бережём для хуков (страж)")
     k = "ai_vision_" + dt.date.today().isoformat()
     n = int(store.kv_get(db, k, "0")) + 1
     store.kv_set(db, k, n)
