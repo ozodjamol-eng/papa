@@ -691,7 +691,12 @@ def push_video_data(day: dt.date, payloads: dict, run=None, branch: str = "diges
 def trigger_weather(day: dt.date, run=None) -> str:
     """🎬 21.10: утренний ролик запускает наш сервер (расписание GitHub 21.10 не сработало). Коммит поверх main
     в ветку weather-req → Actions motion-weather (on push)."""
-    return push_video_data(day, {"weather-request": {"day": day.isoformat()}}, run=run, branch="weather-req")
+    req = {"day": day.isoformat()}
+    try:                     # 27.10: cbu.uz не отвечает серверам GitHub — курс для «Эрталабки дайжест» даёт Франкфурт
+        req["rates"] = video_rates(rates())
+    except Exception:  # noqa: BLE001 — без курса ролик всё равно соберётся (без экрана курса)
+        pass
+    return push_video_data(day, {"weather-request": req}, run=run, branch="weather-req")
 
 
 def motion_video(name: str, get=None, folder: str | None = None) -> Path:

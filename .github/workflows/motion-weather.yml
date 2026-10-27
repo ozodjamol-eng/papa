@@ -25,7 +25,7 @@ jobs:
           echo "day=$D" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code origin refs/heads/motion >/dev/null && \
              git fetch -q --depth 1 origin motion && git cat-file -e FETCH_HEAD:xojaobod-weather-$D.mp4 2>/dev/null \
-             && [ "${{ github.ref_name }}" != "motion-test" ]; then echo "done=1" >> "$GITHUB_OUTPUT"; fi
+             && [ "${{ github.ref_name }}" != "motion-test" ] && [ "${{ github.ref_name }}" != "weather-req" ]; then echo "done=1" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@v4
         if: steps.chk.outputs.done != '1'
         with: { node-version: "20" }
@@ -44,7 +44,7 @@ jobs:
           ln -sfn ../weather/node_modules ../dayjest/node_modules
           sudo apt-get install -y -q fonts-noto-color-emoji >/dev/null || true
           # 27.10 владелец утвердил: в 07:00 — «Эрталабки дайжест» в стиле iPhone (dayjest). Сломался — прежний «Об-ҳаво».
-          python3 ../dayjest/make.py tong "$RUNNER_TEMP/out" || { echo "::warning::dayjest tong не собрался — прежний ролик"; python3 make.py "$RUNNER_TEMP/out"; }
+          python3 ../dayjest/make.py tong "$RUNNER_TEMP/out" "$GITHUB_WORKSPACE/data/weather-request.json" || { echo "::warning::dayjest tong не собрался — прежний ролик"; python3 make.py "$RUNNER_TEMP/out"; }
       - name: В ветку motion (только последние 3 дня)
         if: steps.chk.outputs.done != '1'
         run: |

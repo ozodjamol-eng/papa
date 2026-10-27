@@ -146,7 +146,7 @@ def data(mode: str, fk: dict | None = None) -> dict:
         sun = [{"label": "Бугун қуёш чиқиши", "time": hm(w["sunrise"][i(today)]), "dir": "up"},
                {"label": "Бугун қуёш ботиши", "time": hm(w["sunset"][i(today)]), "dir": "down"}]
         dl, brand, wt, rt = daylen(w["daylight"][i(today)]), "ЭРТАЛАБКИ ДАЙЖЕСТ", "Бугун об-ҳаво", "Бугунги курс · сўм"
-        r = rates()
+        r = (fk or {}).get("rates") or rates()
     else:
         sun = [{"label": "Бугун қуёш ботиши", "time": hm(w["sunset"][i(today)]), "dir": "down"},
                {"label": "Эртага қуёш чиқиши", "time": hm(w["sunrise"][i(day)]), "dir": "up"}]
