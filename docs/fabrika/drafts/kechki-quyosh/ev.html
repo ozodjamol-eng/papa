@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#000}
+body{font-family:Inter,"Inter Display",sans-serif;color:#fff}
+canvas{position:absolute;inset:0}
+.abs{position:absolute}
+.ttl{left:0;right:0;top:150px;text-align:center}
+.ttl b{display:block;font-family:"Inter Display",Inter;font-weight:900;font-size:100px;letter-spacing:-1px;line-height:1;text-shadow:0 6px 40px rgba(0,0,0,.35)}
+.ttl span{display:block;margin-top:22px;font-size:34px;font-weight:700;letter-spacing:8px;color:rgba(255,255,255,.85)}
+.sunset{left:0;right:0;top:860px;text-align:center;font-size:44px;font-weight:600}
+.sunset em{font-style:normal;font-weight:900;font-size:64px;display:block;margin-top:8px}
+.glass{left:70px;width:940px;border-radius:44px;background:rgba(255,255,255,.09);border:1.5px solid rgba(255,255,255,.18);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.wx{top:560px;padding:44px 50px}
+.wx h3{font-size:32px;letter-spacing:8px;font-weight:800;color:#ffcf8a}
+.cols{display:flex;justify-content:space-between;margin-top:30px}
+.col{width:260px;text-align:center}
+.col small{display:block;font-size:30px;color:rgba(255,255,255,.7);font-weight:600}
+.col svg{margin:16px auto 6px;display:block}
+.col b{display:block;font-size:68px;font-weight:800;letter-spacing:-1px}
+.line{margin-top:30px;padding-top:26px;border-top:1px solid rgba(255,255,255,.15);font-size:32px;color:rgba(255,255,255,.85);display:flex;justify-content:space-between}
+.tip{margin-top:22px;font-size:34px;font-weight:700;color:#fff;background:rgba(255,190,110,.16);border-radius:22px;padding:18px 24px}
+.sr{top:1180px;padding:40px 50px;display:flex;align-items:center;gap:40px}
+.sr .t{font-size:30px;color:rgba(255,255,255,.7);font-weight:600}
+.sr .v{font-size:60px;font-weight:800;margin-top:4px}
+.sr .s{font-size:28px;color:rgba(255,255,255,.75);margin-top:10px}
+.sr .bd{font-size:30px;margin-top:10px;color:#ffe2b0;font-weight:700}
+.rt{top:1520px;display:flex;gap:20px;left:70px;width:940px}
+.rt div{flex:1;text-align:center;border-radius:30px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.16);padding:24px 0}
+.rt b{display:block;font-size:46px;font-weight:800}.rt small{font-size:24px;letter-spacing:4px;color:rgba(255,255,255,.65)}
+.end{left:0;right:0;top:860px;text-align:center}
+.end b{display:block;font-family:"Inter Display",Inter;font-weight:900;font-size:92px;letter-spacing:-1px}
+.end span{display:block;margin-top:22px;font-size:32px;letter-spacing:8px;color:rgba(255,255,255,.75);font-weight:700}
+</style></head><body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div class="abs ttl" id="ttl"><b>КЕЧКИ ДАЙЖЕСТ</b><span id="date"></span></div>
+<div class="abs sunset" id="sset">Бугун қуёш ботиши<em id="ssv"></em></div>
+<div class="abs glass wx" id="wx"><h3>ЭРТАГА</h3>
+ <div class="cols">
+  <div class="col"><small>Тонг</small><svg id="i0" width="110" height="90" viewBox="0 0 110 90"></svg><b id="w0"></b></div>
+  <div class="col"><small>Кун</small><svg id="i1" width="110" height="90" viewBox="0 0 110 90"></svg><b id="w1"></b></div>
+  <div class="col"><small>Кеч</small><svg id="i2" width="110" height="90" viewBox="0 0 110 90"></svg><b id="w2"></b></div>
+ </div>
+ <div class="line"><span id="rain"></span><span id="wind"></span></div>
+ <div class="tip" id="tip"></div>
+</div>
+<div class="abs glass sr" id="sr"><svg width="150" height="100" viewBox="0 0 150 100"><path d="M10 90 A65 65 0 0 1 140 90" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3" stroke-dasharray="6 8"/><line x1="0" y1="90" x2="150" y2="90" stroke="rgba(255,255,255,.4)" stroke-width="3"/><circle id="srsun" cx="20" cy="70" r="14" fill="#ffc46b"/></svg>
+ <div><div class="t">Эртага қуёш чиқиши</div><div class="v" id="srv"></div><div class="s" id="dl"></div><div class="bd" id="bd"></div></div></div>
+<div class="abs rt" id="rt"><div><b id="r0"></b><small>USD</small></div><div><b id="r1"></b><small>EUR</small></div><div><b id="r2"></b><small>RUB</small></div></div>
+<div class="abs end" id="end"><b id="u"></b><span id="ch"></span></div>
+<script>
+const D=window.DATA||{date:"27.10 · СЕШАНБА",sunset:"17:25",sunrise:"06:48",daylen:"Кун узунлиги 10 соат 37 дақиқа",bomdod:"Бомдод — 05:20",
+ w:[{t:6,k:"cloud"},{t:18,k:"sun"},{t:11,k:"partly"}],rain:"💧 Ёмғир 10%",wind:"🌬 Шамол 3 м/с",tip:"🧥 Эрталаб салқин — иссиқроқ кийининг",
+ rates:[12650,13780,156],user:"@xojaobodcity24",ch:"ХЎЖАОБОД СИТИ 24"};
+const $=i=>document.getElementById(i);
+$("date").textContent=D.date;$("ssv").textContent=D.sunset;$("srv").textContent=D.sunrise;$("dl").textContent=D.daylen;$("bd").textContent=D.bomdod||"";
+$("rain").textContent=D.rain;$("wind").textContent=D.wind;$("tip").textContent=D.tip;$("u").textContent=D.user;$("ch").textContent=D.ch;
+const ICON={sun:`<circle cx="55" cy="45" r="20" fill="#ffc46b"/><g stroke="#ffc46b" stroke-width="5" stroke-linecap="round" id="rays">${[...Array(8)].map((_,i)=>{const a=i*Math.PI/4;return `<line x1="${55+Math.cos(a)*29}" y1="${45+Math.sin(a)*29}" x2="${55+Math.cos(a)*38}" y2="${45+Math.sin(a)*38}"/>`}).join("")}</g>`,
+ cloud:`<g class="cl"><path d="M28 70h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#e6ebf3"/></g>`,
+ partly:`<circle cx="40" cy="34" r="17" fill="#ffc46b"/><g class="cl"><path d="M34 74h48a15 15 0 0 0 1-30 21 21 0 0 0-40-3 16 16 0 0 0-9 33z" fill="#e6ebf3"/></g>`,
+ rain:`<g class="cl"><path d="M28 56h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#c9d1de"/></g><g class="dr" stroke="#8fc3ff" stroke-width="5" stroke-linecap="round"><line x1="40" y1="66" x2="36" y2="78"/><line x1="58" y1="66" x2="54" y2="78"/><line x1="76" y1="66" x2="72" y2="78"/></g>`};
+D.w.forEach((w,i)=>{$("i"+i).innerHTML=ICON[w.k]});
+const cv=$("c"),x=cv.getContext("2d"),W=1080,H=1920,HZ=1480;
+const cl=(v,a=0,b=1)=>Math.min(b,Math.max(a,v)),p=(t,a,b)=>cl((t-a)/(b-a)),lerp=(a,b,t)=>a+(b-a)*t;
+const eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,eo=t=>1-Math.pow(1-t,3);
+const back=t=>{const s=1.4;return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
+function hx(h){return [1,3,5].map(i=>parseInt(h.substr(i,2),16))}
+function mixc(a,b,t){const A=hx(a),B=hx(b);return A.map((v,i)=>Math.round(lerp(v,B[i],t)))}
+const rgb=c=>`rgb(${c[0]},${c[1]},${c[2]})`;
+// палитры неба (верх → горизонт): закат → сумерки → ночь
+const PAL=[["#1b2a5c","#5b4a8a","#c8607a","#ff9a52","#ffd27a"],
+           ["#101a40","#2e2d66","#6a3f78","#d0665e","#ff9b5c"],
+           ["#060b22","#0e1640","#1f2560","#3b3270","#6b4a7a"],
+           ["#03061a","#070d2c","#0c1540","#152050","#22305e"]];
+function pal(k){const s=k*(PAL.length-1),i=Math.min(PAL.length-2,Math.floor(s)),f=s-i;return PAL[i].map((c,j)=>mixc(c,PAL[i+1][j],eio(f)))}
+// звёзды
+let seed=11;const R=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const STARS=[...Array(260)].map(()=>({x:R()*W,y:R()*HZ*0.95,r:.6+R()*1.8,ph:R()*6.28,sp:.8+R()*2}));
+// горы и тополя
+const MT=[[...Array(30)].map((_,i)=>[i*40,HZ-90-Math.sin(i*.55)*40-Math.sin(i*1.7)*18-R()*14]),
+          [...Array(30)].map((_,i)=>[i*40,HZ-40-Math.sin(i*.8+1)*26-R()*10])];
+const TREES=[];let tx=-40;while(tx<W+40){const grp=R()<.5;const n=grp?2+Math.floor(R()*4):1;
+ for(let j=0;j<n;j++){const tall=R()<.55;TREES.push({x:tx+j*(14+R()*12),h:tall?230+R()*170:110+R()*90,w:tall?30+R()*12:40+R()*30,round:!tall})}
+ tx+=n*20+30+R()*110;}
+const BUSH=[...Array(60)].map((_,i)=>({x:i*19+R()*10,r:14+R()*22}));
+function poplar(t){if(t.round){x.beginPath();x.ellipse(t.x,HZ-t.h*.55,t.w*.75,t.h*.5,0,0,7);x.fill();x.fillRect(t.x-3,HZ-t.h*.2,6,t.h*.2+8);return}x.beginPath();x.moveTo(t.x,HZ+8);
+ x.bezierCurveTo(t.x-t.w*.62,HZ-t.h*.35,t.x-t.w*.42,HZ-t.h*.8,t.x,HZ-t.h);
+ x.bezierCurveTo(t.x+t.w*.42,HZ-t.h*.8,t.x+t.w*.62,HZ-t.h*.35,t.x,HZ+8);x.fill()}
+const CLOUDS=[...Array(7)].map((_,i)=>({x:R()*W,y:300+R()*600,w:260+R()*360,h:40+R()*40,v:6+R()*10}));
+function sky(t){
+ const k=eio(p(t,.5,6.5))*.72+eio(p(t,6.5,15))*.28;     // 0 закат … 1 ночь
+ const P=pal(k);
+ const g=x.createLinearGradient(0,0,0,HZ);[0,.35,.62,.85,1].forEach((s,i)=>g.addColorStop(s,rgb(P[i])));
+ x.fillStyle=g;x.fillRect(0,0,W,HZ+4);
+ // солнце
+ const sy=lerp(HZ-210,HZ+90,eio(p(t,0,4.6))),sx=600;
+ const glowA=1-p(t,3.5,7);
+ if(glowA>0){const gg=x.createRadialGradient(sx,sy,10,sx,sy,900);gg.addColorStop(0,`rgba(255,200,120,${.75*glowA})`);gg.addColorStop(.25,`rgba(255,140,80,${.35*glowA})`);gg.addColorStop(1,"rgba(255,120,80,0)");x.fillStyle=gg;x.fillRect(0,0,W,HZ)}
+ x.save();x.beginPath();x.rect(0,0,W,HZ);x.clip();
+ const sg=x.createRadialGradient(sx,sy,0,sx,sy,78);sg.addColorStop(0,"rgba(255,250,225,1)");sg.addColorStop(.7,"rgba(255,214,140,1)");sg.addColorStop(1,"rgba(255,170,90,0)");
+ x.fillStyle=sg;x.beginPath();x.arc(sx,sy,78,0,7);x.fill();x.restore();
+ // облака-перистые (подсвечены закатом)
+ CLOUDS.forEach(c=>{const cx=(c.x+t*c.v)%(W+600)-300,lit=1-k;
+  const cg=x.createLinearGradient(0,c.y-c.h,0,c.y+c.h);cg.addColorStop(0,`rgba(${lerp(70,255,lit)|0},${lerp(60,170,lit)|0},${lerp(110,140,lit)|0},${.45-.25*k})`);cg.addColorStop(1,"rgba(0,0,0,0)");
+  x.fillStyle=cg;x.save();x.filter="blur(18px)";x.beginPath();x.ellipse(cx,c.y,c.w,c.h,0,0,7);x.fill();x.restore()});
+ // звёзды
+ const sa=p(t,3.2,8);if(sa>0)STARS.forEach(s=>{const tw=.55+.45*Math.sin(t*s.sp+s.ph),fade=1-s.y/HZ*.6;x.fillStyle=`rgba(255,255,255,${sa*tw*fade})`;x.beginPath();x.arc(s.x,s.y,s.r,0,7);x.fill()});
+ // дымка у горизонта
+ const hg=x.createLinearGradient(0,HZ-260,0,HZ);hg.addColorStop(0,"rgba(255,170,120,0)");hg.addColorStop(1,`rgba(${lerp(255,40,k)|0},${lerp(150,40,k)|0},${lerp(110,80,k)|0},${.55})`);x.fillStyle=hg;x.fillRect(0,HZ-260,W,260);
+ // горы (дальние светлее)
+ [[MT[0],.35],[MT[1],.6]].forEach(([m,d])=>{const c=mixc("#6b4a72","#0b1030",cl(k*.9+d*.5));x.fillStyle=`rgba(${c},${.92})`;x.beginPath();x.moveTo(0,HZ+10);m.forEach(q=>x.lineTo(q[0],q[1]));x.lineTo(W,HZ+10);x.fill()});
+ // земля и тополя — силуэт
+ x.fillStyle="#05060d";BUSH.forEach(b=>{x.beginPath();x.arc(b.x,HZ+4,b.r,0,7);x.fill()});TREES.forEach(poplar);x.fillRect(0,HZ,W,H-HZ);
+ const fg=x.createLinearGradient(0,HZ,0,H);fg.addColorStop(0,"rgba(5,6,13,0)");fg.addColorStop(1,"rgba(0,0,0,1)");x.fillStyle=fg;x.fillRect(0,HZ,W,H-HZ);
+ // зерно
+}
+let grain=null;function makeGrain(){grain=document.createElement("canvas");grain.width=W;grain.height=H;const g=grain.getContext("2d"),id=g.createImageData(W,H);for(let i=0;i<id.data.length;i+=4){const v=Math.random()*255;id.data[i]=id.data[i+1]=id.data[i+2]=v;id.data[i+3]=10}g.putImageData(id,0,0)}
+makeGrain();
+const st=(e,o)=>Object.assign(e.style,o);
+function rise(e,t0,dur=.8,dy=60){const k=p(window._t,t0,t0+dur);st(e,{opacity:eo(k),transform:`translateY(${(1-eo(k))*dy}px)`,filter:`blur(${(1-k)*10}px)`})}
+const fmt=n=>Math.round(n).toLocaleString("ru-RU").replace(/ /g," ");
+window.DUR=16;
+window.render=function(t){window._t=t;
+ x.clearRect(0,0,W,H);sky(t);x.globalAlpha=1;x.drawImage(grain,(t*997)%40-20,0);
+ // 1 заголовок
+ rise($("ttl"),.4,1.2,40);const out=p(t,14,15);st($("ttl"),{opacity:Math.min(+$("ttl").style.opacity,1-out)});
+ // 2 закат
+ rise($("sset"),2.6,.9,40);st($("sset"),{opacity:Math.min(+$("sset").style.opacity,1-p(t,4.8,5.4))});
+ // 3 погода
+ rise($("wx"),5,.9,80);
+ D.w.forEach((w,i)=>{$("w"+i).textContent=(w.t>0?"+":"")+Math.round(w.t*eo(p(t,5.3+i*.2,6.5+i*.2)))+"°";
+  const s=$("i"+i),c=s.querySelector(".cl"),r=s.querySelector("#rays"),d=s.querySelector(".dr");
+  if(c)c.setAttribute("transform",`translate(${Math.sin(t*1.3+i)*5},0)`);
+  if(r)r.setAttribute("transform",`rotate(${t*25} 55 45)`);
+  if(d)d.setAttribute("transform",`translate(0,${(t*30)%10})`)});
+ st($("tip"),{opacity:eo(p(t,6.8,7.6))});
+ // 4 восход
+ rise($("sr"),9,.9,80);const a=Math.PI*(1-eo(p(t,9.3,11)));$("srsun").setAttribute("cx",75+Math.cos(a)*65);$("srsun").setAttribute("cy",90-Math.sin(a)*65);
+ // 5 курс
+ rise($("rt"),12,.7,60);D.rates.forEach((v,i)=>$("r"+i).textContent=fmt(v*eo(p(t,12.1+i*.15,13.2+i*.15))));
+ // 6 финал
+ ["wx","sr","rt"].forEach(id=>{const e=$(id);st(e,{opacity:Math.min(+e.style.opacity,1-p(t,14,14.7))})});
+ const e=p(t,14.6,15.4);st($("end"),{opacity:eo(e),transform:`scale(${.92+.08*eo(e)})`});
+};
+</script></body></html>
