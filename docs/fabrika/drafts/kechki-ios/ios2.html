@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#000}
+body{font-family:Inter,"Inter Display",sans-serif;color:#fff}
+#bg{position:absolute;inset:0;width:1080px;height:1920px;object-fit:cover}
+.scr{position:absolute;left:80px;right:80px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:34px}
+.tile{border-radius:56px;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.32);
+ backdrop-filter:blur(42px) saturate(170%) brightness(.92);-webkit-backdrop-filter:blur(42px) saturate(170%) brightness(.92);
+ box-shadow:0 24px 70px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.35);padding:44px 52px;opacity:0}
+.hd{display:flex;align-items:center;gap:16px;font-size:36px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.72);text-transform:uppercase}
+.val{font-family:"Inter Display",Inter;font-weight:800;letter-spacing:-4px;line-height:1}
+.sub{font-size:40px;font-weight:600;margin-top:10px}
+.sub2{font-size:36px;font-weight:500;color:rgba(255,255,255,.82);margin-top:12px;line-height:1.3}
+.row{display:flex;align-items:center;justify-content:space-between}
+.pill{display:inline-block;margin-top:22px;font-size:38px;font-weight:700;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.35);border-radius:999px;padding:12px 34px}
+.top{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;text-shadow:0 2px 20px rgba(0,0,0,.35);opacity:0}
+.top .a{font-size:44px;font-weight:700;letter-spacing:4px}
+.top .b{font-family:"Inter Display",Inter;font-weight:500;font-size:150px;letter-spacing:-3px;margin-top:10px}
+.top .c{font-size:60px;font-weight:600;margin-top:6px}
+.cur{width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:800}
+</style></head><body>
+<img id="bg">
+<div class="top" id="s0"><div class="a">КЕЧКИ ДАЙЖЕСТ</div><div class="b">Хўжаобод</div><div class="c" id="date"></div></div>
+
+<div class="scr" id="s1">
+ <div class="tile" id="t10"><div class="hd"><svg width="46" height="38" viewBox="0 0 48 40"><path d="M10 30a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4"/><line x1="2" y1="34" x2="46" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M24 4v10M18 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>Бугун қуёш ботиши</div>
+  <div class="val" id="ss" style="font-size:150px;margin-top:18px"></div><svg id="c1" width="780" height="170" viewBox="0 0 780 200" style="display:block;margin-top:16px"></svg></div>
+ <div class="tile" id="t11"><div class="hd"><svg width="46" height="38" viewBox="0 0 48 40"><path d="M10 30a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4"/><line x1="2" y1="34" x2="46" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M24 16V6M18 10l6-6 6 6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>Эртага қуёш чиқиши</div>
+  <div class="val" id="sr" style="font-size:150px;margin-top:18px"></div><svg id="c2" width="780" height="170" viewBox="0 0 780 200" style="display:block;margin-top:16px"></svg>
+  <div class="sub2" id="dl"></div><div class="pill" id="bdm"></div></div>
+</div>
+
+<div class="scr" id="s2">
+ <div class="hd tile" id="t20" style="padding:30px 52px;justify-content:center">Эртага об-ҳаво</div>
+ <div class="tile" id="t21"><div class="row"><div><div class="hd">Тонг</div><div class="sub" id="d0"></div></div><div class="row" style="gap:20px"><svg id="i0" width="170" height="140" viewBox="0 0 110 90"></svg><div class="val" id="w0" style="font-size:130px;width:260px;text-align:right"></div></div></div></div>
+ <div class="tile" id="t22"><div class="row"><div><div class="hd">Кун</div><div class="sub" id="d1"></div></div><div class="row" style="gap:20px"><svg id="i1" width="170" height="140" viewBox="0 0 110 90"></svg><div class="val" id="w1" style="font-size:130px;width:260px;text-align:right"></div></div></div></div>
+ <div class="tile" id="t23"><div class="row"><div><div class="hd">Кеч</div><div class="sub" id="d2"></div></div><div class="row" style="gap:20px"><svg id="i2" width="170" height="140" viewBox="0 0 110 90"></svg><div class="val" id="w2" style="font-size:130px;width:260px;text-align:right"></div></div></div></div>
+ <div class="tile" id="t24"><div class="sub" id="rw" style="margin:0"></div><div class="sub2" id="tip"></div></div>
+</div>
+
+<div class="scr" id="s3">
+ <div class="hd tile" id="t30" style="padding:30px 52px;justify-content:center">Валюта курси · сўм</div>
+ <div class="tile" id="t31"><div class="row"><div class="row" style="gap:28px"><div class="cur">$</div><div><div class="hd">USD</div><div class="sub">АҚШ доллари</div></div></div><div class="val" id="r0" style="font-size:120px"></div></div></div>
+ <div class="tile" id="t32"><div class="row"><div class="row" style="gap:28px"><div class="cur">€</div><div><div class="hd">EUR</div><div class="sub">Евро</div></div></div><div class="val" id="r1" style="font-size:120px"></div></div></div>
+ <div class="tile" id="t33"><div class="row"><div class="row" style="gap:28px"><div class="cur">₽</div><div><div class="hd">RUB</div><div class="sub">Рубль</div></div></div><div class="val" id="r2" style="font-size:120px"></div></div></div>
+</div>
+
+<div class="top" id="s4"><div class="b" id="u" style="font-size:96px;font-weight:700;letter-spacing:-1px"></div><div class="a" id="ch" style="margin-top:20px"></div></div>
+<script>
+const D=window.DATA||{date:"Сешанба, 27 октябрь",sunset:"17:25",sunrise:"06:48",daylen:"Кун узунлиги 10 соат 37 дақиқа",bomdod:"Бомдод — 05:20",
+ w:[{t:6,k:"cloud"},{t:18,k:"sun"},{t:11,k:"partly"}],rw:"💧 Ёмғир 10%   🌬 Шамол 3 м/с",tip:"🧥 Эрталаб салқин — иссиқроқ кийининг",
+ rates:[12650,13780,156],user:"@xojaobodcity24",ch:"ХЎЖАОБОД СИТИ 24"};
+const DESC={sun:"Қуёшли",cloud:"Булутли",partly:"Қисман булутли",rain:"Ёмғир"};
+const $=i=>document.getElementById(i);
+$("date").textContent=D.date;$("ss").textContent=D.sunset;$("sr").textContent=D.sunrise;$("dl").textContent=D.daylen;
+if(D.bomdod)$("bdm").textContent=D.bomdod;else $("bdm").style.display="none";
+$("rw").textContent=D.rw;$("tip").textContent=D.tip;$("u").textContent=D.user;$("ch").textContent=D.ch;
+const ICON={sun:`<circle cx="55" cy="45" r="20" fill="#ffd36b"/><g stroke="#ffd36b" stroke-width="5" stroke-linecap="round" class="ry">${[...Array(8)].map((_,i)=>{const a=i*Math.PI/4;return `<line x1="${55+Math.cos(a)*29}" y1="${45+Math.sin(a)*29}" x2="${55+Math.cos(a)*38}" y2="${45+Math.sin(a)*38}"/>`}).join("")}</g>`,
+ cloud:`<g class="cl"><path d="M28 70h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#fff"/></g>`,
+ partly:`<circle cx="40" cy="34" r="17" fill="#ffd36b"/><g class="cl"><path d="M34 74h48a15 15 0 0 0 1-30 21 21 0 0 0-40-3 16 16 0 0 0-9 33z" fill="#fff"/></g>`,
+ rain:`<g class="cl"><path d="M28 56h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#eef2f7"/></g><g class="dr" stroke="#9fd0ff" stroke-width="5" stroke-linecap="round"><line x1="40" y1="66" x2="36" y2="78"/><line x1="58" y1="66" x2="54" y2="78"/><line x1="76" y1="66" x2="72" y2="78"/></g>`};
+D.w.forEach((w,i)=>{$("i"+i).innerHTML=ICON[w.k];$("d"+i).textContent=DESC[w.k]});
+const CW=780,CH=200,HY=118,AMP=78;
+function curve(id){let d="";for(let x=0;x<=CW;x+=6)d+=(x?"L":"M")+x+" "+(HY+AMP*Math.cos(2*Math.PI*x/CW)).toFixed(1);
+ $(id).innerHTML=`<defs><clipPath id="up${id}"><rect x="0" y="0" width="${CW}" height="${HY}"/></clipPath><clipPath id="dn${id}"><rect x="0" y="${HY}" width="${CW}" height="${CH}"/></clipPath></defs>
+ <path d="${d}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="6" clip-path="url(#up${id})"/><path d="${d}" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="6" clip-path="url(#dn${id})"/>
+ <line x1="0" y1="${HY}" x2="${CW}" y2="${HY}" stroke="rgba(255,255,255,.55)" stroke-width="3"/><circle class="dot" r="16" fill="#fff" style="filter:drop-shadow(0 0 14px #fff)"/>`}
+curve("c1");curve("c2");
+const sunAt=(id,x)=>{const c=$(id).querySelector(".dot");c.setAttribute("cx",x);c.setAttribute("cy",HY+AMP*Math.cos(2*Math.PI*x/CW))};
+const cl=(v,a=0,b=1)=>Math.min(b,Math.max(a,v)),p=(t,a,b)=>cl((t-a)/(b-a)),eo=t=>1-Math.pow(1-t,3),ei=t=>t*t*t,eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const back=t=>{const s=1.3;return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
+const fmt=n=>Math.round(n).toLocaleString("ru-RU").replace(/ /g," ");
+// экраны: [начало, конец, плитки с задержками]
+const S=[{id:"s0",a:.2,b:2.6},{id:"s1",a:2.7,b:7.0,t:[["t10",0],["t11",.45]]},
+ {id:"s2",a:7.1,b:12.7,t:[["t20",0],["t21",.25],["t22",.5],["t23",.75],["t24",1.1]]},
+ {id:"s3",a:12.8,b:17.7,t:[["t30",0],["t31",.25],["t32",.5],["t33",.75]]},{id:"s4",a:17.9,b:20.6}];
+window.DUR=20;
+function show(e,ki,ko){Object.assign(e.style,{opacity:eo(ki)*(1-ko),transform:`translateY(${(1-eo(ki))*80-ko*60}px) scale(${(.92+.08*back(ki))*(1+.03*ko)})`})}
+window.render=function(t){
+ S.forEach(s=>{const ko=ei(p(t,s.b-.45,s.b)),e=$(s.id);
+  if(!s.t){const ki=p(t,s.a,s.a+.55);Object.assign(e.style,{opacity:eo(ki)*(1-ko),transform:`translateY(calc(-50% + ${(1-eo(ki))*80-ko*60}px))`});return}
+  e.style.opacity=1;s.t.forEach(([id,d],j)=>{const ki=p(t,s.a+d,s.a+d+.55);show($(id),ki,ei(p(t,s.b-.45-j*.04,s.b-j*.04)))})});
+ sunAt("c1",CW*(0.56+0.2*eio(p(t,3.1,5.0))));
+ sunAt("c2",CW*(0.2+0.18*eio(p(t,3.7,5.6))));
+ D.w.forEach((w,i)=>{const a=7.35+i*.25;$("w"+i).textContent=(w.t>0?"+":"")+Math.round(w.t*eo(p(t,a+.15,a+1.1)))+"°";
+  const s=$("i"+i),c=s.querySelector(".cl"),r=s.querySelector(".ry"),d=s.querySelector(".dr");
+  if(c)c.setAttribute("transform",`translate(${Math.sin(t*1.4+i)*4},0)`);if(r)r.setAttribute("transform",`rotate(${t*30} 55 45)`);if(d)d.setAttribute("transform",`translate(0,${(t*30)%10})`)});
+ D.rates.forEach((v,i)=>{const a=13.05+i*.25;$("r"+i).textContent=fmt(v*eo(p(t,a+.15,a+1.2)))});
+};
+window.setBg=src=>new Promise(r=>{const im=$("bg");im.onload=()=>r();im.src=src});
+</script></body></html>
