@@ -11,7 +11,7 @@ concurrency: { group: motion-branch, cancel-in-progress: false }
 jobs:
   render:
     runs-on: ubuntu-24.04   # 27.10: ubuntu-latest стала 26.04 — Playwright 1.56 там не ставится
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with: { ref: main }
@@ -22,12 +22,15 @@ jobs:
           ls -la "$RUNNER_TEMP/data"
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
+      - uses: actions/cache@v4
+        with: { path: ~/.cache/ms-playwright, key: pw-1.56-chromium-ubuntu24 }
       - name: Зависимости
         working-directory: modules/fabrika/motion/weather
         run: |
           npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
-          sudo apt-get install -y -q ffmpeg >/dev/null
+          # 27.10: apt на раннере GitHub завис на 20 мин → вечерний ролик не успел. Повторы + предел времени на каждую попытку.
+          for i in 1 2 3; do timeout 420 npx playwright install --with-deps chromium && break; echo "повтор playwright $i"; sleep 10; done
+          for i in 1 2 3; do sudo timeout 300 apt-get install -y -q -o Acquire::Retries=3 ffmpeg fonts-noto-color-emoji >/dev/null && break; echo "повтор apt $i"; sleep 10; done
           python3 -m pip install -q numpy
       - name: Рендер
         working-directory: modules/fabrika/motion/digest
