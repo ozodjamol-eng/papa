@@ -46,18 +46,30 @@ class CardG5(Base):
         self.assertTrue(store.get(self.db, 1)["locked"])            # выбор владельца не двигается
         self.assertTrue(any(x.startswith("🌙 Вечер · ") for x in L))
 
-    def test_now_confirm_when_recent(self):
+    def test_urgent_no_confirm(self):
+        """27.10 владелец: 🆘 срочно — одно нажатие, без «Утверждаю» и без вопроса «прошлый пост был недавно»."""
         now = at("12:00")
         self.queued(now)
         store.pulse_add(self.db, "davra", now - dt.timedelta(minutes=5), "manual")
-        self.assertEqual(self.tap("ur:1", now, confirm=False), "confirm")      # 21.10: сначала «✅ Утверждаю»
-        c = self.last_card()
-        self.assertIn("Последний пост вышел 5 мин назад", c["text"])
-        self.assertEqual(c["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "ok:ur:1")
-        self.assertFalse(store.get(self.db, 1)["urgent"])
-        self.tap("ur:1", now)
+        self.assertEqual(self.tap("ur:1", now, confirm=False), "ur")
         self.assertTrue(store.get(self.db, 1)["urgent"])
-        self.assertIn("✅ Принято — выйдет СЕЙЧАС", self.last_card()["text"])   # итог — в карточке, не всплывашкой
+        self.assertIn("Выходит СЕЙЧАС", self.last_card()["text"])
+
+    def test_urgent_from_stock_and_delete(self):
+        now = at("12:00")
+        self.h(dm(10, "Тезкор хабар", photo_uid="s1"))
+        store.update(self.db, 1, via="davra", stock=1, rubric=hub.rubrics(CFG, "davra")[0])
+        _, kb = hub.card(self.db, CFG, 1, now)
+        self.assertEqual(kb["inline_keyboard"][0][0]["callback_data"], "ur:1")       # 🆘 — первой кнопкой
+        self.assertEqual(self.tap("ur:1", now, confirm=False), "ur")
+        m = store.get(self.db, 1)
+        self.assertEqual((m["status"], m["urgent"], m["stock"]), ("queued", 1, 0))
+        store.update(self.db, 1, status="published")
+        store.record(self.db, "davra", "2026-10-27", None, 1, "done", 555)
+        _, kb = hub.card(self.db, CFG, 1, now)
+        self.assertEqual(kb["inline_keyboard"][0][0]["callback_data"], "xd:1")
+        self.tap("xd:1", now, confirm=False)
+        self.assertIn("Удалить этот пост из канала?", self.last_card()["text"])
 
     def test_other_options(self):
         now = at("08:00")

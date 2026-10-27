@@ -123,7 +123,10 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
             from . import extras
             lbl = extras.ad_label(db, int(mid))
             lbl = f" «{lbl}»" if lbl else ""
-        return f"{base}\n\n✔️ {name} · {m['rubric']}{lbl} — опубликовано", {"inline_keyboard": []}
+        if store.kv_get(db, f"xd_{mid}", "") == "1":
+            return f"{base}\n\n🗑 {name} — удалено из канала", {"inline_keyboard": []}
+        kb = {"inline_keyboard": [[{"text": "🗑 Удалить из канала", "callback_data": f"xd:{mid}"}]]} if m["urgent"] else {"inline_keyboard": []}
+        return f"{base}\n\n✔️ {name} · {m['rubric']}{lbl} — опубликовано", kb
     if m["status"] == "rejected":
         from . import extras
         f = extras.final_get(db, m["channel"]) if m["channel"] else None
@@ -153,7 +156,8 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         when = ("⏸ Без текста не выйдет. Допишите текст прямо в посте ХАБа — бот подхватит правку сам "
                 "(или ✏️ Текст здесь)") if hold else "выйдет сам, когда у рубрики будет пустой слот"
         return (f"📍 Канал: {name}\n\n{base}\n\n📦 В запасе · {m['rubric']} — {when}{dup}",
-                {"inline_keyboard": [[{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
+                {"inline_keyboard": [[{"text": "🆘 Срочно — опубликовать", "callback_data": f"ur:{mid}"}],
+                                     [{"text": "🧠 Поставить в план сейчас", "callback_data": f"rq:{mid}:{rs.index(m['rubric']) if m['rubric'] in rs else 0}"}],
                                      [{"text": "📂 Рубрика", "callback_data": f"sr:{mid}"}, {"text": "✏️ Текст", "callback_data": f"ed:{mid}"}],
                                      [{"text": "🧹 Мусор", "callback_data": f"cl:{mid}"}, {"text": "🗑 Убрать", "callback_data": f"del:{mid}"}]]})
     st = smart.smart_time(db, cfg, m["channel"], m["rubric"], now, exclude=mid) if m["rubric"] else None
@@ -1252,16 +1256,24 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
                                       [{"text": "‹ Назад", "callback_data": f"pd:{mid}"}]]},
                  t + f"\n\n❓ Реклама {n} {extras.days_word(n)}: {extras.WD[t0.weekday()]} {t0:%d.%m} – "
                      f"{extras.WD[end.weekday()]} {end:%d.%m}, каждый день {t0:%H:%M}. Утверждаете?")
-    elif kind == "ur":
-        last = smart.last_post(db, m["channel"], now)        # GENPLAN 5: прошлый пост был недавно — спросить
-        gap = (now - last).total_seconds() / 60 if last else None
-        if gap is not None and 0 <= gap < smart.NOW_WARNING_GAP and not arg and not confirmed:
-            show({"inline_keyboard": [[{"text": "✅ Да", "callback_data": f"ur:{mid}:y"}],
-                                      [{"text": "⬅️ Назад", "callback_data": f"bk:{mid}"}]]},
-                 f"⚠️ Последний пост вышел {int(gap)} мин назад.\n\nВсё равно опубликовать сейчас?")
+    elif kind == "ur":                                  # 27.10 владелец: 🆘 срочно — одно нажатие, без «Утверждаю»
+        if m["status"] == "published":
+            note = "Уже опубликовано"
         else:
             store.update(db, mid, status="queued", urgent=1, scheduled_at=now.isoformat(), rubric=m["rubric"] or "Срочно", stock=0)
             show()
+            note = "🆘 Выходит СЕЙЧАС — без утверждения"
+    elif kind == "xd":                                  # 🗑 удалить срочный пост из канала (если нажали по ошибке)
+        if m["status"] != "published":
+            note = "Пост ещё не вышел"
+        else:
+            t, _ = card(db, cfg, mid, now)
+            show({"inline_keyboard": [[{"text": "🗑 Да, удалить из канала", "callback_data": f"xdy:{mid}"}],
+                                      [{"text": "‹ Назад", "callback_data": f"bk:{mid}"}]]},
+                 t + "\n\n❓ Удалить этот пост из канала?")
+    elif kind == "xdy":
+        note = delete_published(bot, db, cfg, m)
+        show()
     elif kind == "ot":
         if m["status"] == "queued" or m["rubric"]:
             t, kb = options_screen(db, cfg, mid, now)
@@ -1367,7 +1379,27 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
 # 21.10 владелец: всё, что меняет план, — только после «✅ Утверждаю» (как в классическом пульте GENPLAN 5).
 # Навигация (группы рубрик, «Другие варианты», «Назад») — без подтверждения. Реклама подтверждается своим шагом
 # (✅ Разовая / 📅 Несколько дней → «✅ Утверждаю»), поэтому её время второй раз не спрашиваем.
-CONFIRM = ("sm", "tm", "nx", "pi", "pf", "rq", "sk", "ur")
+CONFIRM = ("sm", "tm", "nx", "pi", "pf", "rq", "sk")      # 27.10: «ur» (🆘 срочно) — без «Утверждаю»
+
+
+def delete_published(bot, db, cfg: dict, m) -> str:
+    """Удалить вышедший пост из канала/группы ботом этого пульта (он админ). Альбом — все его сообщения."""
+    from . import service
+    ch = m["channel"]
+    if ch not in cfg["channels"] or service.channel_mode(cfg, ch) != "live":
+        return "⚠️ Канал в тесте — удалите вручную"
+    row = db.execute("SELECT message_id FROM publications WHERE material_id=? AND status='done' AND message_id IS NOT NULL "
+                     "ORDER BY id DESC LIMIT 1", (m["id"],)).fetchone()
+    if not row:
+        return "⚠️ Не нашёл сообщение — удалите вручную в канале"
+    first = int(row[0])
+    n = max(1, len(json.loads(m["hub_msgs"] or "[]")) if "hub_msgs" in m.keys() else 1)
+    try:
+        bot("deleteMessages", chat_id="@" + cfg["channels"][ch]["username"], message_ids=list(range(first, first + n)))
+    except Exception as e:  # noqa: BLE001
+        return f"⚠️ Не удалось удалить ({str(e)[:80]}) — удалите вручную в канале"
+    store.kv_set(db, f"xd_{m['id']}", "1")
+    return "🗑 Удалено из канала"
 
 
 def _edit(bot, chat, msg_id, text, kb) -> None:
