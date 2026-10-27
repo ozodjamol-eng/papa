@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#000}
+body{font-family:Inter,"Inter Display",sans-serif;color:#fff}
+#bg{position:absolute;inset:0;width:1080px;height:1920px;object-fit:cover}
+.blk{position:absolute;left:90px;right:90px;top:50%;opacity:0}
+.tile{border-radius:64px;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.32);
+ backdrop-filter:blur(42px) saturate(170%) brightness(.92);-webkit-backdrop-filter:blur(42px) saturate(170%) brightness(.92);
+ box-shadow:0 30px 80px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.35);padding:56px 60px 60px}
+.hd{display:flex;align-items:center;gap:18px;font-size:40px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.72);text-transform:uppercase}
+.hd svg{flex:0 0 auto}
+.val{font-family:"Inter Display",Inter;font-weight:800;font-size:190px;letter-spacing:-5px;line-height:1;margin-top:26px}
+.sub{font-size:48px;font-weight:600;margin-top:22px;line-height:1.25}
+.sub2{font-size:40px;font-weight:500;color:rgba(255,255,255,.82);margin-top:16px;line-height:1.3}
+.row{display:flex;align-items:center;justify-content:space-between}
+.curve{display:block;margin-top:30px}
+.pill{display:inline-block;margin-top:30px;font-size:42px;font-weight:700;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.35);border-radius:999px;padding:16px 38px}
+.top{text-align:center;text-shadow:0 2px 20px rgba(0,0,0,.35)}
+.top .a{font-size:44px;font-weight:700;letter-spacing:4px}
+.top .b{font-family:"Inter Display",Inter;font-weight:500;font-size:150px;letter-spacing:-3px;margin-top:10px}
+.top .c{font-size:60px;font-weight:600;margin-top:6px}
+</style></head><body>
+<img id="bg">
+<div class="blk top" id="b0"><div class="a">КЕЧКИ ДАЙЖЕСТ</div><div class="b">Хўжаобод</div><div class="c" id="date"></div></div>
+
+<div class="blk tile" id="b1"><div class="hd"><svg width="48" height="40" viewBox="0 0 48 40"><path d="M10 30a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4"/><line x1="2" y1="34" x2="46" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M24 4v10M18 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>Қуёш ботиши</div>
+ <div class="val" id="ss"></div><svg class="curve" id="c1" width="780" height="200" viewBox="0 0 780 200"></svg><div class="sub2">Бугун кечқурун</div></div>
+
+<div class="blk tile" id="b2"><div class="hd"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="8" fill="currentColor"/><g stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M20 2v5M20 33v5M2 20h5M33 20h5M7 7l3.5 3.5M29.5 29.5 33 33M7 33l3.5-3.5M29.5 10.5 33 7"/></g></svg>Эртага · тонг</div>
+ <div class="row"><div class="val" id="w0"></div><svg id="i0" width="300" height="250" viewBox="0 0 110 90"></svg></div><div class="sub" id="d0"></div></div>
+<div class="blk tile" id="b3"><div class="hd"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="8" fill="currentColor"/><g stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M20 2v5M20 33v5M2 20h5M33 20h5M7 7l3.5 3.5M29.5 29.5 33 33M7 33l3.5-3.5M29.5 10.5 33 7"/></g></svg>Эртага · кун</div>
+ <div class="row"><div class="val" id="w1"></div><svg id="i1" width="300" height="250" viewBox="0 0 110 90"></svg></div><div class="sub" id="d1"></div></div>
+<div class="blk tile" id="b4"><div class="hd"><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="8" fill="currentColor"/><g stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M20 2v5M20 33v5M2 20h5M33 20h5M7 7l3.5 3.5M29.5 29.5 33 33M7 33l3.5-3.5M29.5 10.5 33 7"/></g></svg>Эртага · кеч</div>
+ <div class="row"><div class="val" id="w2"></div><svg id="i2" width="300" height="250" viewBox="0 0 110 90"></svg></div><div class="sub" id="d2"></div><div class="sub2" id="rw"></div><div class="sub2" id="tip"></div></div>
+
+<div class="blk tile" id="b5"><div class="hd"><svg width="48" height="40" viewBox="0 0 48 40"><path d="M10 30a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4"/><line x1="2" y1="34" x2="46" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M24 16V6M18 10l6-6 6 6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>Эртага қуёш чиқиши</div>
+ <div class="val" id="sr"></div><svg class="curve" id="c2" width="780" height="200" viewBox="0 0 780 200"></svg><div class="sub2" id="dl"></div><div class="pill" id="bdm"></div></div>
+
+<div class="blk tile" id="b6"><div class="hd"><span style="font-size:46px;font-weight:800;width:40px;text-align:center">$</span>Валюта курси</div><div class="val" id="r0"></div><div class="sub">1 АҚШ доллари · сўм</div></div>
+<div class="blk tile" id="b7"><div class="hd"><span style="font-size:46px;font-weight:800;width:40px;text-align:center">€</span>Валюта курси</div><div class="val" id="r1"></div><div class="sub">1 евро · сўм</div></div>
+<div class="blk tile" id="b8"><div class="hd"><span style="font-size:46px;font-weight:800;width:40px;text-align:center">₽</span>Валюта курси</div><div class="val" id="r2"></div><div class="sub">1 рубль · сўм</div></div>
+
+<div class="blk top" id="b9"><div class="b" id="u" style="font-size:96px;font-weight:700;letter-spacing:-1px"></div><div class="a" id="ch" style="margin-top:20px"></div></div>
+<script>
+const D=window.DATA||{date:"Сешанба, 27 октябрь",sunset:"17:25",sunrise:"06:48",daylen:"Кун узунлиги 10 соат 37 дақиқа",bomdod:"Бомдод — 05:20",
+ w:[{t:6,k:"cloud"},{t:18,k:"sun"},{t:11,k:"partly"}],rw:"Ёмғир 10% · Шамол 3 м/с",tip:"Эрталаб салқин — иссиқроқ кийининг",
+ rates:[12650,13780,156],user:"@xojaobodcity24",ch:"ХЎЖАОБОД СИТИ 24"};
+const DESC={sun:"Қуёшли",cloud:"Булутли",partly:"Қисман булутли",rain:"Ёмғир"};
+const $=i=>document.getElementById(i);
+$("date").textContent=D.date;$("ss").textContent=D.sunset;$("sr").textContent=D.sunrise;$("dl").textContent=D.daylen;
+if(D.bomdod)$("bdm").textContent=D.bomdod;else $("bdm").style.display="none";
+$("rw").textContent=D.rw;$("tip").textContent=D.tip;$("u").textContent=D.user;$("ch").textContent=D.ch;
+const ICON={sun:`<circle cx="55" cy="45" r="20" fill="#ffd36b"/><g stroke="#ffd36b" stroke-width="5" stroke-linecap="round" class="ry">${[...Array(8)].map((_,i)=>{const a=i*Math.PI/4;return `<line x1="${55+Math.cos(a)*29}" y1="${45+Math.sin(a)*29}" x2="${55+Math.cos(a)*38}" y2="${45+Math.sin(a)*38}"/>`}).join("")}</g>`,
+ cloud:`<g class="cl"><path d="M28 70h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#fff"/></g>`,
+ partly:`<circle cx="40" cy="34" r="17" fill="#ffd36b"/><g class="cl"><path d="M34 74h48a15 15 0 0 0 1-30 21 21 0 0 0-40-3 16 16 0 0 0-9 33z" fill="#fff"/></g>`,
+ rain:`<g class="cl"><path d="M28 56h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#eef2f7"/></g><g class="dr" stroke="#9fd0ff" stroke-width="5" stroke-linecap="round"><line x1="40" y1="66" x2="36" y2="78"/><line x1="58" y1="66" x2="54" y2="78"/><line x1="76" y1="66" x2="72" y2="78"/></g>`};
+D.w.forEach((w,i)=>{$("i"+i).innerHTML=ICON[w.k];$("d"+i).textContent=DESC[w.k]});
+// кривая пути солнца (как на iPhone): горизонт посередине, синусоида
+const CW=780,CH=200,HY=118,AMP=78;
+const cy=x=>HY-AMP*Math.sin(Math.PI*2*(x/CW)-Math.PI/2+Math.PI)*-1;
+function curve(id){let d="";for(let x=0;x<=CW;x+=6)d+=(x?"L":"M")+x+" "+(HY+AMP*Math.cos(2*Math.PI*x/CW)).toFixed(1);
+ $(id).innerHTML=`<defs><clipPath id="up${id}"><rect x="0" y="0" width="${CW}" height="${HY}"/></clipPath><clipPath id="dn${id}"><rect x="0" y="${HY}" width="${CW}" height="${CH}"/></clipPath></defs>
+ <path d="${d}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="6" clip-path="url(#up${id})"/><path d="${d}" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="6" clip-path="url(#dn${id})"/>
+ <line x1="0" y1="${HY}" x2="${CW}" y2="${HY}" stroke="rgba(255,255,255,.55)" stroke-width="3"/><circle class="dot" r="16" fill="#fff" style="filter:drop-shadow(0 0 14px #fff)"/>`}
+curve("c1");curve("c2");
+const sunAt=(id,x)=>{const c=$(id).querySelector(".dot");c.setAttribute("cx",x);c.setAttribute("cy",HY+AMP*Math.cos(2*Math.PI*x/CW))};
+const cl=(v,a=0,b=1)=>Math.min(b,Math.max(a,v)),p=(t,a,b)=>cl((t-a)/(b-a)),eo=t=>1-Math.pow(1-t,3),ei=t=>t*t*t,eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const back=t=>{const s=1.3;return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
+const fmt=n=>Math.round(n).toLocaleString("ru-RU").replace(/ /g," ");
+const SEG=[[0.2,2.5],[2.6,4.9],[5.0,6.9],[7.0,8.9],[9.0,11.0],[11.1,13.3],[13.4,14.95],[15.0,16.55],[16.6,18.2],[18.3,20.6]];
+window.DUR=20;
+window.render=function(t){
+ SEG.forEach(([a,b],i)=>{const e=$("b"+i),ki=p(t,a,a+.55),ko=ei(p(t,b-.4,b));
+  const op=eo(ki)*(1-ko),y=(1-eo(ki))*90-ko*70,sc=(.9+.1*back(ki))*(1+.04*ko);
+  Object.assign(e.style,{opacity:op,transform:`translateY(calc(-50% + ${y}px)) scale(${sc})`})});
+ // закат: точка спускается по кривой за горизонт (от ~0.62 до ~0.8 ширины)
+ sunAt("c1",CW*(0.56+0.2*eio(p(t,2.9,4.6))));
+ // восход: точка поднимается из-за горизонта
+ sunAt("c2",CW*(0.2+0.18*eio(p(t,11.4,13.0))));
+ D.w.forEach((w,i)=>{const a=SEG[2+i][0];$("w"+i).textContent=(w.t>0?"+":"")+Math.round(w.t*eo(p(t,a+.2,a+1.1)))+"°";
+  const s=$("i"+i),c=s.querySelector(".cl"),r=s.querySelector(".ry"),d=s.querySelector(".dr");
+  if(c)c.setAttribute("transform",`translate(${Math.sin(t*1.4+i)*4},0)`);if(r)r.setAttribute("transform",`rotate(${t*30} 55 45)`);if(d)d.setAttribute("transform",`translate(0,${(t*30)%10})`)});
+ D.rates.forEach((v,i)=>{const a=SEG[6+i][0];$("r"+i).textContent=fmt(v*eo(p(t,a+.15,a+1.0)))});
+};
+window.setBg=src=>new Promise(r=>{const im=$("bg");im.onload=()=>r();im.src=src});
+</script></body></html>
