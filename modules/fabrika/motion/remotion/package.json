@@ -1,0 +1,21 @@
+{
+ "name": "papa-motion-remotion",
+ "version": "1.0.0",
+ "description": "",
+ "scripts": {
+  "studio": "remotion studio src/index.jsx --public-dir ../weather/fonts"
+ },
+ "keywords": [],
+ "author": "",
+ "license": "ISC",
+ "dependencies": {
+  "@remotion/bundler": "^4.0.539",
+  "@remotion/cli": "^4.0.539",
+  "@remotion/renderer": "^4.0.539",
+  "react": "^18.3.1",
+  "react-dom": "^18.3.1",
+  "remotion": "^4.0.539"
+ },
+ "private": true,
+ "type": "module"
+}
