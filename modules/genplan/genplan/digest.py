@@ -488,7 +488,8 @@ def build(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) ->
     tmp.replace(out / "manifest.json")                  # READY-манифест — последним и атомарно (протокол 12.10)
     report.update({"status": "READY", "dir": str(out), "caption_len": len(caption)})
     try:                                                 # 🎬 данные для ролика (рендер — GitHub Actions)
-        (out / "video.json").write_text(json.dumps(video_data_xojaobod(day, w, r, news), ensure_ascii=False, indent=1),
+        (out / "video.json").write_text(json.dumps(video_data_xojaobod(day, w, r, news, bomdod_for(db, day + dt.timedelta(days=1))),
+                                                   ensure_ascii=False, indent=1),
                                         encoding="utf-8")
     except Exception as e:  # noqa: BLE001 — без ролика выйдет баннер
         report["errors"].append(f"данные ролика: {e}")
@@ -535,13 +536,26 @@ def video_rates(r: dict) -> list[dict]:
     return [{"c": c, "s": RATE_SIGN[c], "v": x["rate"], "d": x["diff"]} for c, x in r.items() if c in RATE_SIGN]
 
 
-def video_data_xojaobod(day: dt.date, w: dict, r: dict, news: list[dict]) -> dict:
+def video_data_xojaobod(day: dt.date, w: dict, r: dict, news: list[dict], bomdod: str = "") -> dict:
+    """27.10: ролик «Кечки дайжест» в стиле iPhone (modules/fabrika/motion/dayjest) берёт отсюда курс и Бомдод на завтра;
+    погоду, восход/закат и воздух считает сам на GitHub. Старые поля оставлены — для запасного рендера."""
     x = w.get("Хўжаобод") or next(iter(w.values()))
     t = x["tmr"]
     return {"channel": "xojaobod", "day": day.isoformat(), "date": video_head(day), "tHi": t["max"], "tLo": t["min"],
             "tKind": vkind(t["code"]), "tSky": sky_phrase(t["code"]), "rain": int(t.get("rain") or 0),
             "rates": video_rates(r), "news": [{"t": short_news(n["t"]), "src": n["src"]} for n in news[:3]],
+            "bomdod": f"Бомдод — {bomdod}" if bomdod else "",
             "user": "@xojaobodcity24", "brand": ["КЕЧКИ", "ДАЙЖЕСТ"]}
+
+
+def bomdod_for(db, day: dt.date) -> str:
+    """Время Бомдода на день day — только то, что ввёл владелец (модуль намаза). Нет — пусто (плашки не будет)."""
+    try:
+        from . import namaz
+        row = namaz.schedule_for(db, day)
+        return (row["bomdod"] if row else "") or ""
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 # --- КАТТА ДАВРА (общереспубликанский: погода по городам, без политики — политика канала 16.10)

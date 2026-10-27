@@ -607,7 +607,7 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
             mid = None
             if video:
                 try:
-                    res = p.publish_file(to, str(video), body)
+                    res = p.publish_file(to, str(video), body, duration=25)   # 27.10: «Эрталабки дайжест» ~25 с
                     mid = await res if asyncio.iscoroutine(res) else res
                 except PublishError as e:
                     ERRORS.append(f"⚠️ {ch['title']}: ролик погоды не отправился ({e}) — вышел текст")

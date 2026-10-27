@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<!-- «Эрталабки / Кечки дайжест» в стиле iPhone (утверждён владельцем 27.10.2026). Данные: window.DAYJEST (make.py). -->
+<style>
+@font-face{font-family:Inter;font-weight:500;src:url(../weather/fonts/InterDisplay-Medium.otf)}
+@font-face{font-family:Inter;font-weight:600;src:url(../weather/fonts/InterDisplay-SemiBold.otf)}
+@font-face{font-family:Inter;font-weight:700 800;src:url(../weather/fonts/InterDisplay-ExtraBold.otf)}
+@font-face{font-family:Inter;font-weight:900;src:url(../weather/fonts/InterDisplay-Black.otf)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#000}
+body{font-family:Inter,"Noto Color Emoji",sans-serif;color:#fff}
+#bg{position:absolute;inset:0;width:1080px;height:1920px;object-fit:cover}
+.scr{position:absolute;left:80px;right:80px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:34px;opacity:0}
+.tile{border-radius:56px;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.32);
+ backdrop-filter:blur(42px) saturate(170%) brightness(.92);-webkit-backdrop-filter:blur(42px) saturate(170%) brightness(.92);
+ box-shadow:0 24px 70px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.35);padding:44px 52px;opacity:0}
+.hd{display:flex;align-items:center;gap:16px;font-size:36px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.75);text-transform:uppercase}
+.cap{padding:30px 52px;justify-content:center}
+.val{font-weight:800;letter-spacing:-4px;line-height:1}
+.sub{font-size:40px;font-weight:600;margin-top:10px}
+.sub2{font-size:36px;font-weight:500;color:rgba(255,255,255,.85);margin-top:12px;line-height:1.3}
+.row{display:flex;align-items:center;justify-content:space-between}
+.pill{display:inline-block;margin-top:22px;font-size:38px;font-weight:700;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.35);border-radius:999px;padding:12px 34px}
+.top{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;text-shadow:0 2px 20px rgba(0,0,0,.35);opacity:0}
+.top .a{font-size:44px;font-weight:700;letter-spacing:4px}
+.top .b{font-weight:500;font-size:150px;letter-spacing:-3px;margin-top:10px}
+.top .c{font-size:60px;font-weight:600;margin-top:6px}
+.cur{width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:800}
+.bar{position:relative;height:16px;border-radius:8px;margin-top:30px;background:linear-gradient(90deg,#3ad16b,#f4d23a,#ff8a2a,#ff3b4a,#b03ad1)}
+.bar i{position:absolute;top:-6px;width:28px;height:28px;border-radius:50%;background:#fff;border:4px solid rgba(0,0,0,.25)}
+</style></head><body>
+<img id="bg">
+<div id="root"></div>
+<script>
+const D=window.DAYJEST||window.WEATHER||{};
+const $=i=>document.getElementById(i), H=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const SUNI={up:'<path d="M24 16V6M18 10l6-6 6 6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
+ down:'<path d="M24 4v10M18 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'};
+const sunHd=(dir,label)=>`<div class="hd"><svg width="46" height="38" viewBox="0 0 48 40"><path d="M10 30a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4"/><line x1="2" y1="34" x2="46" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>${SUNI[dir]}</svg>${H(label)}</div>`;
+const ICON={sun:`<circle cx="55" cy="45" r="20" fill="#ffd36b"/><g stroke="#ffd36b" stroke-width="5" stroke-linecap="round" class="ry">${[...Array(8)].map((_,i)=>{const a=i*Math.PI/4;return `<line x1="${55+Math.cos(a)*29}" y1="${45+Math.sin(a)*29}" x2="${55+Math.cos(a)*38}" y2="${45+Math.sin(a)*38}"/>`}).join("")}</g>`,
+ moon:`<path d="M66 18a28 28 0 1 0 18 46A24 24 0 0 1 66 18z" fill="#fff3c4"/>`,
+ cloud:`<g class="cl"><path d="M28 70h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#fff"/></g>`,
+ partly:`<circle cx="40" cy="34" r="17" fill="#ffd36b"/><g class="cl"><path d="M34 74h48a15 15 0 0 0 1-30 21 21 0 0 0-40-3 16 16 0 0 0-9 33z" fill="#fff"/></g>`,
+ partlyn:`<path d="M44 14a18 18 0 1 0 12 30A15 15 0 0 1 44 14z" fill="#fff3c4"/><g class="cl"><path d="M34 74h48a15 15 0 0 0 1-30 21 21 0 0 0-40-3 16 16 0 0 0-9 33z" fill="#fff"/></g>`,
+ rain:`<g class="cl"><path d="M28 56h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#eef2f7"/></g><g class="dr" stroke="#9fd0ff" stroke-width="5" stroke-linecap="round"><line x1="40" y1="66" x2="36" y2="78"/><line x1="58" y1="66" x2="54" y2="78"/><line x1="76" y1="66" x2="72" y2="78"/></g>`,
+ snow:`<g class="cl"><path d="M28 56h52a17 17 0 0 0 1-34 24 24 0 0 0-45-4 19 19 0 0 0-8 38z" fill="#eef2f7"/></g><g class="dr" fill="#fff"><circle cx="40" cy="70" r="4"/><circle cx="58" cy="74" r="4"/><circle cx="76" cy="70" r="4"/></g>`};
+const CW=780,CH=200,HY=118,AMP=78;
+const curve=id=>{let d="";for(let x=0;x<=CW;x+=6)d+=(x?"L":"M")+x+" "+(HY+AMP*Math.cos(2*Math.PI*x/CW)).toFixed(1);
+ return `<svg id="${id}" width="780" height="170" viewBox="0 0 780 200" style="display:block;margin-top:16px"><defs><clipPath id="u${id}"><rect width="${CW}" height="${HY}"/></clipPath><clipPath id="d${id}"><rect y="${HY}" width="${CW}" height="${CH}"/></clipPath></defs>
+ <path d="${d}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="6" clip-path="url(#u${id})"/><path d="${d}" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="6" clip-path="url(#d${id})"/>
+ <line x1="0" y1="${HY}" x2="${CW}" y2="${HY}" stroke="rgba(255,255,255,.55)" stroke-width="3"/><circle class="dot" r="16" fill="#fff" style="filter:drop-shadow(0 0 14px #fff)"/></svg>`};
+const sunAt=(id,x)=>{const c=$(id)?.querySelector(".dot");if(!c)return;c.setAttribute("cx",x);c.setAttribute("cy",HY+AMP*Math.cos(2*Math.PI*x/CW))};
+// ---- экраны собираются по данным: нет курса / воздуха / рекламы — экрана нет, ролик короче
+const S=[];let html="";
+const add=(id,dur,tiles,body,top)=>{S.push({id,dur,t:tiles});html+=top?`<div class="top" id="${id}">${body}</div>`:`<div class="scr" id="${id}">${body}</div>`};
+add("s0",2.3,null,`<div class="a">${H(D.brand||"ДАЙЖЕСТ")}</div><div class="b">${H(D.city||"Хўжаобод")}</div><div class="c">${H(D.date)}</div>`,1);
+if(D.sun&&D.sun.length){
+ const tl=D.sun.map((s,i)=>`<div class="tile" id="t1${i}">${sunHd(s.dir,s.label)}<div class="val" id="sv${i}" style="font-size:150px;margin-top:18px">${H(s.time)}</div>${curve("c"+i)}${
+  i==D.sun.length-1?(D.daylen?`<div class="sub2">${H(D.daylen)}</div>`:"")+(D.bomdod?`<div class="pill">${H(D.bomdod)}</div>`:""):""}</div>`).join("");
+ add("s1",3.9,D.sun.map((_,i)=>["t1"+i,i*.45]),tl);}
+if(D.parts&&D.parts.length){
+ const tl=`<div class="hd tile cap" id="t20">${H(D.wtitle||"Об-ҳаво")}</div>`+D.parts.map((p,i)=>`<div class="tile" id="t2${i+1}"><div class="row"><div><div class="hd">${H(p.label)}</div><div class="sub">${H(p.desc)}</div></div><div class="row" style="gap:20px"><svg id="i${i}" width="170" height="140" viewBox="0 0 110 90">${ICON[p.icon]||ICON.cloud}</svg><div class="val" id="w${i}" style="font-size:130px;width:260px;text-align:right"></div></div></div></div>`).join("");
+ add("s2",4.3,[["t20",0],...D.parts.map((_,i)=>["t2"+(i+1),.25*(i+1)])],tl);}
+if(D.aqi!=null||D.rw){
+ let tl=`<div class="hd tile cap" id="t30">Ҳаво</div>`,tt=[["t30",0]];
+ if(D.aqi!=null){tl+=`<div class="tile" id="t31"><div class="hd"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M4 14h22a5 5 0 1 0-5-5M4 22h28a5 5 0 1 1-5 5M4 30h14" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>Ҳаво сифати</div><div class="val" id="aqv" style="font-size:120px;margin-top:14px"></div><div class="sub">${H(D.aqt)}</div><div class="bar"><i id="aqd"></i></div></div>`;tt.push(["t31",.25])}
+ if(D.rw||D.tip){tl+=`<div class="tile" id="t32">${D.rw?`<div class="sub" style="margin:0">${H(D.rw)}</div>`:""}${D.tip?`<div class="sub2">${H(D.tip)}</div>`:""}</div>`;tt.push(["t32",.6])}
+ add("s3",3.0,tt,tl);}
+if(D.rates&&D.rates.length){
+ const NM={USD:"АҚШ доллари",EUR:"Евро",RUB:"Рубль"};
+ const tl=`<div class="hd tile cap" id="t40">${H(D.rtitle||"Валюта курси · сўм")}</div>`+D.rates.map((r,i)=>`<div class="tile" id="t4${i+1}"><div class="row"><div class="row" style="gap:28px"><div class="cur">${H(r.s)}</div><div><div class="hd">${H(r.c)}</div><div class="sub">${NM[r.c]||""}</div></div></div><div style="text-align:right"><div class="val" id="r${i}" style="font-size:120px"></div><div class="sub" id="df${i}" style="margin-top:6px;font-size:36px"></div></div></div></div>`).join("");
+ add("s4",3.8,[["t40",0],...D.rates.map((_,i)=>["t4"+(i+1),.25*(i+1)])],tl);}
+if(D.ad){add("s5",2.2,[["t50",0]],`<div class="tile" id="t50" style="text-align:center;padding:60px 52px"><div class="hd" style="justify-content:center"><svg width="44" height="40" viewBox="0 0 44 40"><path d="M4 16v8h7l14 10V6L11 16H4z" fill="currentColor"/><path d="M31 13a9 9 0 0 1 0 14M36 8a16 16 0 0 1 0 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>Реклама</div>
+ <div class="val" style="font-size:84px;letter-spacing:-2px;margin-top:30px;line-height:1.1">Бу жой —<br>сизнинг рекламангиз<br>учун</div><div class="sub" style="margin-top:30px">${H(D.adsub||"Ҳар куни минглаб ўқувчи кўради")}</div><div class="pill" style="margin-top:34px;font-size:44px">${H(D.ad)}</div></div>`);}
+add("s6",2.0,null,`<div class="b" style="font-size:96px;font-weight:700;letter-spacing:-1px">${H(D.user)}</div><div class="a" style="margin-top:20px">${H(D.channel_title||"")}</div>`,1);
+$("root").innerHTML=html;
+let t0=.2;S.forEach(s=>{s.a=t0;s.b=t0+s.dur;t0=s.b+.1});S[S.length-1].b=99;
+window.DUR=Math.round((t0+.1)*10)/10;
+const cl=(v,a=0,b=1)=>Math.min(b,Math.max(a,v)),p=(t,a,b)=>cl((t-a)/(b-a)),eo=t=>1-Math.pow(1-t,3),ei=t=>t*t*t,eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const back=t=>{const s=1.3;return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
+const fmt=n=>Math.round(n).toLocaleString("ru-RU").replace(/ /g," ");
+const seg=id=>S.find(s=>s.id===id);
+function show(e,ki,ko){Object.assign(e.style,{opacity:eo(ki)*(1-ko),transform:`translateY(${(1-eo(ki))*80-ko*60}px) scale(${(.92+.08*back(ki))*(1+.03*ko)})`})}
+window.renderAt=function(t){
+ S.forEach(s=>{const ko=ei(p(t,s.b-.45,s.b)),e=$(s.id);
+  if(!s.t){const ki=p(t,s.a,s.a+.55);Object.assign(e.style,{opacity:eo(ki)*(1-ko),transform:`translateY(calc(-50% + ${(1-eo(ki))*80-ko*60}px))`});return}
+  e.style.opacity=1;s.t.forEach(([id,d],j)=>show($(id),p(t,s.a+d,s.a+d+.55),ei(p(t,s.b-.45-j*.04,s.b-j*.04))))});
+ const s1=seg("s1");if(s1)(D.sun||[]).forEach((s,i)=>{const k=eio(p(t,s1.a+.2+i*.6,s1.a+2.1+i*.6));sunAt("c"+i,CW*(s.dir==="up"?0.2+0.18*k:0.56+0.2*k))});
+ const s2=seg("s2");if(s2)(D.parts||[]).forEach((w,i)=>{const a=s2.a+.25*(i+1);$("w"+i).textContent=(w.t>0?"+":w.t<0?"−":"")+Math.abs(Math.round(w.t*eo(p(t,a+.15,a+1.1))))+"°";
+  const s=$("i"+i),c=s.querySelector(".cl"),r=s.querySelector(".ry"),d=s.querySelector(".dr");
+  if(c)c.setAttribute("transform",`translate(${Math.sin(t*1.4+i)*4},0)`);if(r)r.setAttribute("transform",`rotate(${t*30} 55 45)`);if(d)d.setAttribute("transform",`translate(0,${(t*30)%10})`)});
+ const s3=seg("s3");if(s3&&D.aqi!=null){const k=eo(p(t,s3.a+.4,s3.a+1.4));$("aqv").textContent=Math.round(D.aqi*k);$("aqd").style.left=`calc(${Math.min(300,D.aqi)/300*100*k}% - 14px)`}
+ const s4=seg("s4");if(s4)(D.rates||[]).forEach((r,i)=>{const a=s4.a+.25*(i+1),dd=+r.d||0,e=$("df"+i);$("r"+i).textContent=fmt(r.v*eo(p(t,a+.15,a+1.2)));
+  e.textContent=(dd>0?"▲ +":dd<0?"▼ −":"● ")+Math.abs(dd).toLocaleString("ru-RU",{maximumFractionDigits:2});e.style.color=dd>0?"#8dffb0":dd<0?"#ffb1b1":"rgba(255,255,255,.8)";e.style.opacity=eo(p(t,a+1.0,a+1.4))});
+};
+window.setBg=src=>new Promise(r=>{const im=$("bg");im.onload=()=>r();im.onerror=()=>r();im.src=src});
+window.ready=document.fonts.ready;
+</script></body></html>

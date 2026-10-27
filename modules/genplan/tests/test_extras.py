@@ -35,7 +35,7 @@ class Acc:
     async def publish_album(self, chat, hub_chat, ids, body):
         self.sent.append((chat, body, hub_chat, ids)); return 78
 
-    async def publish_file(self, chat, path, body):
+    async def publish_file(self, chat, path, body, duration=15):
         if getattr(self, "fail_file", False):
             from genplan.publish import PublishError
             raise PublishError("FILE_PARTS_INVALID")

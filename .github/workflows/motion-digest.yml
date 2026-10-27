@@ -33,6 +33,16 @@ jobs:
         working-directory: modules/fabrika/motion/digest
         run: |
           ln -sfn ../weather/node_modules node_modules
+          ln -sfn ../weather/node_modules ../dayjest/node_modules
+          sudo apt-get install -y -q fonts-noto-color-emoji >/dev/null || true
+          # 27.10 владелец утвердил: Хўжаобод — новый «Кечки дайжест» в стиле iPhone (dayjest). Сломался — старый ролик.
+          if [ -f "$RUNNER_TEMP/data/xojaobod.json" ]; then
+            if python3 ../dayjest/make.py kech "$RUNNER_TEMP/out" "$RUNNER_TEMP/data/xojaobod.json"; then
+              mv "$RUNNER_TEMP/data/xojaobod.json" "$RUNNER_TEMP/xojaobod.done.json"
+            else
+              echo "::warning::dayjest kech не собрался — старый ролик"
+            fi
+          fi
           python3 make_digest.py "$RUNNER_TEMP/data" "$RUNNER_TEMP/out"
       - name: В ветку motion (по 3 последних дня на канал)
         run: |

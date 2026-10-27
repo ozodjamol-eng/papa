@@ -40,7 +40,11 @@ jobs:
       - name: Рендер
         if: steps.chk.outputs.done != '1'
         working-directory: modules/fabrika/motion/weather
-        run: python3 make.py "$RUNNER_TEMP/out"
+        run: |
+          ln -sfn ../weather/node_modules ../dayjest/node_modules
+          sudo apt-get install -y -q fonts-noto-color-emoji >/dev/null || true
+          # 27.10 владелец утвердил: в 07:00 — «Эрталабки дайжест» в стиле iPhone (dayjest). Сломался — прежний «Об-ҳаво».
+          python3 ../dayjest/make.py tong "$RUNNER_TEMP/out" || { echo "::warning::dayjest tong не собрался — прежний ролик"; python3 make.py "$RUNNER_TEMP/out"; }
       - name: В ветку motion (только последние 3 дня)
         if: steps.chk.outputs.done != '1'
         run: |
