@@ -149,6 +149,17 @@ def main(job_dir, out_dir):
                 print(err); continue
             (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
             print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ voice_id={vid}")
+        elif do == "fetch":  # 29.10: скачать аудио по ссылке (трек Suno/Pixabay) в out/ — для сведения с голосом
+            u = st["url"]
+            if not u.startswith(("https://cdn1.suno.ai/", "https://cdn2.suno.ai/", "https://audiopipe.suno.ai/", "https://cdn.pixabay.com/")):
+                print("URL_NOT_ALLOWED"); continue
+            try:
+                req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+                data = urllib.request.urlopen(req, timeout=180).read()
+            except Exception as e:
+                print("FETCH_FAIL", e); continue
+            (Path(out_dir) / f"{st['name']}.mp3").write_bytes(data)
+            print(f"OK {st['name']}.mp3 {len(data)//1024} КБ")
         elif do == "delete_voice":
             _, err = call("DELETE", f"/v1/voices/{st['voice_id']}", k)
             print(err or "deleted")
