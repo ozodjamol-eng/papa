@@ -1,4 +1,4 @@
-# 🌙 Ролики «Кечки дайжест» — Хўжаобод и КАТТА ДАВРА (решение владельца 20.10). Франкфурт в 19:50 кладёт данные
+# 🌙 Ролики «Кечки дайжест» в стиле iPhone — Хўжаобод (27.10) и КАТТА ДАВРА (28.10). Франкфурт в 19:50 кладёт данные
 # в ветку digest-data (deploy-key) → здесь рендер → MP4 в ветку motion → GENPLAN публикует в 20:30. Нет ролика — картинка/текст.
 name: motion-digest
 on:
@@ -38,22 +38,23 @@ jobs:
           ln -sfn ../weather/node_modules node_modules
           ln -sfn ../weather/node_modules ../dayjest/node_modules
           sudo apt-get install -y -q fonts-noto-color-emoji >/dev/null || true
-          # 27.10 владелец утвердил: Хўжаобод — новый «Кечки дайжест» в стиле iPhone (dayjest). Сломался — старый ролик.
-          if [ -f "$RUNNER_TEMP/data/xojaobod.json" ]; then
-            if python3 ../dayjest/make.py kech "$RUNNER_TEMP/out" "$RUNNER_TEMP/data/xojaobod.json"; then
-              mv "$RUNNER_TEMP/data/xojaobod.json" "$RUNNER_TEMP/xojaobod.done.json"
-            else
-              echo "::warning::dayjest kech не собрался — старый ролик"
+          # 27.10 владелец утвердил iPhone-дайджест (dayjest) для Хўжаобода; 28.10 — и для КАТТА ДАВРА.
+          # Старый ролик с новостями больше не собирается ни как основной, ни как запасной (решение 28.10):
+          # не собрался ролик — GENPLAN в 20:30 выпускает картинку-дайджест.
+          mkdir -p "$RUNNER_TEMP/out"
+          for js in "$RUNNER_TEMP"/data/*.json; do
+            [ -f "$js" ] || continue
+            if ! python3 ../dayjest/make.py kech "$RUNNER_TEMP/out" "$js"; then
+              echo "::warning::$(basename "$js"): ролик не собрался — в 20:30 выйдет картинка"
             fi
-          fi
-          python3 make_digest.py "$RUNNER_TEMP/data" "$RUNNER_TEMP/out"
+          done
       - name: В ветку motion (по 3 последних дня на канал)
         run: |
           set -e
           W="$RUNNER_TEMP/motion"; mkdir -p "$W"; cd "$W"; git init -q
           git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           git fetch -q --depth 1 origin motion && git checkout -q FETCH_HEAD -- . 2>/dev/null || true
-          cp "$RUNNER_TEMP"/out/*-digest-*.mp4 .
+          cp "$RUNNER_TEMP"/out/*-digest-*.mp4 . 2>/dev/null || echo "роликов нет — выйдут картинки"
           for pre in xojaobod-digest davra-digest xojaobod-weather; do
             ls $pre-*.mp4 2>/dev/null | sort | head -n -3 | while read f; do rm -f "$f" "${f%.mp4}.json"; done
           done

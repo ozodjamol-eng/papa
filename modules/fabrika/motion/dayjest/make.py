@@ -1,7 +1,7 @@
 """«Эрталабки / Кечки дайжест» Хўжаобод Сити 24 — ролик в стиле iPhone (утверждён владельцем 27.10.2026).
 
 python3 make.py tong OUT_DIR                 → OUT_DIR/xojaobod-weather-ДАТА.mp4 (+.json)  — выходит в 07:00 вместо «Об-ҳаво»
-python3 make.py kech OUT_DIR [frankfurt.json] → OUT_DIR/xojaobod-digest-ДАТА.mp4          — выходит в 20:30
+python3 make.py kech OUT_DIR [frankfurt.json] → OUT_DIR/<канал>-digest-ДАТА.mp4 (канал из json: xojaobod | davra) — 20:30
 Данные: open-meteo (погода, восход/закат, воздух), cbu.uz (курс; вечером — из данных Франкфурта), Бомдод — от Франкфурта
 (время вводит владелец). Фон и музыка — assets/ (Pixabay, лицензия Pixabay), концовка OZOD JAMOL — docs/brand.
 Нужны node+playwright, ffmpeg. Нет данных какого-то блока — экрана нет, ролик короче (никаких выдуманных цифр).
@@ -22,6 +22,13 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
 TZ = ZoneInfo("Asia/Tashkent")
 LAT, LON = 40.6710, 72.5650
+# 28.10 владелец: КАТТА ДАВРА тоже на iPhone-дайджесте (без намаза и без рекламной плитки). Старый ролик с новостями убран.
+CHANNELS = {
+    "xojaobod": {"lat": LAT, "lon": LON, "city": "Хўжаобод", "user": "@xojaobodcity24", "title": "ХЎЖАОБОД СИТИ 24",
+                 "bomdod": True, "ad": True},
+    "davra": {"lat": 41.2995, "lon": 69.2401, "city": "Тошкент", "user": "@kattadavrauz", "title": "КАТТА ДАВРА",
+              "bomdod": False, "ad": False},
+}
 WD = ["Душанба", "Сешанба", "Чоршанба", "Пайшанба", "Жума", "Шанба", "Якшанба"]
 MON = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
 DESC = {"clear": "Қуёшли", "partly": "Қисман булутли", "cloudy": "Булутли", "fog": "Туманли", "rain": "Ёмғир", "snow": "Қор"}
@@ -96,10 +103,10 @@ AQT = [(50, "Яхши — сайр учун ажойиб"), (100, "Ўртача 
        (9999, "Жуда зарарли — уйда қолинг")]
 
 
-def weather(day: dt.date, night_part: bool) -> dict:
+def weather(day: dt.date, night_part: bool, lat: float = LAT, lon: float = LON) -> dict:
     """Погода дня day: тонг (08:00), кун (максимум), кеч (19:00); восход/закат; дождь, ветер (м/с)."""
     today = dt.datetime.now(TZ).date()
-    f = json.loads(get(f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}"
+    f = json.loads(get(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
                        "&hourly=temperature_2m,weather_code&daily=temperature_2m_max,precipitation_probability_max,"
                        "wind_speed_10m_max,sunrise,sunset,daylight_duration&timezone=Asia%2FTashkent"
                        f"&start_date={today}&end_date={max(day, today + dt.timedelta(days=1))}"))
@@ -118,9 +125,9 @@ def weather(day: dt.date, night_part: bool) -> dict:
             "days": d["time"], "daylight": d["daylight_duration"]}
 
 
-def aqi() -> int | None:
+def aqi(lat: float = LAT, lon: float = LON) -> int | None:
     try:
-        a = json.loads(get(f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={LAT}&longitude={LON}"
+        a = json.loads(get(f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}"
                            "&current=us_aqi&timezone=Asia%2FTashkent"))["current"].get("us_aqi")
         return None if a is None else int(round(a))
     except Exception:  # noqa: BLE001
@@ -136,11 +143,12 @@ def rates() -> list[dict]:
     return [{"c": c, "s": sign[c], "v": float(by[c]["Rate"]), "d": float(by[c].get("Diff") or 0)} for c in sign if c in by]
 
 
-def data(mode: str, fk: dict | None = None) -> dict:
+def data(mode: str, fk: dict | None = None, channel: str = "xojaobod") -> dict:
+    ch = CHANNELS[channel]
     now = dt.datetime.now(TZ)
     today = now.date()
     day = today if mode == "tong" else today + dt.timedelta(days=1)
-    w = weather(day, mode == "kech")
+    w = weather(day, mode == "kech", ch["lat"], ch["lon"])
     i = lambda dd: w["days"].index(dd.isoformat())
     if mode == "tong":
         sun = [{"label": "Бугун қуёш чиқиши", "time": hm(w["sunrise"][i(today)]), "dir": "up"},
@@ -152,16 +160,16 @@ def data(mode: str, fk: dict | None = None) -> dict:
                {"label": "Эртага қуёш чиқиши", "time": hm(w["sunrise"][i(day)]), "dir": "up"}]
         dl, brand, wt, rt = daylen(w["daylight"][i(day)]), "КЕЧКИ ДАЙЖЕСТ", "Эртага об-ҳаво", "Валюта курси · сўм"
         r = (fk or {}).get("rates") or rates()
-    a = aqi()
-    d = {"mode": mode, "day": today.isoformat(), "brand": brand, "city": "Хўжаобод",
+    a = aqi(ch["lat"], ch["lon"])
+    d = {"mode": mode, "channel": channel, "day": today.isoformat(), "brand": brand, "city": ch["city"],
          "date": f"{WD[today.weekday()]}, {today.day} {MON[today.month - 1]}",
-         "sun": sun, "daylen": dl, "bomdod": (fk or {}).get("bomdod") or "",
+         "sun": sun, "daylen": dl, "bomdod": ((fk or {}).get("bomdod") or "") if ch["bomdod"] else "",
          "wtitle": wt, "parts": [{k: p[k] for k in ("label", "t", "desc", "icon")} for p in w["parts"]],
          "rw": f"💧 Ёмғир {w['rain']}%   🌬 Шамол {w['wind']} м/с", "tip": tip(w["parts"], w["rain"], w["wind"]),
          "aqi": a, "aqt": next(t for lim, t in AQT if a is not None and a <= lim) if a is not None else "",
          "rtitle": rt, "rates": [{"c": x["c"], "s": x["s"], "v": x["v"], "d": x["d"]} for x in r],
-         "ad": (fk or {}).get("ad", AD), "adsub": "Ҳар куни минглаб ўқувчи кўради",
-         "user": "@xojaobodcity24", "channel_title": "ХЎЖАОБОД СИТИ 24"}
+         "ad": (fk or {}).get("ad", AD) if ch["ad"] else "", "adsub": "Ҳар куни минглаб ўқувчи кўради",
+         "user": ch["user"], "channel_title": ch["title"]}
     return d
 
 
@@ -180,7 +188,8 @@ def asset(name: str) -> Path:
 def build(mode: str, out: Path, d: dict) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     day = d["day"]
-    name = f"xojaobod-weather-{day}" if mode == "tong" else f"xojaobod-digest-{day}"
+    chn = d.get("channel", "xojaobod")
+    name = f"{chn}-weather-{day}" if mode == "tong" else f"{chn}-digest-{day}"
     js = out / f"{name}.json"
     js.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
     frames, raw, main, mp4 = out / f"{name}-frames", out / f"{name}.raw.mp4", out / f"{name}.main.mp4", out / f"{name}.mp4"
@@ -225,6 +234,6 @@ if __name__ == "__main__":
     if os.environ.get("DAYJEST_JSON"):                       # готовые данные (проверка)
         d = json.loads(Path(os.environ["DAYJEST_JSON"]).read_text(encoding="utf-8"))
     else:
-        d = data(mode, fk)
+        d = data(mode, fk, (fk or {}).get("channel") or "xojaobod")
     print(json.dumps(d, ensure_ascii=False), flush=True)
     print(build(mode, out, d), flush=True)
