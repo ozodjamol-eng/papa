@@ -8,6 +8,7 @@ job.json:
   {"do": "search", "params": {"language": "uz", "gender": "male", "page_size": 40}},
   {"do": "clone", "name": "PAPA-ref", "files": ["ref.mp3"], "description": "..."},
   {"do": "design", "name": "D", "description": "...", "text": "(100–1000 знаков)", "model": "eleven_ttv_v3"},
+  {"do": "sts", "name": "S", "voice_id": "...", "file": "rec.mp3", "settings": {"stability": 0.5, "similarity_boost": 0.85}},
   {"do": "tts", "name": "A", "voice_id": "...|$clone:PAPA-ref", "public_owner_id": "(для голоса из библиотеки)",
    "text": "...", "model": "eleven_v3", "settings": {"stability": 0.4, "similarity_boost": 0.8, "style": 0.3},
    "format": "mp3_44100_64"}
@@ -133,6 +134,21 @@ def main(job_dir, out_dir):
             d, err = call("POST", "/v1/text-to-voice", k, {"voice_name": st["name"], "voice_description": st.get("description", ""),
                                                           "generated_voice_id": st["generated_voice_id"]})
             print(err or f"saved voice_id={d.get('voice_id')}")
+        elif do == "sts":  # 29.10: Voice Changer — подача (темп, паузы, чувство) из записи, тембр — другого голоса
+            vid = st["voice_id"]
+            if vid.startswith("$clone:"):
+                vid = clones.get(vid[7:]) or ""
+            fields = [("model_id", st.get("model", "eleven_multilingual_sts_v2")),
+                      ("remove_background_noise", "true" if st.get("denoise", True) else "false")]
+            if st.get("settings"):
+                fields.append(("voice_settings", json.dumps(st["settings"])))
+            body, h = multipart(fields, [("audio", str(Path(job_dir) / st["file"]))])
+            fmt = st.get("format", "mp3_44100_128")
+            audio, err = call("POST", f"/v1/speech-to-speech/{vid}?output_format={fmt}", k, body, h, raw=True, timeout=300)
+            if err:
+                print(err); continue
+            (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
+            print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ voice_id={vid}")
         elif do == "delete_voice":
             _, err = call("DELETE", f"/v1/voices/{st['voice_id']}", k)
             print(err or "deleted")
