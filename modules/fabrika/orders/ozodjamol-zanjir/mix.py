@@ -24,7 +24,7 @@ for name, s0, s1 in tl["SC"][1:]:
 for t in tl["role_t"]:
     put(sfx, pop, t, 0.30)
 put(sfx, err, tl["brk"], 0.45)
-put(sfx, pop, tl["V"]["Z05"], 0.3); put(sfx, pop, tl["V"]["Z05"] + 2.74, 0.25); put(sfx, pop, tl["V"]["Z05"] + 3.6, 0.25)
+put(sfx, pop, tl["V"]["Z05"], 0.3); put(sfx, pop, tl["V"]["Z05"] + 3.78, 0.25); put(sfx, pop, tl["V"]["Z05"] + 4.7, 0.25)
 put(sfx, ding, tl["tg"], 0.4)
 
 mus = load("/home/claude/zanjir/music.wav")[:N]

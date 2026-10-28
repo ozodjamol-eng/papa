@@ -2,7 +2,7 @@ import numpy as np, wave
 SR = 44100
 BPM = 112
 beat = 60 / BPM
-DUR = 29.0
+DUR = 34.0
 n = int(SR * DUR)
 out = np.zeros((n, 2))
 t_all = np.arange(n) / SR
