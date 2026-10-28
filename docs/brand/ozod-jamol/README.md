@@ -33,3 +33,15 @@ ElevenLabs, библиотека: «Don – Movie Trailer Narrator», voice_id `
 
 ## Фирменный басовый голос (25.10.2026)
 «OZOD JAMOL BAS» — создан с нуля (ElevenLabs text-to-voice, не клон), сохранён в аккаунт: voice_id `YiACFAo5GlRl6fviBljB`, eleven_v3. Сверхнизкий (~65 Гц), медленный, властный. Выбран владельцем «однозначно». Эталон — `golos/BAS_etalon.mp3`. Для эпичных роликов и интро; на телефоне следить за разборчивостью (подъём 2–4 кГц).
+
+## Голоса OZOD JAMOL на Eleven v4 (утверждено владельцем 28.10.2026)
+Модель для всей узбекской озвучки — `eleven_v4`, `language_code: "uz"`, текст кириллицей, stability 0.5, similarity 0.85. Проверка каждой озвучки — «Уши».
+| Голос | voice_id | Характер |
+|---|---|---|
+| Давронбек (библиотека, узб. носитель) | agoC45V78njTIxYzwmSb | уверенный, ~168 Гц, живой |
+| OZOD TREND (свой, дизайн 28.10) | HuvYaRnnFThBzzjuGfrR | тенор-баритон ~136 Гц, трендовый |
+| OZOD JAMOL BAS | YiACFAo5GlRl6fviBljB | сверхнизкий бас, фирменные фразы |
+| Don – Movie Trailer Narrator | JJCR1UICgHnHljtvu5uF | трейлерный (в «Озод Жамол» иногда «Жамал») |
+| Клон владельца | iKTwRsaJmssqBJHugBsY | голос Озода |
+| Vika Grib (женский, тёплый) | gelrownZgbRhxH6LI78J | женский |
+Не используем: Aria (5X91H1Ba65xNiFpKbcg0) — отклонена 28.10.
