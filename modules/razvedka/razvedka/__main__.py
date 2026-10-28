@@ -355,6 +355,16 @@ def main(argv: list[str]) -> None:
         if cmd == "github-auto" or "--send" in argv:
             asyncio.run(_send(text))
             print("GITHUB_SENT")
+        # 28.10 владелец: + «Новинки сервисов» (ElevenLabs, Google, Kling…) — тем же недельным заходом, отдельным сообщением
+        from . import novinki
+        try:
+            ntext = novinki.run(out)
+        except Exception as e:
+            ntext = f"🆕 Новинки сервисов: ошибка — {type(e).__name__}: {e}"
+        print(ntext, flush=True)
+        if cmd == "github-auto" or "--send" in argv:
+            asyncio.run(_send(ntext))
+            print("NOVINKI_SENT")
         print("GITHUB_DONE")
         return
     if cmd == "pain":
