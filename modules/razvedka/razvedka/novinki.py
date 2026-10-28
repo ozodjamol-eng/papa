@@ -74,6 +74,16 @@ def split_topics(text: str) -> tuple[str, list[str]]:
     return (text[:m.start()] + text[m.end():]).strip(), topics
 
 
+def short_err(e: Exception) -> str:
+    """28.10 владелец: никаких непонятных простыней — одна понятная строка."""
+    t = str(e)
+    if "429" in t:
+        return "бесплатный лимит Gemini на сегодня исчерпан — проверю в следующий заход."
+    if "нет GEMINI_API_KEY" in t:
+        return "нет ключа Gemini на сервере."
+    return "не получилось (" + t[:80] + ")."
+
+
 def prompt(now: dt.datetime, seen: list[str]) -> str:
     return TASK.format(today=now.strftime("%d.%m.%Y"), since=(now - dt.timedelta(days=7)).strftime("%d.%m.%Y"),
                        services="\n".join(f"- {n} ({why})" for n, why in SERVICES),
@@ -87,7 +97,7 @@ def run(out_dir: Path, now: dt.datetime | None = None, ask=gemini_ask) -> str:
     try:
         raw, _ = ask(prompt(now, old), search=True)
     except TrendError as e:
-        return f"🆕 Новинки сервисов: ошибка — {e}"
+        return "🆕 Новинки сервисов: " + short_err(e)
     text, topics = split_topics(raw)
     save_history(hist, old, topics)
     (out_dir / "latest-novinki.txt").write_text(text, encoding="utf-8")

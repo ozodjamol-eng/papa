@@ -176,7 +176,7 @@ def run(out_dir: Path, now: dt.datetime | None = None, get=_get, post=_post) -> 
     hist = out_dir / "history-github.json"
     old = load_history_all(hist)
     cands, errors = collect(now.date(), {x.lower() for x in old}, get, os.environ.get("GITHUB_TOKEN", ""))
-    err_line = f"\n⚠️ GitHub: {'; '.join(errors[:3])}" if errors else ""
+    err_line = "\n⚠️ GitHub ответил не на все запросы (лимит) — список неполный." if errors else ""
     if not cands:
         return plain_report([], today_s) + err_line
     key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -193,7 +193,8 @@ def run(out_dir: Path, now: dt.datetime | None = None, get=_get, post=_post) -> 
                 text, usage = ask(prompt, key, post)
             text += f"\n\n💲 расход отчёта ≈ ${cost(usage, usage.get('model', MODEL))} · кандидатов: {len(cands)}"
         except TrendError as e:
-            text = plain_report(cands, today_s, f"ИИ: {e}")
+            from .novinki import short_err
+            text = plain_report(cands, today_s, "ИИ: " + short_err(e))
     # показанных кандидатов больше не предлагаем (даже если ИИ их отсеял) — история на 600 названий
     old_keep = old[-(HISTORY_KEEP - len(cands)):]
     save_history_n(hist, old_keep, [c["name"] for c in cands])
