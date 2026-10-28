@@ -44,6 +44,26 @@ class TestDigest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
         self.db = store.connect(self.dir / "g.db")
+        digest.NEWS_IN_DIGEST = True          # механизм новостей проверяем (в работе выключен с 28.10)
+        self.addCleanup(setattr, digest, "NEWS_IN_DIGEST", False)
+
+    def test_no_news_by_default_2810(self):
+        """28.10 владелец: в «Кечки дайжест» новостей нет совсем — ни в подписи, ни в ролике, ленты не читаются."""
+        digest.NEWS_IN_DIGEST = False
+        calls = []
+        def g(url, *a, **k):
+            calls.append(url)
+            return fake_get(url, *a, **k)
+        r = digest.build(self.db, self.dir, NOW, get=g, gen=fake_gen)
+        self.assertEqual((r["status"], r["news"]), ("READY", 0))
+        m = json.loads((Path(r["dir"]) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertNotIn("ЯНГИЛИКЛАР", m["photo_caption"])
+        self.assertEqual(m["news_sources"], [])
+        self.assertFalse([u for u in calls if "rss" in u.lower() or "kun.uz" in u or "daryo" in u or "gazeta" in u])
+        rd = digest.build_davra(self.db, self.dir, NOW, get=g, gen=fake_gen)
+        if rd.get("status") == "READY":
+            md = json.loads((Path(rd["dir"]) / "manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("ЯНГИЛИКЛАР", md["caption"])
 
     def test_build_ready_package(self):
         r = digest.build(self.db, self.dir, NOW, get=fake_get, gen=fake_gen)
@@ -169,6 +189,8 @@ class VideoDigest(unittest.TestCase):
     """20.10 владелец: дайджест роликом — Хўжаобод и КАТТА ДАВРА (рендер на GitHub, публикация в 20:30)."""
     def setUp(self):
         self.d = Path(tempfile.mkdtemp()); self.db = store.connect(self.d / "g.db")
+        digest.NEWS_IN_DIGEST = True
+        self.addCleanup(setattr, digest, "NEWS_IN_DIGEST", False)
 
     def test_xojaobod_video_json(self):
         r = digest.build(self.db, self.d, NOW, get=fake_get, gen=fake_gen)

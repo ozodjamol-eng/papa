@@ -440,6 +440,9 @@ def sha(p: Path | bytes) -> str:
     return hashlib.sha256(p if isinstance(p, bytes) else p.read_bytes()).hexdigest()
 
 
+NEWS_IN_DIGEST = False   # 28.10 владелец: новости из дайджеста убраны полностью (откат — True)
+
+
 def build(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) -> dict:
     now = (now or dt.datetime.now(TZ)).astimezone(TZ)
     day = now.date()
@@ -456,10 +459,11 @@ def build(db, root: Path, now: dt.datetime | None = None, get=_get, gen=None) ->
     except Exception as e:  # noqa: BLE001
         r = {}
         report["errors"].append(f"курс ЦБ: {e}")
-    items, ferr = news_items(day, get)
+    # 28.10 владелец: новостей в «Кечки дайжест» нет совсем (ни в ролике, ни в подписи) — только полезное.
+    items, ferr = (news_items(day, get) if NEWS_IN_DIGEST else ([], []))
     report["errors"] += [f"лента {x}" for x in ferr]
     try:
-        news = pick_news(db, items, gen)
+        news = pick_news(db, items, gen) if items else []
     except Exception as e:  # noqa: BLE001
         news = []
         report["errors"].append(f"новости (ИИ): {e}")
@@ -629,10 +633,10 @@ def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=No
     except Exception as e:  # noqa: BLE001
         r = {}
         report["errors"].append(f"курс ЦБ: {e}")
-    items, ferr = news_items(day, get)
+    items, ferr = (news_items(day, get) if NEWS_IN_DIGEST else ([], []))   # 28.10: без новостей
     report["errors"] += [f"лента {x}" for x in ferr]
     try:
-        news = pick_news(db, items, gen, system=DAVRA_SYSTEM, block=POL_RX)[:3]
+        news = pick_news(db, items, gen, system=DAVRA_SYSTEM, block=POL_RX)[:3] if items else []
     except Exception as e:  # noqa: BLE001
         news = []
         report["errors"].append(f"новости (ИИ): {e}")
