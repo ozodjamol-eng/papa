@@ -13,7 +13,7 @@ def put(buf, a, t, g=1.0):
 
 voice = np.zeros((N, 2)); sfx = np.zeros((N, 2))
 for z, t in tl["V"].items():
-    put(voice, load(f"/home/claude/zanjir/voice/{z}.mp3"), t, 1.0)
+    put(voice, load(f"/home/claude/zanjir/voice/{z}.wav"), t, 1.0)
 S = "/home/claude/zanjir/src/"
 wh = load(S + "soundreality-whoosh-transition-6-220294.mp3")
 pop = load(S + "soundreality-ui-pop-up-clear-391155.mp3")
@@ -24,7 +24,7 @@ for name, s0, s1 in tl["SC"][1:]:
 for t in tl["role_t"]:
     put(sfx, pop, t, 0.30)
 put(sfx, err, tl["brk"], 0.45)
-put(sfx, pop, tl["V"]["Z05"], 0.3); put(sfx, pop, tl["V"]["Z05"] + 2.88, 0.25); put(sfx, pop, tl["V"]["Z05"] + 3.82, 0.25)
+put(sfx, pop, tl["V"]["Z05"], 0.3); put(sfx, pop, tl["V"]["Z05"] + 2.74, 0.25); put(sfx, pop, tl["V"]["Z05"] + 3.6, 0.25)
 put(sfx, ding, tl["tg"], 0.4)
 
 mus = load("/home/claude/zanjir/music.wav")[:N]
