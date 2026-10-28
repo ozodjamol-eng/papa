@@ -34,7 +34,8 @@ class NovinkiTest(unittest.TestCase):
         def bad(p, search):
             raise TrendError("нет ключа")
         with tempfile.TemporaryDirectory() as d:
-            self.assertIn("ошибка", novinki.run(Path(d), NOW, ask=bad))
+            self.assertIn("не получилось", novinki.run(Path(d), NOW, ask=bad))
+            self.assertIn("лимит", novinki.short_err(TrendError("Gemini HTTP 429: quota")))
 
 
 if __name__ == "__main__":
