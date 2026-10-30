@@ -49,7 +49,8 @@
     "insta-install",
     "sources-auto-install",
     "voronka-restart",
-    "humor-run"
+    "humor-run",
+    "bank-folder"
   ],
   "approve": [
     "morning-pool-clear",

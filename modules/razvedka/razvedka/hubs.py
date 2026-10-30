@@ -97,3 +97,22 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
         return False
     await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
     return True
+
+
+BANK_FOLDER = "KATTA BANK"
+
+
+async def make_bank(client, log=print) -> dict:
+    """🏦 30.10 владелец: папка «KATTA BANK» со всеми хабами направлений (новые хабы — создать)."""
+    from .sortfolders import create_folders
+    cache: dict = {}
+    chans, missing = [], []
+    for name in HUBS:
+        ent = await entity(client, name, cache)
+        if ent is None:
+            missing.append(name)
+            continue
+        chans.append({"entity": ent})
+        log(f"  🏦 {name}: {'есть' if ent else 'нет'}")
+    done = await create_folders(client, {BANK_FOLDER: chans}, log=log)
+    return {"папка": done, "нет хаба": missing}

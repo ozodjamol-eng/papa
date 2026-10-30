@@ -240,6 +240,22 @@ async def _insta() -> dict:
         await c.disconnect()
 
 
+async def _bank() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return {"пропуск": f"Разведка занята ({', '.join(busy)}) — повторите через 5–10 минут"}
+    from . import hubs
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return await hubs.make_bank(c, log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _humor() -> str:
     import datetime as _dt
     import subprocess
@@ -438,6 +454,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "insta":                          # 📸 30.10: агент Instagram-трендов → пульт канала
         print("INSTA_DONE", asyncio.run(_insta()))
+        return
+    if cmd == "bank":                           # 🏦 30.10: папка KATTA BANK + новые хабы
+        print("BANK_DONE", asyncio.run(_bank()))
         return
     if cmd == "humor":                          # 😂 30.10: разведчик приколов → чистые подключить в КАТТА ДАВРА
         print(asyncio.run(_humor()))
