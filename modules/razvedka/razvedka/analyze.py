@@ -127,7 +127,9 @@ def analyze(db, days: int = 7, now: dt.datetime | None = None) -> dict:
     top_posts = [{"title": chans.get(p["channel_id"], {}).get("title", "?"), "rel": round(p["rel"], 1),
                   "views": p["views"], "media": p["media"], "when": p["local"].strftime("%d.%m %H:%M"),
                   "snippet": " ".join((p["text"] or "").split())[:90]} for p in top]
+    from . import daymap   # 30.10: карта дня конкурентов по папкам-темам
     return {
+        "daymap": daymap.build(posts, chans),
         "days": days, "generated": now.astimezone(TZ).strftime("%d.%m.%Y %H:%M"),
         "channels": channel_stats, "posts_total": len(posts),
         "hours": hours, "weekdays": weekdays, "media": media,

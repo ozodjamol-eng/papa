@@ -56,7 +56,7 @@ def publish(text: str, a: dict, pub_dir: str | None = None) -> str | None:
         "top_channels": [{k: c[k] for k in ("title", "username", "folder", "is_own", "subscribers",
                                              "median_views", "err", "per_day", "ads_per_day")}
                          for c in a["channels"][:15]],
-        "text": text[:15000],
+        "text": text[:40000],
     }
     tmp = d / ".latest.json.tmp"
     tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

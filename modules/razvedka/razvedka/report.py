@@ -67,5 +67,8 @@ def render(a: dict) -> str:
             L.append(f"  ×{p['rel']} · {p['title'][:20]} · {p['when']} · {MEDIA_RU.get(p['media'], p['media'])} · "
                      f"{p['snippet'] or '(без текста)'}")
     L.append("")
+    if a.get("daymap"):
+        from .daymap import render as daymap_render
+        L += daymap_render(a["daymap"])
     L.append("Сила ×1.0 = обычный пост канала. Посты моложе суток в сравнение не входят.")
     return "\n".join(L)

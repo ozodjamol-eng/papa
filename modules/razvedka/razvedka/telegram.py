@@ -65,10 +65,33 @@ class TelethonSource:
 
     async def channels(self, cfg: dict) -> list[dict]:
         found: dict[int, dict] = {}
+        my_folders = None
         for f in cfg.get("folders", []):
-            res = await self.c(CheckChatlistInviteRequest(slug=f["slug"]))
-            for ch in getattr(res, "chats", []):
-                if isinstance(ch, Channel) and ch.id not in found:
+            if f.get("name"):
+                # 30.10: папка владельца по названию (как у куратора), не ссылка-папка
+                from .curate import folder_peers, peers_in
+                if my_folders is None:
+                    my_folders = await folder_peers(self.c)
+                chats = []
+                for p in peers_in(my_folders, [f["name"]]):
+                    try:
+                        chats.append(await self.c.get_entity(p))
+                    except Exception:
+                        continue
+            else:
+                res = await self.c(CheckChatlistInviteRequest(slug=f["slug"]))
+                chats = getattr(res, "chats", [])
+            for ch in chats:
+                if not getattr(ch, "broadcast", True) and f.get("name"):
+                    continue            # в папке владельца бывают группы — берём только каналы
+                if f.get("name") and any(w in (getattr(ch, "title", "") or "").upper() for w in ("ХАБ", "HUB", "PAPA")):
+                    continue            # свои служебные хабы — не конкуренты
+                if isinstance(ch, Channel) and ch.id in found:
+                    # 30.10: канал в двух папках — помним обе темы («A + B»), чтобы карта дня видела его в обеих
+                    t = f.get("topic", "?")
+                    if t not in found[ch.id]["folder"].split(" + "):
+                        found[ch.id]["folder"] += " + " + t
+                elif isinstance(ch, Channel):
                     self._entities[ch.id] = ch
                     found[ch.id] = {"id": ch.id, "username": ch.username, "title": ch.title or str(ch.id),
                                     "folder": f.get("topic", "?"), "is_own": 0, "subscribers": None}
