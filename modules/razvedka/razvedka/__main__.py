@@ -226,7 +226,7 @@ async def _sort_folders() -> dict:
 
 async def _curate() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:                                   # один профиль — одна задача за раз
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}

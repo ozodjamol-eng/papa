@@ -89,3 +89,16 @@ class TestSourcesChoice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RubricCodeTest(unittest.TestCase):
+    def test_rubric_code(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from genplan import sources_choice as S
+        p = Path(tempfile.mkdtemp()) / "c.json"
+        p.write_text(json.dumps({"channels": {"xojaobod": {"humor": [{"id": 777}], "warn": [{"id": 888}]}}}))
+        self.assertEqual(S.rubric_code("xojaobod", -1000000000777, p), "humor")
+        self.assertEqual(S.rubric_code("xojaobod", 888, p), "warn")
+        self.assertIsNone(S.rubric_code("davra", 777, p))

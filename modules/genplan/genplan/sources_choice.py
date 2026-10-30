@@ -33,6 +33,21 @@ def is_chosen(channel: str | None, chat_id: int | None, path: Path | None = None
     return any(x.get("id") in (tg, chat_id) for xs in ((data.get("channels") or {}).get(channel) or {}).values() for x in xs)
 
 
+def rubric_code(channel: str | None, chat_id: int | None, path: Path | None = None) -> str | None:
+    """30.10: под какую рубрику владелец выбрал этот источник (news/useful/humor/…); None — не выбран."""
+    if not channel or not chat_id:
+        return None
+    try:
+        data = json.loads((path or CHOICE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    tg = -int(chat_id) - 1_000_000_000_000 if int(chat_id) < -1_000_000_000_000 else None
+    for code, xs in (((data.get("channels") or {}).get(channel)) or {}).items():
+        if any(x.get("id") in (tg, chat_id) for x in xs):
+            return code
+    return None
+
+
 def toggle(markup: dict, data: str) -> dict:
     """Переключить галочку у кнопки с этим callback_data."""
     rows = []

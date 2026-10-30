@@ -1,11 +1,9 @@
 [Unit]
-Description=PAPA куратор — лучшее из папок-источников → карточки в пульты (08:00, 12:30, 17:00 Ташкент)
+Description=PAPA куратор — каждый час 07:05–20:05 Ташкент: материал по рубрикам из выбранных источников → пульты (30.10)
 
 [Timer]
-OnCalendar=*-*-* 03:00:00 UTC
-OnCalendar=*-*-* 07:30:00 UTC
-OnCalendar=*-*-* 12:00:00 UTC
-RandomizedDelaySec=3min
+OnCalendar=*-*-* 02..15:05:00 UTC
+RandomizedDelaySec=2min
 Persistent=false
 Unit=papa-razvedka@curate.service
 

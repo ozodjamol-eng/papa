@@ -622,6 +622,14 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         notes = [f"📦 Склад «{src}» · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
     elif chosen:                                   # 26.10 владелец: выбранный им источник — тоже сам, с вето 🗑
         store.update(db, mid, auto=1)
+        # 30.10: рубрика — по теме, под которую владелец выбрал источник (кулги-канал → Ҳажвия), если по словам
+        # не нашлась своя конкретная тема (Огоҳлантириш, Пул, Об-ҳаво…). Раньше всё без слов шло в «Видео» и висело.
+        code = sources_choice.rubric_code(channel, origin_id(msgs[0]))
+        ch_cfg = cfg["channels"].get(channel) or {}
+        by_src = (ch_cfg.get("source_rubrics") or {}).get(code or "")
+        if by_src and rub in (ch_cfg.get("guess_default"), smart._first_rubric(ch_cfg), "Видео", "Янгиликлар"):
+            rub = by_src
+            store.update(db, mid, rubric=rub)
         stock = sk = True
         notes = [f"📡 Ваш источник {src} · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
     elif src:

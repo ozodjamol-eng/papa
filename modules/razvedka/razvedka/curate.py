@@ -29,8 +29,9 @@ BOTS = {"davra": "PapaGenplanBot", "paparazzi": "PaparazziUZ_PultBot", "xojaobod
 XOJAOBOD_FLAG = Path(os.environ.get("CURATOR_XOJAOBOD_FLAG", "/etc/papa-curator-xojaobod"))
 OWN = {"kattadavrauz", "ozodjamoll", "xojaobodcity24", "xojaobodlikarimiz"}
 PER_RUN = {k: int(v) for k, v in (x.split("=", 1) for x in os.environ.get(
-    "CURATOR_PER_RUN", "davra=5,paparazzi=4,xojaobod=4").split(",") if "=" in x)}
+    "CURATOR_PER_RUN", "davra=3,paparazzi=2,xojaobod=3").split(",") if "=" in x)}   # 30.10: каждый час, понемногу
 MAX_HOURS, MIN_AGE_MIN, MIN_VIEWS = 12, 40, 300
+MIN_CAPTION_WORDS = 3          # 30.10 владелец: «непонятное» — посты без подписи; нужна хотя бы короткая подпись
 AD = re.compile(r"#?реклама|#?reklama|ҳамкорлик|hamkorlik|sotiladi|сотилади|нархи|narxi|скидк|chegirma|"
                 r"чегирма|буюртма|buyurtma|доставка|yetkazib|📞|☎️|\+998[\s\d-]{9,}|t\.me/\+|joinchat|aksiya|акция", re.I)
 URL = re.compile(r"https?://|t\.me/", re.I)
@@ -80,10 +81,24 @@ def is_ad(text: str, has_buttons: bool) -> bool:
 
 
 def pick(cands: list[dict], n: int, history: list[dict]) -> list[dict]:
-    """Лучшие по score; одна новость — один раз (за этот запуск и последние 3 дня)."""
+    """Лучшие по score; одна новость — один раз (за этот запуск и последние 3 дня).
+    30.10: рубрики по кругу — сначала те, которых за сутки было меньше всего (чтобы часы сетки не пустовали)."""
     seen = [set(h["sig"]) for h in history]
     out = []
+    recent: dict[str, int] = {}
+    for h in history:
+        if h.get("rub"):
+            recent[h["rub"]] = recent.get(h["rub"], 0) + 1
+    by_rub: dict[str, list[dict]] = {}
     for c in sorted(cands, key=lambda c: -c["score"]):
+        by_rub.setdefault(c.get("rub") or "", []).append(c)
+    order = []
+    queues = sorted(by_rub.values(), key=lambda q: recent.get(q[0].get("rub") or "", 0))
+    while any(queues):
+        for q in queues:
+            if q:
+                order.append(q.pop(0))
+    for c in order:
         if len(out) >= n:
             break
         s = sig(c["text"])
@@ -220,6 +235,8 @@ async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel:
         if k == "video" and not (5 <= (part[0].file.duration or 0) <= 600):
             continue
         v = max(x.views or 0 for x in part)
+        if k != "audio" and len(WORD.findall(text)) < MIN_CAPTION_WORDS:   # 30.10: без понятной подписи не берём
+            continue
         if v < MIN_VIEWS or is_ad(text, bool(getattr(part[0], "reply_markup", None))) or off_policy(text, channel):
             continue
         age = (now - m.date).total_seconds() / 3600
@@ -270,6 +287,8 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     folders = await folder_peers(client)
     report = {}
     gemini_ok = bool(os.environ.get("GEMINI_API_KEY"))
+    if gemini_ok:      # 30.10: куратор теперь каждый час — кадры на «лёгкой» модели (свой дневной лимит, как у отбора)
+        os.environ["GEMINI_MODEL"] = os.environ.get("CURATOR_GEMINI_MODEL", "gemini-flash-lite-latest")
     routes = dict(ROUTES)
     if XOJAOBOD_FLAG.exists():
         routes["xojaobod"] = ("XOJAOBOD CITY", "XOJAOBODCITY", "PAPA·Шаҳар")
@@ -290,13 +309,18 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             report[channel] = "нет папки " + " / ".join(names) + " · есть: " + ", ".join(sorted(folders)) [:200]
             continue
         cands, seen_ids = [], set()
+        rub_of = {x["id"]: code for code, xs in (((choice or {}).get("channels") or {}).get(channel) or {}).items() for x in xs}
         for p in peers:
             try:
                 ent = await client.get_entity(p)
                 if ent.id in seen_ids:               # выбранный канал есть и в папке — читаем один раз
                     continue
                 seen_ids.add(ent.id)
-                cands += await candidates(client, ent, since, now, channel, log)
+                got = await candidates(client, ent, since, now, channel, log)
+                rub = rub_of.get(ent.id, "")            # 30.10: под какую рубрику владелец выбрал источник
+                for c in got:
+                    c["rub"] = rub
+                cands += got
             except Exception as e:  # noqa: BLE001 — один канал не роняет куратора
                 log(f"  {type(e).__name__}: {str(e)[:80]}")
             await asyncio.sleep(1)
@@ -333,7 +357,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             except Exception as e:  # noqa: BLE001 — защищённые от пересылки каналы и т.п.
                 log(f"  переслать {c['key']}: {type(e).__name__}")
                 continue
-            hist.append({"key": c["key"], "sig": sorted(sig(c["text"])), "ts": now.isoformat()})
+            hist.append({"key": c["key"], "sig": sorted(sig(c["text"])), "ts": now.isoformat(), "rub": c.get("rub", "")})
             sent += 1
             log(f"  → {channel}: {c['source']} · {c['views']} просм. · ×{c['score']:.1f} · {c['text'][:50]!r}")
             await asyncio.sleep(4)

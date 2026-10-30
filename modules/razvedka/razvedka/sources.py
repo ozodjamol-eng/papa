@@ -47,13 +47,18 @@ THEMES = [
     ("music", "🎤 Жонли ижро ва шоу", {"live_music", "music", "showbiz"}),
     ("food", "🍲 Таом ва саломатлик", {"recipes", "health"}),
     ("faith", "🕌 Маънавият", {"religion"}),
+    ("warn", "⚠️ Огоҳлантириш", set()),        # 30.10: по названию канала (NAME_THEMES), не по темам сортировщика
+    ("money", "💵 Курс/нарх", set()),
 ]
+# 30.10: рубрики, которые узнаём по названию/юзернейму канала (сортировщик их не различает)
+NAME_THEMES = {"warn": ("kiberjinoyat", "кибержиноят", "iiv", "иив", "ichkiishlar", "ички ишлар", "firibgar", "фирибгар"),
+               "money": ("bank", "банк", "valyuta", "валюта", "kurs", "курс", "dollar", "доллар", "narx", "нарх", "cbu")}
 THEME_NAME = {c: n for c, n, _ in THEMES}
 # наш канал: (код, название, папки — первая основная, рубрики по порядку важности)
 PROFILES = [
     ("xojaobod", "🏙 ХЎЖАОБОД CITY 24", ("XOJAOBOD CITY", "XOJAOBODCITY", "PAPA·Шаҳар"),
-     ("news", "useful", "humor", "food", "faith")),
-    ("davra", "🎉 КАТТА ДАВРА", ("KATTA DAVRA", "PAPA·Давра", "PAPA·Спорт"), ("news", "fun", "humor", "useful")),
+     ("news", "useful", "humor", "food", "faith", "warn", "money")),
+    ("davra", "🎉 КАТТА ДАВРА", ("KATTA DAVRA", "PAPA·Давра", "PAPA·Спорт"), ("news", "fun", "humor", "useful", "faith", "food")),
     ("paparazzi", "⭐ PAPARAZZI UZ", ("Paparazzi UZ", "PAPA·Музыка"), ("music", "humor")),
 ]
 NEWS_FOLDERS = ("Новости", "Yangiliklar", "Янгиликлар")           # для рубрики «Новости» — ещё эта папка владельца
@@ -367,6 +372,8 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
         for ch in dict.fromkeys(r["for"] + r["news_for"]):
             allowed = rub[ch] if ch in r["for"] else ("news",)
             t = theme(r["cats"], allowed, ch not in NO_POLITICS)
+            nm = (r.get("title") or "").lower() + " " + (r.get("username") or "").lower()
+            t = next((c for c, ws in NAME_THEMES.items() if c in allowed and any(w in nm for w in ws)), t)
             if t:
                 r["theme_by"][ch] = t
     for r in rows:
