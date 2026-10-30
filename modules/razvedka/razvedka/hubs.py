@@ -95,7 +95,10 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
     media = [m.media for m in msgs if getattr(m, "media", None)]
     if not media:
         return False
-    await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
+    try:
+        await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
+    except TypeError:                     # альбом со смешанным медиа — кладём первое (30.10, 2 случая у архивариуса)
+        await client.send_file(hub_ent, media[0], caption=text or None)
     return True
 
 
