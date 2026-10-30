@@ -179,6 +179,94 @@ def download(url: str) -> bytes | None:
         return None
 
 
+# 🔎 30.10 владелец (Mehmon TV): чужие авторские интервью с лого — НЕ берём видео (чужой труд + правило лого).
+# Берём сигнал: новое интервью → карточка «тема дня» в хаб трендов + наш черновик новости для PaparazziUZ +
+# разбор «стреляет ли» (просмотры против обычных у автора). Видео не скачиваем, ничего не публикуем.
+SIGNAL = "🔎 PAPA СИГНАЛ:"
+SIGNAL_PROMPT = """Сен — «PaparazziUZ» шоу-бизнес Telegram-каналининг муҳарририсан. Бошқа блогер интервьюсининг
+тагидаги матнни ўқиб, ЎЗИМИЗНИНГ қисқа янгилик матнимизни ёз (кўчирма эмас): биринчи қатор — эмодзи билан сарлавҳа
+(БОШ ҲАРФЛАР), кейин 2–3 қисқа гап — ким, нима деди/нима бўлди. Фақат ўзбек тилида, КИРИЛЛ алифбосида.
+Бошқа @юзернейм, ҳавола, хэштег, блогер/канал номини ҚЎЙМА. Фактларни ўзгартирма, ўзингдан қўшма.
+Фақат тайёр матнни қайтар."""
+
+
+def signal_picks(items: list[dict], state: dict, per_account: int, now: dt.datetime) -> list[dict]:
+    """Новые свежие посты аккаунтов-сигналов (каждый — один раз), с разбором «во сколько раз сильнее обычного»."""
+    seen = set(state.get("wseen", []))
+    hist = state.setdefault("wviews", {})
+    out, count = [], {}
+    for it in sorted(fresh(items, now), key=lambda x: str(x.get("timestamp") or ""), reverse=True):
+        code = it.get("shortCode") or it.get("id")
+        owner = (it.get("ownerUsername") or "").lower()
+        if not code or not owner or code in seen:
+            continue
+        views = int(it.get("videoPlayCount") or it.get("videoViewCount") or 0)
+        it["_code"], it["_owner"], it["_views"], it["_ratio"] = code, owner, views, ratio(views, hist.get(owner, []))
+        if count.get(owner, 0) >= per_account:
+            continue
+        count[owner] = count.get(owner, 0) + 1
+        out.append(it)
+    for it in out:
+        state.setdefault("wseen", []).append(it["_code"])
+        if it["_views"]:
+            h = hist.setdefault(it["_owner"], [])
+            h.append(it["_views"])
+            del h[:-30]
+    state["wseen"] = state.get("wseen", [])[-1000:]
+    return out
+
+
+def signal_card(it: dict, draft: str, chan: str, rub: str) -> str:
+    v, r = it.get("_views", 0), it.get("_ratio", 1.0)
+    vs = (f"{v / 1e6:.1f} млн" if v >= 1e6 else f"{v // 1000} минг") if v else "—"
+    hot = " 🔥 стреляет" if r >= 2 else ""
+    head = f"{SIGNAL} @{it['_owner']} · 👁 {vs} (×{r:.1f} от обычного){hot}"
+    body = draft or "(черновик не написан — напишите сами ✏️)"
+    link = f"https://www.instagram.com/reel/{it['_code']}/"
+    return f"{head}\n\n{body}\n\n🔗 {link}\n🏷 → {chan} · рубрика: {rub} · видео НЕ берём (чужое лого), только тема"
+
+
+def write_signal(caption: str) -> str:
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key or not (caption or "").strip():
+        return ""
+    body = {"systemInstruction": {"parts": [{"text": SIGNAL_PROMPT}]},
+            "contents": [{"role": "user", "parts": [{"text": f"Интервью матни:\n{caption[:2000]}"}]}],
+            "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.5}}
+    for model in dict.fromkeys([os.environ.get("INSTA_TEXT_MODEL", "gemini-flash-latest"), "gemini-flash-lite-latest"]):
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                     data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = json.loads(r.read())
+            parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+            if text:
+                return text[:900]
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
+
+
+async def watch(client, target, wc: dict, st: dict, token: str, now: dt.datetime, log=print) -> int:
+    accounts = [a.strip().lstrip("@").lower() for a in wc.get("accounts", []) if a.strip()]
+    if not accounts:
+        return 0
+    items = await asyncio.to_thread(apify_reels, accounts, int(wc.get("fetch", 6)), token)
+    sent = 0
+    for it in signal_picks(items, st, int(wc.get("per_account", 3)), now):
+        draft = await asyncio.to_thread(write_signal, it.get("caption") or "")
+        card = signal_card(it, draft, wc.get("channel", "PaparazziUZ"), wc.get("rubric", "Шоу-бизнес янгилик"))
+        try:
+            await client.send_message(target, card[:4000], link_preview=False)
+            sent += 1
+            log(f"  🔎 сигнал @{it['_owner']} · {it['_views']} просм.")
+        except Exception as e:  # noqa: BLE001
+            log(f"  сигнал: {type(e).__name__}")
+        await asyncio.sleep(2)
+    return sent
+
+
 async def hub(client):
     """Свой закрытый канал-хаб трендов (создаём, если нет). Владелец — профиль Разведки (= профиль владельца)."""
     from telethon.tl.functions.channels import CreateChannelRequest
@@ -256,6 +344,10 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
             log(f"  📸 {label} @{it['_owner']} · {it['_views']} просм.")
             await asyncio.sleep(4)
         report[label] = sent
+    try:                                               # 🔎 30.10: аккаунты-сигналы (Mehmon TV и др.) — текстом, без видео
+        report["🔎 сигналы"] = await watch(client, target, ic.get("watch") or {}, st, token, now, log)
+    except Exception as e:  # noqa: BLE001 — сигналы не роняют тренды
+        log(f"сигналы: {type(e).__name__}")
     st["seen"] = st.get("seen", [])[-3000:]
     st["last"] = now.isoformat()
     state_dir.mkdir(parents=True, exist_ok=True)

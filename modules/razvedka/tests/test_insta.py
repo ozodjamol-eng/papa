@@ -46,3 +46,19 @@ class Footer(unittest.TestCase):
         self.assertIn("PaparazziUZ", f)
         self.assertIn("рубрика: Мусиқа", f)
         self.assertIn("2.2 млн", f)
+
+
+class TestSignal(unittest.TestCase):
+    def test_signal_picks_once_and_card(self):
+        import datetime as dt
+        now = dt.datetime(2026, 10, 30, tzinfo=dt.timezone.utc)
+        items = [{"shortCode": f"c{i}", "ownerUsername": "MehmonTV", "videoPlayCount": 1000 * (i + 1),
+                  "timestamp": f"2026-10-2{9 - i}T10:00:00Z"} for i in range(5)]
+        st = {}
+        got = insta.signal_picks(items, st, 3, now)
+        self.assertEqual([x["_code"] for x in got], ["c0", "c1", "c2"])
+        self.assertEqual(insta.signal_picks(items, st, 3, now)[0]["_code"], "c3")   # уже виденные не повторяются
+        card = insta.signal_card(got[0], "", "PaparazziUZ", "Шоу-бизнес янгилик")
+        self.assertTrue(card.startswith(insta.SIGNAL))
+        self.assertIn("instagram.com/reel/c0/", card)
+        self.assertIn("видео НЕ берём", card)
