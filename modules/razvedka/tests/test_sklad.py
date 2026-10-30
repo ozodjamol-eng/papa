@@ -45,7 +45,8 @@ class TestSklad(unittest.TestCase):
         d = [(s, x["id"]) for s, x, _ in p["davra"]]
         self.assertEqual([x for s, x in d if s == "ФОЙДАЛИК"], [1, 2, 3])                  # ровно 3, с начала
         self.assertEqual([s for s, _ in d].count("РАЗВЛЕКАТЕЛЬНО"), 2)                       # юмор — 2
-        self.assertEqual(sum(s in ("ФОЙДАЛИК ОВКАТ", "Jonlik ijrolar") for s, _ in d), 3)  # + 3 других по кругу (30.10: и музыка)
+        self.assertEqual([s for s, _ in d].count("Jonlik ijrolar"), 3)                       # 30.10 сверка: музыка — своя норма 3
+        self.assertEqual([s for s, _ in d].count("ФОЙДАЛИК ОВКАТ"), 3)                       # + 3 других по кругу
         x = [(s, i) for s, i, _ in [(s, x["id"], k) for s, x, k in p["xojaobod"]]]
         self.assertEqual([i for s, i in x if s == "ФОЙДАЛИК"], [20, 19, 18])                # Хўжаобод — с конца
         self.assertEqual(len(x), 6)                                                        # 3 + юмор 1 + 2 по кругу
@@ -56,6 +57,15 @@ class TestSklad(unittest.TestCase):
         used = {"davra|ФОЙДАЛИК": ["1", "2", "3"]}
         p2 = sklad.plan(stashes, used, {"davra|ФОЙДАЛИК": 2}, EVENING)
         self.assertEqual([x["id"] for s, x, _ in p2["davra"] if s == "ФОЙДАЛИК"], [4])     # норма: осталась 1
+
+    def test_davra_hour_norms(self):
+        """30.10 сверка: часы Давры «час = рубрика» получают свои нормы — мотивация 2, музыка 3, бизнес 1, ибрат 1."""
+        self.assertEqual({k: sklad.FIXED["davra"][k] for k in ("МОТИВАЦИЯ", "Jonlik ijrolar", "УЙДА БИЗНЕС", "ИБРАТ")},
+                         {"МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1})
+        stashes = {k: [it(i) for i in range(n, n + 5)] for k, n in
+                   (("МОТИВАЦИЯ", 400), ("Jonlik ijrolar", 500), ("УЙДА БИЗНЕС", 600), ("ИБРАТ", 700))}
+        d = [s for s, _, _ in sklad.plan(stashes, {}, {}, EVENING)["davra"]]
+        self.assertEqual((d.count("МОТИВАЦИЯ"), d.count("Jonlik ijrolar"), d.count("УЙДА БИЗНЕС"), d.count("ИБРАТ")), (2, 3, 1, 1))
 
     def test_stale_words_and_juma_only_friday(self):
         self.assertFalse(sklad.eligible(it(1, text="Бугун об-ҳаво иссиқ"), "ФОЙДАЛИК", "davra", MORNING))
