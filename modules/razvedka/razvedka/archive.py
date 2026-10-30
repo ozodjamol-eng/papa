@@ -22,6 +22,7 @@ from . import curate, hubs, sklad
 CHANNELS = ["ozodjamoll", "kattadavrauz"]     # 30.10: PaparazziUZ + КАТТА ДАВРА. xojaobodcity24 — группа, просмотров нет → не годится
 MIN_AGE = dt.timedelta(days=180)
 SCAN = 400                                    # постов просмотреть за запуск
+PACE = 5                                      # сек между запросами к Gemini
 TAKE = 30                                     # положить в банк за запуск (на канал)
 CLASSIFY = """Сен — медиа-архив муҳаррирсан. Telegram-каналимизнинг эски постини (матн ва кадр) кўриб чиқ.
 Вазифа: 1) пост қайси бўлимга тегишли — фақат шулардан бири:
@@ -127,10 +128,19 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                 jpeg = await client.download_media(it["msgs"][0], file=bytes, thumb=-1)
             except Exception:  # noqa: BLE001
                 pass
-            try:
-                res = await asyncio.to_thread(classify, it["text"], jpeg)
-            except RuntimeError as e:
-                log(f"  {e} — остальное в следующий раз")
+            res = None
+            for wait in (0, 65):                                 # 31.10: 429 — чаще всего лимит в минуту; пауза и ещё раз
+                if wait:
+                    await asyncio.sleep(wait)
+                try:
+                    res = await asyncio.to_thread(classify, it["text"], jpeg)
+                    break
+                except RuntimeError as e:
+                    if "лимит" not in str(e) or wait:
+                        log(f"  {e} — остальное в следующий раз")
+                        break
+            await asyncio.sleep(PACE)                            # бесплатный Gemini: не больше ~12 запросов в минуту
+            if res is None:
                 st["pos"][ch] = it["id"]                         # продолжим с этого места
                 break
             if res["hub"] == "SKIP":
