@@ -202,3 +202,18 @@ class ImageTest(unittest.TestCase):
         m = msg(""); m["business_message"].pop("text"); m["business_message"]["sticker"] = {"file_id": "st", "emoji": "🕌"}
         self.assertEqual(A.handle(db, m, api, T0, ai=ai), "greeting")
         self.assertEqual(got[0], (b"IMG", "image/webp"))
+
+
+class AutoGreetingTest(unittest.TestCase):
+    """30.10: авто-приветствие Telegram от имени владельца не глушит ассистента."""
+    def test_auto_greeting_does_not_silence(self):
+        db, api = A.connect(":memory:"), Api()
+        A.handle(db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}}, api, T0)
+        ai = lambda *a, **k: {"kind": "greeting", "reply": "Жумангиз муборак!"}
+        A.handle(db, msg("Juma muborak"), api, T0, ai=ai)
+        self.assertEqual(A.handle(db, msg("Ассалому алейкум 🙏", uid=OWNER), api, T0), "owner_auto")
+        self.assertEqual(A.handle(db, msg("🕌"), api, T0 + dt.timedelta(minutes=1), ai=ai), "greeting")   # не «quiet»
+        for chat in (1, 2, 3):                                    # одинаковый текст владельца в 3 чатах — тоже авто
+            A.handle(db, msg("Салом! Ҳозир бандман", uid=OWNER, chat=chat), api, T0)
+        self.assertTrue(A.is_auto_owner(db, "Салом! Ҳозир бандман", T0))
+        self.assertFalse(A.is_auto_owner(db, "Ваалайкум, яхшимисиз?", T0))

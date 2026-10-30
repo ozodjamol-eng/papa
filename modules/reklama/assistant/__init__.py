@@ -111,7 +111,10 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
         return "skip"
     row = db.execute("SELECT * FROM chats WHERE chat=?", (chat["id"],)).fetchone()
     if frm.get("id") == c["owner"]:                          # владелец ответил сам — дальше бот молчит
-        _log(db, chat["id"], "owner", _incoming(m), now)
+        said = _incoming(m)
+        _log(db, chat["id"], "owner", said, now)
+        if is_auto_owner(db, said, now):                     # 30.10: авто-«Приветствие» Telegram — не живой ответ владельца
+            return "owner_auto"
         db.execute("INSERT INTO chats(chat, owner_at) VALUES(?,?) ON CONFLICT(chat) DO UPDATE SET owner_at=excluded.owner_at",
                    (chat["id"], now.isoformat()))
         db.commit()
@@ -121,6 +124,11 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
     if ai is None and os.environ.get("GEMINI_API_KEY"):
         ai = gemini_ai
     if ai is not None:
+        if o is not None and o < OWNER_QUIET:            # 30.10: если за сутки от владельца были только авто-приветствия — не молчим
+            recent = db.execute("SELECT text FROM msgs WHERE chat=? AND role='owner' AND at>=?",
+                                (chat["id"], (now - OWNER_QUIET).isoformat())).fetchall()
+            if recent and all(is_auto_owner(db, r[0], now) for r in recent):
+                o = None
         if o is not None and o < OWNER_QUIET:           # владелец сам ведёт разговор — молчим
             _log(db, chat["id"], "user", _incoming(m), now)
             return "quiet"
@@ -225,6 +233,22 @@ def image_ref(m: dict) -> tuple[str, str] | None:
     if (d.get("mime_type") or "").startswith("image/") and (d.get("file_size") or 0) <= IMG_MAX:
         return d["file_id"], d["mime_type"]
     return None
+
+
+# 30.10: «Приветствие» Telegram для бизнеса уходит от имени владельца — раньше бот думал, что владелец пишет сам, и молчал сутки.
+AUTO_OWNER = {"ассалому алейкум 🙏"}
+
+
+def is_auto_owner(db, text: str, now: dt.datetime) -> bool:
+    """Автосообщение владельца: известный текст или одинаковый текст владельца в 3+ разных чатах за 30 дней."""
+    t = (text or "").strip()
+    if not t:
+        return False
+    if t.lower() in AUTO_OWNER:
+        return True
+    n = db.execute("SELECT COUNT(DISTINCT chat) FROM msgs WHERE role='owner' AND text=? AND at>=?",
+                   (t, (now - dt.timedelta(days=30)).isoformat())).fetchone()[0]
+    return n >= 3
 
 
 def _log(db, chat: int, role: str, text: str, now: dt.datetime) -> None:
