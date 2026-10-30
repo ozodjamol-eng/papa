@@ -803,6 +803,29 @@ def live_opts(cfg: dict) -> dict:
     return (cfg.get("channels", {}).get("xojaobod") or {}).get("digest") or {}
 
 
+VIDEO_WAIT = dt.timedelta(minutes=5)   # 30.10 аудит: ролик не готов к 20:30 — ждём до 20:35, потом картинка
+
+
+def _video_or_wait(db, flag: str, name: str, at: str, now: dt.datetime, vget=None):
+    """Ролик для дайджеста. До at+5 мин — пробуем раз в минуту (коротко, чтобы не держать публикации);
+    не готов — 'WAIT'. После — последняя попытка, не вышло — (None, причина) → картинка."""
+    h, m = map(int, at.split(":"))
+    deadline = now.replace(hour=h, minute=m, second=0, microsecond=0) + VIDEO_WAIT
+    if now < deadline:
+        last = store_get(db, flag + "_try")
+        if last and now - dt.datetime.fromisoformat(last) < dt.timedelta(seconds=60):
+            return "WAIT"
+        store_set(db, flag + "_try", now.isoformat())
+        try:
+            return motion_video(name, vget or (lambda u: _get(u, timeout=15, tries=1))), ""
+        except Exception:  # noqa: BLE001 — ещё не собран: ждём
+            return "WAIT"
+    try:
+        return motion_video(name, vget), ""
+    except Exception as e:  # noqa: BLE001
+        return None, f"{type(e).__name__}: {e}"
+
+
 async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = None, root: Path | None = None,
                        vget=None) -> str | None:
     """Один раз в день: готовый пакет (manifest READY) → баннер с подписью в группу от аккаунта PAPA (анонимный админ).
@@ -827,12 +850,12 @@ async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = 
         return None
     from . import morning
     to = morning.target(cfg, env, "xojaobod")
+    got = _video_or_wait(db, flag, f"xojaobod-digest-{day}.mp4", o.get("at", "20:30"), now, vget)   # 🎬 ждём до 20:35
+    if got == "WAIT":
+        return None
+    vid, why = got
+    note = f" (ролика нет: {why} — вышла картинка)" if why else ""
     store_set(db, flag, "sending")                      # сначала флаг: ни при каком сбое — не дважды
-    vid, note = None, ""
-    try:                                                # 🎬 20.10: ролик, если GitHub его собрал
-        vid = motion_video(f"xojaobod-digest-{day}.mp4", vget)
-    except Exception as e:  # noqa: BLE001
-        note = f" (ролика нет: {e} — вышла картинка)"
     if vid:
         try:
             msg = await acc.send_file(to, str(vid), caption=m["photo_caption"][:1024], **video_kw(25))
@@ -898,12 +921,12 @@ async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | N
         return "❌ Кечки дайжест КАТТА ДАВРА не вышел: нет картинки. Без картинки не выпускаю — нужно проверить."
     from . import service
     to = service.target(cfg, env, "davra")
+    got = _video_or_wait(db, flag, f"davra-digest-{day}.mp4", o.get("at", "20:30"), now, vget)   # 🎬 ждём до 20:35
+    if got == "WAIT":
+        return None
+    vid, why = got
+    note = f" (ролика нет: {why.split(':')[0]} — картинкой)" if why else ""
     store_set(db, flag, "sending")
-    note = ""
-    try:
-        vid = motion_video(f"davra-digest-{day}.mp4", vget)
-    except Exception as e:  # noqa: BLE001
-        vid, note = None, f" (ролика нет: {type(e).__name__} — картинкой)"
     if vid:
         try:
             mid = bot.publish_file(to, str(vid), m["caption"], duration=25)

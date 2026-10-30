@@ -232,3 +232,11 @@ class JoinLinkTest(unittest.TestCase):
         self.assertEqual(b.p["name"], "instagram-dm")
         c2 = M.with_join({"dm_channel": "kattadavrauz", "dm_text": "{join}"}, db, None)   # из базы, без бота
         self.assertEqual(c2["dm_text"], "https://t.me/+ABC")
+
+
+class ShodiyonaLimit(unittest.TestCase):
+    """27.10 владелец: воронку Shodiyona включать с низким лимитом (аудит 30.10: стояло 30/час)."""
+    def test_low_limit(self):
+        import tomllib
+        c = tomllib.loads((Path(__file__).resolve().parent.parent / "shodiyona.toml").read_text(encoding="utf-8"))
+        self.assertLessEqual(int(c["max_per_hour"]), 10)

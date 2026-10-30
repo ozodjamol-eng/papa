@@ -33,10 +33,9 @@ jobs:
           for i in 1 2 3; do sudo timeout 300 apt-get install -y -q -o Acquire::Retries=3 ffmpeg fonts-noto-color-emoji >/dev/null && break; echo "повтор apt $i"; sleep 10; done
           python3 -m pip install -q numpy
       - name: Рендер
-        working-directory: modules/fabrika/motion/digest
+        working-directory: modules/fabrika/motion/dayjest
         run: |
           ln -sfn ../weather/node_modules node_modules
-          ln -sfn ../weather/node_modules ../dayjest/node_modules
           sudo apt-get install -y -q fonts-noto-color-emoji >/dev/null || true
           # 27.10 владелец утвердил iPhone-дайджест (dayjest) для Хўжаобода; 28.10 — и для КАТТА ДАВРА.
           # Старый ролик с новостями больше не собирается ни как основной, ни как запасной (решение 28.10):
@@ -44,7 +43,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/out"
           for js in "$RUNNER_TEMP"/data/*.json; do
             [ -f "$js" ] || continue
-            if ! python3 ../dayjest/make.py kech "$RUNNER_TEMP/out" "$js"; then
+            if ! python3 make.py kech "$RUNNER_TEMP/out" "$js"; then
               echo "::warning::$(basename "$js"): ролик не собрался — в 20:30 выйдет картинка"
             fi
           done

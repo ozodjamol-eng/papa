@@ -212,7 +212,7 @@ def ad_closer(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
     if dg.get("live"):                                         # Кечки дайжест в ближайшие 10 мин — он и закроет
         d_at = plan.slot_time(now.date(), dg.get("at", "20:30"))
         flag = f"digest_pub_{now.date()}" if channel == "xojaobod" else f"digest_pub_{channel}_{now.date()}"
-        if now < d_at <= now + AD_CLOSE_SKIP and not store.kv_get(db, flag):
+        if d_at - AD_CLOSE_SKIP <= now < d_at + dt.timedelta(minutes=6) and not store.kv_get(db, flag):   # дайджест ждёт ролик до +5
             return None
     upcoming = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) > now]
     if any(dt.datetime.fromisoformat(m["scheduled_at"]) <= now + AD_CLOSE_SKIP for m in upcoming):

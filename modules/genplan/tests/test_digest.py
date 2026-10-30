@@ -163,7 +163,8 @@ class TestLive(unittest.TestCase):
                                          "morning": {"live": True}, "digest": {"live": True}}}}
         run = lambda t: asyncio.run(digest.publish_live(db, cfg, {"TEST_GROUP_ID": "1"}, Acc(), t, d, vget=NOVID))
         self.assertIsNone(run(now.replace(minute=10)))          # рано
-        self.assertIn("опубликован", run(now))
+        self.assertIsNone(run(now))                              # 30.10: ролика нет — ждём до 20:35
+        self.assertIn("опубликован", run(now.replace(minute=35)))   # 20:35 — картинкой
         self.assertIsNone(run(now.replace(minute=40)))          # второй раз — нет
         self.assertEqual(len(sent), 1)
         self.assertEqual(sent[0][0], "@xojaobodcity24")
@@ -272,12 +273,14 @@ class VideoDigest(unittest.TestCase):
         self.assertEqual(out, [("video", "@kattadavrauz", 25)])
         self.assertIsNone(asyncio.run(digest.publish_live_davra(self.db, cfg, {}, Bot(), now, self.d, vget=lambda u: MP4)))  # один раз
         db2 = store.connect(self.d / "g2.db"); out.clear()
-        res = asyncio.run(digest.publish_live_davra(db2, cfg, {}, Bot(), now, self.d, vget=NOVID))
+        self.assertIsNone(asyncio.run(digest.publish_live_davra(db2, cfg, {}, Bot(), now, self.d, vget=NOVID)))  # ждём
+        late = now.replace(minute=35)
+        res = asyncio.run(digest.publish_live_davra(db2, cfg, {}, Bot(), late, self.d, vget=NOVID))
         self.assertIn("картинкой", res)
         self.assertEqual(out, [("photo", "@kattadavrauz", ".png")])      # 21.10: никогда голый текст
         db3 = store.connect(self.d / "g3.db"); out.clear()
         (self.d / f"evening-digest-davra-{now.date()}" / "digest.png").unlink()
-        res = asyncio.run(digest.publish_live_davra(db3, cfg, {}, Bot(), now, self.d, vget=NOVID))
+        res = asyncio.run(digest.publish_live_davra(db3, cfg, {}, Bot(), now.replace(minute=35), self.d, vget=NOVID))
         self.assertIn("нет картинки", res)
         self.assertEqual(out, [])
         self.assertIsNone(asyncio.run(digest.publish_live_davra(db3, cfg, {}, Bot(), now, self.d, vget=NOVID)))

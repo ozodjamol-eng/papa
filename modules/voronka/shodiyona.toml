@@ -15,7 +15,7 @@ backlog = false
 backlog_since = "2026-10-20T19:00:00+00:00"   # вопросы клиентов за последние дни (например «Канчага урнатиб берасиз») не теряем
 comments_per_poll = 50
 poll_seconds = 120
-max_per_hour = 30
+max_per_hour = 8
 pause_minutes = 60
 retention_days = 90
 
