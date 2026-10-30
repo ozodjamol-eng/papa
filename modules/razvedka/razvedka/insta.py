@@ -37,6 +37,7 @@ DIRECTIONS = {
     "local":  ("📍 Андижон/водий", "Хўжаобод", "Хўжаобод/Андижон", ["andijon", "fargona"], 1),
     "biz":    ("🏠 Уйда бизнес", "КАТТА ДАВРА", "Уйда бизнес", ["uydabiznes", "biznesgoya", "ayollarbiznesi"], 2),
     "motiv":  ("🔥 Мотивация", "КАТТА ДАВРА", "Мотивация", ["motivatsiya", "ozustidaishlash"], 2),
+    "ibrat":  ("📖 Ибрат", "КАТТА ДАВРА / Хўжаобод", "Ибрат", ["ibratli", "ibrat_olamiz", "ibratlihikoya"], 2),
 }
 HUB_TITLE = "PAPA РАЗВЕДКА · ТРЕНДЫ"     # 30.10 владелец: в одной семье с «PAPA РАЗВЕДКА · ВОДА / · МЕБЕЛЬ»
 OLD_TITLES = ("📸 PAPA ТРЕНДЫ",)
