@@ -301,19 +301,25 @@ def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known:
     if image:
         import base64
         body["contents"][0]["parts"].append({"inlineData": {"mimeType": image[1], "data": base64.b64encode(image[0]).decode()}})
-    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
-    data = None
+    # 30.10: с картинкой основная модель «думала» дольше 40 с → шаблон. Теперь: основная 60 с, потом быстрая lite 30 с.
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-lite-latest"]))
+    data, last = None, None
     for i, model in enumerate(models):
         req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(),
                                      headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
         try:
-            with urllib.request.urlopen(req, timeout=40) as r:
+            with urllib.request.urlopen(req, timeout=60 if i == 0 else 30) as r:
                 data = json.loads(r.read())
             break
         except urllib.error.HTTPError as e:
-            if e.code not in (500, 503, 404, 429) or i == len(models) - 1:
-                raise RuntimeError(f"gemini {e.code}") from None
+            last = f"gemini {model} {e.code}"
+            if e.code not in (500, 503, 404, 429, 400):
+                raise RuntimeError(last) from None
+        except Exception as e:  # noqa: BLE001 — таймаут/сеть: пробуем быструю модель
+            last = f"gemini {model} {type(e).__name__}"
+    if data is None:
+        raise RuntimeError(last or "gemini: нет ответа")
     parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
     raw = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
     raw = raw[raw.find("{"): raw.rfind("}") + 1] if "{" in raw else raw
@@ -330,6 +336,10 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
     _log(db, cid, "user", incoming, now)
     if _count(db, cid, now) >= AI_PER_CHAT_DAY or _count(db, None, now) >= AI_PER_DAY:
         return "limit"
+    try:                                              # «печатает…» — человек видит, что ответ готовится
+        api("sendChatAction", chat_id=cid, business_connection_id=c["id"], action="typing")
+    except Exception:  # noqa: BLE001
+        pass
     img = None
     ref = image_ref(m)
     dl = getattr(api, "download", None)
