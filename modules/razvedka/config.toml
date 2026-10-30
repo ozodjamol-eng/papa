@@ -40,12 +40,14 @@ topic = "KATTA DAVRA"
 name = "XOJAOBOD RAQIB"
 topic = "XOJAOBODCITY (38)"
 
-# 📸 30.10: агент Instagram-трендов (Apify, бесплатный план). accounts — узбекские аккаунты с трендами (даёт владелец).
+# 📸 30.10: агент Instagram-трендов (Apify, бесплатный план). Сам ищет по хэштегам (tags, по умолчанию узбекские) и сам
+# запоминает «стреляющие» аккаунты; accounts — дополнительно, если владелец захочет.
 [insta]
 channel = "davra"
 title = "КАТТА ДАВРА"
 accounts = []
-per_account = 3
+per_tag = 12
+per_account = 2
 max_send = 4
-min_views = 20000
-min_ratio = 1.3
+min_views = 30000
+min_ratio = 0

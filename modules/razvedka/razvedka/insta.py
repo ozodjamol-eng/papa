@@ -19,6 +19,12 @@ from pathlib import Path
 from . import curate
 
 ACTOR = os.environ.get("APIFY_REEL_ACTOR", "apify~instagram-reel-scraper")
+TAG_ACTOR = os.environ.get("APIFY_TAG_ACTOR", "apify~instagram-hashtag-scraper")
+# 30.10 владелец: «ты сам знаешь, на что ориентироваться» — агент сам ищет тренды по узбекским хэштегам
+# и сам учит аккаунты, которые чаще всего «стреляют» (state["found"]).
+TAGS = ["kulgili", "kulgu", "qiziqarli", "ozbekcha", "uzbekistan", "foydali", "vaynlar", "prikol_uz", "toshkent",
+        "andijon"]
+FRESH = dt.timedelta(days=4)
 VIDEO_MAX = 45 * 1024 * 1024
 TEXT_PROMPT = """Сен — «{title}» Telegram-каналининг муҳарририсан. Instagram рилсининг тагидаги матнни ўқиб, канал учун
 қисқа пост матни ёз: биринчи қатор — эмодзи билан қисқа сарлавҳа (БОШ ҲАРФЛАР), кейин 1–2 қисқа гап, охирида
@@ -81,6 +87,42 @@ def apify_reels(accounts: list[str], per_account: int, token: str, http=None) ->
     return data if isinstance(data, list) else []
 
 
+def apify_tags(tags: list[str], per_tag: int, token: str, http=None) -> list[dict]:
+    body = {"hashtags": tags, "resultsType": "reels", "resultsLimit": per_tag}
+    url = f"https://api.apify.com/v2/acts/{TAG_ACTOR}/run-sync-get-dataset-items?timeout=280"
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"content-type": "application/json", "authorization": f"Bearer {token}"})
+    if http:
+        return http(req)
+    with urllib.request.urlopen(req, timeout=300) as r:
+        data = json.loads(r.read())
+    return data if isinstance(data, list) else []
+
+
+def fresh(items: list[dict], now: dt.datetime) -> list[dict]:
+    out = []
+    for it in items:
+        ts = it.get("timestamp")
+        try:
+            t = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00")) if ts else None
+        except ValueError:
+            t = None
+        if t is None or now - t <= FRESH:
+            out.append(it)
+    return out
+
+
+def learn(state: dict, items: list[dict]) -> list[str]:
+    """Аккаунты, которые попадают в тренды чаще всего (по хэштегам) — агент запоминает их сам."""
+    f = state.setdefault("found", {})
+    for it in items:
+        o = (it.get("ownerUsername") or "").lower()
+        v = int(it.get("videoPlayCount") or it.get("videoViewCount") or 0)
+        if o and v >= 20000:
+            f[o] = f.get(o, 0) + 1
+    return [o for o, n in sorted(f.items(), key=lambda kv: -kv[1]) if n >= 2][:20]
+
+
 def write_text(caption: str, title: str) -> str:
     """Наш текст (Gemini, бесплатно). Без ключа/ошибка — пусто (владелец напишет сам ✏️ или нажмёт 🤖)."""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -118,8 +160,6 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
     ic = cfg.get("insta") or {}
     accounts = [a.strip().lstrip("@") for a in ic.get("accounts", []) if a.strip()]
     token = os.environ.get("APIFY_TOKEN", "").strip()
-    if not accounts:
-        return {"пропуск": "нет аккаунтов в config.toml [insta]"}
     if not token:
         return {"пропуск": "нет ключа Apify (papa-update apify-token)"}
     channel = ic.get("channel", "davra")
@@ -128,9 +168,16 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
         st = json.loads(sf.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         st = {}
-    items = await asyncio.to_thread(apify_reels, accounts, int(ic.get("per_account", 3)), token)
-    log(f"Apify: {len(items)} рилсов от {len(accounts)} аккаунтов")
-    picks = choose(items, st, int(ic.get("max_send", 4)), int(ic.get("min_views", 20000)), float(ic.get("min_ratio", 1.3)))
+    tags = ic.get("tags") or TAGS
+    items = fresh(await asyncio.to_thread(apify_tags, tags, int(ic.get("per_tag", 12)), token), now)
+    learned = learn(st, items)
+    log(f"Apify: хэштеги {len(tags)} → {len(items)} свежих рилсов; агент запомнил аккаунтов: {len(learned)}")
+    accounts = list(dict.fromkeys(accounts + learned))[:20]
+    if accounts:                                       # свои/выученные аккаунты — сравнение с их обычными просмотрами
+        acc = await asyncio.to_thread(apify_reels, accounts, int(ic.get("per_account", 2)), token)
+        log(f"Apify: аккаунты {len(accounts)} → {len(acc)} рилсов")
+        items = fresh(acc, now) + items
+    picks = choose(items, st, int(ic.get("max_send", 4)), int(ic.get("min_views", 30000)), float(ic.get("min_ratio", 0)))
     sent, skipped = 0, 0
     gemini = bool(os.environ.get("GEMINI_API_KEY"))
     if gemini:
@@ -166,4 +213,5 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
     st["last"] = now.isoformat()
     state_dir.mkdir(parents=True, exist_ok=True)
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
-    return {"рилсов": len(items), "выбрано": len(picks), "отправлено": sent, "пропущено": skipped}
+    return {"рилсов": len(items), "выбрано": len(picks), "отправлено": sent, "пропущено": skipped,
+            "аккаунты_агента": learned[:10]}
