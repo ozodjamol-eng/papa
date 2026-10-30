@@ -151,7 +151,7 @@ def ad_hold(db, cfg: dict, channel: str, now: dt.datetime) -> dt.datetime | None
     return t if t > now else None
 
 
-AD_CLOSE_LOOK = dt.timedelta(minutes=60)   # реклама старше часа — её уже закрыл пост сетки
+AD_CLOSE_LOOK = dt.timedelta(minutes=120)  # окно поиска рекламы: час сетки + тихое окно Жумы (55 мин)
 AD_CLOSE_SKIP = dt.timedelta(minutes=10)   # пост сетки и так выйдет в ближайшие 10 мин — ничего не тянем
 
 
@@ -179,12 +179,27 @@ def ad_closer(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
         return None
     if not (hm(o["from"]) <= now.time() <= (dt.datetime.combine(now.date(), hm(o["to"])) + dt.timedelta(minutes=59)).time()):
         return None                                            # ночью не закрываем
+    if blocked(db, channel, now):                              # тихое окно Жумы — закроет первый пост после окна
+        return None
+    soon = (now + AD_CLOSE_SKIP).isoformat()
+    try:                                                       # намаз-напоминание сам закроет рекламу через минуты
+        if db.execute("SELECT 1 FROM namaz_posts WHERE channel=? AND status='pending' AND at>? AND at<=?",
+                      (channel, now.isoformat(), soon)).fetchone():
+            return None
+    except Exception:  # noqa: BLE001 — таблицы намаза может не быть
+        pass
+    dg = ch.get("digest") or {}
+    if dg.get("live"):                                         # Кечки дайжест в ближайшие 10 мин — он и закроет
+        d_at = plan.slot_time(now.date(), dg.get("at", "20:30"))
+        flag = f"digest_pub_{now.date()}" if channel == "xojaobod" else f"digest_pub_{channel}_{now.date()}"
+        if now < d_at <= now + AD_CLOSE_SKIP and not store.kv_get(db, flag):
+            return None
     upcoming = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) > now]
     if any(dt.datetime.fromisoformat(m["scheduled_at"]) <= now + AD_CLOSE_SKIP for m in upcoming):
         return None                                            # что-то и так выйдет через пару минут
     if any(dt.datetime.fromisoformat(m["scheduled_at"]) <= now for m in store.scheduled(db, channel)):
         return None                                            # уже стоит на сейчас (ждёт прохода)
-    pick = next((m for m in upcoming if is_grid_post(m) and not m["locked"]
+    pick = next((m for m in upcoming if is_grid_post(m) and not m["locked"] and not is_sklad(ch, m)
                  and dt.datetime.fromisoformat(m["scheduled_at"]).date() == now.date()), None)
     if pick is None:
         pool = [m for m in store.stock(db, channel)

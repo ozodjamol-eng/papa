@@ -96,6 +96,39 @@ class T(unittest.TestCase):
         self.tick("20:00")
         self.assertEqual(self.st(nxt), "published")
 
+    def test_digest_soon_closes_itself(self):
+        self.cfg["channels"]["xojaobod"]["digest"] = {"live": True, "at": "20:30", "until": "22:00"}
+        self.add(rubric="Реклама", t=at("20:10"), locked=1)
+        nxt = self.add(t=at("21:00"))
+        self.tick("20:10")
+        self.tick("20:20")
+        self.assertEqual(self.st(nxt), "queued")                  # в 20:30 рекламу закроет Кечки дайжест
+        store.kv_set(self.db, f"digest_pub_{MON}", "1")
+        store.pulse_add(self.db, "xojaobod", at("20:30"), "digest")
+        self.tick("20:41")
+        self.assertEqual(self.st(nxt), "queued")                  # закрыто дайджестом — 21:00 не трогаем
+
+    def test_juma_quiet_window(self):
+        from genplan import namaz
+        self.db.executescript(namaz.SCHEMA) if hasattr(namaz, "SCHEMA") else None
+        self.db.execute("INSERT INTO namaz_locks(channel,day,start,end) VALUES (?,?,?,?)",
+                        ("xojaobod", MON.isoformat(), at("12:25").isoformat(), at("13:20").isoformat()))
+        self.add(rubric="Реклама", t=at("12:10"), locked=1)
+        nxt = self.add(t=at("14:00"))
+        self.tick("12:10")
+        self.tick("12:30")
+        self.assertEqual(self.st(nxt), "queued")                  # тихое окно Жумы — не закрываем
+        self.tick("13:21")
+        self.assertEqual(self.st(nxt), "published")               # после окна — закрываем
+
+    def test_sklad_post_not_pulled(self):
+        self.add(rubric="Реклама", t=at("19:30"), locked=1)
+        sk = self.add(t=at("20:00"))
+        store.update(self.db, sk, source="ФОЙДАЛИК")              # склад: владелец получил «выйдет сам в 20:00» с 🗑
+        self.tick("19:30")
+        self.tick("19:40")
+        self.assertEqual(self.st(sk), "queued")
+
 
 ORIG = service.publish_one
 

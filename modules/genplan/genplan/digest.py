@@ -837,6 +837,7 @@ async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = 
         try:
             msg = await acc.send_file(to, str(vid), caption=m["photo_caption"][:1024], **video_kw(25))
             store_set(db, flag, str(getattr(msg, "id", "ok")))
+            _pulse(db, "xojaobod", now)
             return f"🌙 Кечки дайжест роликом опубликован в «Хўжаобод Сити 24» ({to}) в {hm}."
         except Exception as e:  # noqa: BLE001
             note = f" (ролик не отправился: {type(e).__name__} — вышла картинка)"
@@ -844,7 +845,17 @@ async def publish_live(db, cfg: dict, env: dict, acc, now: dt.datetime | None = 
             vid.unlink(missing_ok=True)
     msg = await acc.send_file(to, str(out / "digest.png"), caption=m["photo_caption"][:1024])
     store_set(db, flag, str(getattr(msg, "id", "ok")))
+    _pulse(db, "xojaobod", now)
     return f"🌙 Кечки дайжест опубликован в «Хўжаобод Сити 24» ({to}) в {hm}{note}."
+
+
+def _pulse(db, channel: str, now: dt.datetime) -> None:
+    """30.10: вышедший дайджест — в журнал постов (промежутки, «реклама → закрывающий пост» видят его)."""
+    try:
+        from . import store
+        store.pulse_add(db, channel, now, "digest")
+    except Exception:  # noqa: BLE001 — журнал не должен ломать публикацию
+        pass
 
 
 def video_kw(duration: int) -> dict:
@@ -897,6 +908,7 @@ async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | N
         try:
             mid = bot.publish_file(to, str(vid), m["caption"], duration=25)
             store_set(db, flag, str(mid))
+            _pulse(db, "davra", now)
             return f"🎉 Кечки дайжест роликом опубликован в «КАТТА ДАВРА» ({to}) в {hm}."
         except Exception as e:  # noqa: BLE001
             note = f" (ролик не отправился: {e} — вышла картинка)"
@@ -904,6 +916,7 @@ async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | N
             vid.unlink(missing_ok=True)
     mid = bot.publish_photo(to, str(png), m["caption"])
     store_set(db, flag, str(mid))
+    _pulse(db, "davra", now)
     return f"🎉 Кечки дайжест опубликован в «КАТТА ДАВРА» ({to}) в {hm}{note}."
 
 
