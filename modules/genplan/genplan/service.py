@@ -11,6 +11,8 @@ from . import plan, smart, store, text
 from .publish import PublishError
 
 ERRORS: list[str] = []             # ошибки публикации — служба сообщает владельцу
+HELD = "held"                       # 30.10 сверка: пост не вышел, но остаётся в очереди (не failed)
+LANG_HOLDS = 2                      # сколько раз откладываем пост с не узбекским текстом (+1 ч), потом — снят
 LATE = dt.timedelta(hours=3)        # служба долго стояла: такие посты не публикуем пачкой, а переносим на новое время
 
 
@@ -290,6 +292,20 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
             ERRORS.append(f"⛔ {ch['title']}: пост на русском не опубликован — нет перевода ({e}). Нажмите 🤖 в карточке.")
             log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — русский текст без перевода")
             return False
+        if translit.language_note(m["text"] or ""):     # 30.10 сверка (№8): ИИ вернул русский/смесь — не публикуем
+            k = f"langhold_{m['id']}"
+            n = int(store.kv_get(db, k) or 0) + 1
+            store.kv_set(db, k, str(n))
+            if n > LANG_HOLDS:
+                store.record(db, channel, day, slot, m["id"], "failed", error="текст не на узбекском после ИИ")
+                ERRORS.append(f"⛔ {ch['title']}: пост #{m['id']} не вышел — текст так и не стал узбекским. Поправьте текст в карточке.")
+                log(f"{channel} {slot or 'срочно'}: снят — текст не на узбекском")
+                return False
+            later = (now or dt.datetime.now(plan.TZ)) + dt.timedelta(hours=1)
+            store.update(db, m["id"], status="queued", scheduled_at=later.isoformat())
+            ERRORS.append(f"⏸ {ch['title']}: пост задержан: текст не на узбекском — поправьте (повтор в {later:%H:%M}, #{m['id']})")
+            log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — после ИИ текст не узбекский, повтор в {later:%H:%M}")
+            return HELD
     own = tuple(c["username"] for c in cfg["channels"].values())
     is_ad = (m["rubric"] or "").lower().startswith("реклама")
     tag = "#РЕКЛАМА" if is_ad else tag_for(cfg, ch, m)
@@ -429,6 +445,9 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
                 log(f"{channel}: срочный ждёт рекламу — выйдет в {hold:%H:%M}")
                 continue
             ok = await publish_one(db, cfg, env, pubs, channel, m, None, day, log, now)
+            if ok == HELD:
+                out["moved"] += 1
+                continue
             out["published" if ok else "failed"] += 1
             out["ids"].append(m["id"])
             if ok:
@@ -450,6 +469,9 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
                 log(f"{channel} {t:%H:%M}: рядом другой пост — выйдет в {later:%H:%M}")
                 continue
             ok = await publish_one(db, cfg, env, pubs, channel, m, t.strftime("%H:%M"), day, log, now)
+            if ok == HELD:
+                out["moved"] += 1
+                continue
             out["published" if ok else "failed"] += 1
             out["ids"].append(m["id"])
             if not ok:
