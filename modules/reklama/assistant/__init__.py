@@ -138,6 +138,8 @@ def handle_callback(db, q: dict, api, now: dt.datetime) -> str:
         api("answerCallbackQuery", callback_query_id=q["id"])
     except Exception:  # noqa: BLE001
         pass
+    if data.startswith("o:"):
+        return order_callback(db, q, api, now)
     if not data.startswith("m:") or data[2:] not in BRANCH:
         return "skip"
     m = q.get("message") or {}
@@ -186,6 +188,8 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS msgs (chat INTEGER NOT NULL, role TEXT NOT NULL, text TEXT, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS ad_media (chat INTEGER NOT NULL, kind TEXT NOT NULL, file_id TEXT NOT NULL, at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS orders (chat INTEGER NOT NULL, at TEXT NOT NULL, summary TEXT);
+CREATE TABLE IF NOT EXISTS packs (id INTEGER PRIMARY KEY, chat INTEGER NOT NULL, bc TEXT, name TEXT, at TEXT NOT NULL,
+                                  order_json TEXT, media TEXT, state TEXT NOT NULL DEFAULT 'new');
 CREATE INDEX IF NOT EXISTS idx_msgs ON msgs(chat, at);
 """
 
@@ -474,7 +478,7 @@ def save_media(db, chat: int, m: dict, now: dt.datetime) -> None:
 
 
 def send_order(db, api, owner_chat: int, chat: int, name: str, username: str | None, order: dict,
-               now: dt.datetime) -> bool:
+               now: dt.datetime, bc: str | None = None) -> bool:
     """💰 30.10 «реклама под ключ», этап 1: готовый заказ — владельцу одним пакетом (сводка + реклама как есть),
     чтобы переслать в пульт Хўжаобода. Один заказ от человека — не чаще раза в 6 ч."""
     last = db.execute("SELECT at FROM orders WHERE chat=? ORDER BY at DESC LIMIT 1", (chat,)).fetchone()
@@ -491,8 +495,15 @@ def send_order(db, api, owner_chat: int, chat: int, name: str, username: str | N
             + " · ".join(opts) + (f"\n💵 по прайсу: {total:,} сўм".replace(",", " ") if total else "")
             + "\n—\nНиже — реклама как есть. Перешлите её в пульт Хўжаобода → 📣 Реклама → время → ✅."
             + "\nОплату и время клиенту подтверждаете вы.")
-    api("sendMessage", chat_id=owner_chat, text=head[:4000])
     text = (order.get("ad_text") or "").strip()[:1000]
+    cur = db.execute("INSERT INTO packs(chat, bc, name, at, order_json, media) VALUES(?,?,?,?,?,?)",
+                     (chat, bc, who, now.isoformat(), json.dumps(order, ensure_ascii=False),
+                      json.dumps([list(x) for x in reversed(media)])))
+    pid = cur.lastrowid
+    head = head.replace("\nНиже — реклама как есть. Перешлите её в пульт Хўжаобода → 📣 Реклама → время → ✅.",
+                        "\nНиже — реклама как есть. ✅ — сам положу её в пульт Хўжаобода, останется выбрать время.")
+    api("sendMessage", chat_id=owner_chat, text=head[:4000], reply_markup={"inline_keyboard": [[
+        {"text": "✅ В пульт Хўжаобода", "callback_data": f"o:ok:{pid}"}, {"text": "❌ Не берём", "callback_data": f"o:no:{pid}"}]]})
     sent_media = False
     for k, fid in reversed(media):
         method = {"photo": "sendPhoto", "video": "sendVideo", "animation": "sendAnimation"}.get(k, "sendDocument")
@@ -507,6 +518,69 @@ def send_order(db, api, owner_chat: int, chat: int, name: str, username: str | N
     db.execute("INSERT INTO orders VALUES (?,?,?)", (chat, now.isoformat(), head[:500]))
     db.commit()
     return True
+
+
+ADS_INBOX = os.environ.get("PAPA_ADS_INBOX", "/var/lib/papa-ads-inbox")
+FILE_MAX = 20 * 1024 * 1024                 # предел Bot API на скачивание
+
+
+def order_callback(db, q: dict, api, now: dt.datetime, inbox: str | None = None) -> str:
+    """💰 31.10 «реклама под ключ», этап 2: владелец жмёт ✅ под заказом → пакет (текст + файлы) кладётся в папку,
+    GENPLAN сам открывает его в пульте Хўжаобода экраном «📣 когда выпустить?». ❌ — заказ закрыт, клиенту ничего не шлём."""
+    _, act, pid = (q.get("data") or "o:x:0").split(":", 2)
+    owners = {r[0] for r in db.execute("SELECT owner FROM conn")}
+    if (q.get("from") or {}).get("id") not in owners:
+        return "skip"
+    p = db.execute("SELECT * FROM packs WHERE id=?", (int(pid) if pid.isdigit() else 0,)).fetchone()
+    m = q.get("message") or {}
+    chat_id, mid = (m.get("chat") or {}).get("id"), m.get("message_id")
+
+    def mark(note: str) -> None:
+        try:
+            api("editMessageReplyMarkup", chat_id=chat_id, message_id=mid, reply_markup={"inline_keyboard": [[
+                {"text": note, "callback_data": "o:x:0"}]]})
+        except Exception:  # noqa: BLE001
+            pass
+    if not p or p["state"] != "new":
+        mark("✔️ уже сделано")
+        return "order_done"
+    if act == "no":
+        db.execute("UPDATE packs SET state='no' WHERE id=?", (p["id"],)); db.commit()
+        mark("❌ Не берём")
+        return "order_no"
+    if act != "ok":
+        return "skip"
+    base = os.path.join(inbox or ADS_INBOX, f"order-{p['id']}")
+    os.makedirs(base, exist_ok=True)
+    os.chmod(base, 0o2770)                                    # GENPLAN (группа папки) читает и удаляет
+    files = []
+    for i, (kind, fid) in enumerate(json.loads(p["media"] or "[]")):
+        try:
+            data = api.download(fid, FILE_MAX) if hasattr(api, "download") else b""
+        except Exception as e:  # noqa: BLE001
+            print(f"assistant: файл заказа не скачался ({str(e)[:80]})", flush=True)
+            data = b""
+        if not data or len(data) > FILE_MAX:
+            continue
+        ext = {"photo": "jpg", "video": "mp4", "animation": "mp4"}.get(kind, "bin")
+        fn = f"{i}.{ext}"
+        with open(os.path.join(base, fn), "wb") as f:
+            f.write(data)
+        os.chmod(os.path.join(base, fn), 0o660)
+        files.append({"kind": kind, "file": fn})
+    order = json.loads(p["order_json"] or "{}")
+    meta = {"id": p["id"], "client_chat": p["chat"], "bc": p["bc"], "client": p["name"], "at": now.isoformat(),
+            "text": (order.get("ad_text") or "").strip()[:1000], "media": files, "days": int(order.get("days") or 1),
+            "evening": bool(order.get("evening")), "pin": bool(order.get("pin")), "what": order.get("what") or "",
+            "date": order.get("date") or ""}
+    tmp = os.path.join(base, "meta.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False)
+    os.chmod(tmp, 0o660)
+    os.replace(tmp, os.path.join(base, "meta.json"))          # meta.json — последним: GENPLAN не возьмёт половину
+    db.execute("UPDATE packs SET state='sent' WHERE id=?", (p["id"],)); db.commit()
+    mark("⏳ Ушло в пульт Хўжаобода — выберите там время")
+    return "order_ok"
 
 
 def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetime) -> str:
@@ -564,7 +638,7 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
         reply = reply or "(приветствие + меню)"
     name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or "—"
     if kind == "ad" and (out.get("order") or {}).get("ready") and c["owner_chat"]:
-        send_order(db, api, c["owner_chat"], cid, name, frm.get("username"), out["order"], now)
+        send_order(db, api, c["owner_chat"], cid, name, frm.get("username"), out["order"], now, bc=c["id"])
     db.execute("INSERT INTO chats(chat, replied_at, kind, name) VALUES(?,?,?,?) ON CONFLICT(chat) DO UPDATE SET "
                "replied_at=COALESCE(excluded.replied_at, chats.replied_at), kind=excluded.kind, name=excluded.name",
                (cid, now.isoformat() if reply else None, kind, name))
@@ -607,13 +681,13 @@ def api_for(token: str):
             raise RuntimeError(f"{method}: {out.get('description')}")
         return out["result"]
 
-    def download(file_id: str) -> bytes:
-        """30.10: файл из сообщения (картинка для ИИ). Токен в ошибки не попадает."""
+    def download(file_id: str, limit: int = IMG_MAX) -> bytes:
+        """30.10: файл из сообщения (картинка для ИИ; 31.10 — и файлы заказа). Токен в ошибки не попадает."""
         path = api("getFile", file_id=file_id).get("file_path")
         if not path:
             return b""
-        with urllib.request.urlopen(f"https://api.telegram.org/file/bot{token}/{path}", timeout=30) as r:
-            return r.read(IMG_MAX + 1)
+        with urllib.request.urlopen(f"https://api.telegram.org/file/bot{token}/{path}", timeout=120) as r:
+            return r.read(limit + 1)
     api.download = download
     return api
 

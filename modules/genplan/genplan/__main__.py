@@ -256,6 +256,15 @@ async def run() -> None:
                                 cb("editMessageText", chat_id=o, message_id=m["owner_msg"], text=t, reply_markup=kb)
                             except Exception:  # noqa: BLE001 — карточка могла быть в другом чате
                                 pass
+                try:                                          # 💰 31.10: заказы ИИ-ассистента (✅) → реклама в пульт Хўжаобода
+                    from . import adsin as _ai_in
+                    _xb = bots.for_channel(_ai_in.CHANNEL)
+                    _ai_in.scan(_xb, bots.token_of(_xb, env), db, c, owners, log=lambda s: print(s, flush=True))
+                    for _b in (_ai_in.INBOX.glob("bad-*") if _ai_in.INBOX.is_dir() else []):
+                        service.ERRORS.append(f"⚠️ Заказ рекламы не открылся в пульте ({_b.name}) — перешлите его вручную")
+                        _b.rename(_b.with_name(_b.name.replace("bad-", "err-")))
+                except Exception as e:  # noqa: BLE001
+                    print(f"adsin: {type(e).__name__}: {e}", flush=True)
                 try:                                          # 🌙 Кечки дайжест → группа Хўжаобод (20:30)
                     from . import digest as _dg
                     pub = await _dg.publish_live(db, c, env, acc)

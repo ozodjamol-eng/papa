@@ -325,3 +325,39 @@ class OrderTest(unittest.TestCase):
         n = len(api.calls)
         A.handle(db, msg("раҳмат"), api, T0 + dt.timedelta(minutes=5), ai=ai)
         self.assertFalse(any(m2 == "sendPhoto" for m2, _ in api.calls[n:]))      # повторно не шлём
+
+
+class OrderToPult(unittest.TestCase):
+    """31.10 этап 2: ✅ под заказом → пакет в папку для GENPLAN; ❌ — закрыт; чужой не нажмёт."""
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.mkdtemp()
+        self.db, self.api = A.connect(":memory:"), Api()
+        self.api.download = lambda fid, limit=0: b"JPEGDATA"
+        A.handle(self.db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}},
+                 self.api, T0)
+        m = msg(""); m["business_message"].pop("text"); m["business_message"]["photo"] = [{"file_id": "P1"}]
+        order = {"ready": True, "what": "дўкон", "days": 3, "evening": True, "pin": False, "total": 160000, "ad_text": "Дўкон очилди!"}
+        A.handle(self.db, m, self.api, T0, ai=lambda *a, **k: {"kind": "ad", "reply": "ок", "order": order})
+        btn = next(p for meth, p in self.api.calls if meth == "sendMessage" and "reply_markup" in p and p["chat_id"] == OWNER
+                   and "ЗАКАЗ" in p["text"])
+        self.ok = btn["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+
+    def cb(self, data, uid=OWNER):
+        return A.order_callback(self.db, {"id": "1", "data": data, "from": {"id": uid},
+                                          "message": {"chat": {"id": OWNER}, "message_id": 9}}, self.api, T0, inbox=self.dir)
+
+    def test_ok_writes_pack(self):
+        import json, os
+        self.assertEqual(self.cb(self.ok, uid=777), "skip")
+        self.assertEqual(self.cb(self.ok), "order_ok")
+        d = os.path.join(self.dir, os.listdir(self.dir)[0])
+        meta = json.load(open(os.path.join(d, "meta.json")))
+        self.assertEqual((meta["text"], meta["days"], meta["client_chat"], meta["bc"]), ("Дўкон очилди!", 3, 555, "BC"))
+        self.assertEqual(open(os.path.join(d, meta["media"][0]["file"]), "rb").read(), b"JPEGDATA")
+        self.assertEqual(self.cb(self.ok), "order_done")              # второй раз — не дублирует
+
+    def test_no(self):
+        import os
+        self.assertEqual(self.cb(self.ok.replace(":ok:", ":no:")), "order_no")
+        self.assertEqual(os.listdir(self.dir), [])
