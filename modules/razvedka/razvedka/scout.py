@@ -67,3 +67,94 @@ def render(rows: list[dict]) -> str:
         u = "@" + r["username"] if r.get("username") else "без @"
         L.append(f"{i}. {r['title'][:40]} ({u}) — {r['subscribers']:,} подп. · поиск «{r['q']}»".replace(",", " "))
     return "\n".join(L) if rows else "🔭 Новых больших каналов не нашлось."
+
+
+# ---------- 😂 30.10 владелец: «смех — основа канала; найти много источников приколов, даже международных;
+#            изучить, если контент чистый — подключаем» ----------
+HUMOR_QUERIES = ["kulgili videolar", "prikol videolar", "кулгили видео", "приколы", "смешные видео", "ржака",
+                 "funny videos", "fails", "funny animals", "comedy videos", "memes video", "lol videos", "приколы животные",
+                 "смешно до слёз", "funny moments", "hazil"]
+HUMOR_MIN_SUBS = 15000
+HUMOR_CHECK = 18                      # сколько самых больших проверить по кадрам за раз (лимит Gemini)
+
+
+async def humor(client, choice: dict | None, log=print) -> dict:
+    """Найти каналы приколов → проверить кадры (чужое лого) → чистые подключить в КАТТА ДАВРА (рубрика кулги)."""
+    import datetime as dt
+
+    from telethon.tl.functions.contacts import SearchRequest
+    from telethon.tl.types import Channel
+
+    from . import sources
+    from .curate import OWN, folder_peers
+    folders = await folder_peers(client)
+    known = {getattr(p, "channel_id", None) for ps in folders.values() for p in ps}
+    known |= set(sources.ids_for(choice, "davra"))
+    tried = set(((choice or {}).get("auto_seen") or {}).get("davra", [])) | set(((choice or {}).get("humor_tried") or []))
+    found = []
+    for q in HUMOR_QUERIES:
+        try:
+            res = await client(SearchRequest(q=q, limit=50))
+        except Exception as e:  # noqa: BLE001
+            log(f"  «{q}»: {type(e).__name__}")
+            await asyncio.sleep(5)
+            continue
+        for ch in res.chats:
+            if isinstance(ch, Channel) and ch.broadcast and ch.username:
+                found.append({"id": ch.id, "title": ch.title, "username": ch.username, "broadcast": True,
+                              "subscribers": getattr(ch, "participants_count", None), "q": q, "ent": ch})
+        await asyncio.sleep(3)
+    cands = [c for c in rank(found, known | tried, OWN | sources.BLOCK) if (c.get("subscribers") or 0) >= HUMOR_MIN_SUBS]
+    cands = sorted(cands, key=lambda c: -(c["subscribers"] or 0))[:HUMOR_CHECK]
+    log(f"кандидатов на проверку: {len(cands)}")
+    now = dt.datetime.now(dt.timezone.utc)
+    ok, bad = [], []
+    for c in cands:
+        ent = next((f["ent"] for f in found if f["id"] == c["id"]), None)
+        try:
+            posts, media = await sources._channel_posts(client, ent, now)
+            st = sources.stats(posts, now)
+            why = sources.eligible(st)
+            if why:
+                bad.append((c, why))
+                continue
+            clean_n, checked = await sources._clean(client, media)
+        except RuntimeError as e:                     # лимит Gemini — остальные в следующий раз
+            log(f"  кадры: {e}")
+            break
+        except Exception as e:  # noqa: BLE001
+            bad.append((c, type(e).__name__))
+            continue
+        if checked >= 2 and clean_n == checked:
+            ok.append({**c, "median_views": st["median_views"], "per_day": st["per_day"]})
+        else:
+            bad.append((c, f"чужое лого {checked - clean_n}/{checked}" if checked else "кадры не проверить"))
+        await asyncio.sleep(2)
+    return {"ok": ok, "bad": bad}
+
+
+def connect(choice: dict | None, ok: list[dict], bad: list[tuple], now_iso: str) -> dict:
+    """Чистые — в выбор КАТТА ДАВРА (кулги), один раз (auto_seen); проверенные грязные — больше не проверяем."""
+    import json
+    data = json.loads(json.dumps(choice or {}))
+    humor_list = data.setdefault("channels", {}).setdefault("davra", {}).setdefault("humor", [])
+    seen = data.setdefault("auto_seen", {}).setdefault("davra", [])
+    for c in ok:
+        if c["id"] not in seen:
+            humor_list.append({"id": c["id"], "title": c["title"], "username": c["username"], "found_by": "scout"})
+            seen.append(c["id"])
+    data.setdefault("humor_tried", [])
+    data["humor_tried"] = list(dict.fromkeys(data["humor_tried"] + [c["id"] for c, _ in bad]))[-500:]
+    data["version"] = 2
+    data["humor_at"] = now_iso
+    return data
+
+
+def render_humor(ok: list[dict], bad: list[tuple]) -> str:
+    L = ["😂 РАЗВЕДЧИК ПРИКОЛОВ · подключено в КАТТА ДАВРА (кадры чистые):"]
+    L += [f"  ✅ {c['title'][:36]} (@{c['username']}) — {c['subscribers']:,} подп., 👁 {c['median_views']:,}".replace(",", " ")
+          for c in ok] or ["  — чистых не нашлось"]
+    if bad:
+        L.append("Отсеяно:")
+        L += [f"  🚫 {c['title'][:30]} (@{c['username']}) — {why}" for c, why in bad[:15]]
+    return "\n".join(L)

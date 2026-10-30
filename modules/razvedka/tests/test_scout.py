@@ -17,3 +17,15 @@ class T(unittest.TestCase):
         r = scout.rank(f, {3}, {"xojaobodcity24"})
         self.assertEqual([x["id"] for x in r], [1])
         self.assertIn("90 000", scout.render(r))
+
+
+class Humor(unittest.TestCase):
+    def test_connect_once(self):
+        ok = [{"id": 7, "title": "Fun", "username": "fun", "subscribers": 50000, "median_views": 9000}]
+        bad = [({"id": 8, "title": "Logo", "username": "lg"}, "чужое лого 2/2")]
+        d = scout.connect(None, ok, bad, "t")
+        self.assertEqual(d["channels"]["davra"]["humor"][0]["found_by"], "scout")
+        self.assertIn(8, d["humor_tried"])
+        d2 = scout.connect(d, ok, [], "t")
+        self.assertEqual(len(d2["channels"]["davra"]["humor"]), 1)          # повторно не добавляем
+        self.assertIn("✅ Fun", scout.render_humor(ok, bad))

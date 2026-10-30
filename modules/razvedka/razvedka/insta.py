@@ -29,6 +29,7 @@ TAGS = ["kulgili", "kulgu", "qiziqarli", "ozbekcha", "uzbekistan", "foydali", "v
 DIRECTIONS = {
     "music":  ("🎵 Мусиқа/клип", "PaparazziUZ / КАТТА ДАВРА", "Мусиқа", ["qoshiq", "jonliijro", "uzbekmusic"], 3),
     "humor":  ("😂 Кулги", "КАТТА ДАВРА", "Ҳажвия", ["kulgili", "prikol_uz", "vaynlar"], 2),
+    "fun_world": ("😂 Дунё кулгиси", "КАТТА ДАВРА", "Ҳажвия", ["funnyvideos", "fails", "funnyanimals"], 3),   # 30.10: смех — основа
     "fun":    ("✨ Қизиқарли", "КАТТА ДАВРА", "Қизиқарли", ["qiziqarli", "ajoyib"], 1),
     "useful": ("💡 Фойдали", "КАТТА ДАВРА", "Фойдали видео", ["foydali", "maslahat"], 2),
     "food":   ("🍲 Таом/соғлиқ", "Хўжаобод", "Соғлиқ/Оила", ["retsept", "taom"], 1),

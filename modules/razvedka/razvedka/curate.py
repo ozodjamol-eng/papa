@@ -330,7 +330,10 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         wl_ids = sources.ids_for(choice, channel)
         if wl_ids:
             from telethon.tl.types import PeerChannel
-            peers = [PeerChannel(i) for i in wl_ids]
+            # 30.10: каналы, найденные разведчиком (владелец на них не подписан), — по @username: по id их не найти
+            uname = {x["id"]: x.get("username") for xs in (((choice or {}).get("channels") or {}).get(channel) or {}).values()
+                     for x in xs if x.get("username") and x.get("found_by")}
+            peers = [uname[i] if i in uname else PeerChannel(i) for i in wl_ids]
             if sources.main_empty(choice, channel):     # главная рубрика не выбрана — плюс папка канала, как раньше
                 peers += peers_in(folders, names)
         else:

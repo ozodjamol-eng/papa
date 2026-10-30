@@ -48,7 +48,8 @@
     "insta-run",
     "insta-install",
     "sources-auto-install",
-    "voronka-restart"
+    "voronka-restart",
+    "humor-run"
   ],
   "approve": [
     "morning-pool-clear",

@@ -240,6 +240,29 @@ async def _insta() -> dict:
         await c.disconnect()
 
 
+async def _humor() -> str:
+    import datetime as _dt
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return f"Разведка занята ({', '.join(busy)}) — повторите через 10–20 минут"
+    from . import scout, sources
+    from .telegram import client_from_env
+    if os.environ.get("GEMINI_API_KEY"):
+        os.environ["GEMINI_MODEL"] = sources.VISION_MODEL
+    c = client_from_env()
+    await c.connect()
+    try:
+        choice = sources.load_choice()
+        res = await scout.humor(c, choice, log=lambda s: print(s, flush=True))
+        data = scout.connect(sources.load_choice(), res["ok"], res["bad"], _dt.datetime.now(_dt.timezone.utc).isoformat())
+        saved = sources.save_choice(data)
+        return scout.render_humor(res["ok"], res["bad"]) + ("" if saved else "\n⚠️ не сохранилось (права папки выбора)")
+    finally:
+        await c.disconnect()
+
+
 async def _scout() -> str:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
@@ -415,6 +438,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "insta":                          # 📸 30.10: агент Instagram-трендов → пульт канала
         print("INSTA_DONE", asyncio.run(_insta()))
+        return
+    if cmd == "humor":                          # 😂 30.10: разведчик приколов → чистые подключить в КАТТА ДАВРА
+        print(asyncio.run(_humor()))
         return
     if cmd == "scout":                          # 🔭 30.10: разведчик каналов (только поиск и список)
         print(asyncio.run(_scout()))
