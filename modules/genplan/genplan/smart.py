@@ -151,6 +151,53 @@ def ad_hold(db, cfg: dict, channel: str, now: dt.datetime) -> dt.datetime | None
     return t if t > now else None
 
 
+AD_CLOSE_LOOK = dt.timedelta(minutes=60)   # реклама старше часа — её уже закрыл пост сетки
+AD_CLOSE_SKIP = dt.timedelta(minutes=10)   # пост сетки и так выйдет в ближайшие 10 мин — ничего не тянем
+
+
+def ad_closer(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
+    """30.10 владелец, ПРОТОКОЛ «реклама → закрывающий пост»: вышла реклама, прошло `after` (10) мин,
+    после неё ничего не вышло, а пост сетки ещё не скоро — ставим пост на сейчас.
+    Берём ближайший запланированный пост сетки (не 🔒, он уже прошёл вето 🗑); нет — самый старый из 📦 запаса
+    (не склад — у склада вето за 30 мин). Возвращает id поставленного поста или None."""
+    ch = cfg["channels"][channel]
+    o = hourly(ch)
+    if not o:
+        return None
+    after = dt.timedelta(minutes=int(o["after"]))
+    rows = db.execute("SELECT at, source FROM pulse WHERE channel=? AND at>=?",
+                      (channel, (now - AD_CLOSE_LOOK).isoformat())).fetchall()
+    pulses = sorted((dt.datetime.fromisoformat(r[0]).astimezone(plan.TZ), r[1]) for r in rows)
+    pulses = [p for p in pulses if p[0] <= now]
+    ads = [t for t, s in pulses if s == "ad"]
+    if not ads:
+        return None
+    last_ad = max(ads)
+    if now < last_ad + after:                                  # реклама ещё держится свои 10 мин
+        return None
+    if any(t > last_ad and s != "ad" for t, s in pulses):      # уже закрыта (пост, протокол, дайджест)
+        return None
+    if not (hm(o["from"]) <= now.time() <= (dt.datetime.combine(now.date(), hm(o["to"])) + dt.timedelta(minutes=59)).time()):
+        return None                                            # ночью не закрываем
+    upcoming = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) > now]
+    if any(dt.datetime.fromisoformat(m["scheduled_at"]) <= now + AD_CLOSE_SKIP for m in upcoming):
+        return None                                            # что-то и так выйдет через пару минут
+    if any(dt.datetime.fromisoformat(m["scheduled_at"]) <= now for m in store.scheduled(db, channel)):
+        return None                                            # уже стоит на сейчас (ждёт прохода)
+    pick = next((m for m in upcoming if is_grid_post(m) and not m["locked"]
+                 and dt.datetime.fromisoformat(m["scheduled_at"]).date() == now.date()), None)
+    if pick is None:
+        pool = [m for m in store.stock(db, channel)
+                if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
+                and not waits_text(cfg, m) and not _stale(ch, m, now) and not is_sklad(ch, m)
+                and not is_ad_rubric(m["rubric"])]
+        pick = pool[0] if pool else None
+    if pick is None:
+        return None
+    store.update(db, pick["id"], status="queued", scheduled_at=now.isoformat(), stock=0)
+    return pick["id"]
+
+
 def collision_defer(db, cfg: dict, channel: str, m, now: dt.datetime) -> dt.datetime | None:
     """Пост сетки наступил, а за последние `after` минут вышел другой пост (реклама, срочный, протокол, ручной) —
     ждём: новое время = тот пост + after. Сдвигается только этот пост, сетка остаётся."""

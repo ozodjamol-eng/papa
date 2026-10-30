@@ -410,7 +410,14 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
         placed = smart.fill_from_stock(db, cfg, channel, now)            # 📦 запас → в пустые слоты
         out["ids"] += placed
         sklad_notice(db, cfg, env, channel, placed, now, log)
-        due = [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
+        try:                                                             # 📣 30.10 протокол: реклама → закрывающий пост
+            closer = smart.ad_closer(db, cfg, channel, now)
+            if closer:
+                out["moved"] += 1
+                log(f"{channel}: реклама держалась {smart.hourly(cfg['channels'][channel])['after']} мин — закрываем постом #{closer}")
+        except Exception as e:  # noqa: BLE001 — закрывашка не должна ломать публикации
+            log(f"ad_closer: {type(e).__name__}: {e}")
+        due =[m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]) <= now]
         urgent = [m for m in due if m["urgent"]]
         regular = [m for m in due if not m["urgent"]]
         regular.sort(key=lambda m: (not smart.is_ad_rubric(m["rubric"]), m["scheduled_at"]))   # 25.10: реклама — раньше поста сетки
