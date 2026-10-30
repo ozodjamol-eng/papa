@@ -1,5 +1,5 @@
 [Unit]
-Description=PAPA 📸 агент Instagram-трендов → пульт КАТТА ДАВРА (каждый день 10:20 Ташкент)
+Description=PAPA 📸 агент Instagram-трендов → хаб «📸 PAPA ТРЕНДЫ» по направлениям (каждый день 10:20 Ташкент)
 
 [Timer]
 OnCalendar=*-*-* 05:20:00 UTC

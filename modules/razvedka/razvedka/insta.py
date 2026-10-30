@@ -24,6 +24,25 @@ TAG_ACTOR = os.environ.get("APIFY_TAG_ACTOR", "apify~instagram-hashtag-scraper")
 # и сам учит аккаунты, которые чаще всего «стреляют» (state["found"]).
 TAGS = ["kulgili", "kulgu", "qiziqarli", "ozbekcha", "uzbekistan", "foydali", "vaynlar", "prikol_uz", "toshkent",
         "andijon"]
+# 30.10 владелец: «музыка — музыку, полезное — отдельно… всё в один хаб, внизу — какая рубрика». Направление = поток:
+# свои хэштеги, своя дневная норма, подпись внизу «🏷 PAPA ТРЕНД: … → канал · рубрика: …».
+DIRECTIONS = {
+    "music":  ("🎵 Мусиқа/шоу", "PaparazziUZ", "Қўшиқ", ["qoshiq", "jonliijro", "uzbekmusic"], 2),
+    "humor":  ("😂 Кулги", "КАТТА ДАВРА", "Ҳажвия", ["kulgili", "prikol_uz", "vaynlar"], 2),
+    "fun":    ("✨ Қизиқарли", "КАТТА ДАВРА", "Қизиқарли", ["qiziqarli", "ajoyib"], 1),
+    "useful": ("💡 Фойдали", "КАТТА ДАВРА", "Фойдали видео", ["foydali", "maslahat"], 2),
+    "food":   ("🍲 Таом/соғлиқ", "Хўжаобод", "Соғлиқ/Оила", ["retsept", "taom"], 1),
+    "faith":  ("🕌 Маънавият", "Хўжаобод", "Маънавият", ["islom", "duo"], 1),
+    "local":  ("📍 Андижон/водий", "Хўжаобод", "Хўжаобод/Андижон", ["andijon", "fargona"], 1),
+}
+HUB_TITLE = "📸 PAPA ТРЕНДЫ"
+MARK = "🏷 PAPA ТРЕНД:"
+
+
+def footer(code: str, owner: str, views: int) -> str:
+    label, chan, rub, _, _ = DIRECTIONS[code]
+    v = f"{views / 1e6:.1f} млн" if views >= 1e6 else f"{views // 1000} минг"
+    return f"{MARK} {label} → {chan} · рубрика: {rub} · @{owner} · 👁 {v}"
 FRESH = dt.timedelta(days=4)
 VIDEO_MAX = 45 * 1024 * 1024
 TEXT_PROMPT = """Сен — «{title}» Telegram-каналининг муҳарририсан. Instagram рилсининг тагидаги матнни ўқиб, канал учун
@@ -155,63 +174,72 @@ def download(url: str) -> bytes | None:
         return None
 
 
+async def hub(client):
+    """Свой закрытый канал-хаб трендов (создаём, если нет). Владелец — профиль Разведки (= профиль владельца)."""
+    from telethon.tl.functions.channels import CreateChannelRequest
+    async for d in client.iter_dialogs():
+        if d.is_channel and not d.is_group and (d.title or "").strip() == HUB_TITLE:
+            return d.entity
+    r = await client(CreateChannelRequest(title=HUB_TITLE, about="Тренды Instagram по рубрикам — для каналов PAPA",
+                                          megagroup=False))
+    return r.chats[0]
+
+
 async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None, log=print) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     ic = cfg.get("insta") or {}
-    accounts = [a.strip().lstrip("@") for a in ic.get("accounts", []) if a.strip()]
     token = os.environ.get("APIFY_TOKEN", "").strip()
     if not token:
         return {"пропуск": "нет ключа Apify (papa-update apify-token)"}
-    channel = ic.get("channel", "davra")
     sf = state_dir / "insta.json"
     try:
         st = json.loads(sf.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         st = {}
-    tags = ic.get("tags") or TAGS
-    items = fresh(await asyncio.to_thread(apify_tags, tags, int(ic.get("per_tag", 12)), token), now)
-    learned = learn(st, items)
-    log(f"Apify: хэштеги {len(tags)} → {len(items)} свежих рилсов; агент запомнил аккаунтов: {len(learned)}")
-    accounts = list(dict.fromkeys(accounts + learned))[:20]
-    if accounts:                                       # свои/выученные аккаунты — сравнение с их обычными просмотрами
-        acc = await asyncio.to_thread(apify_reels, accounts, int(ic.get("per_account", 2)), token)
-        log(f"Apify: аккаунты {len(accounts)} → {len(acc)} рилсов")
-        items = fresh(acc, now) + items
-    picks = choose(items, st, int(ic.get("max_send", 4)), int(ic.get("min_views", 30000)), float(ic.get("min_ratio", 0)))
-    sent, skipped = 0, 0
+    target = await hub(client)
     gemini = bool(os.environ.get("GEMINI_API_KEY"))
     if gemini:
         os.environ["GEMINI_MODEL"] = os.environ.get("CURATOR_GEMINI_MODEL", "gemini-flash-lite-latest")
-    for it in picks:
-        st.setdefault("seen", []).append(it["_code"])
-        video = await asyncio.to_thread(download, it["videoUrl"])
-        if not video:
-            skipped += 1
-            continue
-        if gemini:                                     # чужое лого/@ на кадрах — не берём (правило владельца)
-            try:
-                grid = await asyncio.to_thread(curate.frames_grid, video, float(it.get("videoDuration") or 15))
-                v = await asyncio.to_thread(curate.vision, grid) if grid else {}
-                if v.get("foreign_logo") or v.get("ad") or v.get("bad"):
-                    skipped += 1
-                    log(f"  🚫 @{it['_owner']} {it['_code']}: лого/реклама на кадрах")
-                    continue
-            except RuntimeError as e:
-                log(f"  кадры: {e}")
-        title = ic.get("title", "КАТТА ДАВРА")
-        text = await asyncio.to_thread(write_text, it.get("caption") or "", title)
+    per_tag = int(ic.get("per_tag", 4))
+    report: dict[str, object] = {}
+    total = 0
+    for code, (label, chan, rub, tags, quota) in DIRECTIONS.items():
         try:
-            await client.send_file(curate.BOTS[channel], video, caption=text or None, supports_streaming=True,
-                                   attributes=None)
-        except Exception as e:  # noqa: BLE001
-            log(f"  отправка: {type(e).__name__}")
+            items = fresh(await asyncio.to_thread(apify_tags, tags, per_tag, token), now)
+        except Exception as e:  # noqa: BLE001 — одно направление не роняет остальные
+            log(f"{label}: Apify {type(e).__name__}")
             continue
-        sent += 1
-        log(f"  📸 @{it['_owner']} ×{it['_ratio']:.1f} · {it['_views']} просм. → {channel}")
-        await asyncio.sleep(5)
-    st["seen"] = st.get("seen", [])[-2000:]
+        total += len(items)
+        learn(st, items)
+        picks = choose(items, st, quota, int(ic.get("min_views", 30000)), 0)
+        sent = 0
+        for it in picks:
+            st.setdefault("seen", []).append(it["_code"])
+            video = await asyncio.to_thread(download, it["videoUrl"])
+            if not video:
+                continue
+            if gemini:                                 # чужое лого/@ на кадрах — не берём (правило владельца)
+                try:
+                    grid = await asyncio.to_thread(curate.frames_grid, video, float(it.get("videoDuration") or 15))
+                    v = await asyncio.to_thread(curate.vision, grid) if grid else {}
+                    if v.get("foreign_logo") or v.get("ad") or v.get("bad"):
+                        log(f"  🚫 {label} @{it['_owner']}: лого/реклама на кадрах")
+                        continue
+                except RuntimeError as e:
+                    log(f"  кадры: {e}")
+            text = await asyncio.to_thread(write_text, it.get("caption") or "", chan)
+            cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])
+            try:
+                await client.send_file(target, video, caption=cap[:1024], supports_streaming=True)
+            except Exception as e:  # noqa: BLE001
+                log(f"  отправка: {type(e).__name__}")
+                continue
+            sent += 1
+            log(f"  📸 {label} @{it['_owner']} · {it['_views']} просм.")
+            await asyncio.sleep(4)
+        report[label] = sent
+    st["seen"] = st.get("seen", [])[-3000:]
     st["last"] = now.isoformat()
     state_dir.mkdir(parents=True, exist_ok=True)
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
-    return {"рилсов": len(items), "выбрано": len(picks), "отправлено": sent, "пропущено": skipped,
-            "аккаунты_агента": learned[:10]}
+    return {"рилсов": total, "в хаб": report}

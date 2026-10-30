@@ -37,3 +37,12 @@ class Learn(unittest.TestCase):
         now = dt.datetime(2026, 10, 30, tzinfo=dt.timezone.utc)
         f = insta.fresh([{"timestamp": "2026-10-29T10:00:00.000Z"}, {"timestamp": "2026-10-01T10:00:00Z"}, {}], now)
         self.assertEqual(len(f), 2)
+
+
+class Footer(unittest.TestCase):
+    def test_footer(self):
+        f = insta.footer("music", "xayrshou", 2175972)
+        self.assertTrue(f.startswith(insta.MARK))
+        self.assertIn("PaparazziUZ", f)
+        self.assertIn("рубрика: Қўшиқ", f)
+        self.assertIn("2.2 млн", f)

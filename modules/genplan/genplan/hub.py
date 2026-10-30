@@ -65,6 +65,9 @@ def duplicate_note(db, m) -> str:
             f"Повтор можно, но лучше через {REPEAT_DAYS} дн.")
 
 
+TREND_RE = re.compile(r"\n*🏷 PAPA ТРЕНД:[^\n]*?рубрика: ([^·\n]+)[^\n]*")
+
+
 def rubrics(cfg: dict, channel: str) -> list[str]:
     out: list[str] = ["Якуний пост"] if cfg["channels"][channel].get("final_post") else []   # 20.10: свой слот 22:00
     for s in cfg["channels"][channel]["slots"]:
@@ -589,6 +592,11 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
            stock: bool = False) -> str:
     """Новый материал (одиночный пост или альбом) → черновик с угаданными каналом и рубрикой → карточка владельцу."""
     text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
+    trend_rub = None                               # 📸 30.10: из хаба трендов — строка «🏷 PAPA ТРЕНД: … рубрика: X» служебная
+    tm = TREND_RE.search(text)
+    if tm:
+        trend_rub = tm.group(1).strip()
+        text = TREND_RE.sub("", text).rstrip()
     media = [md for x in msgs for md in media_of(x)]
     fp = fingerprint(text, media)
     mid = store.add_material(db, hub, hub_ids[0], text, bool(media), media=media, hub_msgs=hub_ids, fp=fp)
@@ -599,6 +607,8 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     from . import bots
     channel = channel if channel in cfg["channels"] else smart.guess_channel(cfg, text, has_audio)
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=has_audio)
+    if trend_rub and trend_rub in rubrics(cfg, channel):
+        rub = trend_rub
     src = source_of(msgs[0])
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot), source=src)
     from .text import link_junk
