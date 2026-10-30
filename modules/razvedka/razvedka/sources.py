@@ -244,7 +244,8 @@ def card(ch: str, cands: dict[str, list[dict]], rows: list[dict], found: str | N
         lines.append("")
     if [c for c in MUST if c in cands and not any(is_must(r, c) for r in cands[c])]:
         lines.append("ℹ️ Тезкор Хабарлар / Tezkor Yangiliklar не найдены в ваших папках — добавьте их в «Новости».")
-    lines.append("Мой совет: берите ⭐. ⚠️ — можно, кадры проверю позже. 🚫 — лучше не брать.")
+    lines.append("⭐ уже включены сами (☑) — куратор берёт их без кнопки. Лишнее: снимите ☑ и нажмите «✅ Утверждаю».")
+    lines.append("⚠️ — можно, кадры проверю позже. 🚫 — лучше не брать.")
     if not kb:
         return "\n".join(lines)[:4096], None
     kb.append([{"text": "✅ Утверждаю", "callback_data": f"sw:ok:{ch}"}])
@@ -256,6 +257,42 @@ def load_choice(path: Path = CHOICE) -> dict | None:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+
+
+def auto_star(cands: dict[str, dict[str, list[dict]]], choice: dict | None, now: dt.datetime) -> tuple[dict, list[str]]:
+    """30.10 владелец: «кнопка не нужна» — ⭐ (рекомендую) включаются сами, владелец только убирает лишнее.
+    Каждый ⭐ добавляется ОДИН раз (auto_seen): убранный владельцем не вернётся."""
+    data = json.loads(json.dumps(choice or {}))
+    chans = data.setdefault("channels", {})
+    seen = data.setdefault("auto_seen", {})
+    added = []
+    for ch, rub in cands.items():
+        mine = chans.setdefault(ch, {})
+        have = {x["id"] for xs in mine.values() for x in xs}
+        was = set(seen.get(ch, []))
+        for code, rs in rub.items():
+            for r in rs:
+                if verdict(r)[0] != 0 or r["id"] in have or r["id"] in was:
+                    continue
+                mine.setdefault(code, []).append({"id": r["id"], "title": r["title"], "username": r.get("username")})
+                have.add(r["id"])
+                seen.setdefault(ch, []).append(r["id"])
+                added.append(f"{ch}: {r['title'][:30]}")
+    if added:
+        data["auto_at"] = now.isoformat()
+        data["version"] = 2
+    return data, added
+
+
+def save_choice(data: dict, path: Path = CHOICE) -> bool:
+    try:
+        tmp = path.with_name("." + path.name + ".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.chmod(tmp, 0o640)
+        os.replace(tmp, path)
+        return True
+    except OSError:
+        return False
 
 
 def ids_for(choice: dict | None, channel: str) -> list[int]:
@@ -419,6 +456,10 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
         await asyncio.sleep(1)
     gen = now.astimezone(dt.timezone(dt.timedelta(hours=5))).strftime("%d.%m.%Y %H:%M")
     choice = load_choice()
+    merged, added = auto_star(cands, choice, now)
+    if added and save_choice(merged):              # ⭐ включены сами — в карточке уже стоят ☑
+        choice = merged
+        log("⭐ включены сами: " + "; ".join(added))
     cards = []
     for ch, *_ in PROFILES:
         chosen = None

@@ -85,7 +85,7 @@ class TestSources(unittest.TestCase):
         self.assertEqual(btn[-1]["callback_data"], "sw:ok:davra")
         self.assertTrue(all(len(b["callback_data"].encode()) <= 64 for b in btn))
         self.assertIn("⭐ Рекомендую", t)
-        self.assertIn("Мой совет", t)
+        self.assertIn("⭐ уже включены сами", t)
         t2, kb2 = sources.card("davra", cands["davra"], rows, "KATTA DAVRA", "26.10", chosen={2})
         self.assertTrue(kb2["inline_keyboard"][1][0]["text"].startswith("☑"))       # уже выбранные владельцем
         self.assertIsNone(sources.card("paparazzi", {}, rows, None, "26.10")[1])     # нет папки — без кнопок
@@ -126,3 +126,19 @@ class TestSources(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutoStar(unittest.TestCase):
+    def test_auto_star_once(self):
+        import datetime as dt
+        from razvedka import sources
+        star = {"id": 5, "title": "Good", "username": "g", "clean": 1.0, "median_views": 9000, "why": "", "cyr_share": 1}
+        meh = {"id": 6, "title": "Meh", "username": "m", "clean": None, "median_views": 900, "why": ""}
+        cands = {"davra": {"humor": [star, meh]}}
+        now = dt.datetime(2026, 10, 30)
+        d, added = sources.auto_star(cands, None, now)
+        self.assertEqual([x["id"] for x in d["channels"]["davra"]["humor"]], [5])
+        self.assertEqual(len(added), 1)
+        d["channels"]["davra"]["humor"] = []            # владелец убрал
+        d2, added2 = sources.auto_star(cands, d, now)
+        self.assertEqual(added2, [])                   # не возвращаем

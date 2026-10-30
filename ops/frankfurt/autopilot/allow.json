@@ -46,7 +46,8 @@
     "sources-status",
     "razvedka-scout",
     "insta-run",
-    "insta-install"
+    "insta-install",
+    "sources-auto-install"
   ],
   "approve": [
     "morning-pool-clear",

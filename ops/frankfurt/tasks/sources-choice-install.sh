@@ -9,7 +9,7 @@ D=/var/lib/papa-sources-choice
 PY=/opt/papa-venv/razvedka/bin/python
 ( cd /opt/papa/modules/genplan && $PY -m unittest -q tests.test_sources_choice 2>&1 | tail -1 )
 ( cd /opt/papa/modules/razvedka && $PY -m unittest -q tests.test_sources 2>&1 | tail -1 )
-install -d -m 2750 -o papa-genplan -g papa-razvedka "$D"
+install -d -m 2770 -o papa-genplan -g papa-razvedka "$D"   # 30.10: Разведка тоже пишет (⭐ сами)
 mkdir -p /etc/systemd/system/papa-genplan.service.d
 cat > /etc/systemd/system/papa-genplan.service.d/sources-choice.conf <<EOF
 [Service]
