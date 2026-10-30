@@ -1,5 +1,10 @@
 """ИИ-ассистент личного Telegram владельца (@Ozodjamol) через Telegram Business (решение 17.10).
 
+30.10 (утверждено: «все пункты нормальные, одобряю»): первый раз за сутки новому человеку — «Ассалому алайкум ва
+раҳматуллоҳи ва барокатуҳ! Мен — Озод Жамолнинг ИИ-ёрдамчисиман» + 3 кнопки (📣 Реклама / 🎬 Бошқа иш / 👤 Шахсий);
+поздравление — сначала ответное поздравление, потом меню; ясная просьба — приветствие и сразу ответ по делу; кнопки не
+прошли — меню цифрами 1/2/3. Знакомым — только ответ на поздравления.
+
 30.10 (владелец: «нужен другой подход, он должен полноценно работать»): есть ключ Gemini → настоящий ИИ-разговор
 (бесплатно): понимает поздравления (Жума муборак → ответное поздравление), ведёт разговор о рекламе, личное — «Озод Жамол
 сам ответит». Со знакомыми (с кем владелец уже переписывался) — только ответ на поздравления/салом. Владелец написал
@@ -38,16 +43,101 @@ PRICE = """📣 XO'JAOBOD CITY 24 — РЕКЛАМА
 💻 Сайт, Telegram-бот — нархи келишилади
 Буюртма: @Ozodjamol"""   # 30.10 утверждено владельцем («согласен»)
 
-AD_TEXT = """Ассалому алайкум!
-Мен Озод Жамолнинг ИИ-ёрдамчисиман 🤖
+# 30.10 (утверждено владельцем): тёплое приветствие + меню из 3 кнопок вместо «пустого» шаблона.
+GREETING_HEAD = """Ассалому алайкум ва раҳматуллоҳи ва барокатуҳ! 🤝
+Мен — Озод Жамолнинг ИИ-ёрдамчисиман."""
+GREETING = GREETING_HEAD + "\nСизга қайси масалада ёрдам бера оламан? 👇"
+MENU = (("📣 Реклама бўйича", "ad"), ("🎬 Бошқа иш юзасидан (видео, сайт, бот)", "work"), ("👤 Шахсий масала", "me"))
+MENU_MARK = "[МЕНЮ]"
+MENU_NUMBERS = "\n\n" + "\n".join(f"{n} {t.split(' ', 1)[1]}" for n, (t, _) in zip(("1️⃣", "2️⃣", "3️⃣"), MENU)) + "\n\nКеракли рақамни ёзинг 🙂"
+BRANCH = {
+    "ad": """Реклама «Хўжаобод Сити 24» каналида чиқади:
+▫️ 1 кун — 50 000 сўм
+▫️ 3 кун — 130 000 сўм
+▫️ 7 кун — 280 000 сўм
+▫️ Кечки вақт (18:00–20:00) — +10 000
+▫️ 1 кунга юқорига қадаш — +20 000
+▫️ Моушн-видео + 1 ҳафта реклама — 500 000
+
+Реклама матни, расм ёки видеони юборинг — тайёрлаб, Озод Жамолга тасдиққа бераман ✅""",
+    "work": "Ажойиб! Қисқача ёзинг: нима керак, қайси соҳа ва қачонгача. Озод Жамол ўзи сиз билан боғланади 🤝",
+    "me": "Хабарингизни шу ерга ёзиб қолдиринг — Озод Жамолга албатта етказаман, у ўзи жавоб беради 🙏",
+}
+BRANCH_KIND = {"ad": "ad", "work": "work", "me": "personal"}
+PICK_NUM = {"1": "ad", "1️⃣": "ad", "2": "work", "2️⃣": "work", "3": "me", "3️⃣": "me"}
+
+AD_TEXT = GREETING_HEAD + """
 
 """ + PRICE + """
 
 Нимани реклама қилмоқчи эканингизни ёзиб, матн ва расм/видеони юборинг — Озод Жамол тез орада боғланади. Раҳмат!"""
 
-PERSONAL_TEXT = """Ассалому алайкум!
-Мен Озод Жамолнинг ИИ-ёрдамчисиман 🤖
+PERSONAL_TEXT = GREETING_HEAD + """
 Хабарингизни унга етказдим — тез орада ўзи сиз билан боғланади. Раҳмат!"""
+
+
+def _who(frm: dict) -> tuple[str, str]:
+    name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or "—"
+    return name, (f" (@{frm['username']})" if frm.get("username") else "")
+
+
+def send_menu(db, api, c, cid: int, now: dt.datetime) -> None:
+    """Приветствие + 3 кнопки. Кнопки не прошли (не ошибка прав) — то же меню цифрами 1/2/3."""
+    kb = {"inline_keyboard": [[{"text": t, "callback_data": "m:" + k}] for t, k in MENU]}
+    try:
+        api("sendMessage", chat_id=cid, business_connection_id=c["id"], text=GREETING, reply_markup=kb)
+    except RuntimeError as e:
+        if "PEER_INVALID" in str(e) or "not enough rights" in str(e).lower():
+            raise
+        print(f"assistant: кнопки не прошли ({str(e)[:80]}) — меню цифрами", flush=True)
+        api("sendMessage", chat_id=cid, business_connection_id=c["id"], text=GREETING + MENU_NUMBERS)
+    _log(db, cid, "ai", MENU_MARK + " " + GREETING + MENU_NUMBERS, now)
+
+
+def last_was_menu(db, cid: int, now: dt.datetime) -> bool:
+    r = db.execute("SELECT text FROM msgs WHERE chat=? AND role='ai' AND at>=? ORDER BY at DESC, rowid DESC LIMIT 1",
+                   (cid, (now - HISTORY_FOR).isoformat())).fetchone()
+    return bool(r and (r[0] or "").startswith(MENU_MARK))
+
+
+def choose(db, api, c, cid: int, frm: dict, branch: str, now: dt.datetime) -> str:
+    """Человек выбрал пункт меню (кнопкой или цифрой) → ответ ветки + уведомление владельцу."""
+    last = db.execute("SELECT v FROM kv WHERE k=?", (f"pick:{cid}",)).fetchone()
+    if last and last[0].split("|")[0] == branch and now - dt.datetime.fromisoformat(last[0].split("|")[1]) < dt.timedelta(minutes=2):
+        return "pick_dup"                                  # двойное нажатие — второй раз не отвечаем
+    api("sendMessage", chat_id=cid, business_connection_id=c["id"], text=BRANCH[branch])
+    _log(db, cid, "ai", BRANCH[branch], now)
+    kind = BRANCH_KIND[branch]
+    name, user = _who(frm)
+    db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"pick:{cid}", f"{branch}|{now.isoformat()}"))
+    db.execute("INSERT INTO chats(chat, replied_at, kind, name) VALUES(?,?,?,?) ON CONFLICT(chat) DO UPDATE SET "
+               "replied_at=excluded.replied_at, kind=excluded.kind, name=excluded.name", (cid, now.isoformat(), kind, name))
+    db.commit()
+    if c["owner_chat"]:
+        label = dict((k, t) for t, k in MENU)[branch]
+        try:
+            api("sendMessage", chat_id=c["owner_chat"], text=f"{label} · {name}{user}\n—\n🤖 Выбрал пункт меню, ассистент ведёт дальше.")
+        except Exception as e:  # noqa: BLE001
+            print(f"assistant: уведомление не ушло ({e})", flush=True)
+    return "pick_" + branch
+
+
+def handle_callback(db, q: dict, api, now: dt.datetime) -> str:
+    data = q.get("data") or ""
+    try:
+        api("answerCallbackQuery", callback_query_id=q["id"])
+    except Exception:  # noqa: BLE001
+        pass
+    if not data.startswith("m:") or data[2:] not in BRANCH:
+        return "skip"
+    m = q.get("message") or {}
+    cid = (m.get("chat") or {}).get("id")
+    bcid = m.get("business_connection_id")
+    c = db.execute("SELECT * FROM conn WHERE id=?", (bcid,)).fetchone() if bcid else None
+    c = c or db.execute("SELECT * FROM conn WHERE enabled=1 LIMIT 1").fetchone()
+    if not c or not c["enabled"] or not cid:
+        return "no_connection"
+    return choose(db, api, c, cid, q.get("from") or {}, data[2:], now)
 
 AD_WORDS = ("реклам", "reklam", "эълон", "элон", "e'lon", "eʼlon", "elon", "нарх", "narx", "прайс", "price",
             "цена", "стоимост", "сколько стоит", "қанча турад", "qancha tur", "жойла", "joyla", "размест", "тарқат",
@@ -104,6 +194,8 @@ def _ago(ts: str | None, now: dt.datetime) -> dt.timedelta | None:
 def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
     """Одно обновление Bot API → действие. api(method, **params). Возвращает, что сделано (для журнала/тестов)."""
     now = now or dt.datetime.now(dt.timezone.utc)
+    if upd.get("callback_query"):
+        return handle_callback(db, upd["callback_query"], api, now)
     bc = upd.get("business_connection")
     if bc:
         db.execute("INSERT OR REPLACE INTO conn VALUES (?,?,?,?)",
@@ -113,8 +205,9 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
         print(f"assistant: подключение · ответ разрешён: {can_reply}", flush=True)
         if bc.get("is_enabled", True) and bc.get("user_chat_id"):
             api("sendMessage", chat_id=bc["user_chat_id"],
-                text=("✅ ИИ-ассистент подключён к вашему Telegram.\nОтвечаю только на первое сообщение человека "
-                      "(реклама — прайс, остальное — «передал, скоро свяжется») и пересылаю вам сюда.")
+                text=("✅ ИИ-ассистент подключён к вашему Telegram.\nНовому человеку — приветствие и меню "
+                      "(Реклама / Бошқа иш / Шахсий), дальше веду разговор; знакомым — только ответ на поздравления. "
+                      "Обращения пересылаю вам сюда.")
                 if can_reply is not False else FIX_RIGHTS)
         return "connected" if bc.get("is_enabled", True) else "disconnected"
     m = upd.get("business_message")
@@ -138,6 +231,10 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
         return "owner"
     o, r = (_ago(row["owner_at"], now), _ago(row["replied_at"], now)) if row else (None, None)
     text = m.get("text") or m.get("caption") or ""
+    pick = PICK_NUM.get(text.strip())
+    if pick and not (o is not None and o < OWNER_QUIET) and last_was_menu(db, chat["id"], now):
+        _log(db, chat["id"], "user", text.strip(), now)
+        return choose(db, api, c, chat["id"], frm, pick, now)
     if ai is None and os.environ.get("GEMINI_API_KEY"):
         ai = gemini_ai
     if ai is not None:
@@ -157,7 +254,10 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
         return "quiet"
     kind = kind_of(text)
     try:
-        api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT if kind == "ad" else PERSONAL_TEXT)
+        if kind == "ad":
+            api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT)
+        else:
+            send_menu(db, api, c, chat["id"], now)          # 30.10: вместо «передал» — приветствие и меню
     except RuntimeError as e:
         # 19.10: BUSINESS_PEER_INVALID — у бота нет права отвечать (или чат вне доступа). Владельцу — инструкция, раз в сутки.
         last = db.execute("SELECT v FROM kv WHERE k='rights_alert'").fetchone()
@@ -190,7 +290,7 @@ AI_PER_CHAT_DAY = 20            # не больше ответов ИИ одно
 AI_PER_DAY = 300                # общий предел в сутки (бесплатный лимит Gemini)
 HISTORY = 12                    # сколько последних сообщений помнит
 HISTORY_FOR = dt.timedelta(hours=48)
-KINDS = ("greeting", "ad", "personal", "other")
+KINDS = ("greeting", "congrats", "ad", "work", "personal", "other")
 
 SYSTEM = """Ты — ИИ-ёрдамчи (ИИ-помощник) Озод Жамола в его личном Telegram (@Ozodjamol).
 Озод Жамол — блогер и медиа-владелец из Хўжаобода (Андижон): Telegram-каналы XO'JAOBOD CITY 24, КАТТА ДАВРА, PaparazziUZ,
@@ -200,10 +300,16 @@ Instagram @paparazzi.uz. Ты отвечаешь людям, пока он за�
 узбекский — ТОЛЬКО кириллицей (даже если человек пишет латиницей), русский — по-русски. Ты не Озод Жамол и не выдаёшь себя
 за него; если спросят — ты его ИИ-ёрдамчи. Не повторяй одно и то же, учитывай переписку.
 
+ПРИВЕТСТВИЕ И МЕНЮ отправляет сам бот: «Ассалому алайкум ва раҳматуллоҳи ва барокатуҳ! Мен — Озод Жамолнинг
+ИИ-ёрдамчисиман» + кнопки «📣 Реклама бўйича / 🎬 Бошқа иш юзасидан (видео, сайт, бот) / 👤 Шахсий масала». Ты не
+представляйся заново и не перечисляй меню. Если человек выбрал пункт — продолжай разговор по нему.
+
 ПРАВИЛА:
 1) Поздравления и дуо (Жума муборак, байрам, туғилган кун, тилаклар, пересланные открытки/посты с поздравлением) —
-   ответь искренним ответным поздравлением и дуо от имени Озод Жамола («Озод Жамол номидан ҳам…»). kind=greeting.
-2) Салом / как дела — поприветствуй и спроси, чем можешь помочь. kind=greeting.
+   ответь искренним ответным поздравлением и дуо от имени Озод Жамола («Озод Жамол номидан ҳам…»). kind=congrats.
+2) Просто салом / как дела без просьбы — короткое ответное приветствие. kind=greeting.
+2б) Бошқа иш (заказать видеоролик, моушн, сайт, Telegram-бот): узнай коротко, что нужно, соҳа и срок; цену не называй —
+   «нархини Озод Жамол ўзи айтади», он сам свяжется. kind=work.
 3) Реклама — ТОЛЬКО по утверждённому прайсу (ниже), других сумм не называй, скидок не давай. Реклама выходит ТОЛЬКО
    в XO'JAOBOD CITY 24 (в КАТТА ДАВРА и PaparazziUZ рекламы нет). Собери заказ по шагам, не всё сразу:
    что рекламируют → сколько дней (1/3/7) → нужно ли вечернее время и закреп → текст рекламы и фото/видео → желаемая дата.
@@ -223,7 +329,7 @@ Instagram @paparazzi.uz. Ты отвечаешь людям, пока он за�
    переписке), число дней (1/3/7) и дату. Тогда order.ready=true, скажи клиенту, что заказ передан Озод Жамолу и он
    подтвердит время и оплату. Иначе order.ready=false и спрашивай недостающее по одному.
 
-Ответ — ТОЛЬКО JSON: {"reply": "текст или пусто", "kind": "greeting|ad|personal|other",
+Ответ — ТОЛЬКО JSON: {"reply": "текст или пусто", "kind": "greeting|congrats|ad|work|personal|other",
  "order": {"ready": false, "what": "", "days": 1, "evening": false, "pin": false, "date": "", "total": 0,
            "ad_text": "текст рекламы клиента дословно"}}"""
 
@@ -414,17 +520,26 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
         db.commit()
         return "ai_failed"
     kind, reply = out["kind"], out["reply"]
-    if known and kind != "greeting":                  # знакомым — только ответ на поздравление/салом
+    if known and kind != "congrats":                  # 30.10: знакомым — только ответное поздравление, остальное — сам владелец
         return "contact_quiet"
     first_today = not (row and row["replied_at"] and _ago(row["replied_at"], now) < REPLY_EVERY)
-    if reply and first_today and "ёрдамчи" not in reply.lower() and "помощник" not in reply.lower():
-        reply = "🤖 Озод Жамолнинг ИИ-ёрдамчиси:\n" + reply
+    menu = False
+    if first_today and not known:                     # 30.10: первый раз за сутки — тёплое приветствие
+        if kind in ("greeting", "other") or not reply:
+            reply, menu = "", True                    # просто салом / непонятно → приветствие + меню
+        elif kind == "congrats":
+            menu = True                               # сначала ответное поздравление, потом меню
+        elif "ёрдамчи" not in reply.lower() and "помощник" not in reply.lower():
+            reply = GREETING_HEAD + "\n\n" + reply     # ясная просьба → приветствие и сразу ответ по делу
     if reply:
         try:
             api("sendMessage", chat_id=cid, business_connection_id=c["id"], text=reply[:3500])
         except RuntimeError:
             raise
         _log(db, cid, "ai", reply, now)
+    if menu:
+        send_menu(db, api, c, cid, now)
+        reply = reply or "(приветствие + меню)"
     name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or "—"
     if kind == "ad" and (out.get("order") or {}).get("ready") and c["owner_chat"]:
         send_order(db, api, c["owner_chat"], cid, name, frm.get("username"), out["order"], now)
@@ -434,7 +549,8 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
     db.commit()
     # владельцу: новый человек — первое обращение за сутки; реклама — каждый раз
     if c["owner_chat"] and not known and (first_today or kind == "ad"):
-        head = {"ad": "📣 РЕКЛАМА", "greeting": "🤝 Салом/табрик", "personal": "👤 Личное"}.get(kind, "💬 Сообщение")
+        head = {"ad": "📣 РЕКЛАМА", "greeting": "🤝 Салом", "congrats": "🤝 Табрик", "work": "🎬 Работа (видео/сайт/бот)",
+                "personal": "👤 Личное"}.get(kind, "💬 Сообщение")
         user = f" (@{frm['username']})" if frm.get("username") else ""
         try:
             api("sendMessage", chat_id=c["owner_chat"],
@@ -490,7 +606,7 @@ def loop() -> None:
     while True:
         try:
             ups = api("getUpdates", offset=off, timeout=50,
-                      allowed_updates=["business_connection", "business_message", "message"])
+                      allowed_updates=["business_connection", "business_message", "message", "callback_query"])
         except Exception as e:  # noqa: BLE001
             print(f"assistant: getUpdates {e}", flush=True)
             time.sleep(10)
@@ -502,7 +618,7 @@ def loop() -> None:
                     api("sendMessage", chat_id=u["message"]["chat"]["id"], text=start_text(db, u["message"]))
                 else:
                     res = handle(db, u, api)
-                    if res not in ("skip", "quiet", "owner"):
+                    if res not in ("skip", "quiet", "owner", "pick_dup"):
                         print(f"assistant: {res}", flush=True)
             except Exception as e:  # noqa: BLE001
                 print(f"assistant: ошибка {e}", flush=True)

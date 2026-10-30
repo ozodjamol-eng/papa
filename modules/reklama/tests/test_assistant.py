@@ -48,12 +48,13 @@ class Assistant(unittest.TestCase):
         self.assertNotIn("PaparazziUZ", r["text"])
         self.assertIn("📣 РЕКЛАМА · Ali (@ali)", self.sent(OWNER)[0]["text"])
 
-    def test_personal_short_reply(self):
+    def test_personal_gets_greeting_menu(self):
         self.assertEqual(A.handle(self.db, msg("Ozod aka, qalaysiz?"), self.api, T0), "personal")
-        t = self.sent(555)[0]["text"]
-        self.assertIn("ИИ-ёрдамчиси", t)
-        self.assertIn("тез орада ўзи сиз билан боғланади", t)
-        self.assertNotIn("50 000", t)
+        r = self.sent(555)[0]
+        self.assertIn("ва раҳматуллоҳи ва барокатуҳ", r["text"])
+        self.assertIn("ИИ-ёрдамчисиман", r["text"])
+        self.assertEqual(len(r["reply_markup"]["inline_keyboard"]), 3)     # 3 кнопки меню
+        self.assertNotIn("50 000", r["text"])
 
     def test_only_first_message_per_day(self):
         A.handle(self.db, msg("салом"), self.api, T0)
@@ -143,14 +144,14 @@ class AiTest(unittest.TestCase):
         return [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == chat]
 
     def test_juma_greeting_warm_reply_and_keeps_talking(self):
-        r = A.handle(self.db, msg("Жума муборак!"), self.api, T0, ai=self.ai("greeting", "Жумангиз муборак бўлсин!"))
-        self.assertEqual(r, "greeting")
-        self.assertIn("ИИ-ёрдамчиси", self.sent(555)[0])          # первый ответ дня — с пометкой ИИ
-        self.assertIn("Жумангиз муборак", self.sent(555)[0])
+        r = A.handle(self.db, msg("Жума муборак!"), self.api, T0, ai=self.ai("congrats", "Жумангиз муборак бўлсин!"))
+        self.assertEqual(r, "congrats")
+        self.assertIn("Жумангиз муборак", self.sent(555)[0])          # сначала ответное поздравление
+        self.assertIn("ИИ-ёрдамчисиман", self.sent(555)[1])           # потом приветствие + меню
         A.handle(self.db, msg("Реклама қанча?"), self.api, T0 + dt.timedelta(minutes=2),
                  ai=self.ai("ad", "50 000 сўм, XO'JAOBOD CITY 24 да."))
-        self.assertEqual(len(self.sent(555)), 2)                  # разговор продолжается, не глохнет
-        self.assertNotIn("ИИ-ёрдамчиси:", self.sent(555)[1])
+        self.assertEqual(len(self.sent(555)), 3)                  # разговор продолжается, не глохнет
+        self.assertNotIn("барокатуҳ", self.sent(555)[2])          # второй раз не здоровается
         self.assertEqual(self.seen[1][0][-1][0], "ai")            # ИИ видит свою прошлую реплику
         self.assertIn("📣 РЕКЛАМА", self.sent(OWNER)[-1])
 
@@ -159,7 +160,10 @@ class AiTest(unittest.TestCase):
         later = T0 + dt.timedelta(hours=30)
         self.assertEqual(A.handle(self.db, msg("Пул керак эди"), self.api, later, ai=self.ai("personal", "Етказаман")), "contact_quiet")
         self.assertEqual(self.sent(555), [])
-        self.assertEqual(A.handle(self.db, msg("Жума муборак"), self.api, later, ai=self.ai("greeting", "Сизга ҳам!")), "greeting")
+        self.assertEqual(A.handle(self.db, msg("салом"), self.api, later, ai=self.ai("greeting", "Ваалайкум")), "contact_quiet")
+        self.assertEqual(self.sent(555), [])                       # знакомым меню не шлём
+        self.assertEqual(A.handle(self.db, msg("Жума муборак"), self.api, later, ai=self.ai("congrats", "Сизга ҳам!")), "congrats")
+        self.assertEqual(self.sent(555), ["Сизга ҳам!"])
         self.assertTrue(self.seen[-1][2])                          # ИИ знает, что это знакомый
 
     def test_owner_wrote_ai_silent(self):
@@ -171,7 +175,7 @@ class AiTest(unittest.TestCase):
         def bad(*a):
             raise RuntimeError("gemini 500")
         self.assertEqual(A.handle(self.db, msg("салом"), self.api, T0, ai=bad), "personal")
-        self.assertIn("тез орада ўзи сиз билан боғланади", self.sent(555)[0])
+        self.assertIn("ИИ-ёрдамчисиман", self.sent(555)[0])         # шаблон тоже с приветствием и меню
 
     def test_daily_limit(self):
         f = self.ai("other", "ок")
@@ -217,6 +221,58 @@ class AutoGreetingTest(unittest.TestCase):
             A.handle(db, msg("Салом! Ҳозир бандман", uid=OWNER, chat=chat), api, T0)
         self.assertTrue(A.is_auto_owner(db, "Салом! Ҳозир бандман", T0))
         self.assertFalse(A.is_auto_owner(db, "Ваалайкум, яхшимисиз?", T0))
+
+
+class MenuTest(unittest.TestCase):
+    """30.10: приветствие + меню из 3 кнопок, выбор кнопкой или цифрой."""
+    def setUp(self):
+        self.db, self.api = A.connect(":memory:"), Api()
+        A.handle(self.db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}},
+                 self.api, T0)
+        self.api.calls.clear()
+
+    def sent(self, chat):
+        return [p for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == chat]
+
+    def test_salom_gets_menu_only(self):
+        ai = lambda *a, **k: {"kind": "greeting", "reply": "Ваалайкум ассалом! Қандай ёрдам керак?"}
+        self.assertEqual(A.handle(self.db, msg("Салом"), self.api, T0, ai=ai), "greeting")
+        out = self.sent(555)
+        self.assertEqual(len(out), 1)                              # без дубля «чем помочь»
+        self.assertIn("reply_markup", out[0])
+
+    def test_clear_request_greeting_plus_answer(self):
+        ai = lambda *a, **k: {"kind": "ad", "reply": "1 кун — 50 000 сўм. Нимани реклама қиласиз?"}
+        A.handle(self.db, msg("reklama narxi?"), self.api, T0, ai=ai)
+        t = self.sent(555)[0]["text"]
+        self.assertTrue(t.startswith("Ассалому алайкум ва раҳматуллоҳи"))
+        self.assertIn("50 000", t)
+
+    def test_button_press(self):
+        A.handle(self.db, msg("салом"), self.api, T0)
+        q = {"callback_query": {"id": "q1", "data": "m:ad", "from": {"id": 555, "first_name": "Ali"},
+                                "message": {"business_connection_id": "BC", "chat": {"id": 555, "type": "private"}}}}
+        self.assertEqual(A.handle(self.db, q, self.api, T0 + dt.timedelta(minutes=1)), "pick_ad")
+        self.assertIn("Хўжаобод Сити 24", self.sent(555)[-1]["text"])
+        self.assertIn("Реклама бўйича · Ali", self.sent(OWNER)[-1]["text"])
+        self.assertTrue(any(m == "answerCallbackQuery" for m, _ in self.api.calls))
+        self.assertEqual(A.handle(self.db, q, self.api, T0 + dt.timedelta(minutes=1)), "pick_dup")   # двойное нажатие
+
+    def test_buttons_fail_numbers_work(self):
+        calls = []
+
+        def api(method, **p):
+            if p.get("reply_markup"):
+                raise RuntimeError("sendMessage: Bad Request: BUTTON_TYPE_INVALID")
+            calls.append(p)
+            return {}
+        A.handle(self.db, msg("салом"), api, T0)
+        self.assertIn("1️⃣ Реклама бўйича", calls[0]["text"])
+        self.assertEqual(A.handle(self.db, msg("3"), api, T0 + dt.timedelta(minutes=1)), "pick_me")
+        self.assertIn("албатта етказаман", [p for p in calls if p["chat_id"] == 555][-1]["text"])
+
+    def test_number_without_menu_is_ordinary(self):
+        self.assertEqual(A.handle(self.db, msg("2"), self.api, T0), "personal")
 
 
 class OrderTest(unittest.TestCase):
