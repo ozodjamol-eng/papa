@@ -116,7 +116,8 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             if m.grouped_id:
                 groups[m.grouped_id] = it
             items.append(it)
-        st.setdefault("pos", {})[ch] = last_id if last_id and len(items) else -1
+        # 31.10: молодой канал (старше 6 мес. ещё ничего нет) — не «пройден навсегда», проверим завтра снова
+        st.setdefault("pos", {})[ch] = last_id if last_id and len(items) else (-1 if pos else 0)
         picks = strong([it for it in items if is_candidate(it, now)])
         done, skip, per = 0, 0, {}
         for it in picks:
