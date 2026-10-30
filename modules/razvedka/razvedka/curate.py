@@ -140,6 +140,8 @@ def pick(cands: list[dict], n: int, history: list[dict], need: list[str] | None 
 
 # ---------- Gemini: проверка кадра ----------
 def vision(jpeg: bytes) -> dict:
+    from . import budget
+    budget.gate()                                # 30.10: лимит Gemini общий — BudgetStop (RuntimeError) = «лимит»
     key = os.environ["GEMINI_API_KEY"].strip().strip('"').strip("'")
     model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest").strip().strip('"').removeprefix("models/") or "gemini-flash-latest"
     body = {"contents": [{"role": "user", "parts": [{"text": VISION},

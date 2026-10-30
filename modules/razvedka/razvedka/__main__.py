@@ -2,7 +2,7 @@
   python -m razvedka login            — вход в Telegram (интерактивно, на сервере)
   python -m razvedka collect          — собрать посты
   python -m razvedka report [--send]  — отчёт в консоль (и в PAPA TEST GROUP с --send)
-  python -m razvedka send             — отчёт в консоль и в «PAPA ОТЧЁТЫ» (картинками, 18.10)
+  python -m razvedka send             — отчёт в консоль и в бот-пульт владельца (картинками; 20.10 — отчёты в бот)
   python -m razvedka cards            — только нарисовать картинки отчёта (проверка, без Telegram)
   python -m razvedka dossier [--send] — досье больших каналов + сравнение с нашими (по понедельникам — само в run)
   python -m razvedka run              — collect + send (для ежедневного таймера)

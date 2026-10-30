@@ -51,6 +51,11 @@ def write(text: str) -> str:
     import urllib.request
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if key:
+        from . import budget
+        try:
+            budget.gate()                        # 30.10: лимит общий — без Gemini берём исходный текст
+        except budget.BudgetStop:
+            return clean(text)[:900]
         body = {"systemInstruction": {"parts": [{"text": PROMPT}]},
                 "contents": [{"role": "user", "parts": [{"text": f"Матн:\n{(text or '(матн йўқ)')[:2500]}"}]}],
                 "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.5}}

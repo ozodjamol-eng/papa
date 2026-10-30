@@ -4,10 +4,10 @@
   1) GitHub Search API (бесплатно, без ключа; если есть GITHUB_TOKEN — лимит выше) по темам PAPA:
      Telegram-боты и автопостинг, Instagram, монтаж видео, ИИ-видео, навыки Claude, узбекский язык.
   2) Отсев мусора: форки, архив, заброшенные (> 60 дней без коммитов), мало звёзд, уже показанные раньше.
-  3) ИИ (Haiku, без веб-поиска) оценивает кандидатов по правилу «Копилки фишек»: берём / на заметку / не нужно,
-     где применить в PAPA и какой расход. Нет ключа ИИ — короткий список без оценки.
-  4) Отчёт → «PAPA ОТЧЁТЫ» (как все отчёты Разведки). Код с GitHub сам ничего НЕ ставит — только советует.
-Расход: GitHub — 0 $; оценка ≈ 0,01–0,03 $ за отчёт (~0,1 $ в месяц)."""
+  3) ИИ (Gemini, без веб-поиска) оценивает кандидатов по правилу «Копилки фишек»: берём / на заметку / не нужно,
+     где применить в PAPA и какой расход. Нет ключа Gemini или лимит дня — короткий список без оценки.
+  4) Отчёт → бот-пульт владельца (20.10: отчёты в бот, без отдельных каналов). Код с GitHub сам ничего НЕ ставит — только советует.
+Расход: $0 (GitHub и бесплатный Gemini)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -18,10 +18,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .trend import TrendError, _post, cost
+from .trend import TrendError, _gpost, cost, gemini_ask
 
 SEARCH = "https://api.github.com/search/repositories"
-MODEL = os.environ.get("GITHUB_SCOUT_MODEL", "claude-haiku-5-5")
 TZ = dt.timezone(dt.timedelta(hours=5))
 HISTORY_KEEP = 600
 MAX_CANDIDATES = 14
@@ -159,17 +158,7 @@ def plain_report(cands: list[dict], today: str, note: str = "") -> str:
     return "\n".join(lines)
 
 
-def ask(prompt: str, key: str, post=_post) -> tuple[str, dict]:
-    d = post({"model": MODEL, "max_tokens": 4000, "system": CONTEXT,
-              "messages": [{"role": "user", "content": prompt}]}, key)
-    u = d.get("usage") or {}
-    text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
-    if not text:
-        raise TrendError(f"пустой ответ ИИ (stop={d.get('stop_reason')})")
-    return text, {"input_tokens": int(u.get("input_tokens", 0)), "output_tokens": int(u.get("output_tokens", 0)), "searches": 0}
-
-
-def run(out_dir: Path, now: dt.datetime | None = None, get=_get, post=_post) -> str:
+def run(out_dir: Path, now: dt.datetime | None = None, get=_get, gpost=_gpost) -> str:
     """Сделать недельный отчёт. Возвращает текст для отправки."""
     now = now or dt.datetime.now(TZ)
     today_s = now.strftime("%d.%m.%Y")
@@ -179,19 +168,13 @@ def run(out_dir: Path, now: dt.datetime | None = None, get=_get, post=_post) -> 
     err_line = "\n⚠️ GitHub ответил не на все запросы (лимит) — список неполный." if errors else ""
     if not cands:
         return plain_report([], today_s) + err_line
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
-    use_gemini = post is _post and bool(os.environ.get("GEMINI_API_KEY"))   # 22.10: Anthropic заблокирован → Gemini
-    if not key and not use_gemini:
-        text = plain_report(cands, today_s, "нет ключа ИИ")
+    if not os.environ.get("GEMINI_API_KEY"):          # 30.10: только Gemini (Anthropic владельца заблокирован)
+        text = plain_report(cands, today_s, "нет GEMINI_API_KEY")
     else:
         try:
             prompt = TASK.format(today=today_s, items=items_text(cands))
-            if use_gemini:
-                from .trend import gemini_ask
-                text, usage = gemini_ask(f"{CONTEXT}\n\n{prompt}", search=False)
-            else:
-                text, usage = ask(prompt, key, post)
-            text += f"\n\n💲 расход отчёта ≈ ${cost(usage, usage.get('model', MODEL))} · кандидатов: {len(cands)}"
+            text, usage = gemini_ask(f"{CONTEXT}\n\n{prompt}", search=False, gpost=gpost)
+            text += f"\n\n💲 расход отчёта ≈ ${cost(usage)} · кандидатов: {len(cands)}"
         except TrendError as e:
             from .novinki import short_err
             text = plain_report(cands, today_s, "ИИ: " + short_err(e))
