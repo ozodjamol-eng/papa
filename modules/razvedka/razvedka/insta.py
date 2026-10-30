@@ -147,10 +147,21 @@ def learn(state: dict, items: list[dict]) -> list[str]:
     return [o for o, n in sorted(f.items(), key=lambda kv: -kv[1]) if n >= 2][:20]
 
 
+def _budget_ok() -> bool:
+    """30.10: лимит Gemini общий — нет места фоновой Разведке → без текста (владелец напишет ✏️ / 🤖)."""
+    from . import budget
+    try:
+        budget.gate()
+        return True
+    except budget.BudgetStop as e:
+        print(f"insta: {e}", flush=True)
+        return False
+
+
 def write_text(caption: str, title: str) -> str:
     """Наш текст (Gemini, бесплатно). Без ключа/ошибка — пусто (владелец напишет сам ✏️ или нажмёт 🤖)."""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not key:
+    if not key or not _budget_ok():
         return ""
     body = {"systemInstruction": {"parts": [{"text": TEXT_PROMPT.format(title=title)}]},
             "contents": [{"role": "user", "parts": [{"text": f"Рилс матни:\n{(caption or '(матн йўқ)')[:2000]}"}]}],
@@ -228,7 +239,7 @@ def signal_card(it: dict, draft: str, chan: str, rub: str) -> str:
 
 def write_signal(caption: str) -> str:
     key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not key or not (caption or "").strip():
+    if not key or not (caption or "").strip() or not _budget_ok():
         return ""
     body = {"systemInstruction": {"parts": [{"text": SIGNAL_PROMPT}]},
             "contents": [{"role": "user", "parts": [{"text": f"Интервью матни:\n{caption[:2000]}"}]}],

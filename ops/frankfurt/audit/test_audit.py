@@ -198,12 +198,14 @@ class TestGuard(unittest.TestCase):
     def test_gemini_saver_flag(self):
         import tempfile
         from pathlib import Path
-        f = Path(tempfile.mkdtemp()) / "saver"
-        a = pa.saver_guard(self.now, {}, hit=lambda: True, flag=f)
+        d = Path(tempfile.mkdtemp())
+        f, sh = d / "saver", d / "shared-saver"
+        a = pa.saver_guard(self.now, {}, hit=lambda: True, flag=f, shared=sh)
         self.assertTrue(a and "лимит" in a[0], a)
         self.assertEqual(f.read_text(), self.now.date().isoformat())
-        self.assertEqual(pa.saver_guard(self.now, {}, hit=lambda: True, flag=f), [])   # один раз в день
-        self.assertEqual(pa.saver_guard(self.now, {}, hit=lambda: False, flag=Path(str(f) + "2")), [])
+        self.assertEqual(sh.read_text(), self.now.date().isoformat())     # 30.10: флаг видит и Разведка
+        self.assertEqual(pa.saver_guard(self.now, {}, hit=lambda: True, flag=f, shared=sh), [])   # один раз в день
+        self.assertEqual(pa.saver_guard(self.now, {}, hit=lambda: False, flag=Path(str(f) + "2"), shared=None), [])
 
     def test_ai_alive_parsing(self):
         self.assertIsNone(pa.ai_alive({"GEMINI_API_KEY": "k"}, get=lambda: (200, "")))

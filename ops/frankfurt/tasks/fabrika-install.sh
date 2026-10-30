@@ -14,6 +14,6 @@ systemctl daemon-reload
 systemctl enable -q papa-fabrika
 systemctl restart papa-genplan papa-fabrika; sleep 5
 echo "genplan: $(systemctl is-active papa-genplan) | fabrika: $(systemctl is-active papa-fabrika)"
-[[ -s /etc/papa-genplan/ai.env ]] && echo "ИИ: ключ есть" || echo "ИИ: ключа ещё нет — papa-update genplan-ai-key"
+grep -q '^GEMINI_API_KEY=' /etc/papa-genplan/ai.env 2>/dev/null && echo "ИИ: ключ Gemini есть" || echo "ИИ: ключа Gemini ещё нет — papa-update genplan-gemini-key"
 free -m | awk 'NR==2{print "память: занято " $3 " из " $2 " МБ"}'
 echo "== FABRIKA_DONE"

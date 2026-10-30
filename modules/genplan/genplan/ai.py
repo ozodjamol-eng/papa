@@ -52,7 +52,32 @@ def available() -> bool:
     return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
 
 
+def shared_spend(n: int = 1) -> None:
+    """30.10 полный аудит: +n к общему дневному счётчику Gemini (тот же файл, что razvedka/budget.py).
+    GENPLAN и ассистент не ограничиваются — счётчик нужен, чтобы фоновая Разведка знала, сколько осталось.
+    Нет доступа к папке — молча пропускаем (публикации важнее)."""
+    p = os.path.join(os.environ.get("PAPA_GEMINI_DIR", "/var/lib/papa-sources-choice"), "gemini-count")
+    try:
+        import fcntl
+        today = dt.datetime.now(dt.timezone(dt.timedelta(hours=5))).date().isoformat()
+        with open(p, "a+", encoding="utf-8") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.seek(0)
+            parts = f.read().split()
+            cur = int(parts[1]) if len(parts) >= 2 and parts[0] == today and parts[1].isdigit() else 0
+            f.seek(0)
+            f.truncate()
+            f.write(f"{today} {cur + n}\n")
+        try:
+            os.chmod(p, 0o660)
+        except OSError:
+            pass
+    except (OSError, ValueError):
+        pass
+
+
 def _gemini(system: str, user: str, http=None) -> str:
+    shared_spend()
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.6}}
@@ -182,11 +207,16 @@ SAVER = os.environ.get("GEMINI_SAVER_FILE", "/var/lib/papa-genplan/gemini-saver"
 
 def saver_on() -> bool:
     """27.10: страж ставит флаг (дата), когда Gemini упёрся в лимит — проверка кадров ждёт до завтра."""
-    try:
-        with open(SAVER, encoding="utf-8") as f:
-            return f.read().strip() == dt.datetime.now(dt.timezone(dt.timedelta(hours=5))).date().isoformat()
-    except OSError:
-        return False
+    today = dt.datetime.now(dt.timezone(dt.timedelta(hours=5))).date().isoformat()
+    shared = os.path.join(os.environ.get("PAPA_GEMINI_DIR", "/var/lib/papa-sources-choice"), "gemini-saver")
+    for p in (SAVER, shared):                   # 30.10: страж пишет флаг и в общую папку (её видит и Разведка)
+        try:
+            with open(p, encoding="utf-8") as f:
+                if f.read().strip() == today:
+                    return True
+        except OSError:
+            continue
+    return False
 
 
 def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
@@ -202,11 +232,12 @@ def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
     store.kv_set(db, k, n)
     if n > VISION_LIMIT:
         raise AIError(f"дневной лимит проверки кадров ({VISION_LIMIT}) исчерпан")
+    shared_spend()
     parts = [{"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(b).decode()}} for b in images]
     body = {"contents": [{"role": "user", "parts": parts + [{"text": prompt}]}],
             "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.1, "responseMimeType": "application/json"}}
-    # основная модель перегружена (503) — пробуем запасные модели Gemini (тоже бесплатные)
-    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
+    # 30.10 полный аудит: кадры — на «лёгкой» модели (свой, больший дневной лимит; как у куратора), перегрузка — flash
+    models = list(dict.fromkeys([os.environ.get("GENPLAN_VISION_MODEL", "gemini-flash-lite-latest"), "gemini-flash-latest"]))
     data, err = None, None
     for model in models:
         req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",

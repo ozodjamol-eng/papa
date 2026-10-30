@@ -6,10 +6,10 @@
   market — раз в неделю (понедельник): блогеры и студии с «панелями» (кодовое слово → ссылка → панель с шаблонами),
            чья партнёрка или какой API под капотом, цены, сильные/слабые стороны, что берём себе; цены API-моделей.
 
-Работает через Gemini с поиском Google (ключ GEMINI_API_KEY из /etc/papa-genplan/ai.env). 22.10: аккаунт Anthropic
-владельца заблокирован — Anthropic остаётся только запасным путём (если когда-то вернётся ключ, а Gemini нет).
+Работает только через Gemini с поиском Google (ключ GEMINI_API_KEY из /etc/papa-genplan/ai.env, задача genplan-gemini-key).
+30.10: путь Anthropic удалён (аккаунт владельца заблокирован); лимит Gemini общий — см. budget.py.
 История тем (history.json) — чтобы не повторять одни и те же тренды каждый день.
-Расход: daily (Haiku, ≤ 6 поисков) ~ $0.05–0.10; market (Sonnet, ≤ 12 поисков) ~ $0.3–0.6. Итого ~ $3–5 в месяц."""
+Расход: $0 (бесплатный ключ Gemini)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -20,9 +20,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-API = "https://api.anthropic.com/v1/messages"
-DAILY_MODEL = os.environ.get("TREND_DAILY_MODEL", "claude-haiku-5-5")
-MARKET_MODEL = os.environ.get("TREND_MARKET_MODEL", "claude-sonnet-5-5")
 TZ = dt.timezone(dt.timedelta(hours=5))
 HISTORY_KEEP = 60
 
@@ -69,18 +66,6 @@ class TrendError(Exception):
     pass
 
 
-def _post(body: dict, key: str, timeout: int = 300) -> dict:
-    req = urllib.request.Request(API, data=json.dumps(body).encode(), method="POST", headers={
-        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        raise TrendError(f"Anthropic HTTP {e.code}: {e.read()[:300]!r}") from None
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise TrendError(f"Anthropic недоступен: {e}") from None
-
-
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
 
 
@@ -101,6 +86,11 @@ def gemini_ask(prompt: str, search: bool = True, key: str | None = None, gpost=_
     key = (key or os.environ.get("GEMINI_API_KEY", "")).strip().strip('"').strip("'")
     if not key:
         raise TrendError("нет GEMINI_API_KEY (задача genplan-gemini-key)")
+    from . import budget
+    try:
+        budget.gate()                            # 30.10: лимит Gemini общий — отчёт подождёт, ассистент важнее
+    except budget.BudgetStop as e:
+        raise TrendError(str(e)) from None
     body = {"systemInstruction": {"parts": [{"text": CONTEXT}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.4, "maxOutputTokens": 8192}}
@@ -124,33 +114,9 @@ def gemini_ask(prompt: str, search: bool = True, key: str | None = None, gpost=_
     raise TrendError("Gemini: " + "; ".join(errs[-2:]))
 
 
-def ask(prompt: str, model: str, max_searches: int, key: str | None = None, post=_post, gpost=_gpost) -> tuple[str, dict]:
-    """Один запрос с веб-поиском; продолжаем, если API вернул pause_turn. Возвращает (текст, usage).
-    22.10: основной путь — Gemini (Anthropic владельца заблокирован). Anthropic — только если ключа Gemini нет
-    или тест подставил свой post."""
-    if post is _post and os.environ.get("GEMINI_API_KEY"):
-        return gemini_ask(prompt, True, gpost=gpost)
-    key = key or os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        raise TrendError("нет ANTHROPIC_API_KEY (задача genplan-ai-key)")
-    messages = [{"role": "user", "content": prompt}]
-    usage = {"input_tokens": 0, "output_tokens": 0, "searches": 0}
-    for _ in range(4):
-        # 17.10: модель сначала «думает» (thinking) — при 4000 весь лимит уходил на размышления, ответ был пустым
-        d = post({"model": model, "max_tokens": 16000, "system": CONTEXT, "messages": messages,
-                  "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": max_searches}]}, key)
-        u = d.get("usage") or {}
-        usage["input_tokens"] += int(u.get("input_tokens", 0))
-        usage["output_tokens"] += int(u.get("output_tokens", 0))
-        usage["searches"] += int((u.get("server_tool_use") or {}).get("web_search_requests", 0))
-        if d.get("stop_reason") == "pause_turn":
-            messages = [messages[0], {"role": "assistant", "content": d.get("content", [])}]
-            continue
-        text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
-        if not text:
-            raise TrendError(f"пустой ответ ИИ (stop={d.get('stop_reason')}, вывод={u.get('output_tokens')})")
-        return text, usage
-    raise TrendError("ИИ не закончил ответ за 4 шага")
+def ask(prompt: str, key: str | None = None, gpost=_gpost) -> tuple[str, dict]:
+    """Один запрос с поиском Google через Gemini. 30.10: путь Anthropic удалён — аккаунт владельца заблокирован."""
+    return gemini_ask(prompt, True, key, gpost=gpost)
 
 
 def split_topics(text: str) -> tuple[str, list[str]]:
@@ -178,15 +144,13 @@ def save_history(path: Path, old: list[str], new: list[str]) -> None:
     os.replace(tmp, path)
 
 
-def cost(usage: dict, model: str) -> float:
-    """Примерная цена запроса в $ (вход/выход за 1М токенов + $0.01 за поиск)."""
-    if "gemini" in model:                       # Gemini Flash: ~$0.30 вход / $2.50 выход за 1М; поиск в пределах бесплатной квоты
-        return round(usage["input_tokens"] / 1e6 * 0.3 + usage["output_tokens"] / 1e6 * 2.5, 3)
-    rin, rout = (1.0, 5.0) if "haiku" in model else (3.0, 15.0)
-    return round(usage["input_tokens"] / 1e6 * rin + usage["output_tokens"] / 1e6 * rout + usage["searches"] * 0.01, 3)
+def cost(usage: dict, model: str = "gemini") -> float:
+    """Примерная цена запроса в $, если бы ключ был платный (Gemini Flash: ~$0.30 вход / $2.50 выход за 1М).
+    Сейчас ключ бесплатный — фактически $0."""
+    return round(usage["input_tokens"] / 1e6 * 0.3 + usage["output_tokens"] / 1e6 * 2.5, 3)
 
 
-def run(mode: str, out_dir: Path, now: dt.datetime | None = None, post=_post) -> str:
+def run(mode: str, out_dir: Path, now: dt.datetime | None = None, gpost=_gpost) -> str:
     """Сделать отчёт режима daily|market. Возвращает текст для отправки (с расходом в конце)."""
     if mode not in ("daily", "market"):
         raise TrendError(f"неизвестный режим: {mode}")
@@ -195,11 +159,11 @@ def run(mode: str, out_dir: Path, now: dt.datetime | None = None, post=_post) ->
     old = load_history(hist_path)
     seen = "; ".join(old[-30:]) or "—"
     if mode == "daily":
-        prompt, model, n = DAILY_TASK.format(today=today, seen=seen), DAILY_MODEL, 6
+        prompt = DAILY_TASK.format(today=today, seen=seen)
     else:
-        prompt, model, n = MARKET_TASK.format(today=today, seen=seen), MARKET_MODEL, 12
-    raw, usage = ask(prompt, model, n, post=post)
+        prompt = MARKET_TASK.format(today=today, seen=seen)
+    raw, usage = ask(prompt, gpost=gpost)
     text, topics = split_topics(raw)
     save_history(hist_path, old, topics)
     (out_dir / f"latest-{mode}.txt").write_text(text, encoding="utf-8")
-    return f"{text}\n\n💲 расход отчёта ≈ ${cost(usage, usage.get('model', model))} · поисков: {usage['searches']}"
+    return f"{text}\n\n💲 расход отчёта ≈ ${cost(usage)} · поисков: {usage['searches']}"

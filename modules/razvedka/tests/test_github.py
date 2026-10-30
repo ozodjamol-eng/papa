@@ -65,25 +65,28 @@ class TestGithub(unittest.TestCase):
         get = fake_get([[repo("x/tool", 120)]])
         answer = "🧭 GITHUB-РАЗВЕДКА — неделя до 19.10.2026\n1) x/tool ⭐ 120 · MIT\n👉 Совет: x/tool"
 
-        def post(body, key, timeout=300):
+        def gpost(model, body, key, timeout=300):
             self.assertNotIn("tools", body)            # без веб-поиска — дёшево
-            self.assertIn("x/tool", body["messages"][0]["content"])
-            return {"content": [{"type": "text", "text": answer}], "usage": {"input_tokens": 3000, "output_tokens": 400}}
+            self.assertIn("x/tool", body["contents"][0]["parts"][0]["text"])
+            return {"candidates": [{"content": {"parts": [{"text": answer}]}}],
+                    "usageMetadata": {"promptTokenCount": 3000, "candidatesTokenCount": 400}}
         with tempfile.TemporaryDirectory() as d:
-            os.environ["ANTHROPIC_API_KEY"] = "sk-ant-test"
+            os.environ["GEMINI_API_KEY"] = "g-test"
+            os.environ["PAPA_GEMINI_DIR"] = d
             try:
-                text = github.run(Path(d), now=NOW, get=get, post=post)
+                text = github.run(Path(d), now=NOW, get=get, gpost=gpost)
+                self.assertIn("x/tool", text)
+                self.assertIn("💲 расход", text)
+                self.assertEqual(json.loads((Path(d) / "history-github.json").read_text()), ["x/tool"])
+                # повторный запуск: уже показанный инструмент не предлагается
+                text2 = github.run(Path(d), now=NOW, get=fake_get([[repo("x/tool", 130)]]), gpost=gpost)
+                self.assertIn("не найдено", text2)
             finally:
-                del os.environ["ANTHROPIC_API_KEY"]
-            self.assertIn("x/tool", text)
-            self.assertIn("💲 расход", text)
-            self.assertEqual(json.loads((Path(d) / "history-github.json").read_text()), ["x/tool"])
-            # повторный запуск: уже показанный инструмент не предлагается
-            text2 = github.run(Path(d), now=NOW, get=fake_get([[repo("x/tool", 130)]]), post=post)
-            self.assertIn("не найдено", text2)
+                os.environ.pop("GEMINI_API_KEY", None)
+                os.environ.pop("PAPA_GEMINI_DIR", None)
 
     def test_run_without_key_plain(self):
-        os.environ.pop("ANTHROPIC_API_KEY", None)
+        os.environ.pop("GEMINI_API_KEY", None)
         with tempfile.TemporaryDirectory() as d:
             text = github.run(Path(d), now=NOW, get=fake_get([[repo("y/bot", 4200, created="2024-01-01")]]))
         self.assertIn("без ИИ-оценки", text)

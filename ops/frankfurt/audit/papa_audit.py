@@ -470,15 +470,17 @@ def unit_guard(now: dt.datetime, state: dict, units=UNITS, st=unit_state, restar
 # 27.10 рецепт: Gemini упёрся в дневной лимит → до конца дня выключаем проверку утренних видео (самое прожорливое),
 # чтобы бесплатного лимита хватило на хуки. Флаг читает genplan/ai.vision; завтра сам перестаёт действовать.
 SAVER = Path("/var/lib/papa-genplan/gemini-saver")
+SAVER_SHARED = Path("/var/lib/papa-sources-choice/gemini-saver")   # 30.10: тот же флаг видит и фоновая Разведка (budget.py)
 
 
 def gemini_limit_hit() -> bool:
-    out = sh("journalctl", "-u", "papa-genplan", "-u", "papa-fabrika", "--since", "1 hour ago",
+    out = sh("journalctl", "-u", "papa-genplan", "-u", "papa-fabrika", "-u", "papa-razvedka@*", "--since", "1 hour ago",
              "--no-pager", "-o", "cat", timeout=30)
     return "лимит Gemini исчерпан" in out or ("Gemini" in out and "429" in out) or "Gemini: лимит исчерпан" in out
 
 
-def saver_guard(now: dt.datetime, state: dict, hit=gemini_limit_hit, flag: Path = SAVER) -> list[str]:
+def saver_guard(now: dt.datetime, state: dict, hit=gemini_limit_hit, flag: Path = SAVER,
+                shared: Path | None = SAVER_SHARED) -> list[str]:
     today = now.date().isoformat()
     try:
         on = flag.read_text().strip() == today
@@ -491,8 +493,14 @@ def saver_guard(now: dt.datetime, state: dict, hit=gemini_limit_hit, flag: Path 
         flag.chmod(0o644)
     except OSError:
         return []
-    return ["🛠 Gemini упёрся в дневной лимит — до конца дня выключил проверку утренних видео, "
-            "чтобы хватило на ИИ-хуки. Завтра включится сама."]
+    if shared is not None:
+        try:                                      # общая папка GENPLAN ↔ Разведка: фоновые агенты тоже останавливаются
+            shared.write_text(today)
+            shared.chmod(0o644)
+        except OSError:
+            pass
+    return ["🛠 Gemini упёрся в дневной лимит — до конца дня выключил проверку утренних видео и фоновую Разведку, "
+            "чтобы хватило на ИИ-ассистента и хуки. Завтра включится сама."]
 
 
 def due(state: dict, key: str, kind: str, now: float) -> bool:

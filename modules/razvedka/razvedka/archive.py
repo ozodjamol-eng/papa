@@ -57,6 +57,8 @@ def classify(text: str, jpeg: bytes | None) -> dict:
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise RuntimeError("нет ключа Gemini")
+    from . import budget
+    budget.gate()                                  # 30.10: лимит общий — фоновая Разведка уступает ассистенту и постам
     parts = [{"text": CLASSIFY + f"\n\nПост матни:\n{(text or '(матн йўқ)')[:2000]}"}]
     if jpeg:
         parts.append({"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}})

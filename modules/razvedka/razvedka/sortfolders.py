@@ -3,7 +3,7 @@
 Профиль Разведки (= профиль владельца) читает все свои каналы, ИИ (Gemini, бесплатно) по последним постам
 определяет тему каждого канала, и агент создаёт три НОВЫЕ папки Telegram — по одной на наш канал.
 Один канал может попасть в несколько папок. Старые папки владельца не трогаются.
-Отчёт (что куда и почему) — в pub/morning/folders.json и в «Избранное» профиля."""
+Отчёт (что куда и почему) — в pub/morning/folders.json и в бот-пульт владельца («Избранное» запрещено владельцем)."""
 from __future__ import annotations
 
 import asyncio
@@ -86,6 +86,8 @@ def plan(channels: list[dict], cats: dict[str, list[str]]) -> dict[str, list[dic
 
 
 def gemini(system: str, user: str) -> str:
+    from . import budget
+    budget.gate()                              # 30.10: лимит Gemini общий — BudgetStop (RuntimeError)
     body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.1, "responseMimeType": "application/json"}}
     errs = []
