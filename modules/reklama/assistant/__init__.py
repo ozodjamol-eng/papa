@@ -1,6 +1,6 @@
 """ИИ-ассистент личного Telegram владельца (@Ozodjamol) через Telegram Business (решение 17.10).
 
-30.10 (утверждено: «все пункты нормальные, одобряю»): первый раз за сутки новому человеку — «Ассалому алайкум ва
+30.10 (утверждено: «все пункты нормальные, одобряю»): первый раз (после паузы больше часа) или на любое «салом» — «Ассалому алайкум ва
 раҳматуллоҳи ва барокатуҳ! Мен — Озод Жамолнинг ИИ-ёрдамчисиман» + 3 кнопки (📣 Реклама / 🎬 Бошқа иш / 👤 Шахсий);
 поздравление — сначала ответное поздравление, потом меню; ясная просьба — приветствие и сразу ответ по делу; кнопки не
 прошли — меню цифрами 1/2/3. Отвечает ВСЕГДА, на каждое сообщение, и знакомым тоже (владелец: «хоть 5 раз, хоть 10»);
@@ -28,7 +28,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-REPLY_EVERY = dt.timedelta(hours=24)        # не чаще одного ответа на чат в сутки
+REPLY_EVERY = dt.timedelta(hours=1)         # 30.10: пауза больше часа = новый разговор → снова приветствие + меню (было 24 ч)
+HELLO_WORDS = ("салом", "салам", "ассалом", "assalom", "salom", "привет", "здравств", "хорманг", "hormang", "яхшимисиз",
+               "yaxshimisiz", "қалайсиз", "qalaysiz")
+MENU_AGAIN = dt.timedelta(minutes=10)       # «салом» → меню заново, но не чаще раза в 10 мин (без спама меню)
 OWNER_QUIET = dt.timedelta(minutes=30)      # 30.10: молчит, только пока владелец сам ведёт живой разговор (было 24 ч)
 SHORT_TEXT = "Хабарингизни Озод Жамолга етказдим 🙏 Тез орада ўзи жавоб беради."
 
@@ -100,6 +103,11 @@ def last_was_menu(db, cid: int, now: dt.datetime) -> bool:
     r = db.execute("SELECT text FROM msgs WHERE chat=? AND role='ai' AND at>=? ORDER BY at DESC, rowid DESC LIMIT 1",
                    (cid, (now - HISTORY_FOR).isoformat())).fetchone()
     return bool(r and (r[0] or "").startswith(MENU_MARK))
+
+
+def menu_recent(db, cid: int, now: dt.datetime) -> bool:
+    return bool(db.execute("SELECT 1 FROM msgs WHERE chat=? AND role='ai' AND text LIKE ? AND at>=? LIMIT 1",
+                           (cid, MENU_MARK + "%", (now - MENU_AGAIN).isoformat())).fetchone())
 
 
 def choose(db, api, c, cid: int, frm: dict, branch: str, now: dt.datetime) -> str:
@@ -264,7 +272,8 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
         return "quiet"
     kind = kind_of(text)
     try:
-        if r is not None and r < REPLY_EVERY:             # 30.10: уже здоровались сегодня — всё равно отвечаем, коротко
+        hello = any(w in text.lower() for w in HELLO_WORDS) and len(text) < 60
+        if r is not None and r < REPLY_EVERY and (menu_recent(db, chat["id"], now) or not hello):   # в разговоре — коротко
             api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT if kind == "ad" else SHORT_TEXT)
         elif kind == "ad":
             api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT)
@@ -535,7 +544,9 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
     # 30.10 (владелец: «всегда надо отвечать, хоть 5 раз, хоть 10»): знакомым тоже отвечаем — ограничение «знакомый» убрано
     first_today = not (row and row["replied_at"] and _ago(row["replied_at"], now) < REPLY_EVERY)
     menu = False
-    if first_today:                                   # 30.10: первый раз за сутки — тёплое приветствие
+    if not first_today and kind in ("greeting", "other") and not menu_recent(db, cid, now):
+        reply, menu = "", True                        # 30.10: «салом» посреди дня — тоже начинаем заново: приветствие + меню
+    elif first_today:                                 # 30.10: первый раз за сутки — тёплое приветствие
         if kind in ("greeting", "other") or not reply:
             reply, menu = "", True                    # просто салом / непонятно → приветствие + меню
         elif kind == "congrats":

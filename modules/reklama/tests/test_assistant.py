@@ -58,7 +58,7 @@ class Assistant(unittest.TestCase):
 
     def test_always_answers(self):
         A.handle(self.db, msg("салом"), self.api, T0)
-        self.assertEqual(A.handle(self.db, msg("салом"), self.api, T0 + dt.timedelta(hours=2)), "personal")
+        self.assertEqual(A.handle(self.db, msg("ака, гап бор"), self.api, T0 + dt.timedelta(minutes=20)), "personal")
         self.assertEqual(len(self.sent(555)), 2)                    # 30.10: отвечает всегда
         self.assertIn("етказдим", self.sent(555)[1]["text"])        # второй раз — коротко, без меню
         self.assertNotIn("reply_markup", self.sent(555)[1])
@@ -284,6 +284,25 @@ class MenuTest(unittest.TestCase):
         A.handle(self.db, msg("ассалом", uid=OWNER), self.api, T0)
         self.assertEqual(A.handle(self.db, msg("ака"), self.api, T0 + dt.timedelta(minutes=10)), "quiet")
         self.assertEqual(A.handle(self.db, msg("ака"), self.api, T0 + dt.timedelta(minutes=31)), "personal")
+
+    def test_salom_later_restarts_with_menu(self):
+        ai = lambda *a, **k: {"kind": "ad", "reply": "Нархлар: 50 000"}
+        A.handle(self.db, msg("реклама"), self.api, T0, ai=ai)
+        g = lambda *a, **k: {"kind": "greeting", "reply": "Ассалому алайкум! Яхшимисиз?"}
+        A.handle(self.db, msg("Салом"), self.api, T0 + dt.timedelta(minutes=20), ai=g)
+        last = self.sent(555)[-1]
+        self.assertIn("ИИ-ёрдамчисиман", last["text"])             # заново: кто он + меню
+        self.assertIn("reply_markup", last)
+        n = len(self.sent(555))
+        A.handle(self.db, msg("салом"), self.api, T0 + dt.timedelta(minutes=22), ai=g)
+        self.assertNotIn("reply_markup", self.sent(555)[-1])       # меню не спамим (10 мин)
+        self.assertEqual(len(self.sent(555)), n + 1)
+
+    def test_pause_over_hour_new_talk(self):
+        ai = lambda *a, **k: {"kind": "ad", "reply": "Нархлар: 50 000"}
+        A.handle(self.db, msg("реклама"), self.api, T0, ai=ai)
+        A.handle(self.db, msg("реклама"), self.api, T0 + dt.timedelta(hours=2), ai=ai)
+        self.assertTrue(self.sent(555)[-1]["text"].startswith("Ассалому алайкум ва раҳматуллоҳи"))
 
     def test_number_without_menu_is_ordinary(self):
         self.assertEqual(A.handle(self.db, msg("2"), self.api, T0), "personal")
