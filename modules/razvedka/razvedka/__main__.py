@@ -275,7 +275,7 @@ async def _evening() -> dict:
 
 async def _bank() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "evening", "archive") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return {"пропуск": f"Разведка занята ({', '.join(busy)}) — повторите через 5–10 минут"}
