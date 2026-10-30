@@ -50,7 +50,8 @@
     "sources-auto-install",
     "voronka-restart",
     "humor-run",
-    "bank-folder"
+    "bank-folder",
+    "archive-install"
   ],
   "approve": [
     "morning-pool-clear",

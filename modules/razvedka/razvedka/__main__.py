@@ -240,6 +240,22 @@ async def _insta() -> dict:
         await c.disconnect()
 
 
+async def _archive() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import archive
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return await archive.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _bank() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
@@ -454,6 +470,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "insta":                          # 📸 30.10: агент Instagram-трендов → пульт канала
         print("INSTA_DONE", asyncio.run(_insta()))
+        return
+    if cmd == "archive":                        # 📚 30.10: архивариус — старое сильное из наших каналов → KATTA BANK
+        print("ARCHIVE_DONE", asyncio.run(_archive()))
         return
     if cmd == "bank":                           # 🏦 30.10: папка KATTA BANK + новые хабы
         print("BANK_DONE", asyncio.run(_bank()))

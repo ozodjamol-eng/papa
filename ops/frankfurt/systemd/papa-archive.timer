@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 📚 архивариус — старое сильное из наших каналов → KATTA BANK (каждый день 12:40 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 07:40:00 UTC
+RandomizedDelaySec=3min
+Persistent=false
+Unit=papa-razvedka@archive.service
+
+[Install]
+WantedBy=timers.target
