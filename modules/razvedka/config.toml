@@ -39,3 +39,13 @@ topic = "KATTA DAVRA"
 [[folders]]
 name = "XOJAOBOD RAQIB"
 topic = "XOJAOBODCITY (38)"
+
+# 📸 30.10: агент Instagram-трендов (Apify, бесплатный план). accounts — узбекские аккаунты с трендами (даёт владелец).
+[insta]
+channel = "davra"
+title = "КАТТА ДАВРА"
+accounts = []
+per_account = 3
+max_send = 4
+min_views = 20000
+min_ratio = 1.3

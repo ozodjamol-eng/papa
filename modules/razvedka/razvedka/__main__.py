@@ -224,6 +224,22 @@ async def _sort_folders() -> dict:
         await c.disconnect()
 
 
+async def _insta() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import insta
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return await insta.run(c, cfg(), Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _scout() -> str:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
@@ -393,6 +409,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "sources":
         print("SOURCES_DONE", asyncio.run(_sources()))
+        return
+    if cmd == "insta":                          # 📸 30.10: агент Instagram-трендов → пульт канала
+        print("INSTA_DONE", asyncio.run(_insta()))
         return
     if cmd == "scout":                          # 🔭 30.10: разведчик каналов (только поиск и список)
         print(asyncio.run(_scout()))

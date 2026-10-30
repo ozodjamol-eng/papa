@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 📸 агент Instagram-трендов → пульт КАТТА ДАВРА (каждый день 10:20 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 05:20:00 UTC
+RandomizedDelaySec=3min
+Persistent=false
+Unit=papa-razvedka@insta.service
+
+[Install]
+WantedBy=timers.target
