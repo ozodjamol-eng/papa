@@ -63,6 +63,7 @@ EXTRA = {
     "hook_ai": "TEXT",             # 17.10: хук по смыслу от ИИ ("" — ИИ решил без хука), чтобы не звать ИИ повторно
     "junk": "TEXT",                # 17.10: JSON — строки с чужими ссылками-словами (из entities), убираются при публикации
     "auto": "INTEGER NOT NULL DEFAULT 0",     # 26.10: склад или выбранный владельцем источник — выходит сам, с вето 🗑
+    "planned_at": "TEXT",          # 30.10 сверка №14: время, назначенное при утверждении; авто-переносы (+10, после рекламы) его не меняют — Страж считает опоздание от него
     "source": "TEXT",              # откуда переслал куратор (@канал-источник) — для отчёта и отбора источников                 # через какой бот-пульт пришёл материал ("main" / код канала) — карточки и файлы этого бота
 }
 
@@ -138,7 +139,17 @@ def get(db, mid: int):
 
 def update(db, mid: int, **kw) -> None:
     sets = ", ".join(f"{k}=?" for k in kw)
-    db.execute(f"UPDATE materials SET {sets} WHERE id=?", (*kw.values(), mid))
+    vals = list(kw.values())
+    if "scheduled_at" in kw and "planned_at" not in kw:     # 30.10 №14: исходное время для Стража
+        if kw["scheduled_at"] is None:
+            sets += ", planned_at=NULL"
+        elif "urgent" in kw or "locked" in kw:               # решение владельца / новая постановка — новое исходное время
+            sets += ", planned_at=?"
+            vals.append(kw["scheduled_at"])
+        else:                                                # авто-перенос: исходное время остаётся
+            sets += ", planned_at=COALESCE(planned_at, ?)"
+            vals.append(kw["scheduled_at"])
+    db.execute(f"UPDATE materials SET {sets} WHERE id=?", (*vals, mid))
     db.commit()
 
 

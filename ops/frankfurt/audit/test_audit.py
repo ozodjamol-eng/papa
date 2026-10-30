@@ -113,6 +113,29 @@ class TestGuard(unittest.TestCase):
         self.assertTrue(any("🚨 РЕКЛАМА" in x for x in a), a)
         self.assertFalse(any("РЕКЛАМА" in x for x in self.run_guard(st)))   # второй раз — без спама
 
+    def test_post_moved_again_and_again_alerts(self):
+        """30.10 сверка №14: пост переносят +10 снова и снова — Страж видит по исходному времени (planned_at)."""
+        db = store.connect(str(self.p))
+        db.execute("DELETE FROM materials")
+        mid = store.add_material(db, 1, 2, "Пост", True)
+        store.update(db, mid, channel="davra", rubric="Видео", status="queued",
+                     scheduled_at=(self.now - dt.timedelta(minutes=90)).isoformat())
+        store.update(db, mid, scheduled_at=(self.now + dt.timedelta(minutes=5)).isoformat())   # авто-перенос
+        db.commit()
+        db.close()
+        self.assertTrue(any("не вышла вовремя" in x for x in self.run_guard({})))
+
+    def test_short_move_after_ad_is_quiet(self):
+        db = store.connect(str(self.p))
+        db.execute("DELETE FROM materials")
+        mid = store.add_material(db, 1, 3, "Пост", True)
+        store.update(db, mid, channel="davra", rubric="Видео", status="queued",
+                     scheduled_at=(self.now - dt.timedelta(minutes=8)).isoformat())
+        store.update(db, mid, scheduled_at=(self.now + dt.timedelta(minutes=2)).isoformat())   # +10 после рекламы
+        db.commit()
+        db.close()
+        self.assertFalse(any("не вышла вовремя" in x for x in self.run_guard({})))
+
     def test_lost_admin_alerts_and_heals(self):
         st = {}
         a = self.run_guard(st, rights=lambda: {"session": True, "member": True, "admin": False})

@@ -443,6 +443,13 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
                     store.update(db, m["id"], scheduled_at=st[0].isoformat())
                     out["moved"] += 1
                     continue
+            if smart.is_ad_rubric(m["rubric"]):                # 30.10 сверка №5: две рекламы подряд — вторая ждёт,
+                hold_ad = smart.ad_hold(db, cfg, channel, now)  # первая держит свои 10 мин (обещание клиенту)
+                if hold_ad:
+                    store.update(db, m["id"], scheduled_at=hold_ad.isoformat())
+                    out["moved"] += 1
+                    log(f"{channel}: реклама ждёт предыдущую рекламу — выйдет в {hold_ad:%H:%M}")
+                    continue
             later = smart.collision_defer(db, cfg, channel, m, now)   # ⏱ совпал с рекламой/срочным/протоколом — +10 мин
             if later:
                 store.update(db, m["id"], scheduled_at=later.isoformat())

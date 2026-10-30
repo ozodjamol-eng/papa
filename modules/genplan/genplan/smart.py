@@ -50,7 +50,15 @@ def occupied(db, channel: str, now: dt.datetime, exclude: int | None = None, ch:
     since = now - dt.timedelta(hours=3)
     from . import extras
     return (out + store.pulse_since(db, channel, since) + namaz.busy(db, channel, since) + morning.busy(db, channel, since)
-            + extras.busy(db, channel, since))
+            + extras.busy(db, channel, since) + digest_busy(ch, now))
+
+
+def digest_busy(ch: dict | None, now: dt.datetime) -> list[dt.datetime]:
+    """30.10 сверка №9: Кечки дайжест — протокол; умное время рекламы не ставит её вплотную к нему (как к намазу)."""
+    dg = (ch or {}).get("digest") or {}
+    if not dg.get("live"):
+        return []
+    return [plan.slot_time(now.date() + dt.timedelta(days=d), dg.get("at", "20:30")) for d in (0, 1)]
 
 
 def blocked(db, channel: str, t: dt.datetime) -> bool:
@@ -201,7 +209,8 @@ def ad_closer(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
         return None                                            # уже стоит на сейчас (ждёт прохода)
     pick = next((m for m in upcoming if is_grid_post(m) and not m["locked"] and not is_sklad(ch, m)
                  and dt.datetime.fromisoformat(m["scheduled_at"]).date() == now.date()), None)
-    if pick is None:
+    room = day_room(db, cfg, channel, now)                     # 30.10 сверка №10: лимит дня — запас не трогаем
+    if pick is None and (room is None or room > 0):
         pool = [m for m in store.stock(db, channel)
                 if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
                 and not waits_text(cfg, m) and not _stale(ch, m, now) and not is_sklad(ch, m)
@@ -430,9 +439,39 @@ def _fits(ch: dict, m, t: dt.datetime, now: dt.datetime) -> bool:
     return not is_sklad(ch, m) or t >= now + SKLAD_LEAD
 
 
+def day_room(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
+    """30.10 сверка №10 (решение 16.10): не больше `day_limit.max` (20) постов в день. count="all" (КАТТА ДАВРА, PaparazziUZ) —
+    считаются все посты, утро тоже; count="grid" (Хўжаобод) — только обычные посты, протоколы и реклама вне 20.
+    Считаем вышедшее сегодня + стоящее на сегодня. Возвращает, сколько ещё можно; None — лимита нет.
+    Лимит закрывает только запас (📦/склад): пост, утверждённый владельцем, не блокируется."""
+    lim = cfg["channels"][channel].get("day_limit")
+    if not lim:
+        return None
+    a = plan.slot_time(now.date(), "00:00")
+    b = a + dt.timedelta(days=1)
+    scope = lim.get("count", "all")
+    q = "SELECT COUNT(*) FROM pulse WHERE channel=? AND at>=? AND at<? AND at<=?"
+    args = [channel, a.isoformat(), b.isoformat(), now.isoformat()]
+    if scope == "grid":
+        q += " AND source='bot'"
+    n = db.execute(q, args).fetchone()[0]
+    for m in store.scheduled(db, channel):
+        t = dt.datetime.fromisoformat(m["scheduled_at"])
+        if now < t < b and (scope == "all" or not is_ad_rubric(m["rubric"])):
+            n += 1
+    if scope == "all":
+        from . import extras, morning, namaz
+        for f in (namaz.busy, morning.busy, extras.busy):
+            n += sum(1 for t in f(db, channel, now) if now < t < b)
+    return int(lim.get("max", 20)) - n
+
+
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
+    room = day_room(db, cfg, channel, now)              # 30.10 сверка №10: дневной лимит 20
+    if room is not None and room <= 0:
+        return []
     pool = [m for m in store.stock(db, channel)
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
             and not waits_text(cfg, m) and not _stale(ch, m, now)]
@@ -452,6 +491,8 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
             if pick:
                 store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
                 used.append(pick["id"])
+                if room is not None and len(used) >= room:
+                    break
         return used
     for t, s in grid(ch, now.date()):
         if s["kind"] == "ad" or not (now + LEAD <= t <= now + STOCK_AHEAD):
@@ -464,6 +505,8 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
         if pick:
             store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
             used.append(pick["id"])
+            if room is not None and len(used) >= room:
+                break
     return used
 
 

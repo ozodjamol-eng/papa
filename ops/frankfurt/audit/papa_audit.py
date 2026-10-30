@@ -30,6 +30,9 @@ TIMERS = ["papa-curator.timer", "papa-razvedka-daily.timer"]
 ERR = re.compile(r"error|ошибк|failed|traceback|exception|не удалось|❌", re.I)
 
 
+STUCK_DRIFT = dt.timedelta(minutes=75)   # 30.10 №14: переносы дольше (час сетки + тихое окно Жумы) — пост застрял
+
+
 def sh(*cmd: str, timeout: int = 60) -> str:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
@@ -614,8 +617,16 @@ def guard(cfg: dict, env: dict, now: dt.datetime, state: dict, db_path: Path = G
         db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=15)
         db.row_factory = sqlite3.Row
         late = (now - dt.timedelta(minutes=7)).isoformat()
-        for r in db.execute("SELECT id, channel, rubric, scheduled_at FROM materials WHERE status='queued' "
-                            "AND scheduled_at IS NOT NULL AND scheduled_at < ?", (late,)).fetchall():
+        drift = (now - STUCK_DRIFT).isoformat()
+        try:                                       # 30.10 сверка №14: пост, который всё время переносят (+10 после рекламы и т.п.),
+            stuck = db.execute(                    # тоже ловим — по исходному времени planned_at, с запасом STUCK_DRIFT
+                "SELECT id, channel, rubric, COALESCE(planned_at, scheduled_at) AS scheduled_at FROM materials "
+                "WHERE status='queued' AND scheduled_at IS NOT NULL AND (scheduled_at < ? OR planned_at < ?)",
+                (late, drift)).fetchall()
+        except sqlite3.Error:                      # старая база без planned_at
+            stuck = db.execute("SELECT id, channel, rubric, scheduled_at FROM materials WHERE status='queued' "
+                               "AND scheduled_at IS NOT NULL AND scheduled_at < ?", (late,)).fetchall()
+        for r in stuck:
             ad = (r["rubric"] or "").lower().startswith("реклама")
             if due(state, f"stuck:{r['id']}", "post", t):
                 when = dt.datetime.fromisoformat(r["scheduled_at"]).astimezone(TZ).strftime("%H:%M")
