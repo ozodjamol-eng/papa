@@ -28,3 +28,9 @@ topic = "XOJAOBODCITY (38)"
 [[folders]]
 name = "KATTA DAVRA"
 topic = "KATTA DAVRA"
+
+# 30.10 владелец: крупные развлекательные соперники КАТТА ДАВРА — отдельная папка, ТОЛЬКО для изучения
+# (куратор и отбор источников её не читают, посты оттуда не берём). Тема общая — в карте дня вместе с KATTA DAVRA.
+[[folders]]
+name = "DAVRA RAQIB"
+topic = "KATTA DAVRA"
