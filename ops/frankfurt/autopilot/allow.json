@@ -51,7 +51,8 @@
     "voronka-restart",
     "humor-run",
     "bank-folder",
-    "archive-install"
+    "archive-install",
+    "archive-run"
   ],
   "approve": [
     "morning-pool-clear",

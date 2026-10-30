@@ -19,10 +19,10 @@ from pathlib import Path
 
 from . import curate, hubs, sklad
 
-CHANNELS = ["ozodjamoll"]                     # 30.10: начинаем с PaparazziUZ; дальше — kattadavrauz, xojaobodcity24
+CHANNELS = ["ozodjamoll", "kattadavrauz"]     # 30.10: PaparazziUZ + КАТТА ДАВРА. xojaobodcity24 — группа, просмотров нет → не годится
 MIN_AGE = dt.timedelta(days=180)
 SCAN = 400                                    # постов просмотреть за запуск
-TAKE = 40                                     # положить в банк за запуск
+TAKE = 30                                     # положить в банк за запуск (на канал)
 CLASSIFY = """Сен — медиа-архив муҳаррирсан. Telegram-каналимизнинг эски постини (матн ва кадр) кўриб чиқ.
 Вазифа: 1) пост қайси бўлимга тегишли — фақат шулардан бири:
 "РАЗВЛЕКАТЕЛЬНО" (кулги, ҳажвия, прикол), "Jonlik ijrolar" (қўшиқ, клип, жонли ижро, концерт, мусиқа),
