@@ -646,7 +646,7 @@ def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=No
     if not cw:
         report["status"] = "INVALID"
         return report
-    caption = compose_davra(day, cw, r, news, os.environ.get("DIGEST_AD_TEXT"))
+    caption = compose_davra(day, cw, r, news, "")   # 30.10 аудит: в КАТТА ДАВРА рекламы нет (20.10, 28.10)
     vd = {"channel": "davra", "day": day.isoformat(), "date": video_head(day),
           "cities": [{"name": c, "hi": x["max"], "lo": x["min"], "kind": vkind(x["code"])} for c, x in cw.items()],
           "rates": video_rates(r), "news": [{"t": short_news(n["t"]), "src": n["src"]} for n in news],
@@ -758,12 +758,12 @@ def preview(env: dict, report: dict, bot, davra: dict | None = None, push: str |
     подробности — только если дайджест НЕ готов."""
     owners = [int(x) for x in env.get("OWNER_IDS", "").split(",") if x.strip().lstrip("-").isdigit()]
     if report.get("status") == "READY":
-        head = f"🌙 Кечки дайжест готов — выйдет сам (новостей: {report.get('news', 0)})"
+        head = "🌙 Кечки дайжест готов — выйдет сам" + (f" (новостей: {report.get('news', 0)})" if NEWS_IN_DIGEST else "")
     else:
         errs = "\n".join("• " + e for e in report.get("errors", [])) or "• нет"
         head = f"❌ Кечки дайжест НЕ готов — сегодня не выйдет\nПричины:\n{errs}"
     if davra is not None:
-        head += (f"\n🎉 КАТТА ДАВРА: готов (новостей: {davra.get('news', 0)})" if davra.get("status") == "READY"
+        head += ("\n🎉 КАТТА ДАВРА: готов" + (f" (новостей: {davra.get('news', 0)})" if NEWS_IN_DIGEST else "") if davra.get("status") == "READY"
                  else "\n❌ КАТТА ДАВРА: не готов — " + "; ".join(davra.get("errors", [])[:3]))
     if push is not None:
         head += "\n🎬 Ролики: собираются на GitHub" if push == "ok" else f"\n🎬 Ролики не запущены ({push}) — выйдут картинка/текст"
@@ -903,7 +903,7 @@ async def publish_live_davra(db, cfg: dict, env: dict, bot, now: dt.datetime | N
     try:
         vid = motion_video(f"davra-digest-{day}.mp4", vget)
     except Exception as e:  # noqa: BLE001
-        vid, note = None, " (картинкой)"
+        vid, note = None, f" (ролика нет: {type(e).__name__} — картинкой)"
     if vid:
         try:
             mid = bot.publish_file(to, str(vid), m["caption"], duration=25)

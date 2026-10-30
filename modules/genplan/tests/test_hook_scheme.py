@@ -1,9 +1,13 @@
 """Схема хуков владельца 17.10: новости — без хука; музыка — наша реклама; полезное — ИИ; дуо — готовый хук."""
+import sys
 import tomllib
 import unittest
+from pathlib import Path
 from unittest import mock
 
-from genplan import service, store
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from genplan import service, store  # noqa: E402
 
 
 class Row(dict):
@@ -17,7 +21,7 @@ def mat(i, rubric, text):
 
 class Scheme(unittest.TestCase):
     def setUp(self):
-        self.cfg = tomllib.load(open("config.toml", "rb"))
+        self.cfg = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
         self.db = store.connect(":memory:")
 
     def hook(self, ch, rubric, text, ai_answer="📌 Сақлаб қўйинг — асқотади!"):

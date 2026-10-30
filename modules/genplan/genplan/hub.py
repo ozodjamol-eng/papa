@@ -219,12 +219,20 @@ def kb_queued(db, cfg: dict, m, now: dt.datetime) -> list:
                 many = f"✅ 📅 до {extras.WD[end.weekday()]} · {c['days']} {extras.days_word(int(c['days']))}"
             else:
                 many = "📅 Несколько дней"
+            ordered = 0                                        # 30.10 аудит: клиент оплатил N дней через ассистента
+            try:
+                ordered = int((json.loads(store.kv_get(db, f"ad_order_{mid}", "") or "{}") or {}).get("days") or 0)
+            except (ValueError, TypeError):
+                ordered = 0
+            pd_cb = f"pd:{mid}"
+            if ordered > 1 and not multi and m["scheduled_at"]:
+                many, pd_cb = f"📅 {min(ordered, 7)} кун — по заказу", f"pk:{mid}:{min(ordered, 7)}"
             ok = store.kv_get(db, f"ad_ok_{mid}", "") == "1"
             if ok and multi:
                 many = many + " · утверждено"
             rows.insert(0, [{"text": "Разовая" if multi else ("✅ Разовая · утверждено" if ok else "✅ Разовая"),
                              "callback_data": f"p1:{mid}"},
-                            {"text": many, "callback_data": f"pd:{mid}"}])
+                            {"text": many, "callback_data": pd_cb}])
             rows.insert(1, [{"text": "🏷 Название", "callback_data": f"an:{mid}"},
                             {"text": "📢 Мои кампании", "callback_data": f"al:{m['channel']}"}])
     return rows
@@ -687,7 +695,6 @@ def direct(bot, db, cfg, owners, hub: int, msgs: list[dict], channel: str | None
     if not any(k in msgs[0] for k in MEDIA_KEYS) and not (msgs[0].get("text") or "").strip() and len(msgs) == 1:
         return "skip"
     chat = msgs[0]["chat"]["id"]
-    text = next((x.get("text") or x.get("caption") for x in msgs if x.get("text") or x.get("caption")), "") or ""
     if channel not in cfg["channels"]:
         # 20.10 владелец: «каждый бот — своё»: всё, что брошено в бот, идёт в его канал (главный бот — КАТТА ДАВРА)
         from . import bots as _b

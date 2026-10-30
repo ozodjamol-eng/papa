@@ -438,6 +438,14 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
         regular = [m for m in due if not m["urgent"]]
         regular.sort(key=lambda m: (not smart.is_ad_rubric(m["rubric"]), m["scheduled_at"]))   # 25.10: реклама — раньше поста сетки
         hold = smart.ad_hold(db, cfg, channel, now)
+        quiet = smart.lock_end(db, channel, now)             # 🕌 30.10 аудит: тихое окно Жумы — ничего не выходит
+        if quiet:
+            for m in due:
+                store.update(db, m["id"], scheduled_at=quiet.isoformat())
+                out["moved"] += 1
+            if due:
+                log(f"{channel}: тихое окно Жумы — {len(due)} пост(ов) выйдут в {quiet:%H:%M}")
+            urgent, regular = [], []
         for m in urgent:                                     # срочные — все и сразу
             if hold:                                         # 30.10 владелец: реклама держится 10 мин — обещание клиенту
                 store.update(db, m["id"], scheduled_at=hold.isoformat())

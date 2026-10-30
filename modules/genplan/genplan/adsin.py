@@ -73,7 +73,8 @@ def note_of(meta: dict) -> str:
            (["тепада қадаб"] if meta.get("pin") else [])
     return (f"💰 Заказ ИИ-ассистента · {meta.get('client') or '—'}\n📦 {meta.get('what') or '—'} · "
             + " · ".join(opts) + (f" · 🗓 {meta['date']}" if meta.get("date") else "")
-            + ("\n📅 Несколько дней — кнопкой после выбора времени" if int(meta.get("days") or 1) > 1 else ""))
+            + (f"\n📅 Оплачено {meta.get('days')} кун — после выбора времени нажмите «📅 {min(int(meta.get('days')), 7)} кун — по заказу»"
+               if int(meta.get("days") or 1) > 1 else ""))
 
 
 def scan(bot, token: str, db, cfg: dict, owners: list[int], inbox: Path = INBOX, up=upload, log=print) -> int:
@@ -122,7 +123,7 @@ def published(db, cfg: dict, mid: int, msg_id, inbox: Path = INBOX) -> bool:
     f = inbox / f"done-{o.get('id')}.json"
     tmp = f.with_suffix(".tmp")
     tmp.write_text(json.dumps({**o, "link": link}, ensure_ascii=False), encoding="utf-8")
-    os.chmod(tmp, 0o660)
-    os.replace(tmp, f)
+    os.chmod(tmp, 0o664)   # 30.10 аудит: ассистент (papa-assistant, не в группе papa-genplan) должен прочитать;
+    os.replace(tmp, f)     # чужим не видно — папка 2770 papa-assistant:papa-genplan
     store.kv_set(db, f"ad_order_done_{mid}", "1")
     return True

@@ -67,6 +67,18 @@ def blocked(db, channel: str, t: dt.datetime) -> bool:
     return namaz.locked(db, channel, t)
 
 
+def lock_end(db, channel: str, t: dt.datetime) -> dt.datetime | None:
+    """30.10 аудит: t внутри тихого окна Жумы → время сразу после окна (конец + 1 мин), иначе None."""
+    try:
+        r = db.execute("SELECT end FROM namaz_locks WHERE channel=? AND start<=? AND end>=? ORDER BY end DESC LIMIT 1",
+                       (channel, t.isoformat(), t.isoformat())).fetchone()
+    except Exception:  # noqa: BLE001 — таблицы намаза может не быть
+        return None
+    if not r:
+        return None
+    return dt.datetime.fromisoformat(r[0]).astimezone(plan.TZ) + dt.timedelta(minutes=1)
+
+
 def is_free(ch: dict, t: dt.datetime, busy: list[dt.datetime]) -> bool:
     gap = dt.timedelta(minutes=int(rules(ch)["gap"]))
     return all(abs(t - b) >= gap for b in busy)
@@ -234,7 +246,9 @@ def collision_defer(db, cfg: dict, channel: str, m, now: dt.datetime) -> dt.date
     if not recent:
         return None
     t = max(recent) + after
-    return t if t > now else None
+    if t <= now:
+        return None
+    return lock_end(db, channel, t) or t                # 30.10 аудит: не внутрь тихого окна Жумы
 
 
 def grid(ch: dict, day: dt.date) -> list[tuple[dt.datetime, dict]]:
@@ -550,7 +564,6 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
     """План дня канала: что вышло, что запланировано (точное время), какие слоты сетки пустые."""
     ch = cfg["channels"][channel]
     day = now.date()
-    lines = []
     done = db.execute("SELECT p.slot, p.status, m.rubric, m.text FROM publications p LEFT JOIN materials m ON m.id=p.material_id "
                       "WHERE p.channel=? AND p.slot_date=? ORDER BY p.at", (channel, day.isoformat())).fetchall()
     items = [((r["slot"] or "сейчас"), f"{'✔️' if r['status'] == 'done' else '❌'} {r['slot'] or '🆘'}  {r['rubric'] or '—'} — {short(r['text'])}")
