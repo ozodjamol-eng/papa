@@ -43,7 +43,10 @@
     "shodiyona-bot-restart",
     "plan-today",
     "sources-run",
-    "sources-status"
+    "sources-status",
+    "razvedka-scout",
+    "insta-run",
+    "insta-install"
   ],
   "approve": [
     "morning-pool-clear",
