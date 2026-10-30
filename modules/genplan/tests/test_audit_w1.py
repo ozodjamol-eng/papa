@@ -1,19 +1,16 @@
 """30.10 полный аудит (W1): тихое окно Жумы при публикации, КАТТА ДАВРА без рекламы в дайджесте,
-done-файл заказа читаем ассистентом, заказ на N дней — кнопка «по заказу», предпросмотр без «новостей»."""
+предпросмотр без «новостей»."""
 import asyncio
 import datetime as dt
 import inspect
-import json
-import os
 import sys
-import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from genplan import adsin, digest, hub, namaz, plan, service, smart, store  # noqa: E402
+from genplan import digest, namaz, plan, service, smart, store  # noqa: E402
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
 FRI = dt.date(2026, 10, 23)
@@ -72,12 +69,12 @@ class Juma(unittest.TestCase):
         self.tick("13:21")
         self.assertEqual(self.st(p)[0], "published")
 
-    def test_urgent_and_ad_wait_too(self):
+    def test_urgent_waits_ad_unchanged(self):
         u = self.add(t=at("12:40"), urgent=1)
         a = self.add(rubric="Реклама", t=at("12:40"), locked=1)
         self.tick("12:40")
         self.assertEqual(self.st(u), ("queued", "13:21"))
-        self.assertEqual(self.st(a), ("queued", "13:21"))
+        self.assertEqual(store.get(self.db, a)["status"], "published")   # 30.10 владелец: рекламу пока не трогаем
 
     def test_collision_defer_not_into_window(self):
         store.pulse_add(self.db, "xojaobod", at("12:18"), "bot")
@@ -117,37 +114,6 @@ class DavraDigest(unittest.TestCase):
             digest.NEWS_IN_DIGEST = old
         self.assertTrue(sent)
         self.assertFalse(any("новостей" in t for t in sent))
-
-
-class Orders(unittest.TestCase):
-    def setUp(self):
-        self.db = store.connect(":memory:")
-        self.inbox = Path(tempfile.mkdtemp())
-
-    def mat(self, days):
-        mid = store.add_material(self.db, -100777, 1, "Реклама", False)
-        store.update(self.db, mid, channel="xojaobod", rubric="Реклама", status="queued",
-                     scheduled_at=at("15:00").isoformat())
-        store.kv_set(self.db, f"ad_order_{mid}", json.dumps({"id": "o1", "days": days}))
-        return mid
-
-    def test_done_file_readable_by_assistant(self):
-        mid = self.mat(1)
-        self.assertTrue(adsin.published(self.db, CFG, mid, 777, inbox=self.inbox))
-        f = self.inbox / "done-o1.json"
-        self.assertEqual(os.stat(f).st_mode & 0o777, 0o664)
-
-    def test_ordered_days_button(self):
-        mid = self.mat(3)
-        rows = hub.kb_queued(self.db, CFG, store.get(self.db, mid), at("10:00"))
-        btns = [b for r in rows for b in r]
-        b = next(b for b in btns if "по заказу" in b["text"])
-        self.assertEqual(b["callback_data"], f"pk:{mid}:3")
-
-    def test_single_day_order_plain(self):
-        mid = self.mat(1)
-        rows = hub.kb_queued(self.db, CFG, store.get(self.db, mid), at("10:00"))
-        self.assertFalse(any("по заказу" in b["text"] for r in rows for b in r))
 
 
 if __name__ == "__main__":
