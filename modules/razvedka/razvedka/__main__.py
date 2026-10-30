@@ -295,6 +295,24 @@ async def _humor() -> str:
         await c.disconnect()
 
 
+async def _weekly() -> str:
+    """🧹 31.10: раз в неделю — самоочистка источников, потом разведчик приколов (новые чистые — подключить)."""
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "archive") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return f"Разведка занята ({', '.join(busy)}) — неделька в следующий раз"
+    from . import clean
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        out = await clean.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+    return out + "\n\n" + await _humor()
+
+
 async def _scout() -> str:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
@@ -476,6 +494,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "bank":                           # 🏦 30.10: папка KATTA BANK + новые хабы
         print("BANK_DONE", asyncio.run(_bank()))
+        return
+    if cmd == "weekly":                         # 🧹 31.10: самоочистка источников + разведчик приколов (по воскресеньям)
+        print("WEEKLY_DONE", asyncio.run(_weekly()))
         return
     if cmd == "humor":                          # 😂 30.10: разведчик приколов → чистые подключить в КАТТА ДАВРА
         print(asyncio.run(_humor()))

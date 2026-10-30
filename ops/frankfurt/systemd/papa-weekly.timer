@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 🧹 неделька — самоочистка источников + разведчик приколов (воскресенье 04:30 Ташкент)
+
+[Timer]
+OnCalendar=Sat *-*-* 23:30:00 UTC
+RandomizedDelaySec=5min
+Persistent=false
+Unit=papa-razvedka@weekly.service
+
+[Install]
+WantedBy=timers.target

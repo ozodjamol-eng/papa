@@ -53,7 +53,8 @@
     "bank-folder",
     "archive-install",
     "archive-run",
-    "ads-inbox-install"
+    "ads-inbox-install",
+    "weekly-install"
   ],
   "approve": [
     "morning-pool-clear",
