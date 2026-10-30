@@ -186,6 +186,8 @@ Instagram @paparazzi.uz. Ты отвечаешь людям, пока он за�
    скажи, что передал и Озод Жамол ответит сам. kind=personal.
 5) Никогда не выдумывай факты, номера, адреса, цены (кроме 50 000 сўм за пост). Без политики и религиозных споров.
 6) Человек закончил («раҳмат», «ок», стикер) — короткий ответ или пустой reply.
+7) Если приложена картинка (открытка, стикер, фото, кадр видео) — смотри на неё: открытка «Жума муборак» = поздравление,
+   фото товара/вывески = вероятно реклама. Не описывай картинку, просто отвечай по смыслу.
 
 Ответ — ТОЛЬКО JSON: {"reply": "текст или пусто", "kind": "greeting|ad|personal|other"}"""
 
@@ -199,6 +201,30 @@ def _incoming(m: dict) -> str:
         emoji = (m.get("sticker") or {}).get("emoji", "") if kind == "sticker" else ""
         t = f"[{kind}{' ' + emoji if emoji else ''}] {t}".strip()
     return t[:1500]
+
+
+IMG_MAX = 4 * 1024 * 1024
+
+
+def image_ref(m: dict) -> tuple[str, str] | None:
+    """30.10: что показать ИИ — (file_id, mime): фото, стикер (анимированный — его превью), превью видео/GIF/кружка,
+    картинка-документ. Нет картинки — None."""
+    if m.get("photo"):
+        return m["photo"][-1]["file_id"], "image/jpeg"
+    st = m.get("sticker")
+    if st:
+        if not st.get("is_animated") and not st.get("is_video"):
+            return st["file_id"], "image/webp"
+        th = st.get("thumbnail") or st.get("thumb")
+        return (th["file_id"], "image/webp") if th else None
+    for k in ("video", "animation", "video_note"):
+        th = (m.get(k) or {}).get("thumbnail") or (m.get(k) or {}).get("thumb")
+        if th:
+            return th["file_id"], "image/jpeg"
+    d = m.get("document") or {}
+    if (d.get("mime_type") or "").startswith("image/") and (d.get("file_size") or 0) <= IMG_MAX:
+        return d["file_id"], d["mime_type"]
+    return None
 
 
 def _log(db, chat: int, role: str, text: str, now: dt.datetime) -> None:
@@ -219,7 +245,8 @@ def _count(db, chat: int | None, now: dt.datetime) -> int:
     return db.execute("SELECT COUNT(*) FROM msgs WHERE chat=? AND role='ai' AND at>=?", (chat, since)).fetchone()[0]
 
 
-def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known: bool) -> dict:
+def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known: bool,
+              image: tuple[bytes, str] | None = None) -> dict:
     who = {"user": "Собеседник", "ai": "Ты (ИИ-ёрдамчи)", "owner": "Озод Жамол сам"}
     talk = "\n".join(f"{who.get(r, r)}: {t}" for r, t in history) or "(переписки ещё нет)"
     user = (f"{'Это ЗНАКОМЫЙ Озод Жамола (они уже переписывались).' if known else 'Это новый человек.'}\n"
@@ -227,6 +254,9 @@ def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known:
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.5, "responseMimeType": "application/json"}}
+    if image:
+        import base64
+        body["contents"][0]["parts"].append({"inlineData": {"mimeType": image[1], "data": base64.b64encode(image[0]).decode()}})
     models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
     data = None
     for i, model in enumerate(models):
@@ -256,8 +286,18 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
     _log(db, cid, "user", incoming, now)
     if _count(db, cid, now) >= AI_PER_CHAT_DAY or _count(db, None, now) >= AI_PER_DAY:
         return "limit"
+    img = None
+    ref = image_ref(m)
+    dl = getattr(api, "download", None)
+    if ref and dl:
+        try:
+            data = dl(ref[0])
+            if data and len(data) <= IMG_MAX:
+                img = (data, ref[1])
+        except Exception as e:  # noqa: BLE001  — без картинки всё равно отвечаем по тексту
+            print(f"assistant: картинка не скачалась ({str(e)[:80]})", flush=True)
     try:
-        out = ai(SYSTEM, hist, incoming, known)
+        out = ai(SYSTEM, hist, incoming, known, image=img) if img else ai(SYSTEM, hist, incoming, known)
     except Exception as e:  # noqa: BLE001
         print(f"assistant: ИИ ошибка {str(e)[:120]}", flush=True)
         db.execute("DELETE FROM msgs WHERE rowid=(SELECT MAX(rowid) FROM msgs WHERE chat=?)", (cid,))   # шаблон запишет сам
@@ -316,6 +356,15 @@ def api_for(token: str):
         if not out.get("ok"):
             raise RuntimeError(f"{method}: {out.get('description')}")
         return out["result"]
+
+    def download(file_id: str) -> bytes:
+        """30.10: файл из сообщения (картинка для ИИ). Токен в ошибки не попадает."""
+        path = api("getFile", file_id=file_id).get("file_path")
+        if not path:
+            return b""
+        with urllib.request.urlopen(f"https://api.telegram.org/file/bot{token}/{path}", timeout=30) as r:
+            return r.read(IMG_MAX + 1)
+    api.download = download
     return api
 
 

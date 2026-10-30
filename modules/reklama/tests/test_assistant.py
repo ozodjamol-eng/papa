@@ -178,3 +178,27 @@ class AiTest(unittest.TestCase):
         for i in range(A.AI_PER_CHAT_DAY):
             A.handle(self.db, msg(f"м{i}"), self.api, T0 + dt.timedelta(minutes=i), ai=f)
         self.assertEqual(A.handle(self.db, msg("ещё"), self.api, T0 + dt.timedelta(minutes=50), ai=f), "limit")
+
+
+class ImageTest(unittest.TestCase):
+    """30.10: ИИ смотрит картинки — фото, стикер, превью видео."""
+    def test_image_ref(self):
+        self.assertEqual(A.image_ref({"photo": [{"file_id": "s"}, {"file_id": "big"}]}), ("big", "image/jpeg"))
+        self.assertEqual(A.image_ref({"sticker": {"file_id": "st", "emoji": "🙏"}}), ("st", "image/webp"))
+        self.assertEqual(A.image_ref({"sticker": {"file_id": "a", "is_animated": True, "thumbnail": {"file_id": "th"}}}),
+                         ("th", "image/webp"))
+        self.assertEqual(A.image_ref({"video": {"file_id": "v", "thumbnail": {"file_id": "vt"}}}), ("vt", "image/jpeg"))
+        self.assertIsNone(A.image_ref({"text": "салом"}))
+
+    def test_ai_gets_image(self):
+        db, api = A.connect(":memory:"), Api()
+        api.download = lambda fid: b"IMG" if fid == "st" else b""
+        A.handle(db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}}, api, T0)
+        got = []
+
+        def ai(system, hist, incoming, known, image=None):
+            got.append(image)
+            return {"kind": "greeting", "reply": "Жумангиз муборак!"}
+        m = msg(""); m["business_message"].pop("text"); m["business_message"]["sticker"] = {"file_id": "st", "emoji": "🕌"}
+        self.assertEqual(A.handle(db, m, api, T0, ai=ai), "greeting")
+        self.assertEqual(got[0], (b"IMG", "image/webp"))
