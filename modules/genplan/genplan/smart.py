@@ -466,6 +466,28 @@ def day_room(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
     return int(lim.get("max", 20)) - n
 
 
+MINBAR = "Муфтий минбари"
+
+
+def minbar_ok(m) -> bool:
+    """30.10 владелец: в слот «Муфтий минбари» (22:00) — только уроки с минбара (#muftiy_minbari).
+    Поздравления Муфтия (#tabrik, «Жума муборак») туда не берём: вечером это выглядит как утренний пост.
+    Нет урока — час берёт запасную рубрику сетки (Маънавият)."""
+    if m["rubric"] != MINBAR:
+        return True
+    n = _nrm(m["text"])
+    return "minbar" in n or "минбар" in n
+
+
+def twin_taken(db, channel: str, m) -> bool:
+    """30.10 владелец: посты Муфтия в КАТТА ДАВРА и Хўжаобод Сити 24 должны отличаться —
+    материал, который другой канал уже поставил или выпустил, этому каналу не берём."""
+    if m["rubric"] != MINBAR or not m["fp"]:
+        return False
+    return db.execute("SELECT 1 FROM materials WHERE fp=? AND channel<>? AND status IN ('queued','published') LIMIT 1",
+                      (m["fp"], channel)).fetchone() is not None
+
+
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
@@ -474,7 +496,8 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
         return []
     pool = [m for m in store.stock(db, channel)
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
-            and not waits_text(cfg, m) and not _stale(ch, m, now)]
+            and not waits_text(cfg, m) and not _stale(ch, m, now)
+            and minbar_ok(m) and not twin_taken(db, channel, m)]
     if not pool:
         return []
     used: list[int] = []
