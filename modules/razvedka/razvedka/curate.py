@@ -355,6 +355,8 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                 log(f"  {type(e).__name__}: {str(e)[:80]}")
             await asyncio.sleep(1)
         need = need_codes(needs, channel, now)          # 🧠 заказ штаба: сначала рубрики пустых часов
+        if needs and "news" not in need:             # 30.10 владелец: новостей меньше — только под час новости
+            cands = [c for c in cands if c.get("rub") != "news"]
         want = max(PER_RUN.get(channel, 4), min(5, len(need)))
         sent, checked, skipped = 0, 0, 0
         blocked = LOGO_SOURCES | set(st.get("logo_sources", []))

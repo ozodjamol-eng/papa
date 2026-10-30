@@ -12,6 +12,9 @@ QUERIES = {
                  "Vodiy", "Farg'ona", "Фарғона", "Наманган", "Namangan", "Тезкор хабарлар", "Tezkor xabarlar",
                  "O'zbekiston yangiliklari", "Ўзбекистон янгиликлари", "Фойдали маслаҳатлар", "Foydali maslahatlar",
                  "Соғлом турмуш", "Ish o'rinlari Andijon", "Андижон бозор"],
+    "davra": ["Uyda biznes", "Уйда бизнес", "Ayollar uchun biznes", "Аёллар учун бизнес", "Motivatsiya", "Мотивация",
+              "O'z ustida ishlash", "Ўз устида ишлаш", "Biznes g'oya", "Бизнес ғоя", "Kulgili videolar", "Qiziqarli videolar",
+              "Foydali maslahatlar", "Klip", "Yangi qo'shiqlar"],
 }
 MIN_SUBS = 20000
 SHOW = 15
@@ -59,7 +62,7 @@ async def run(client, target: str = "xojaobod", log=print) -> list[dict]:
 
 
 def render(rows: list[dict]) -> str:
-    L = ["🔭 РАЗВЕДЧИК КАНАЛОВ · кандидаты в XOJAOBOD RAQIB (нет в ваших папках)", ""]
+    L = ["🔭 РАЗВЕДЧИК КАНАЛОВ · новые большие каналы (нет в ваших папках)", ""]
     for i, r in enumerate(rows, 1):
         u = "@" + r["username"] if r.get("username") else "без @"
         L.append(f"{i}. {r['title'][:40]} ({u}) — {r['subscribers']:,} подп. · поиск «{r['q']}»".replace(",", " "))

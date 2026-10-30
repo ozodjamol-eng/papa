@@ -148,12 +148,12 @@ class T(unittest.TestCase):
     def test_xojaobod_stock_takes_only_hour_rubric(self):
         self.cfg["channels"]["xojaobod"]["mode"] = "shadow"
         fun = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
-        news = self.add(rubric="Янгиликлар", ch="xojaobod", status="draft")
+        news = self.add(rubric="Фойдали видео", ch="xojaobod", status="draft")
         for m in (fun, news):
             store.update(self.db, m, stock=1, scheduled_at=None)
         used = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("08:40"))   # впереди часы 09 и 10
         self.assertEqual(sorted(used), sorted([fun, news]))
-        self.assertEqual((self.when(news), self.when(fun)), ("09:00", "10:00"))   # 09 — запасная «Янгиликлар», 10 — кулги
+        self.assertEqual((self.when(news), self.when(fun)), ("09:00", "10:00"))   # 09 — фойдали, 10 — кулги
 
     def test_xojaobod_no_match_leaves_hour_empty(self):
         fun = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
@@ -173,7 +173,9 @@ class T(unittest.TestCase):
         self.assertTrue(self.davra_hours)
         self.cfg["channels"]["davra"]["hour_rubrics"] = self.davra_hours
         t, why = smart.smart_time(self.db, self.cfg, "davra", "Маънавият", at("06:00"))
-        self.assertEqual(f"{t:%H:%M}", "15:00")
+        self.assertEqual(f"{t:%H:%M}", "22:00")                      # 30.10: день закрывает Муфтий / маънавият
+        t, _ = smart.smart_time(self.db, self.cfg, "davra", "Мусиқа", at("06:00"))
+        self.assertEqual(f"{t:%H:%M}", "12:00")                      # музыка — с 10:00 (правило канала)
 
     async def _fake_publish(self, db, cfg, env, pubs, channel, m, slot, day, log=print, now=None):
         store.update(db, m["id"], status="published")

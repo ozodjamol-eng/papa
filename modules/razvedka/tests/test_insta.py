@@ -44,5 +44,5 @@ class Footer(unittest.TestCase):
         f = insta.footer("music", "xayrshou", 2175972)
         self.assertTrue(f.startswith(insta.MARK))
         self.assertIn("PaparazziUZ", f)
-        self.assertIn("рубрика: Қўшиқ", f)
+        self.assertIn("рубрика: Мусиқа", f)
         self.assertIn("2.2 млн", f)

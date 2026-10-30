@@ -27,13 +27,15 @@ TAGS = ["kulgili", "kulgu", "qiziqarli", "ozbekcha", "uzbekistan", "foydali", "v
 # 30.10 владелец: «музыка — музыку, полезное — отдельно… всё в один хаб, внизу — какая рубрика». Направление = поток:
 # свои хэштеги, своя дневная норма, подпись внизу «🏷 PAPA ТРЕНД: … → канал · рубрика: …».
 DIRECTIONS = {
-    "music":  ("🎵 Мусиқа/шоу", "PaparazziUZ", "Қўшиқ", ["qoshiq", "jonliijro", "uzbekmusic"], 2),
+    "music":  ("🎵 Мусиқа/клип", "PaparazziUZ / КАТТА ДАВРА", "Мусиқа", ["qoshiq", "jonliijro", "uzbekmusic"], 3),
     "humor":  ("😂 Кулги", "КАТТА ДАВРА", "Ҳажвия", ["kulgili", "prikol_uz", "vaynlar"], 2),
     "fun":    ("✨ Қизиқарли", "КАТТА ДАВРА", "Қизиқарли", ["qiziqarli", "ajoyib"], 1),
     "useful": ("💡 Фойдали", "КАТТА ДАВРА", "Фойдали видео", ["foydali", "maslahat"], 2),
     "food":   ("🍲 Таом/соғлиқ", "Хўжаобод", "Соғлиқ/Оила", ["retsept", "taom"], 1),
     "faith":  ("🕌 Маънавият", "Хўжаобод", "Маънавият", ["islom", "duo"], 1),
     "local":  ("📍 Андижон/водий", "Хўжаобод", "Хўжаобод/Андижон", ["andijon", "fargona"], 1),
+    "biz":    ("🏠 Уйда бизнес", "КАТТА ДАВРА", "Уйда бизнес", ["uydabiznes", "biznesgoya", "ayollarbiznesi"], 2),
+    "motiv":  ("🔥 Мотивация", "КАТТА ДАВРА", "Мотивация", ["motivatsiya", "ozustidaishlash"], 2),
 }
 HUB_TITLE = "PAPA РАЗВЕДКА · ТРЕНДЫ"     # 30.10 владелец: в одной семье с «PAPA РАЗВЕДКА · ВОДА / · МЕБЕЛЬ»
 OLD_TITLES = ("📸 PAPA ТРЕНДЫ",)

@@ -24,7 +24,8 @@ from . import curate
 TZ = dt.timezone(dt.timedelta(hours=5))
 # склад → каким нашим каналам служит (26.10 владелец: «как в плане»)
 SKLAD = {
-    "NEWS INBOX": ("davra", "xojaobod"),
+    "NEWS INBOX": ("xojaobod",),                   # 30.10 владелец: в КАТТА ДАВРА новостей минимум
+    "@shayx_nuriddinxoliqnazar": ("davra", "xojaobod"),   # 30.10: «закончить день с муфтием» — якорь 22:00
     "ФОЙДАЛИК": ("davra", "xojaobod", "paparazzi"),   # 26.10 владелец: «там очень много полезного — во все три»
     "ФОЙДАЛИК ОВКАТ": ("xojaobod", "davra"),
     "Jonlik ijrolar": ("paparazzi",),
@@ -39,6 +40,8 @@ SKLAD = {
     "@madaniyat_marifat_tv": ("paparazzi",),
     "@madaniyatvazirligi": ("paparazzi",),
 }
+TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
+NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar"}      # якорь: сначала свежий пост, нет нового — следующий из архива
 FRESH_DAYS = {"NEWS INBOX": 2, "@madaniyatvazirligi": 2}   # новости: только свежие, архив не берём
 # 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
 FIXED = {"davra": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1},
@@ -94,8 +97,8 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
     return not curate.off_policy(item["text"], channel)
 
 
-def order(items: list[dict], channel: str, now: dt.datetime | None = None) -> list[dict]:
-    xs = sorted(items, key=lambda x: x["id"], reverse=channel in FROM_END)
+def order(items: list[dict], channel: str, now: dt.datetime | None = None, stash: str = "") -> list[dict]:
+    xs = sorted(items, key=lambda x: x["id"], reverse=channel in FROM_END or stash in NEWEST_FIRST)
     if channel in FROM_MIDDLE:
         xs = xs[len(xs) // 2:] + xs[:len(xs) // 2]
     if now is not None and now.astimezone(TZ).weekday() == 4:   # пятница: «Жума» — первыми
@@ -216,7 +219,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             continue                                    # группа ещё не на PAPA — её бот не трогаем
         sent = 0
         for stash, it, key in picks:
-            if external(stash):                         # чужой архив: кадр — на чужое лого, перед каждой отправкой
+            if external(stash) and stash not in TRUSTED_EXT:   # чужой архив: кадр — на чужое лого, перед каждой отправкой
                 if not gemini_ok:
                     continue
                 try:
@@ -295,15 +298,15 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
             continue
         sent = 0
         for name in names:
-            if name not in ents or ch not in SKLAD.get(name, ()) or external(name):
-                continue                               # якорь — только свои доверенные склады (без проверки лого)
+            if name not in ents or ch not in SKLAD.get(name, ()) or (external(name) and name not in TRUSTED_EXT):
+                continue                               # якорь — только доверенные склады (без проверки лого)
             if name not in cache:
                 try:
                     cache[name] = await read(client, ents[name], 3000)
                 except Exception as e:  # noqa: BLE001
                     log(f"  якорь {name}: {type(e).__name__}")
                     cache[name] = []
-            it = next((x for x in order(cache[name], ch, now) if eligible(x, name, ch, now)
+            it = next((x for x in order(cache[name], ch, now, name) if eligible(x, name, ch, now)
                        and str(x["id"]) not in used.get(f"{ch}|{name}", [])), None)
             if not it:
                 continue

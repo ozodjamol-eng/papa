@@ -41,7 +41,8 @@ BLOCK = {"shohonakulgu"}           # 20.10 владелец: ставит сво
 # рубрика: (код, название, темы сортировщика); порядок = приоритет, если канал подходит под несколько
 THEMES = [
     ("news", "🗞 Янгиликлар", {"news", "local", "politics_official"}),
-    ("useful", "💡 Фойдали", {"useful", "home_business"}),
+    ("useful", "💡 Фойдали", {"useful"}),
+    ("biz", "🏠 Уйда бизнес", {"home_business"}),      # 30.10 владелец: домашний бизнес — своя рубрика
     ("fun", "🎉 Кўнгилочар", {"interesting", "sport"}),
     ("humor", "😂 Кулги", {"humor"}),
     ("music", "🎤 Жонли ижро ва шоу", {"live_music", "music", "showbiz"}),
@@ -49,19 +50,25 @@ THEMES = [
     ("faith", "🕌 Маънавият", {"religion"}),
     ("warn", "⚠️ Огоҳлантириш", set()),        # 30.10: по названию канала (NAME_THEMES), не по темам сортировщика
     ("money", "💵 Курс/нарх", set()),
+    ("motiv", "🔥 Мотивация", set()),                 # 30.10: по названию канала (NAME_THEMES)
 ]
 # 30.10: рубрики, которые узнаём по названию/юзернейму канала (сортировщик их не различает)
 NAME_THEMES = {"warn": ("kiberjinoyat", "кибержиноят", "iiv", "иив", "ichkiishlar", "ички ишлар", "firibgar", "фирибгар"),
-               "money": ("bank", "банк", "valyuta", "валюта", "kurs", "курс", "dollar", "доллар", "narx", "нарх", "cbu")}
+               "money": ("bank", "банк", "valyuta", "валюта", "kurs", "курс", "dollar", "доллар", "narx", "нарх", "cbu"),
+               "motiv": ("motivatsiya", "мотивация", "мотивацион", "o'z ustida", "ўз устида", "muvaffaqiyat", "муваффақият",
+                         "rivojlan", "ривожлан", "shaxsiy rivoj"),
+               "biz": ("biznes", "бизнес", "uyda", "уйда", "daromad", "даромад", "tadbirkor", "тадбиркор", "startap")}
 THEME_NAME = {c: n for c, n, _ in THEMES}
 # наш канал: (код, название, папки — первая основная, рубрики по порядку важности)
 PROFILES = [
     ("xojaobod", "🏙 ХЎЖАОБОД CITY 24", ("XOJAOBOD CITY", "XOJAOBODCITY", "PAPA·Шаҳар"),
-     ("news", "useful", "humor", "food", "faith", "warn", "money")),
-    ("davra", "🎉 КАТТА ДАВРА", ("KATTA DAVRA", "PAPA·Давра", "PAPA·Спорт"), ("news", "fun", "humor", "useful", "faith", "food")),
+     ("news", "useful", "humor", "food", "faith", "warn", "money", "biz")),
+    ("davra", "🎉 КАТТА ДАВРА", ("KATTA DAVRA", "PAPA·Давра", "PAPA·Спорт"),
+     ("fun", "humor", "useful", "biz", "motiv", "music", "faith", "food", "news")),
     ("paparazzi", "⭐ PAPARAZZI UZ", ("Paparazzi UZ", "PAPA·Музыка"), ("music", "humor")),
 ]
 NEWS_FOLDERS = ("Новости", "Yangiliklar", "Янгиликлар")           # для рубрики «Новости» — ещё эта папка владельца
+BIZ_FOLDERS = ("Купля-продажа", "Купля продажа", "Kupli-prodaja")  # 30.10 владелец: папка с каналами домашнего бизнеса
 NO_POLITICS = {"davra", "paparazzi"}                               # docs/CHANNELS.md: без политики
 # 26.10 владелец: «помнишь эти два — Тезкор Хабарлар и …» — всегда в кандидатах новостей, если есть в папках
 MUST = {"news": ("тезкорхабар", "tezkorxabar", "tezkoryangilik", "тезкорянгилик")}
@@ -305,8 +312,13 @@ def ids_for(choice: dict | None, channel: str) -> list[int]:
     return out
 
 
+MAIN_FALLBACK = {"paparazzi"}
+
+
 def main_empty(choice: dict | None, channel: str) -> bool:
     """Главная рубрика канала не выбрана (напр. жонли ижро) — куратор добавляет и папку канала, как раньше."""
+    if channel not in MAIN_FALLBACK:             # 30.10: КАТТА ДАВРА/Хўжаобод — только выбранные (без всей папки)
+        return False
     main = next((rub[0] for c, _, _, rub in PROFILES if c == channel), None)
     return bool(main) and not (((choice or {}).get("channels") or {}).get(channel) or {}).get(main)
 
@@ -357,6 +369,7 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
     titles = list(folders)
     found, plan = {}, []
     news_f = folder_match(titles, NEWS_FOLDERS)
+    biz_f = folder_match(titles, BIZ_FOLDERS)
     for ch, _, names, rubrics in PROFILES:
         name = folder_match(titles, names)
         found[ch] = name
@@ -364,6 +377,8 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
             plan += [(ch, name, p, False) for p in folders[name]]
         if news_f and "news" in rubrics:
             plan += [(ch, news_f, p, True) for p in folders[news_f]]
+        if biz_f and "biz" in rubrics:              # 30.10: «Купля-продажа» — источник для «Уйда бизнес»
+            plan += [(ch, biz_f, p, "biz") for p in folders[biz_f]]
     log("папки: " + ", ".join(f"{ch}={found[ch] or 'НЕТ'}" for ch in found) + f" · новости={news_f or 'НЕТ'}"
         + f" (всего у владельца {len(folders)})")
     if not all(found.values()):
@@ -378,7 +393,7 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
         title = (getattr(ent, "title", "") or "")
         if ent.id in by_id:                           # канал в нескольких папках — читаем один раз
             r = by_id[ent.id]
-            (r["news_for"] if news_only else r["for"]).append(ch)
+            (r["biz_for"] if news_only == "biz" else r["news_for"] if news_only else r["for"]).append(ch)
             continue
         from .sklad import SKLAD
         if (not getattr(ent, "broadcast", False) or (getattr(ent, "username", "") or "").lower() in OWN
@@ -392,13 +407,14 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
             continue
         s = stats(posts, now)
         r = {"id": ent.id, "title": title, "username": getattr(ent, "username", None), "folder": fname,
-             "for": [] if news_only else [ch], "news_for": [ch] if news_only else [],
+             "for": [] if news_only else [ch], "news_for": [ch] if news_only is True else [],
+             "biz_for": [ch] if news_only == "biz" else [],
              **s, "why": eligible(s), "texts": [x["text"].replace("\n", " ")[:140] for x in posts if x["text"]][:10],
              "checked": 0, "clean_n": 0, "clean": None, "subscribers": None, "theme_by": {}}
         rows.append(r)
         by_id[ent.id] = r
         ents[ent.id], media[ent.id] = ent, mm
-        log(f"  [{len(rows)}] {ch}{'·нов' if news_only else ''} · {title[:34]}: {s['posts']} п., 👁 {s['median_views']}, "
+        log(f"  [{len(rows)}] {ch}{'·биз' if news_only == 'biz' else '·нов' if news_only else ''} · {title[:34]}: {s['posts']} п., 👁 {s['median_views']}, "
             f"реклама {s['ad_share']} {r['why']}")
         await asyncio.sleep(1)
     # рубрики: Gemini (бесплатно), без него — по ключевым словам. Слабые тоже сортируем — обязательные могут быть среди них.
@@ -406,8 +422,8 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
     rub = {c: r for c, _, _, r in PROFILES}
     for r in rows:
         r["cats"] = cats.get(str(r["id"])) or cats.get(r["id"]) or sortfolders.keyword_cats(r)
-        for ch in dict.fromkeys(r["for"] + r["news_for"]):
-            allowed = rub[ch] if ch in r["for"] else ("news",)
+        for ch in dict.fromkeys(r["for"] + r["news_for"] + r.get("biz_for", [])):
+            allowed = rub[ch] if ch in r["for"] else (("news",) if ch in r["news_for"] else ("biz",))
             t = theme(r["cats"], allowed, ch not in NO_POLITICS)
             nm = (r.get("title") or "").lower() + " " + (r.get("username") or "").lower()
             t = next((c for c, ws in NAME_THEMES.items() if c in allowed and any(w in nm for w in ws)), t)
@@ -466,7 +482,7 @@ async def run(client, out_dir: Path, now: dt.datetime | None = None, log=print) 
         if choice and (choice.get("channels") or {}).get(ch) is not None:
             chosen = set(ids_for(choice, ch))
         cards.append((ch, *card(ch, cands[ch], rows, found[ch], gen, chosen)))
-    keep = ("id", "title", "username", "folder", "for", "news_for", "theme_by", "posts", "per_day", "median_views",
+    keep = ("id", "title", "username", "folder", "for", "news_for", "biz_for", "theme_by", "posts", "per_day", "median_views",
             "ad_share", "media_share", "cyr_share", "why", "checked", "clean_n", "clean", "score", "subscribers")
     data = {"generated": gen, "candidates": {ch: {c: [r["id"] for r in rs] for c, rs in t.items()} for ch, t in cands.items()},
             "rows": [{k: r.get(k) for k in keep} for r in rows], "cards": [c[1] for c in cards]}

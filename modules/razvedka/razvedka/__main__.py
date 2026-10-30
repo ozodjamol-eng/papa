@@ -251,7 +251,10 @@ async def _scout() -> str:
     c = client_from_env()
     await c.connect()
     try:
-        return scout.render(await scout.run(c, "xojaobod", log=lambda s: print(s, flush=True)))
+        out = []
+        for t, title in (("xojaobod", "XOJAOBOD RAQIB"), ("davra", "КАТТА ДАВРА: бизнес, мотивация, кулги")):
+            out.append(f"=== {title} ===\n" + scout.render(await scout.run(c, t, log=lambda s: print(s, flush=True))))
+        return "\n\n".join(out)
     finally:
         await c.disconnect()
 

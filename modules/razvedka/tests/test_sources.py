@@ -120,8 +120,7 @@ class TestSources(unittest.TestCase):
         good.append({**row(60, "news", 10), "title": "Тезкор Хабарлар", "clean": None})
         order = sources.check_order(good)
         self.assertEqual(order[0]["id"], 60)                                         # обязательный — первым
-        self.assertEqual(order[1]["id"], 19)
-        self.assertEqual(order[2]["id"], 50)                                         # и сразу другая рубрика
+        self.assertEqual({order[1]["id"], order[2]["id"]}, {19, 50})                 # по кругу рубрик
 
 
 if __name__ == "__main__":
