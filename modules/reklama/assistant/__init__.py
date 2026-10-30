@@ -1,5 +1,10 @@
 """ИИ-ассистент личного Telegram владельца (@Ozodjamol) через Telegram Business (решение 17.10).
 
+30.10 (владелец: «нужен другой подход, он должен полноценно работать»): есть ключ Gemini → настоящий ИИ-разговор
+(бесплатно): понимает поздравления (Жума муборак → ответное поздравление), ведёт разговор о рекламе, личное — «Озод Жамол
+сам ответит». Со знакомыми (с кем владелец уже переписывался) — только ответ на поздравления/салом. Владелец написал
+сам — бот молчит 24 ч. Нет ключа / ИИ упал — прежние шаблоны (ниже), раз в сутки на чат.
+
 Отвечает ТОЛЬКО на первое сообщение человека (раз в сутки на чат), всегда представляется ИИ-ассистентом:
 - 📣 реклама → готовый ответ с прайсом (50 000 сўм — пост только в XO'JAOBOD CITY 24, решение 20.10);
 - 👤 всё остальное (личное, непонятное) → «передал, Озоджамол скоро свяжется».
@@ -21,12 +26,12 @@ REPLY_EVERY = dt.timedelta(hours=24)        # не чаще одного отв�
 OWNER_QUIET = dt.timedelta(hours=24)        # владелец сам писал в чат — бот молчит
 
 AD_TEXT = """Ассалому алайкум!
-Мен Озоджамолнинг ИИ-ёрдамчисиман 🤖
+Мен Озод Жамолнинг ИИ-ёрдамчисиман 🤖
 Реклама бўйича: 50 000 сўм — постингиз 📍 XO'JAOBOD CITY 24 каналида чиқади.
-Нимани реклама қилмоқчи эканингизни ёзиб, матн ва расм/видеони юборинг — Озоджамол тез орада боғланади. Раҳмат!"""
+Нимани реклама қилмоқчи эканингизни ёзиб, матн ва расм/видеони юборинг — Озод Жамол тез орада боғланади. Раҳмат!"""
 
 PERSONAL_TEXT = """Ассалому алайкум!
-Мен Озоджамолнинг ИИ-ёрдамчисиман 🤖
+Мен Озод Жамолнинг ИИ-ёрдамчисиман 🤖
 Хабарингизни унга етказдим — тез орада ўзи сиз билан боғланади. Раҳмат!"""
 
 AD_WORDS = ("реклам", "reklam", "эълон", "элон", "e'lon", "eʼlon", "elon", "нарх", "narx", "прайс", "price",
@@ -63,6 +68,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS conn (id TEXT PRIMARY KEY, owner INTEGER NOT NULL, owner_chat INTEGER, enabled INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS chats (chat INTEGER PRIMARY KEY, replied_at TEXT, owner_at TEXT, kind TEXT, name TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS msgs (chat INTEGER NOT NULL, role TEXT NOT NULL, text TEXT, at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_msgs ON msgs(chat, at);
 """
 
 
@@ -77,7 +84,7 @@ def _ago(ts: str | None, now: dt.datetime) -> dt.timedelta | None:
     return now - dt.datetime.fromisoformat(ts) if ts else None
 
 
-def handle(db, upd: dict, api, now: dt.datetime | None = None) -> str:
+def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
     """Одно обновление Bot API → действие. api(method, **params). Возвращает, что сделано (для журнала/тестов)."""
     now = now or dt.datetime.now(dt.timezone.utc)
     bc = upd.get("business_connection")
@@ -104,14 +111,25 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None) -> str:
         return "skip"
     row = db.execute("SELECT * FROM chats WHERE chat=?", (chat["id"],)).fetchone()
     if frm.get("id") == c["owner"]:                          # владелец ответил сам — дальше бот молчит
+        _log(db, chat["id"], "owner", _incoming(m), now)
         db.execute("INSERT INTO chats(chat, owner_at) VALUES(?,?) ON CONFLICT(chat) DO UPDATE SET owner_at=excluded.owner_at",
                    (chat["id"], now.isoformat()))
         db.commit()
         return "owner"
     o, r = (_ago(row["owner_at"], now), _ago(row["replied_at"], now)) if row else (None, None)
+    text = m.get("text") or m.get("caption") or ""
+    if ai is None and os.environ.get("GEMINI_API_KEY"):
+        ai = gemini_ai
+    if ai is not None:
+        if o is not None and o < OWNER_QUIET:           # владелец сам ведёт разговор — молчим
+            _log(db, chat["id"], "user", _incoming(m), now)
+            return "quiet"
+        res = ai_turn(db, c, m, chat, frm, row, api, ai, now)
+        if res != "ai_failed":
+            return res
+        print("assistant: ИИ не ответил — шаблон", flush=True)
     if (o is not None and o < OWNER_QUIET) or (r is not None and r < REPLY_EVERY):
         return "quiet"
-    text = m.get("text") or m.get("caption") or ""
     kind = kind_of(text)
     try:
         api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT if kind == "ad" else PERSONAL_TEXT)
@@ -142,8 +160,140 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None) -> str:
     return kind
 
 
+# ---------- 30.10: настоящий ИИ-разговор (Gemini, бесплатно) ----------
+AI_PER_CHAT_DAY = 20            # не больше ответов ИИ одному человеку в сутки
+AI_PER_DAY = 300                # общий предел в сутки (бесплатный лимит Gemini)
+HISTORY = 12                    # сколько последних сообщений помнит
+HISTORY_FOR = dt.timedelta(hours=48)
+KINDS = ("greeting", "ad", "personal", "other")
+
+SYSTEM = """Ты — ИИ-ёрдамчи (ИИ-помощник) Озод Жамола в его личном Telegram (@Ozodjamol).
+Озод Жамол — блогер и медиа-владелец из Хўжаобода (Андижон): Telegram-каналы XO'JAOBOD CITY 24, КАТТА ДАВРА, PaparazziUZ,
+Instagram @paparazzi.uz. Ты отвечаешь людям, пока он занят.
+
+КАК ОТВЕЧАТЬ: коротко (1–3 предложения), тепло и уважительно (на «сиз»), как воспитанный узбек. Язык — как у собеседника:
+узбекский — ТОЛЬКО кириллицей (даже если человек пишет латиницей), русский — по-русски. Ты не Озод Жамол и не выдаёшь себя
+за него; если спросят — ты его ИИ-ёрдамчи. Не повторяй одно и то же, учитывай переписку.
+
+ПРАВИЛА:
+1) Поздравления и дуо (Жума муборак, байрам, туғилган кун, тилаклар, пересланные открытки/посты с поздравлением) —
+   ответь искренним ответным поздравлением и дуо от имени Озод Жамола («Озод Жамол номидан ҳам…»). kind=greeting.
+2) Салом / как дела — поприветствуй и спроси, чем можешь помочь. kind=greeting.
+3) Реклама: пост — 50 000 сўм, выходит ТОЛЬКО в канале XO'JAOBOD CITY 24 (в других каналах рекламы нет).
+   Узнай, что рекламируют, попроси текст и фото/видео. Скидок, точного времени и гарантий не обещай — время согласует
+   Озод Жамол. Рекламный видео/моушн-ролик под ключ — цену Озод Жамол скажет сам. kind=ad.
+4) Личное (деньги, встречи, просьбы, семья, работа, вопросы о его жизни) — ничего не решай и не выдумывай:
+   скажи, что передал и Озод Жамол ответит сам. kind=personal.
+5) Никогда не выдумывай факты, номера, адреса, цены (кроме 50 000 сўм за пост). Без политики и религиозных споров.
+6) Человек закончил («раҳмат», «ок», стикер) — короткий ответ или пустой reply.
+
+Ответ — ТОЛЬКО JSON: {"reply": "текст или пусто", "kind": "greeting|ad|personal|other"}"""
+
+
+def _incoming(m: dict) -> str:
+    t = m.get("text") or m.get("caption") or ""
+    kind = next((k for k in ("voice", "video_note", "photo", "video", "sticker", "document", "audio", "animation") if k in m), "")
+    if m.get("forward_origin") or m.get("forward_from") or m.get("forward_from_chat"):
+        t = "[пересланный пост] " + t
+    if kind:
+        emoji = (m.get("sticker") or {}).get("emoji", "") if kind == "sticker" else ""
+        t = f"[{kind}{' ' + emoji if emoji else ''}] {t}".strip()
+    return t[:1500]
+
+
+def _log(db, chat: int, role: str, text: str, now: dt.datetime) -> None:
+    db.execute("INSERT INTO msgs VALUES (?,?,?,?)", (chat, role, text, now.isoformat()))
+    db.commit()
+
+
+def _history(db, chat: int, now: dt.datetime) -> list[tuple[str, str]]:
+    rows = db.execute("SELECT role, text FROM msgs WHERE chat=? AND at>=? ORDER BY at DESC, rowid DESC LIMIT ?",
+                      (chat, (now - HISTORY_FOR).isoformat(), HISTORY)).fetchall()
+    return [(r[0], r[1]) for r in reversed(rows)]
+
+
+def _count(db, chat: int | None, now: dt.datetime) -> int:
+    since = (now - dt.timedelta(hours=24)).isoformat()
+    if chat is None:
+        return db.execute("SELECT COUNT(*) FROM msgs WHERE role='ai' AND at>=?", (since,)).fetchone()[0]
+    return db.execute("SELECT COUNT(*) FROM msgs WHERE chat=? AND role='ai' AND at>=?", (chat, since)).fetchone()[0]
+
+
+def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known: bool) -> dict:
+    who = {"user": "Собеседник", "ai": "Ты (ИИ-ёрдамчи)", "owner": "Озод Жамол сам"}
+    talk = "\n".join(f"{who.get(r, r)}: {t}" for r, t in history) or "(переписки ещё нет)"
+    user = (f"{'Это ЗНАКОМЫЙ Озод Жамола (они уже переписывались).' if known else 'Это новый человек.'}\n"
+            f"Переписка (последние сообщения):\n{talk}\n\nНовое сообщение собеседника:\n{incoming}")
+    body = {"systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.5, "responseMimeType": "application/json"}}
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
+    data = None
+    for i, model in enumerate(models):
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                     data=json.dumps(body).encode(),
+                                     headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+        try:
+            with urllib.request.urlopen(req, timeout=40) as r:
+                data = json.loads(r.read())
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in (500, 503, 404, 429) or i == len(models) - 1:
+                raise RuntimeError(f"gemini {e.code}") from None
+    parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    raw = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+    raw = raw[raw.find("{"): raw.rfind("}") + 1] if "{" in raw else raw
+    out = json.loads(raw)
+    return {"reply": str(out.get("reply") or "").strip(), "kind": out.get("kind") if out.get("kind") in KINDS else "other"}
+
+
+def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetime) -> str:
+    """Один ход ИИ. Возвращает kind / 'contact_quiet' / 'limit' / 'ai_failed'."""
+    cid = chat["id"]
+    incoming = _incoming(m)
+    known = bool(row and row["owner_at"])             # владелец с этим человеком уже переписывался
+    hist = _history(db, cid, now)
+    _log(db, cid, "user", incoming, now)
+    if _count(db, cid, now) >= AI_PER_CHAT_DAY or _count(db, None, now) >= AI_PER_DAY:
+        return "limit"
+    try:
+        out = ai(SYSTEM, hist, incoming, known)
+    except Exception as e:  # noqa: BLE001
+        print(f"assistant: ИИ ошибка {str(e)[:120]}", flush=True)
+        db.execute("DELETE FROM msgs WHERE rowid=(SELECT MAX(rowid) FROM msgs WHERE chat=?)", (cid,))   # шаблон запишет сам
+        db.commit()
+        return "ai_failed"
+    kind, reply = out["kind"], out["reply"]
+    if known and kind != "greeting":                  # знакомым — только ответ на поздравление/салом
+        return "contact_quiet"
+    first_today = not (row and row["replied_at"] and _ago(row["replied_at"], now) < REPLY_EVERY)
+    if reply and first_today and "ёрдамчи" not in reply.lower() and "помощник" not in reply.lower():
+        reply = "🤖 Озод Жамолнинг ИИ-ёрдамчиси:\n" + reply
+    if reply:
+        try:
+            api("sendMessage", chat_id=cid, business_connection_id=c["id"], text=reply[:3500])
+        except RuntimeError:
+            raise
+        _log(db, cid, "ai", reply, now)
+    name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or "—"
+    db.execute("INSERT INTO chats(chat, replied_at, kind, name) VALUES(?,?,?,?) ON CONFLICT(chat) DO UPDATE SET "
+               "replied_at=COALESCE(excluded.replied_at, chats.replied_at), kind=excluded.kind, name=excluded.name",
+               (cid, now.isoformat() if reply else None, kind, name))
+    db.commit()
+    # владельцу: новый человек — первое обращение за сутки; реклама — каждый раз
+    if c["owner_chat"] and not known and (first_today or kind == "ad"):
+        head = {"ad": "📣 РЕКЛАМА", "greeting": "🤝 Салом/табрик", "personal": "👤 Личное"}.get(kind, "💬 Сообщение")
+        user = f" (@{frm['username']})" if frm.get("username") else ""
+        try:
+            api("sendMessage", chat_id=c["owner_chat"],
+                text=f"{head} · {name}{user}\n—\n{incoming[:600] or '(медиа)'}\n—\n🤖 {reply[:400] or '(промолчал)'}")
+        except Exception as e:  # noqa: BLE001
+            print(f"assistant: уведомление не ушло ({e})", flush=True)
+    return kind
+
+
 STRANGER_START = """Ассалому алайкум!
-Бу — Озоджамолнинг ИИ-ёрдамчиси 🤖
+Бу — Озод Жамолнинг ИИ-ёрдамчиси 🤖
 Реклама ва бошқа масалалар бўйича тўғридан-тўғри @Ozodjamol га ёзинг — ёрдамчи дарҳол жавоб беради."""
 
 
@@ -151,7 +301,7 @@ def start_text(db, msg: dict) -> str:
     """18.10: бот только для владельца. Владелец — уведомления; посторонний — короткая подсказка написать @Ozodjamol."""
     owners = {r[0] for r in db.execute("SELECT owner FROM conn")}
     if (msg.get("from") or {}).get("id") in owners:
-        return "🤖 ИИ-ассистент Озоджамола. Сюда приходят уведомления о новых обращениях."
+        return "🤖 ИИ-ассистент Озод Жамола. Сюда приходят уведомления о новых обращениях."
     return STRANGER_START
 
 

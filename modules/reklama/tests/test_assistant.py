@@ -122,3 +122,59 @@ class RightsTest(unittest.TestCase):
         self.assertEqual(len(sent), 1)                 # инструкция владельцу — один раз в сутки
         self.assertIn("Чат-боты", sent[0]["text"])
 
+
+
+class AiTest(unittest.TestCase):
+    """30.10: настоящий ИИ-разговор (Gemini) — поздравления, реклама, знакомые, владелец, сбой ИИ."""
+    def setUp(self):
+        self.db, self.api = A.connect(":memory:"), Api()
+        A.handle(self.db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}},
+                 self.api, T0)
+        self.api.calls.clear()
+        self.seen = []
+
+    def ai(self, kind, reply):
+        def f(system, hist, incoming, known):
+            self.seen.append((hist, incoming, known))
+            return {"kind": kind, "reply": reply}
+        return f
+
+    def sent(self, chat):
+        return [p["text"] for m, p in self.api.calls if m == "sendMessage" and p["chat_id"] == chat]
+
+    def test_juma_greeting_warm_reply_and_keeps_talking(self):
+        r = A.handle(self.db, msg("Жума муборак!"), self.api, T0, ai=self.ai("greeting", "Жумангиз муборак бўлсин!"))
+        self.assertEqual(r, "greeting")
+        self.assertIn("ИИ-ёрдамчиси", self.sent(555)[0])          # первый ответ дня — с пометкой ИИ
+        self.assertIn("Жумангиз муборак", self.sent(555)[0])
+        A.handle(self.db, msg("Реклама қанча?"), self.api, T0 + dt.timedelta(minutes=2),
+                 ai=self.ai("ad", "50 000 сўм, XO'JAOBOD CITY 24 да."))
+        self.assertEqual(len(self.sent(555)), 2)                  # разговор продолжается, не глохнет
+        self.assertNotIn("ИИ-ёрдамчиси:", self.sent(555)[1])
+        self.assertEqual(self.seen[1][0][-1][0], "ai")            # ИИ видит свою прошлую реплику
+        self.assertIn("📣 РЕКЛАМА", self.sent(OWNER)[-1])
+
+    def test_known_contact_only_greetings(self):
+        A.handle(self.db, msg("салом", uid=OWNER), self.api, T0)
+        later = T0 + dt.timedelta(hours=30)
+        self.assertEqual(A.handle(self.db, msg("Пул керак эди"), self.api, later, ai=self.ai("personal", "Етказаман")), "contact_quiet")
+        self.assertEqual(self.sent(555), [])
+        self.assertEqual(A.handle(self.db, msg("Жума муборак"), self.api, later, ai=self.ai("greeting", "Сизга ҳам!")), "greeting")
+        self.assertTrue(self.seen[-1][2])                          # ИИ знает, что это знакомый
+
+    def test_owner_wrote_ai_silent(self):
+        A.handle(self.db, msg("ассалом", uid=OWNER), self.api, T0)
+        self.assertEqual(A.handle(self.db, msg("реклама?"), self.api, T0 + dt.timedelta(minutes=5), ai=self.ai("ad", "x")), "quiet")
+        self.assertEqual(self.sent(555), [])
+
+    def test_ai_failure_falls_back_to_template(self):
+        def bad(*a):
+            raise RuntimeError("gemini 500")
+        self.assertEqual(A.handle(self.db, msg("салом"), self.api, T0, ai=bad), "personal")
+        self.assertIn("тез орада ўзи сиз билан боғланади", self.sent(555)[0])
+
+    def test_daily_limit(self):
+        f = self.ai("other", "ок")
+        for i in range(A.AI_PER_CHAT_DAY):
+            A.handle(self.db, msg(f"м{i}"), self.api, T0 + dt.timedelta(minutes=i), ai=f)
+        self.assertEqual(A.handle(self.db, msg("ещё"), self.api, T0 + dt.timedelta(minutes=50), ai=f), "limit")
