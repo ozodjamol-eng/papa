@@ -93,3 +93,8 @@
 - 2026-10-30 11:40: **Штаб, неделя 1** — заказ needs.json (genplan, d69e488), куратор по заказу + ⚓ якорь из склада, ИИ-редактор для постов источников (dd90c0a). papa-genplan active. Схема «Штаб → отделы» — PASSPORT §0.
 - 2026-10-30 14:16: **ИИ-ассистент @Ozodjamol — приветствие + меню из 3 кнопок** (8b6b142, тесты 23/23 OK, papa-assistant active, Франкфурт).
 - 2026-10-30 15:00: ассистент отвечает всегда (знакомым тоже), тишина после владельца — 30 мин.
+
+## 2026-10-30 вечер — план выходных (автоматизация до понедельника)
+- `/var/lib/papa-ads-inbox` (papa-assistant:papa-genplan 2770), drop-in ReadWritePaths у papa-assistant и papa-genplan (`ads-inbox.conf`). Задача `ads-inbox-install`.
+- `papa-weekly.timer` → `papa-razvedka@weekly.service` (сб 23:30 UTC): `razvedka weekly` = clean + humor. Задача `weekly-install`.
+- Архивариус: каналы ozodjamoll + kattadavrauz, TAKE 30/канал, PACE 5 с. Задача `archive-run`.
