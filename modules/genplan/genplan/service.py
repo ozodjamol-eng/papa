@@ -325,6 +325,12 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
         store.record(db, channel, day, slot, m["id"], "done", mid)
         if ch["publisher"] == "account" and not is_ad:
             cleanup_hubcopy(db, env, pubs, m, log)
+        if is_ad:                                          # 💰 31.10: реклама из заказа ассистента — клиенту «чиқди ✅»
+            try:
+                from . import adsin
+                adsin.published(db, cfg, m["id"], mid)
+            except Exception as e:  # noqa: BLE001 — отчёт клиенту не должен ломать публикацию
+                log(f"adsin.published: {type(e).__name__}: {e}")
         store.pulse_add(db, channel, now or dt.datetime.now(plan.TZ), "ad" if is_ad else "bot")   # 30.10: реклама помечена — держится 10 мин
         log(f"{channel} {slot or 'срочно'}: опубликовано ({m['rubric']})")
         return True

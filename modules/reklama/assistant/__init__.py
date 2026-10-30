@@ -583,6 +583,44 @@ def order_callback(db, q: dict, api, now: dt.datetime, inbox: str | None = None)
     return "order_ok"
 
 
+DONE_TEXT = """✅ Рекламангиз «Хўжаобод Сити 24» да чиқди!
+{link}
+Ишончингиз учун раҳмат 🤝 Яна реклама керак бўлса — шу ерга ёзинг."""
+
+
+def client_reports(db, api, inbox: str | None = None) -> int:
+    """💰 31.10: GENPLAN выпустил рекламу из заказа → клиенту в его чат (через Telegram Business) «чиқди ✅» + ссылка.
+    Не вышло отправить (клиент давно не писал — Telegram не даёт) — владельцу готовый текст, чтобы переслал сам."""
+    base = inbox or ADS_INBOX
+    try:
+        names = sorted(n for n in os.listdir(base) if n.startswith("done-") and n.endswith(".json"))
+    except OSError:
+        return 0
+    n = 0
+    for name in names:
+        path = os.path.join(base, name)
+        try:
+            d = json.load(open(path, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        text = DONE_TEXT.format(link=d.get("link") or "")
+        try:
+            api("sendMessage", chat_id=d["client_chat"], business_connection_id=d.get("bc"), text=text)
+            note = f"✅ Клиенту {d.get('client') or ''} сообщил: реклама вышла · {d.get('link') or ''}"
+        except Exception as e:  # noqa: BLE001
+            note = (f"⚠️ Клиенту {d.get('client') or ''} не смог написать ({str(e)[:60]}). Перешлите ему сами:\n\n" + text)
+        owner = db.execute("SELECT owner_chat FROM conn WHERE id=?", (d.get("bc"),)).fetchone() or \
+            db.execute("SELECT owner_chat FROM conn WHERE enabled=1 LIMIT 1").fetchone()
+        if owner and owner[0]:
+            try:
+                api("sendMessage", chat_id=owner[0], text=note[:4000])
+            except Exception:  # noqa: BLE001
+                pass
+        os.remove(path)
+        n += 1
+    return n
+
+
 def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetime) -> str:
     """Один ход ИИ. Возвращает kind / 'contact_quiet' / 'limit' / 'ai_failed'."""
     cid = chat["id"]
@@ -701,12 +739,16 @@ def loop() -> None:
     off = int((db.execute("SELECT v FROM kv WHERE k='offset'").fetchone() or ["0"])[0])
     while True:
         try:
-            ups = api("getUpdates", offset=off, timeout=50,
+            ups = api("getUpdates", offset=off, timeout=25,
                       allowed_updates=["business_connection", "business_message", "message", "callback_query"])
         except Exception as e:  # noqa: BLE001
             print(f"assistant: getUpdates {e}", flush=True)
             time.sleep(10)
             continue
+        try:
+            client_reports(db, api)
+        except Exception as e:  # noqa: BLE001
+            print(f"assistant: отчёт клиенту {e}", flush=True)
         for u in ups:
             off = u["update_id"] + 1
             try:

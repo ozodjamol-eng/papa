@@ -361,3 +361,17 @@ class OrderToPult(unittest.TestCase):
         import os
         self.assertEqual(self.cb(self.ok.replace(":ok:", ":no:")), "order_no")
         self.assertEqual(os.listdir(self.dir), [])
+
+
+class ClientReport(unittest.TestCase):
+    def test_done_to_client_and_owner(self):
+        import json, os, tempfile
+        d = tempfile.mkdtemp()
+        db, api = A.connect(":memory:"), Api()
+        A.handle(db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}}, api, T0)
+        json.dump({"client_chat": 555, "bc": "BC", "client": "Ali", "link": "https://t.me/xojaobodcity24/9"}, open(os.path.join(d, "done-1.json"), "w"))
+        self.assertEqual(A.client_reports(db, api, inbox=d), 1)
+        to_client = [p for m, p in api.calls if p.get("chat_id") == 555]
+        self.assertTrue(to_client and "чиқди" in to_client[0]["text"] and to_client[0]["business_connection_id"] == "BC")
+        self.assertTrue(any("сообщил" in p.get("text", "") for m, p in api.calls if p.get("chat_id") == OWNER))
+        self.assertEqual(os.listdir(d), [])

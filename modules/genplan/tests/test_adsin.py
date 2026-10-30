@@ -78,3 +78,15 @@ class AdsIn(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Published(unittest.TestCase):
+    def test_done_file_once(self):
+        inbox = Path(tempfile.mkdtemp())
+        db = store.connect(":memory:")
+        store.kv_set(db, "ad_order_7", json.dumps({"id": 3, "client_chat": 555, "bc": "BC"}))
+        self.assertTrue(adsin.published(db, CFG, 7, 1234, inbox=inbox))
+        d = json.loads((inbox / "done-3.json").read_text())
+        self.assertEqual((d["client_chat"], d["link"]), (555, "https://t.me/xojaobodcity24/1234"))
+        self.assertFalse(adsin.published(db, CFG, 7, 1235, inbox=inbox))     # 3 дня рекламы — сообщаем один раз
+        self.assertFalse(adsin.published(db, CFG, 8, 1, inbox=inbox))        # своя реклама владельца — без клиента

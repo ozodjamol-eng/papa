@@ -108,3 +108,21 @@ def scan(bot, token: str, db, cfg: dict, owners: list[int], inbox: Path = INBOX,
             continue
         shutil.rmtree(d, ignore_errors=True)
     return n
+
+
+def published(db, cfg: dict, mid: int, msg_id, inbox: Path = INBOX) -> bool:
+    """Реклама из заказа вышла (первый раз) → файл для ИИ-ассистента: он сам скажет клиенту «чиқди ✅» со ссылкой."""
+    from . import store
+    raw = store.kv_get(db, f"ad_order_{mid}")
+    if not raw or store.kv_get(db, f"ad_order_done_{mid}") or not inbox.is_dir():
+        return False
+    o = json.loads(raw)
+    user = ((cfg.get("channels") or {}).get(CHANNEL) or {}).get("username") or ""
+    link = f"https://t.me/{user}/{msg_id}" if user and isinstance(msg_id, int) else (f"https://t.me/{user}" if user else "")
+    f = inbox / f"done-{o.get('id')}.json"
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps({**o, "link": link}, ensure_ascii=False), encoding="utf-8")
+    os.chmod(tmp, 0o660)
+    os.replace(tmp, f)
+    store.kv_set(db, f"ad_order_done_{mid}", "1")
+    return True
