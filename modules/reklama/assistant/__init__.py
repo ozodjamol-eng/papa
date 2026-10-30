@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS conn (id TEXT PRIMARY KEY, owner INTEGER NOT NULL, ow
 CREATE TABLE IF NOT EXISTS chats (chat INTEGER PRIMARY KEY, replied_at TEXT, owner_at TEXT, kind TEXT, name TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS msgs (chat INTEGER NOT NULL, role TEXT NOT NULL, text TEXT, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ad_media (chat INTEGER NOT NULL, kind TEXT NOT NULL, file_id TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS orders (chat INTEGER NOT NULL, at TEXT NOT NULL, summary TEXT);
 CREATE INDEX IF NOT EXISTS idx_msgs ON msgs(chat, at);
 """
 
@@ -217,7 +219,13 @@ Instagram @paparazzi.uz. Ты отвечаешь людям, пока он за�
 7) Если приложена картинка (открытка, стикер, фото, кадр видео) — смотри на неё: открытка «Жума муборак» = поздравление,
    фото товара/вывески = вероятно реклама. Не описывай картинку, просто отвечай по смыслу.
 
-Ответ — ТОЛЬКО JSON: {"reply": "текст или пусто", "kind": "greeting|ad|personal|other"}"""
+8) Заказ рекламы готов, когда клиент дал: что рекламирует, текст рекламы, хотя бы одно фото/видео ([photo]/[video] в
+   переписке), число дней (1/3/7) и дату. Тогда order.ready=true, скажи клиенту, что заказ передан Озод Жамолу и он
+   подтвердит время и оплату. Иначе order.ready=false и спрашивай недостающее по одному.
+
+Ответ — ТОЛЬКО JSON: {"reply": "текст или пусто", "kind": "greeting|ad|personal|other",
+ "order": {"ready": false, "what": "", "days": 1, "evening": false, "pin": false, "date": "", "total": 0,
+           "ad_text": "текст рекламы клиента дословно"}}"""
 
 
 def _incoming(m: dict) -> str:
@@ -324,7 +332,54 @@ def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known:
     raw = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
     raw = raw[raw.find("{"): raw.rfind("}") + 1] if "{" in raw else raw
     out = json.loads(raw)
-    return {"reply": str(out.get("reply") or "").strip(), "kind": out.get("kind") if out.get("kind") in KINDS else "other"}
+    return {"reply": str(out.get("reply") or "").strip(), "kind": out.get("kind") if out.get("kind") in KINDS else "other",
+            "order": out.get("order") if isinstance(out.get("order"), dict) else {}}
+
+
+def save_media(db, chat: int, m: dict, now: dt.datetime) -> None:
+    """30.10: фото/видео клиента — для готового заказа рекламы."""
+    if m.get("photo"):
+        db.execute("INSERT INTO ad_media VALUES (?,?,?,?)", (chat, "photo", m["photo"][-1]["file_id"], now.isoformat()))
+    for k in ("video", "animation", "document"):
+        if m.get(k) and (k != "document" or (m[k].get("mime_type") or "").startswith(("image/", "video/"))):
+            db.execute("INSERT INTO ad_media VALUES (?,?,?,?)", (chat, k, m[k]["file_id"], now.isoformat()))
+    db.commit()
+
+
+def send_order(db, api, owner_chat: int, chat: int, name: str, username: str | None, order: dict,
+               now: dt.datetime) -> bool:
+    """💰 30.10 «реклама под ключ», этап 1: готовый заказ — владельцу одним пакетом (сводка + реклама как есть),
+    чтобы переслать в пульт Хўжаобода. Один заказ от человека — не чаще раза в 6 ч."""
+    last = db.execute("SELECT at FROM orders WHERE chat=? ORDER BY at DESC LIMIT 1", (chat,)).fetchone()
+    if last and now - dt.datetime.fromisoformat(last[0]) < dt.timedelta(hours=6):
+        return False
+    since = (now - dt.timedelta(days=2)).isoformat()
+    media = db.execute("SELECT kind, file_id FROM ad_media WHERE chat=? AND at>=? ORDER BY at DESC LIMIT 3",
+                       (chat, since)).fetchall()
+    opts = [f"{int(order.get('days') or 1)} кун"] + (["кечки вақт"] if order.get("evening") else []) + \
+           (["тепада қадаб"] if order.get("pin") else [])
+    total = int(order.get("total") or 0)
+    who = name + (f" (@{username})" if username else "")
+    head = (f"💰 ЗАКАЗ РЕКЛАМЫ · {who}\n—\n📦 {order.get('what') or '—'}\n🗓 {order.get('date') or 'дата не указана'} · "
+            + " · ".join(opts) + (f"\n💵 по прайсу: {total:,} сўм".replace(",", " ") if total else "")
+            + "\n—\nНиже — реклама как есть. Перешлите её в пульт Хўжаобода → 📣 Реклама → время → ✅."
+            + "\nОплату и время клиенту подтверждаете вы.")
+    api("sendMessage", chat_id=owner_chat, text=head[:4000])
+    text = (order.get("ad_text") or "").strip()[:1000]
+    sent_media = False
+    for k, fid in reversed(media):
+        method = {"photo": "sendPhoto", "video": "sendVideo", "animation": "sendAnimation"}.get(k, "sendDocument")
+        field = {"photo": "photo", "video": "video", "animation": "animation"}.get(k, "document")
+        try:
+            api(method, chat_id=owner_chat, **{field: fid}, caption=text if not sent_media else "")
+            sent_media = True
+        except Exception as e:  # noqa: BLE001
+            print(f"assistant: медиа заказа не ушло ({str(e)[:80]})", flush=True)
+    if not sent_media and text:
+        api("sendMessage", chat_id=owner_chat, text=text)
+    db.execute("INSERT INTO orders VALUES (?,?,?)", (chat, now.isoformat(), head[:500]))
+    db.commit()
+    return True
 
 
 def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetime) -> str:
@@ -334,6 +389,7 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
     known = bool(row and row["owner_at"])             # владелец с этим человеком уже переписывался
     hist = _history(db, cid, now)
     _log(db, cid, "user", incoming, now)
+    save_media(db, cid, m, now)
     if _count(db, cid, now) >= AI_PER_CHAT_DAY or _count(db, None, now) >= AI_PER_DAY:
         return "limit"
     try:                                              # «печатает…» — человек видит, что ответ готовится
@@ -370,6 +426,8 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
             raise
         _log(db, cid, "ai", reply, now)
     name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or "—"
+    if kind == "ad" and (out.get("order") or {}).get("ready") and c["owner_chat"]:
+        send_order(db, api, c["owner_chat"], cid, name, frm.get("username"), out["order"], now)
     db.execute("INSERT INTO chats(chat, replied_at, kind, name) VALUES(?,?,?,?) ON CONFLICT(chat) DO UPDATE SET "
                "replied_at=COALESCE(excluded.replied_at, chats.replied_at), kind=excluded.kind, name=excluded.name",
                (cid, now.isoformat() if reply else None, kind, name))

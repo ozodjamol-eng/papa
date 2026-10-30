@@ -217,3 +217,22 @@ class AutoGreetingTest(unittest.TestCase):
             A.handle(db, msg("Салом! Ҳозир бандман", uid=OWNER, chat=chat), api, T0)
         self.assertTrue(A.is_auto_owner(db, "Салом! Ҳозир бандман", T0))
         self.assertFalse(A.is_auto_owner(db, "Ваалайкум, яхшимисиз?", T0))
+
+
+class OrderTest(unittest.TestCase):
+    """30.10 реклама под ключ, этап 1: готовый заказ — владельцу пакетом."""
+    def test_order_sent_once(self):
+        db, api = A.connect(":memory:"), Api()
+        A.handle(db, {"business_connection": {"id": "BC", "user": {"id": OWNER}, "user_chat_id": OWNER, "is_enabled": True}}, api, T0)
+        m = msg(""); m["business_message"].pop("text"); m["business_message"]["photo"] = [{"file_id": "P1"}]
+        m["business_message"]["caption"] = "Дўконимиз очилди!"
+        order = {"ready": True, "what": "дўкон", "days": 3, "evening": True, "pin": False, "date": "1 ноябр", "total": 160000,
+                 "ad_text": "Дўконимиз очилди!"}
+        ai = lambda *a, **k: {"kind": "ad", "reply": "Заказ Озод Жамолга етказилди", "order": order}
+        A.handle(db, m, api, T0, ai=ai)
+        to_owner = [(meth, p) for meth, p in api.calls if p.get("chat_id") == OWNER]
+        self.assertTrue(any("ЗАКАЗ РЕКЛАМЫ" in p.get("text", "") and "160 000" in p.get("text", "") for _, p in to_owner))
+        self.assertTrue(any(meth == "sendPhoto" and p["photo"] == "P1" for meth, p in to_owner))
+        n = len(api.calls)
+        A.handle(db, msg("раҳмат"), api, T0 + dt.timedelta(minutes=5), ai=ai)
+        self.assertFalse(any(m2 == "sendPhoto" for m2, _ in api.calls[n:]))      # повторно не шлём

@@ -35,3 +35,19 @@ class T(unittest.TestCase):
         p = Path(tempfile.mkdtemp()) / "needs.json"
         self.assertTrue(needs.write(db, cfg, now, p, force=True))
         self.assertIn("xojaobod", json.loads(p.read_text())["channels"])
+
+
+class Evening(unittest.TestCase):
+    def test_evening_report(self):
+        from genplan import service
+        db = store.connect(":memory:")
+        mid = store.add_material(db, -100777, 1, "пост", False)
+        store.update(db, mid, channel="davra", rubric="Ҳажвия", status="published")
+        day = MON
+        store.record(db, "davra", day.isoformat(), "10:00", mid, "done", 5)
+        db.execute("UPDATE publications SET at=? WHERE material_id=?", (plan.slot_time(day, "10:00").isoformat(), mid))
+        self.assertIsNone(service.evening_report(db, CFG, plan.slot_time(day, "20:00")))
+        t = service.evening_report(db, CFG, plan.slot_time(day, "21:50"))
+        self.assertIn("ШТАБ", t)
+        self.assertIn("КАТТА ДАВРА: вышло 1 · часы 1/16", t)
+        self.assertIsNone(service.evening_report(db, CFG, plan.slot_time(day, "22:00")))   # раз в день

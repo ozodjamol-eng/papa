@@ -496,6 +496,9 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
     rep = curator_report(db, cfg, now)
     if rep:
         ERRORS.append(rep)
+    ev = evening_report(db, cfg, now)                  # 🧠 30.10: итог дня штаба
+    if ev:
+        ERRORS.append(ev)
     jc = morning.juma_check(db, now)                   # 23.10: четверг вечером — есть ли видео «Жума» на завтра
     if jc:
         ERRORS.append(jc)
@@ -650,6 +653,33 @@ def today_text(db, cfg: dict, now: dt.datetime | None = None) -> str:
     modes = ", ".join(f"{ch['title']}: {'🟢 работа' if channel_mode(cfg, c) == 'live' else '🧪 тест'}"
                       for c, ch in cfg["channels"].items())
     return f"Режим — {modes}\n\n" + "\n\n".join(parts)
+
+
+def evening_report(db, cfg: dict, now: dt.datetime, at: str = "21:45") -> str | None:
+    """🧠 30.10 Штаб: один короткий вечерний отчёт владельцу — по каждому каналу: вышло, заполнено часов, пробелы, реклама."""
+    if now.time() < plan.slot_time(now.date(), at).time():
+        return None
+    k = f"evening_report_{now.date().isoformat()}"
+    if store.kv_get(db, k):
+        return None
+    store.kv_set(db, k, "1")
+    day = now.date().isoformat()
+    lines = [f"🧠 ШТАБ · итог дня {now:%d.%m}"]
+    for channel, ch in cfg["channels"].items():
+        rows = db.execute("SELECT p.at, m.rubric FROM publications p LEFT JOIN materials m ON m.id=p.material_id "
+                          "WHERE p.channel=? AND p.slot_date=? AND p.status='done'", (channel, day)).fetchall()
+        ads = sum(1 for r in rows if smart.is_ad_rubric(r["rubric"]))
+        o = smart.hourly(ch)
+        hrs = ""
+        if o:
+            span = range(smart.hm(o["from"]).hour, smart.hm(o["to"]).hour + 1)
+            got = {dt.datetime.fromisoformat(r["at"]).astimezone(plan.TZ).hour for r in rows
+                   if not smart.is_ad_rubric(r["rubric"])}
+            empty = [f"{h:02d}" for h in span if h not in got]
+            hrs = f" · часы {len(span) - len(empty)}/{len(span)}" + (f" (пусто: {', '.join(empty)})" if empty else " ✅")
+        stock = len(store.stock(db, channel))
+        lines.append(f"\n{ch.get('title', channel)}: вышло {len(rows)}{hrs} · реклама {ads} · в запасе {stock}")
+    return "\n".join(lines)
 
 
 def curator_report(db, cfg: dict, now: dt.datetime, at: str = "21:30") -> str | None:
