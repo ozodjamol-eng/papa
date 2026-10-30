@@ -48,10 +48,27 @@ def _word(w: str) -> str:
     return "".join(out)
 
 
+# 30.10 сверка (№6): короткая латиница («Juma muborak!») проходила без кириллицы — порог был ≥12 букв и ≥2 признака.
+# Для текста совсем без кириллицы хватает одного частого узбекского слова или ўзак-признака (o'/g'), если нет английских слов.
+UZ_WORDS = re.compile(r"(?i)(?<![\w'‘’ʻ`])(juma|muborak\w*|assalomu|as-salomu|aleykum|alaykum|salom|xayrli|tong\w*|kech\w*|tun\w*|"
+                      r"kun\w*|uchun|bilan|rahmat|barchangiz\w*|barcha\w*|murodbaxsh|yangilik\w*|bugun\w*|ertaga|hayot\w*|"
+                      r"yaxshi\w*|sog['‘’ʻ`]liq\w*|oila\w*|farzand\w*|duo\w*|namoz\w*|muborakbod|tabrik\w*|ota|ona\w*|"
+                      r"jonli|ijro\w*|qadrli|aziz\w*|do['‘’ʻ`]st\w*|ko['‘’ʻ`]p|emas|yoki|lekin|nima\w*|qanday|qanaqa|siz\w*|biz\w*)(?![\w'‘’ʻ`])")
+UZ_APOS = re.compile(r"(?i)\b\w*[og]['‘’ʻ`]\w+")
+EN_WORDS = re.compile(r"(?i)\b(the|and|you|your|is|are|to|of|for|with|this|that|my|happy|new|good|best|day|love|from|in|on|at|it|we|our|be)\b")
+
+
 def is_uz_latin(text: str) -> bool:
-    lat = len(re.findall(r"[A-Za-z]", PROTECT.sub("", text or "")))
+    plain = PROTECT.sub("", text or "")
+    lat = len(re.findall(r"[A-Za-z]", plain))
     cyr = len(re.findall(r"[А-Яа-яЁёЎўҚқҒғҲҳ]", text or ""))
-    return lat >= 12 and lat > cyr * 2 and len(UZ_MARK.findall(text)) >= 2
+    if lat >= 12 and lat > cyr * 2 and len(UZ_MARK.findall(text)) >= 2:
+        return True
+    if cyr == 0 and lat >= 4 and not EN_WORDS.search(plain):          # короткий пост без кириллицы
+        words = [w for w in WORD.findall(plain) if not _brand(w)]
+        uz = len(UZ_WORDS.findall(plain)) + len(UZ_APOS.findall(plain))
+        return uz >= 1 and uz * 3 >= len(words)                       # узбекские слова — не меньше трети
+    return False
 
 
 def to_cyrillic(text: str) -> str:
