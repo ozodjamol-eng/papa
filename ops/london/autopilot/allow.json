@@ -38,7 +38,8 @@
     "genplan5-guard-install",
     "genplan5-utin-1730",
     "genplan5-stop",
-    "genplan5-start"
+    "genplan5-start",
+    "old-digest-reset"
   ],
   "deny_patterns": [
     "-key$",
