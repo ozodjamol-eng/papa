@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 🌆 вечерний пул — Pixabay → «PAPA ВЕЧЕР ПУЛ» → фоны «Кечки дайжест» (каждый день 15:30 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 10:30:00 UTC
+RandomizedDelaySec=3min
+Persistent=false
+Unit=papa-razvedka@evening.service
+
+[Install]
+WantedBy=timers.target

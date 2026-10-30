@@ -256,6 +256,23 @@ async def _archive() -> dict:
         await c.disconnect()
 
 
+async def _evening() -> dict:
+    """🌆 30.10: вечерний пул — Pixabay → канал «PAPA ВЕЧЕР ПУЛ» → фоны дайджеста на диске."""
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "archive") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import evening
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return await evening.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _bank() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
@@ -491,6 +508,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "archive":                        # 📚 30.10: архивариус — старое сильное из наших каналов → KATTA BANK
         print("ARCHIVE_DONE", asyncio.run(_archive()))
+        return
+    if cmd == "evening":                        # 🌆 30.10: вечерний пул — фоны «Кечки дайжест»
+        print("EVENING_DONE", asyncio.run(_evening()))
         return
     if cmd == "bank":                           # 🏦 30.10: папка KATTA BANK + новые хабы
         print("BANK_DONE", asyncio.run(_bank()))

@@ -661,6 +661,21 @@ def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=No
     return report
 
 
+EVENING_DIR = Path(os.environ.get("PAPA_EVENING_DIR", "/var/lib/papa-evening"))
+
+
+def evening_bg(day: dt.date, folder: Path | None = None) -> Path | None:
+    """🌆 30.10 владелец: вечерний пул — каждый вечер новый фон «Кечки дайжест». Нет пула — осенний по умолчанию."""
+    folder = folder or EVENING_DIR
+    m = day.month
+    s = "qish" if m in (12, 1, 2) else "bahor" if m in (3, 4, 5) else "yoz" if m in (6, 7, 8) else "kuz"
+    try:
+        files = sorted(p for p in folder.glob(f"{s}-*.mp4") if p.stat().st_size > 200_000)
+    except OSError:
+        return None
+    return files[day.toordinal() % len(files)] if files else None
+
+
 def push_video_data(day: dt.date, payloads: dict, run=None, branch: str = "digest-data") -> str:
     """Данные роликов → ветка digest-data на GitHub (push запускает рендер в Actions). Ключ — deploy-key владельца."""
     if not payloads:
@@ -680,6 +695,10 @@ def push_video_data(day: dt.date, payloads: dict, run=None, branch: str = "diges
                          ["git", "checkout", "-q", "-b", branch, "FETCH_HEAD"]):
                 run(args, tmp, env)
             (Path(tmp) / "data").mkdir(exist_ok=True)
+            bg = evening_bg(day) if branch == "digest-data" else None
+            if bg:                                       # 🌆 30.10: фон вечера из вечернего пула (по кругу)
+                import shutil
+                shutil.copyfile(bg, Path(tmp) / "data" / "bg_kech.mp4")
             for name, data in payloads.items():
                 (Path(tmp) / "data" / f"{name}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
             for args in (["git", "add", "data"],

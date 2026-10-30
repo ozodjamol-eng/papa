@@ -311,3 +311,19 @@ class DigestWatch(unittest.TestCase):
         cfg = {"channels": {"xojaobod": {"digest": {"live": True}}, "davra": {"digest": {"live": True}}}}
         store.kv_set(db, "digest_pub_2026-10-21", "1"); store.kv_set(db, "digest_pub_davra_2026-10-21", "2")
         self.assertIsNone(digest.watch(db, cfg, dt.datetime(2026, 10, 21, 21, 0, tzinfo=plan.TZ)))
+
+
+class TestEveningBg(unittest.TestCase):
+    """30.10: фон «Кечки дайжест» из вечернего пула."""
+    def test_rotates_by_day_and_season(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            for n in (1, 2):
+                (d / f"kuz-{n}.mp4").write_bytes(b"0" * 300_000)
+            (d / "kuz-3.mp4").write_bytes(b"0")                       # битый — не берём
+            a = digest.evening_bg(dt.date(2026, 10, 30), d)
+            b = digest.evening_bg(dt.date(2026, 10, 31), d)
+            self.assertEqual({a.name, b.name}, {"kuz-1.mp4", "kuz-2.mp4"})
+            self.assertIsNone(digest.evening_bg(dt.date(2026, 12, 5), d))   # зимнего нет — фон по умолчанию

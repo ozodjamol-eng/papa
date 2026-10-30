@@ -81,7 +81,8 @@
     "shodiyona-voronka-restart",
     "reports-to-bot",
     "namaz-import",
-    "xojaobod-golive"
+    "xojaobod-golive",
+    "evening-install"
   ],
   "deny_patterns": [
     "-key$",

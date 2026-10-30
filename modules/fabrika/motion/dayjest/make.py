@@ -195,6 +195,8 @@ def build(mode: str, out: Path, d: dict) -> Path:
     frames, raw, main, mp4 = out / f"{name}-frames", out / f"{name}.raw.mp4", out / f"{name}.main.mp4", out / f"{name}.mp4"
     frames.mkdir(exist_ok=True)
     bg = asset(f"bg_{mode}_{season(dt.date.fromisoformat(day))}.mp4")
+    if d.get("_bg") and Path(d["_bg"]).exists():            # 🌆 30.10: фон дня из вечернего пула (Франкфурт)
+        bg = Path(d["_bg"])
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1", "-i", str(bg), "-t", "28",
                     "-vf", "fps=30,scale=1080:1920", "-q:v", "3", str(frames / "%04d.jpg")], check=True)
     r = subprocess.run(["node", str(HERE / "render.mjs"), str(HERE / "page.html"), str(js), str(frames), "30", str(raw)],
@@ -235,5 +237,7 @@ if __name__ == "__main__":
         d = json.loads(Path(os.environ["DAYJEST_JSON"]).read_text(encoding="utf-8"))
     else:
         d = data(mode, fk, (fk or {}).get("channel") or "xojaobod")
+    if len(sys.argv) > 3 and (Path(sys.argv[3]).parent / f"bg_{mode}.mp4").exists():
+        d["_bg"] = str(Path(sys.argv[3]).parent / f"bg_{mode}.mp4")
     print(json.dumps(d, ensure_ascii=False), flush=True)
     print(build(mode, out, d), flush=True)
