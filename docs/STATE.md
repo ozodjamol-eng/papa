@@ -1,7 +1,7 @@
 # Текущее состояние инфраструктуры
 
 > Снимок фактов, а не планов. Обновляется при каждом изменении на серверах.
-> Последнее обновление: 2026-10-14.
+> Последнее обновление: 2026-10-30 (полный аудит).
 
 ## Лондон — `xojaobodcity24bot`, 165.227.239.109, tailnet `nexus-core`
 
@@ -11,9 +11,9 @@
 - Память после остановки старого NEXUS: 597 МБ, swap 748 МБ (снижается). Апгрейд не нужен. Перезапущен 2026-10-15 10:33 (ядро 6.8.0-147): GENPLAN 5, боты, nginx, PostgreSQL, ozixon-mobile-api, агент — поднялись сами. В очереди GENPLAN висит один просроченный пост с 2026-10-13 22:00 (разобрать в фазе 3, сейчас не трогаем).
 - 2026-10-22 22:57: ffmpeg задачи автопилота убит по нехватке памяти (swap после перезагрузки пропал → 0). Добавлен `/swapfile` 2 ГБ + строка в `/etc/fstab` (переживает перезагрузку). Шлюз, papa-genplan, автопилот перезапущены — active.
 - Журналы ограничены 300 МБ: `/etc/systemd/journald.conf.d/papa-limit.conf`.
-- Работает:
-  - `xojaobod-genplan-v3.service` — **на самом деле GENPLAN 5** из `/opt/xojaobod-genplan-v5`, база `data/genplan_v3_production.db`. Публикует в группу Xo'jaobod City 24 через бота XOJAOBODCITYAVTOPOST24.
-  - `xojaobodcity24bot.service`, `goldwater-bot.service`, nginx (goldwater.uz), PostgreSQL, `ozixon-mobile-api`.
+- **GENPLAN 5 остановлен 2026-10-21** (`xojaobod-genplan-v3.service` inactive/disabled, очередь пуста, просроченных нет). С 21.10 Хўжаобод Сити 24 живёт на GENPLAN PAPA (Франкфурт, live).
+- Работает (проверено 2026-10-30): `goldwater-bot`, `nexus-london-agent`, `xojaobodcity24bot`, nginx (goldwater.uz), PostgreSQL, `ozixon-mobile-api`.
+- ~30 старых юнитов `nexus-*`/`ozod-*` — мёртвые (inactive/static/disabled), ждут решения владельца об уборке; `/opt/nexus` 903 МБ.
   - **Старый NEXUS остановлен и выключен 2026-10-15** (23 работавших юнита из 41; список `/var/backups/papa-archive/old-nexus-units-*.state`, вернуть `papa-update nexus-old-restore`). Код `/opt/nexus` (903 МБ) пока на месте. Мёртвый маршрут Tailscale `nexus-core:443 → 8876` (старая панель) убрать.
   - Tailscale: `nexus-core:8443 → 8890` (ozixon-mobile-api) — работает, не трогать.
   - `nexus-london-agent.service` — агент NEXUS V2, только чтение (GENPLAN, службы, ресурсы). Без особых прав; файлы секретов ему недоступны.
@@ -27,16 +27,16 @@
 - `nexus-private-control-v2` (127.0.0.1:8788) — **из репозитория**, релиз `releases/papa-<коммит>` (`papa-update pult-deploy`, тесты + автооткат; прежний `r4-london` сохранён). Панель: `https://nexus-frankfurt.tail83fe5c.ts.net:8443/` (только tailnet).
 - `nexus-connect` (127.0.0.1:8789) — **из репозитория**, `releases/papa-<коммит>` (прежний `r3` сохранён), OAuth + MCP для ChatGPT и Claude. Публично через Tailscale Funnel: `https://nexus-frankfurt.tail83fe5c.ts.net/mcp`.
 - `papa-autopilot` (root, с 2026-10-16) — выполняет `papa-update <задача>` по заявке ИИ (`nexus_papa_task`): allow.json auto — сразу, остальное — кнопка владельца в пульте КАТТА ДАВРА, секреты — запрещены. Выключить: `systemctl disable --now papa-autopilot`.
-- Куратор: `papa-curator.timer` 08:00/12:30/17:00 → `papa-razvedka@curate` (папки PAPA·Давра/Спорт → пульт КАТТА ДАВРА, PAPA·Музыка → пульт PaparazziUZ; без Gemini кадры не берёт). Вечерний отчёт куратора 21:30 в главном пульте. Папки 16.10 рассортированы по ключевым словам (Давра 100, Музыка 67, Шаҳар 90) — пересортировать с ИИ.
+- Куратор: `papa-curator.timer` каждый час 07:05–20:05 (с 30.10) → `papa-razvedka@curate` (папки PAPA·Давра/Спорт → пульт КАТТА ДАВРА, PAPA·Музыка → пульт PaparazziUZ; без Gemini кадры не берёт). Вечерний отчёт куратора 21:30 в главном пульте. Папки 16.10 рассортированы по ключевым словам (Давра 100, Музыка 67, Шаҳар 90) — пересортировать с ИИ.
 - Инструменты MCP: `nexus_papa_task`, `nexus_papa_result`, `nexus_status`, `nexus_tasks`, `nexus_audit`, `nexus_devices`, `nexus_run_check`, `nexus_genplan`, `nexus_razvedka` (отчёт из `/var/lib/papa-razvedka-pub/latest.json`, читает только шлюз).
 - Перезапущен 2026-10-15 (ядро 6.8.0-147): все службы поднялись сами (шлюз, Connect, Tailscale, таймер Разведки). Диск 30 %, память 448/961 МБ.
-- PAPA подключён: `/opt/papa`, `papa-update`. **Razvedka** установлена: пользователь `papa-razvedka`, venv `/opt/papa-venv/razvedka` (telethon 1.45), база `/var/lib/papa-razvedka/razvedka.sqlite3`, сессия `/etc/papa-razvedka/telegram.env` (0600). Вход — **временно основной профиль владельца** (устройство «PAPA Razvedka»), заменить отдельным профилем. Первый сбор 2026-10-14: 38 каналов, 5 758 постов, 0 ошибок, пик памяти 51 МБ. Ежедневный таймер `papa-razvedka-daily.timer` включён (06:10 Ташкент, отчёт в «Избранное»).
+- PAPA подключён: `/opt/papa`, `papa-update`. **Razvedka** установлена: пользователь `papa-razvedka`, venv `/opt/papa-venv/razvedka` (telethon 1.45), база `/var/lib/papa-razvedka/razvedka.sqlite3`, сессия `/etc/papa-razvedka/telegram.env` (0600). Вход — **временно основной профиль владельца** (устройство «PAPA Razvedka»), заменить отдельным профилем. Первый сбор 2026-10-14: 38 каналов, 5 758 постов, 0 ошибок, пик памяти 51 МБ. Ежедневный таймер `papa-razvedka-daily.timer` включён (06:10 Ташкент; отчёты — в бот-пульт, «Избранное» запрещено владельцем).
 - **Voronka** (2026-10-15): приложение Meta «PAPA Voronka» (ID 911121901931568, **опубликовано (Live) 2026-10-15**, политика/удаление данных на papa-site, категория «Бизнес и страницы», иконки пока нет, без бизнес-портфолио, сценарий Instagram API со входом через Instagram). Instagram @paparazzi.uz (MEDIA_CREATOR, 238 735 подписчиков, id 17841400735314190) — тестировщик, токен (60 дней) в `/etc/papa-voronka/instagram.env` (0600). Проверка: `papa-update voronka-check`. Вебхуки выключены (опрос API). Служба `papa-voronka.service` (пользователь papa-voronka, опрос раз в 2 мин, до 120 МБ) установлена 2026-10-15; **в РАБОТЕ с 12:04** на последнем посте для всех (фильтр спама, ≤30/час), директ ведёт на визитку (HTTP 200). Бот заявок — тестовый (PAPA TEST); боевые каналы — отдельным шагом. Задачи: `voronka-install`, `voronka-status`, `voronka-invite`.
 - **Сайт PAPA** (публичный репозиторий `ozodjamol-eng/papa-site`, GitHub Pages): визитка с двумя каналами (`links.json` — ссылки по источнику `?s=`), `privacy.html`, `data-deletion.html`, `icon.png` (1024). Адрес: https://ozodjamol-eng.github.io/papa-site/
 - **Бот PAPA** @PapaUzBot (2026-10-15): токен `/etc/papa-voronka/bot.env` (0600), админ в обоих каналах (только приглашения); ссылки-заявки «panel» на панели: PaparazziUZ t.me/+HnzA67d2QvlhMzky, Хўжаобод t.me/+cFzm8zxxQYA2YTli (старая t.me/+t9ljKVMfWOkzNGYy тоже действует). Описания обоих каналов обновлены. Voronka приветствует и одобряет заявки по ссылкам бота.
 - **Рабочий аккаунт Telegram «PAPA»** @papa_admin_uz (id 8904756361, новая SIM владельца, облачный пароль, номер скрыт) — вход на сервер по QR 2026-10-15, сессия `/etc/papa-tg/publisher.env` (0600). Тест ANON_OK; 2026-10-15 — анонимный админ Хўжаобод Сити 24 (права: анонимность, удаление сообщений), пока ничего не публикует. Затем — Разведка.
 - **КАТТА ДАВРА** @kattadavrauz (бывший @XOJAOBODLIKLARIMIZ, ~3,4 тыс.) — главный канал (переименован владельцем 2026-10-15). В GENPLAN PAPA (11 слотов, бот), Voronka (приветствие), панели (первая карточка).
-- **GENPLAN PAPA** (2026-10-15): служба `papa-genplan` (Франкфурт, пользователь papa-genplan, до 180 МБ), режим **shadow** — публикации только в PAPA TEST GROUP / PAPA TEST. Хаб «PAPA HUB» (-1004451211656), бот @PapaGenplanBot (админ хаба и PAPA TEST), аккаунт PAPA — участник хаба. Настройки `/etc/papa-genplan/genplan.env` (0600), база `/var/lib/papa-genplan/genplan.sqlite3`. Намоз/дуо/реклама — пока GENPLAN 5.
+- **GENPLAN PAPA** (2026-10-15): служба `papa-genplan` (Франкфурт, пользователь papa-genplan, до 180 МБ), в 2026-10-15 был в shadow; сейчас **live** во всех трёх каналах (Хўжаобод с 21.10). Хаб «PAPA HUB» (-1004451211656), бот @PapaGenplanBot (админ хаба и PAPA TEST), аккаунт PAPA — участник хаба. Настройки `/etc/papa-genplan/genplan.env` (0600), база `/var/lib/papa-genplan/genplan.sqlite3`. Намоз, утро, реклама, дайджест — в PAPA (GENPLAN 5 остановлен 21.10).
 - **Тестовый контур** (2026-10-15): закрытый канал «PAPA TEST» (id -1004318108675), бот `@papa_test_88fb84_bot` — админ канала; токен `/etc/papa-test/bot.env` (0600). Проверка: `papa-update test-setup`.
 - Watchdog каждые 2 мин (шлюз, Connect, Разведка, диск, память) → Healthchecks → Telegram. Шифрованная резервная копия ночью (02:17 UTC): база шлюза + база Разведки, по 14 копий. Скрипты ставятся из репозитория: `papa-update monitoring`.
 
@@ -98,3 +98,8 @@
 - `/var/lib/papa-ads-inbox` (papa-assistant:papa-genplan 2770), drop-in ReadWritePaths у papa-assistant и papa-genplan (`ads-inbox.conf`). Задача `ads-inbox-install`.
 - `papa-weekly.timer` → `papa-razvedka@weekly.service` (сб 23:30 UTC): `razvedka weekly` = clean + humor. Задача `weekly-install`.
 - Архивариус: каналы ozodjamoll + kattadavrauz, TAKE 30/канал, PACE 5 с. Задача `archive-run`.
+
+## Выкладка 2026-10-30 22:17 (Франкфурт)
+- GENPLAN (`genplan-restart`, тесты на сервере 316 ✅): протокол «реклама → закрывающий пост» (`smart.ad_closer`), сверка A/B/C — две рекламы подряд, умное время рекламы учитывает дайджест, лимит 20 постов в день, короткая узбекская латиница → кириллица, русский после ИИ не выходит, нормы складов Давры, promo_hooks без «Реклама учун» в Давре/PaparazziUZ, переход в соседний канал раз в 5.
+- Страж (`audit-install`): опоздание считается от исходного времени поста (`planned_at`). Аудит после выкладки — «✅ Всё в порядке».
+
