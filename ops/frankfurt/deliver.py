@@ -1,6 +1,6 @@
 """Доставка готовых видео владельцу в Telegram (личка от главного бота PAPA). Видео приходят в ветке «outbox»
 (кладёт ассистент): outbox/*.mp4 + одноимённый .txt с подписью. После отправки ассистент очищает ветку."""
-import json, os, sys, urllib.request, uuid
+import json, os, sys, urllib.parse, urllib.request, uuid
 from pathlib import Path
 
 
@@ -31,6 +31,18 @@ def send_document(token, chat, path: Path, caption: str) -> dict:
     return json.loads(urllib.request.urlopen(req, timeout=300).read())
 
 
+def send_message(token, chat, text: str) -> dict:
+    """30.10: текстовый отчёт (outbox/*.msg) — обычным сообщением, куски по 4000 знаков."""
+    r = {}
+    for i in range(0, len(text), 4000):
+        data = urllib.parse.urlencode({"chat_id": str(chat), "text": text[i:i + 4000],
+                                       "disable_web_page_preview": "true"}).encode()
+        r = json.loads(urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=60).read())
+        if not r.get("ok"):
+            return r
+    return r
+
+
 DOC_EXT = {".mp4", ".mp3", ".wav", ".png", ".jpg", ".jpeg", ".webp", ".pdf", ".zip", ".svg", ".gif", ".mov"}
 
 
@@ -39,8 +51,14 @@ def main(folder):
     owners = [int(o) for o in os.environ.get("OWNER_IDS", "").split(",") if o.strip()]
     vids = []  # 24.10 правило владельца: видео — документом, оригиналом без сжатия (идут через DOC_EXT)
     docs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() in DOC_EXT)
-    if not vids and not docs:
+    msgs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() == ".msg")
+    if not vids and not docs and not msgs:
         sys.exit("NO_VIDEO")
+    for m in msgs:
+        text = m.read_text(encoding="utf-8").strip()
+        for o in owners:
+            r = send_message(token, o, text)
+            print(f"{m.name} (текст) → владельцу: {'OK' if r.get('ok') else r}")
     for d in docs:
         cap = d.with_suffix(".txt").read_text(encoding="utf-8").strip() if d.with_suffix(".txt").exists() else d.stem
         size = d.stat().st_size / 1048576
