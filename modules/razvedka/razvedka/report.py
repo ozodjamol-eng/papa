@@ -47,6 +47,10 @@ def render(a: dict) -> str:
     if own:
         L.append("🏠 СВОИ КАНАЛЫ:")
         for c in own:
+            if c.get("no_views"):   # группа: просмотров в Telegram нет — показываем реакции
+                L.append(f"  {c['title'][:28]} — группа: {_n(c.get('median_reactions'))} реакц./пост, "
+                         f"{c['per_day']} пост/день, участников {_n(c['subscribers'])}")
+                continue
             L.append(f"  {c['title'][:28]} — {_n(c['median_views'])} просм., ERR {_n(c['err'])}%, "
                      f"{c['per_day']} пост/день, подписчиков {_n(c['subscribers'])}")
         L.append("")

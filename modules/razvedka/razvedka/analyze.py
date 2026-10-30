@@ -88,6 +88,10 @@ def analyze(db, days: int = 7, now: dt.datetime | None = None) -> dict:
             "folder": ch.get("folder", "?"), "is_own": ch.get("is_own", 0), "subscribers": subs,
             "posts": len(ps), "per_day": round(len(ps) / days, 1),
             "median_views": int(med) if med else None,
+            # 30.10: группа (напр. Xo'jaobod City 24) — Telegram не даёт просмотров; меряем реакции на пост
+            "no_views": not any(p["views"] for p in ps),
+            "median_reactions": (round(median([p["reactions"] or 0 for p in ps if p["age_h"] >= 24]), 1)
+                                 if any(p["age_h"] >= 24 for p in ps) else None),
             "err": round(100 * med / subs, 1) if med and subs else None,
             "ads": sum(1 for p in ps if p["ad"]),
             "ads_per_day": round(sum(1 for p in ps if p["ad"]) / days, 1),

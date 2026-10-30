@@ -275,7 +275,9 @@ def card_leaders(a: dict) -> bytes:
         c.section("НАШИ КАНАЛЫ")
         cols2 = [("", 60, "l"), ("Канал", 370, "l"), ("Просм.", 180, "r"), ("ERR", 120, "r"),
                  ("Пост/д", 130, "r"), ("Подп.", 124, "r")]
-        rows2 = [(["★", x["title"], _n(x["median_views"]), f"{x['err']}%" if x["err"] is not None else "—",
+        rows2 = [(["★", x["title"],
+                   (f"{_n(x.get('median_reactions'))} реакц." if x.get("no_views") else _n(x["median_views"])),
+                   f"{x['err']}%" if x["err"] is not None else "—",
                    str(x["per_day"]), _n(x["subscribers"])], True) for x in own]
         _table(c, cols2, rows2, [(x["median_views"] or 0) / mx for x in own])
     return c.done()
