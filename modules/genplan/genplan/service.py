@@ -325,7 +325,7 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
         store.record(db, channel, day, slot, m["id"], "done", mid)
         if ch["publisher"] == "account" and not is_ad:
             cleanup_hubcopy(db, env, pubs, m, log)
-        store.pulse_add(db, channel, now or dt.datetime.now(plan.TZ), "bot")
+        store.pulse_add(db, channel, now or dt.datetime.now(plan.TZ), "ad" if is_ad else "bot")   # 30.10: реклама помечена — держится 10 мин
         log(f"{channel} {slot or 'срочно'}: опубликовано ({m['rubric']})")
         return True
     except PublishError as e:
@@ -408,7 +408,13 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
         urgent = [m for m in due if m["urgent"]]
         regular = [m for m in due if not m["urgent"]]
         regular.sort(key=lambda m: (not smart.is_ad_rubric(m["rubric"]), m["scheduled_at"]))   # 25.10: реклама — раньше поста сетки
+        hold = smart.ad_hold(db, cfg, channel, now)
         for m in urgent:                                     # срочные — все и сразу
+            if hold:                                         # 30.10 владелец: реклама держится 10 мин — обещание клиенту
+                store.update(db, m["id"], scheduled_at=hold.isoformat())
+                out["moved"] += 1
+                log(f"{channel}: срочный ждёт рекламу — выйдет в {hold:%H:%M}")
+                continue
             ok = await publish_one(db, cfg, env, pubs, channel, m, None, day, log, now)
             out["published" if ok else "failed"] += 1
             out["ids"].append(m["id"])

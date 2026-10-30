@@ -136,6 +136,21 @@ def free_at(db, cfg: dict, channel: str, t: dt.datetime, rubric: str | None, now
     return is_free(ch, t, occupied(db, channel, now, exclude))
 
 
+def ad_hold(db, cfg: dict, channel: str, now: dt.datetime) -> dt.datetime | None:
+    """30.10 владелец: вышедшая реклама держится наверху не меньше `after` минут (10) — обещание клиенту.
+    Ничего (даже срочный) не выходит раньше. Возвращает время, до которого ждать, или None."""
+    ch = cfg["channels"][channel]
+    after = dt.timedelta(minutes=int((hourly(ch) or HOURLY_DEFAULT)["after"]))
+    rows = db.execute("SELECT at FROM pulse WHERE channel=? AND source='ad' AND at>=?",
+                      (channel, (now - after).isoformat())).fetchall()
+    ads = [dt.datetime.fromisoformat(r[0]).astimezone(plan.TZ) for r in rows]
+    ads = [a for a in ads if a <= now]
+    if not ads:
+        return None
+    t = max(ads) + after
+    return t if t > now else None
+
+
 def collision_defer(db, cfg: dict, channel: str, m, now: dt.datetime) -> dt.datetime | None:
     """Пост сетки наступил, а за последние `after` минут вышел другой пост (реклама, срочный, протокол, ручной) —
     ждём: новое время = тот пост + after. Сдвигается только этот пост, сетка остаётся."""

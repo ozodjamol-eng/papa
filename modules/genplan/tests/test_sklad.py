@@ -40,6 +40,7 @@ class T(unittest.TestCase):
     def setUp(self):
         self.db = store.connect(":memory:")
         self.cfg = {**CFG, "channels": {k: dict(v) for k, v in CFG["channels"].items()}}
+        self.cfg["channels"]["davra"].pop("hour_rubrics", None)   # 30.10: проверки склада — без карты «час = рубрика»
 
     def test_config_maps_rubrics_that_exist(self):
         for ch in ("davra", "xojaobod", "paparazzi"):

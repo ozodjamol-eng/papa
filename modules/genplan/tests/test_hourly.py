@@ -35,6 +35,7 @@ class T(unittest.TestCase):
         self.n = 0
         self.cfg = {**CFG, "channels": {k: dict(v) for k, v in CFG["channels"].items()}}
         self.cfg["channels"]["davra"]["mode"] = "shadow"
+        self.davra_hours = self.cfg["channels"]["davra"].pop("hour_rubrics", None)   # 30.10: общие проверки — без карты часов
 
     def add(self, rubric="Видео", t=None, ch="davra", urgent=0, locked=0, status="queued"):
         self.n += 1
@@ -159,6 +160,20 @@ class T(unittest.TestCase):
         store.update(self.db, fun, stock=1, scheduled_at=None)
         used = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("12:20"))    # часы 13, 14 — польза/соғлиқ
         self.assertEqual(used, [])
+
+    def test_ad_hold_10_min(self):
+        # 30.10: реклама вышла в 15:00 — до 15:10 ничего, даже срочный
+        store.pulse_add(self.db, "xojaobod", at("15:00"), "ad")
+        self.assertEqual(smart.ad_hold(self.db, self.cfg, "xojaobod", at("15:04")), at("15:10"))
+        self.assertIsNone(smart.ad_hold(self.db, self.cfg, "xojaobod", at("15:11")))
+        store.pulse_add(self.db, "davra", at("15:00"), "bot")              # обычный пост — не держит
+        self.assertIsNone(smart.ad_hold(self.db, self.cfg, "davra", at("15:04")))
+
+    def test_davra_hour_rubrics(self):
+        self.assertTrue(self.davra_hours)
+        self.cfg["channels"]["davra"]["hour_rubrics"] = self.davra_hours
+        t, why = smart.smart_time(self.db, self.cfg, "davra", "Маънавият", at("06:00"))
+        self.assertEqual(f"{t:%H:%M}", "15:00")
 
     async def _fake_publish(self, db, cfg, env, pubs, channel, m, slot, day, log=print, now=None):
         store.update(db, m["id"], status="published")
