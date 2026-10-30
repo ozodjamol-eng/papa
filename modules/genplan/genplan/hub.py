@@ -72,6 +72,10 @@ def rubrics(cfg: dict, channel: str) -> list[str]:
             for r in [s.get("rubric")] + list(s.get("fallback", [])):
                 if r and r not in out:
                     out.append(r)
+    for w in (cfg["channels"][channel].get("hour_rubrics") or {}).values():   # 30.10: рубрики режима дня — тоже кнопками
+        for r in ([w] if isinstance(w, str) else w):
+            if r and r not in out:
+                out.append(r)
     return out
 
 

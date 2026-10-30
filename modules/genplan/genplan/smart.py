@@ -79,6 +79,18 @@ def hourly(ch: dict) -> dict | None:
     return {**HOURLY_DEFAULT, **o}
 
 
+def hour_wants(ch: dict, t: dt.datetime) -> list[str] | None:
+    """30.10 владелец (режим дня по разведке): час сетки → рубрики по порядку (первая — главная, дальше запасные).
+    config: [channels.<канал>.hour_rubrics] "10" = ["Ҳажвия", "Видео"]. Нет карты/часа — None (как раньше, любая рубрика)."""
+    m = ch.get("hour_rubrics")
+    if not m:
+        return None
+    w = m.get(f"{t.astimezone(plan.TZ).hour:02d}")
+    if w is None:
+        return None
+    return [w] if isinstance(w, str) else list(w)
+
+
 def is_ad_rubric(rubric: str | None) -> bool:
     return (rubric or "").lower().startswith("реклама")
 
@@ -153,8 +165,16 @@ def smart_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime
     """Лучшее время: слот своей рубрики → слот, где рубрика запасная → (на следующий день то же) → ближайшее свободное."""
     ch = cfg["channels"][channel]
     if hourly(ch) and not is_ad_rubric(rubric):
-        for d in range(max(ttl(ch, rubric), 1) + 1):
-            hrs = free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)
+        days = [free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)
+                for d in range(max(ttl(ch, rubric), 1) + 1)]
+        if ch.get("hour_rubrics") and rubric:        # 30.10: сначала час своей рубрики (главной, потом запасной)
+            for rank in (0, 1):
+                for hrs in days:
+                    for t in hrs:
+                        w = hour_wants(ch, t) or []
+                        if rubric in w and (w.index(rubric) == 0) == (rank == 0):
+                            return t, f"час рубрики «{w[0]}»"
+        for hrs in days:
             if hrs:
                 return hrs[0], "часовая сетка"
         return None
@@ -344,7 +364,14 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     used: list[int] = []
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
         for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1)):
-            pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
+            wants = hour_wants(ch, t)
+            if wants is not None:                    # 30.10: в час берём только его рубрики; нет такой — час пустой
+                pick = next((m for r in wants for m in pool if m["rubric"] == r and m["id"] not in used
+                             and allowed(ch, t, r) and _fits(ch, m, t, now)), None)
+                if pick is None and ch.get("hour_rubrics_loose"):
+                    pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
+            else:
+                pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
             if pick:
                 store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
                 used.append(pick["id"])
@@ -395,7 +422,8 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
     if hourly(ch):
         for t in free_hours(db, ch, channel, None, now, day):
             empty += 1
-            items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  час пустой — нет поста"))
+            w = hour_wants(ch, t)
+            items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {w[0] + ' — нет материала' if w else 'час пустой — нет поста'}"))
     for t, s in ([] if hourly(ch) else grid(ch, day)):
         if s["kind"] == "ad" or t < now or not is_free(ch, t, busy):
             continue

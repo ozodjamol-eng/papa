@@ -136,6 +136,30 @@ class T(unittest.TestCase):
         t, why = smart.smart_time(self.db, self.cfg, "paparazzi", "Қўшиқ", at("06:00"))
         self.assertNotEqual(why, "часовая сетка")
 
+    def test_xojaobod_hour_rubrics_smart_time(self):
+        # 30.10: кулги — в свой час 10:00, а не в ближайший свободный 07:00
+        t, why = smart.smart_time(self.db, self.cfg, "xojaobod", "Ҳажвия", at("06:00"))
+        self.assertEqual((f"{t:%H:%M}", why), ("10:00", "час рубрики «Ҳажвия»"))
+        t, _ = smart.smart_time(self.db, self.cfg, "xojaobod", "Огоҳлантириш", at("06:00"))
+        self.assertEqual(f"{t:%H:%M}", "17:00")
+        self.assertIn("Огоҳлантириш", __import__("genplan.hub", fromlist=["x"]).rubrics(self.cfg, "xojaobod"))
+
+    def test_xojaobod_stock_takes_only_hour_rubric(self):
+        self.cfg["channels"]["xojaobod"]["mode"] = "shadow"
+        fun = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
+        news = self.add(rubric="Янгиликлар", ch="xojaobod", status="draft")
+        for m in (fun, news):
+            store.update(self.db, m, stock=1, scheduled_at=None)
+        used = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("08:40"))   # впереди часы 09 и 10
+        self.assertEqual(sorted(used), sorted([fun, news]))
+        self.assertEqual((self.when(news), self.when(fun)), ("09:00", "10:00"))   # 09 — запасная «Янгиликлар», 10 — кулги
+
+    def test_xojaobod_no_match_leaves_hour_empty(self):
+        fun = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
+        store.update(self.db, fun, stock=1, scheduled_at=None)
+        used = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("12:20"))    # часы 13, 14 — польза/соғлиқ
+        self.assertEqual(used, [])
+
     async def _fake_publish(self, db, cfg, env, pubs, channel, m, slot, day, log=print, now=None):
         store.update(db, m["id"], status="published")
         store.pulse_add(db, channel, now, "bot")
