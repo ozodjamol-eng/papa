@@ -435,9 +435,20 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         items.append((f"{t:%H:%M}", f"⏳ {t:%H:%M}  {m['rubric']} — {short(m['text'])}{' 🔒' if m['locked'] else ''}"))
     empty = 0
     if hourly(ch):
+        # 30.10: запас ставится в час только за 90 мин — дальние часы показываем честно: «возьмёт из запаса», а не «нет материала»
+        left: dict[str, int] = {}
+        for m in store.stock(db, channel):
+            left[m["rubric"]] = left.get(m["rubric"], 0) + 1
         for t in free_hours(db, ch, channel, None, now, day):
-            empty += 1
             w = hour_wants(ch, t)
+            got = next((r for r in (w or []) if left.get(r, 0) > 0), None)
+            if got is None and w is None and left:
+                got = next(iter(left))
+            if got:
+                left[got] -= 1
+                items.append((f"{t:%H:%M}", f"📦 {t:%H:%M}  {got} — возьмёт из запаса"))
+                continue
+            empty += 1
             items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {w[0] + ' — нет материала' if w else 'час пустой — нет поста'}"))
     for t, s in ([] if hourly(ch) else grid(ch, day)):
         if s["kind"] == "ad" or t < now or not is_free(ch, t, busy):
