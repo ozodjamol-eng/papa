@@ -15,7 +15,7 @@ HUBS = {
     "РАЗВЛЕКАТЕЛЬНО": {"codes": ("humor", "fun"), "insta": ("humor", "fun_world", "fun")},
     "ФОЙДАЛИК": {"codes": ("useful",), "insta": ("useful",)},
     "ФОЙДАЛИК ОВКАТ": {"codes": ("food",), "insta": ("food",)},
-    "МАЪНАВИЯТ": {"codes": ("faith",), "insta": ("faith",)},
+    "МАЪНАВИЯТ": {"codes": ("faith",), "insta": ("faith",), "create": True},   # 30.10 владелец: «создай сам»
     "УЙДА БИЗНЕС": {"codes": ("biz",), "insta": ("biz",), "create": True},
     "МОТИВАЦИЯ": {"codes": ("motiv",), "insta": ("motiv",), "create": True},
     "Jonlik ijrolar": {"codes": ("music",), "insta": ("music",)},
