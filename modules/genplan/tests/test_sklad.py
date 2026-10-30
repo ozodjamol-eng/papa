@@ -50,7 +50,7 @@ class T(unittest.TestCase):
                     self.assertIn(r, c["hashtags"], f"{ch}: {r}")
         self.assertEqual(smart.sklad_rubric(self.cfg["channels"]["davra"], "📦 Фойдалик"), "Фойдали видео")
         self.assertIsNone(smart.sklad_rubric(self.cfg["channels"]["davra"], "@bugungi_gap"))
-        self.assertIsNone(smart.sklad_rubric(self.cfg["channels"]["davra"], "Jonlik ijrolar"))  # не склад Давры
+        self.assertEqual(smart.sklad_rubric(self.cfg["channels"]["davra"], "Jonlik ijrolar"), "Мусиқа")  # 30.10: хаб музыки и для Давры
 
     def test_intake_from_sklad_goes_to_stock(self):
         bot = Bot()

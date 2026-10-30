@@ -29,3 +29,15 @@ class Humor(unittest.TestCase):
         d2 = scout.connect(d, ok, [], "t")
         self.assertEqual(len(d2["channels"]["davra"]["humor"]), 1)          # повторно не добавляем
         self.assertIn("✅ Fun", scout.render_humor(ok, bad))
+
+
+class Hubs(unittest.TestCase):
+    def test_hub_maps_and_clean(self):
+        from razvedka import hubs, insta
+        self.assertEqual(hubs.hub_for_code("humor"), "РАЗВЛЕКАТЕЛЬНО")
+        self.assertEqual(hubs.hub_for_code("biz"), "УЙДА БИЗНЕС")
+        self.assertIsNone(hubs.hub_for_code("news"))                       # новости — не в хаб
+        self.assertIsNone(hubs.hub_for_direction("local"))
+        for d in insta.DIRECTIONS:                                          # у каждого направления — хаб или тренды
+            self.assertIn(hubs.hub_for_direction(d), list(hubs.HUBS) + [None])
+        self.assertEqual(hubs.clean("ЗЎР 😂\\nкулинг @other t.me/x #tag"), "ЗЎР 😂\\nкулинг")

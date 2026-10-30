@@ -206,6 +206,7 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
     except (OSError, ValueError):
         st = {}
     target = await hub(client)
+    hub_cache: dict = {}
     gemini = bool(os.environ.get("GEMINI_API_KEY"))
     if gemini:
         os.environ["GEMINI_MODEL"] = os.environ.get("CURATOR_GEMINI_MODEL", "gemini-flash-lite-latest")
@@ -236,10 +237,17 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
                         continue
                 except RuntimeError as e:
                     log(f"  кадры: {e}")
-            text = await asyncio.to_thread(write_text, it.get("caption") or "", chan)
-            cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])
+            from . import hubs as H                  # 🗃 30.10: направление с хабом — сразу в хаб (чисто, без подписи)
+            hub_name = H.hub_for_direction(code)
+            dest = (await H.entity(client, hub_name, hub_cache)) if hub_name else None
+            if dest is not None:
+                cap = await asyncio.to_thread(H.write, it.get("caption") or "")
+            else:
+                text = await asyncio.to_thread(write_text, it.get("caption") or "", chan)
+                cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])
+                dest = target
             try:
-                await client.send_file(target, video, caption=cap[:1024], supports_streaming=True)
+                await client.send_file(dest, video, caption=cap[:1024], supports_streaming=True)
             except Exception as e:  # noqa: BLE001
                 log(f"  отправка: {type(e).__name__}")
                 continue

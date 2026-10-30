@@ -45,7 +45,7 @@ class TestSklad(unittest.TestCase):
         d = [(s, x["id"]) for s, x, _ in p["davra"]]
         self.assertEqual([x for s, x in d if s == "ФОЙДАЛИК"], [1, 2, 3])                  # ровно 3, с начала
         self.assertEqual([s for s, _ in d].count("РАЗВЛЕКАТЕЛЬНО"), 2)                       # юмор — 2
-        self.assertEqual([s for s, _ in d].count("ФОЙДАЛИК ОВКАТ"), 3)                      # + 3 других по кругу
+        self.assertEqual(sum(s in ("ФОЙДАЛИК ОВКАТ", "Jonlik ijrolar") for s, _ in d), 3)  # + 3 других по кругу (30.10: и музыка)
         x = [(s, i) for s, i, _ in [(s, x["id"], k) for s, x, k in p["xojaobod"]]]
         self.assertEqual([i for s, i in x if s == "ФОЙДАЛИК"], [20, 19, 18])                # Хўжаобод — с конца
         self.assertEqual(len(x), 6)                                                        # 3 + юмор 1 + 2 по кругу

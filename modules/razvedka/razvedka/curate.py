@@ -316,6 +316,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     folders = await folder_peers(client)
     report = {}
     needs = load_needs()
+    hub_cache: dict = {}
     gemini_ok = bool(os.environ.get("GEMINI_API_KEY"))
     if gemini_ok:      # 30.10: куратор теперь каждый час — кадры на «лёгкой» модели (свой дневной лимит, как у отбора)
         os.environ["GEMINI_MODEL"] = os.environ.get("CURATOR_GEMINI_MODEL", "gemini-flash-lite-latest")
@@ -387,6 +388,23 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                         st["logo_sources"].append(c["source"].lower())
                         log(f"  🚫 {c['source']}: чужое лого {LOGO_STRIKES} раза — источник больше не берём")
                 hist.append({"key": c["key"], "sig": sorted(sig(c["text"])), "ts": now.isoformat()})
+                continue
+            from . import hubs as H                  # 🗃 30.10: вечные рубрики — в хаб направления, оттуда берут все каналы
+            hub_name = H.hub_for_code(c.get("rub"))
+            if hub_name:
+                try:
+                    ent = await H.entity(client, hub_name, hub_cache)
+                    msgs = [m for m in await client.get_messages(c["ent"], ids=c["ids"]) if m]
+                    text = await asyncio.to_thread(H.write, c["text"])
+                    if not ent or not await H.put(client, ent, msgs, text):
+                        raise RuntimeError("нет хаба/медиа")
+                except Exception as e:  # noqa: BLE001
+                    log(f"  в хаб {hub_name}: {type(e).__name__}: {str(e)[:60]}")
+                    continue
+                hist.append({"key": c["key"], "sig": sorted(sig(c["text"])), "ts": now.isoformat(), "rub": c.get("rub", "")})
+                sent += 1
+                log(f"  🗃 {hub_name} ← {c['source']} · {c['views']} просм. · {c['text'][:40]!r}")
+                await asyncio.sleep(4)
                 continue
             try:     # с подписью источника: в карточке пульта видно «📡 Куратор нашёл · @источник»
                 await client.forward_messages(BOTS[channel], c["ids"], from_peer=c["ent"])
