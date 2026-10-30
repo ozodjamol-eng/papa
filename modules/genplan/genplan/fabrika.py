@@ -116,6 +116,21 @@ def process_ai(bot, db, cfg: dict, p: dict) -> str:
     from .text import drop_lines
     junk = json.loads(m["junk"] or "[]") if "junk" in m.keys() else []
     text = ai.rewrite(db, drop_lines(m["text"], junk), cfg["channels"][m["channel"]]["title"])
+    if p.get("quiet"):                       # ✍️ 30.10 ИИ-редактор для постов источников — без лишних сообщений
+        if text.strip().upper().rstrip(".!") == "РАД":     # ИИ счёл текст негодным — пост не выйдет сам
+            store.update(db, m["id"], stock=0, status="draft", auto=0)
+            note = "⛔ ИИ-редактор: текст негодный (провокация/ненадёжно) — сам не выйдет"
+        else:
+            store.update(db, m["id"], text=text)
+            note = "✍️ Текст переписан ИИ-редактором"
+        if m["owner_msg"]:
+            t, kb = hub.card(db, cfg, m["id"])
+            try:
+                bot("editMessageText", chat_id=int(p["owner_chat"]), message_id=m["owner_msg"], text=(note + "\n\n" + t)[:4096],
+                    reply_markup=kb, disable_web_page_preview=True)
+            except Exception:  # noqa: BLE001 — карточка старая/удалена — не страшно
+                pass
+        return "ok"
     store.update(db, m["id"], text=text)
     t, kb = hub.card(db, cfg, m["id"])
     r = bot("sendMessage", chat_id=int(p["owner_chat"]), text="🤖 Текст переписан ИИ — проверьте:\n\n" + t,

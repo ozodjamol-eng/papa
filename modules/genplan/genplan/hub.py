@@ -632,6 +632,10 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
             store.update(db, mid, rubric=rub)
         stock = sk = True
         notes = [f"📡 Ваш источник {src} · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
+        from . import ai as _ai, translit as _tr   # ✍️ 30.10 ИИ-редактор: чужой текст → наш (кириллица, без чужих @)
+        if _ai.available() and text.strip() and cfg.get("ai_editor", True) and not _tr.language_note(text):
+            store.job_add(db, "ai", {"mid": mid, "owner_chat": reply_chat or next(iter(owners)), "quiet": True})
+            notes.append("✍️ ИИ-редактор перепишет текст в нашем стиле")
     elif src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
