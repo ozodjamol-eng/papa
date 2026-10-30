@@ -22,5 +22,5 @@ class T(unittest.TestCase):
         self.assertFalse(archive.is_candidate(it(1, text="Бугун концерт бўлади"), NOW))   # привязка к дате
 
     def test_strong(self):
-        got = archive.strong([it(1, views=100), it(2, views=1000), it(3, views=5000)])
-        self.assertEqual([x["id"] for x in got], [2, 3])
+        got = archive.strong([it(1, views=100), it(4, views=500), it(2, views=1000), it(3, views=5000)])
+        self.assertEqual([x["id"] for x in got], [2, 3])                       # медиана 750 ×1.1
