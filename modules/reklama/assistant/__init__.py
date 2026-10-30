@@ -3,7 +3,8 @@
 30.10 (утверждено: «все пункты нормальные, одобряю»): первый раз за сутки новому человеку — «Ассалому алайкум ва
 раҳматуллоҳи ва барокатуҳ! Мен — Озод Жамолнинг ИИ-ёрдамчисиман» + 3 кнопки (📣 Реклама / 🎬 Бошқа иш / 👤 Шахсий);
 поздравление — сначала ответное поздравление, потом меню; ясная просьба — приветствие и сразу ответ по делу; кнопки не
-прошли — меню цифрами 1/2/3. Знакомым — только ответ на поздравления.
+прошли — меню цифрами 1/2/3. Отвечает ВСЕГДА, на каждое сообщение, и знакомым тоже (владелец: «хоть 5 раз, хоть 10»);
+молчит только 30 мин после живого ответа владельца в этом чате. Альбом — один ответ.
 
 30.10 (владелец: «нужен другой подход, он должен полноценно работать»): есть ключ Gemini → настоящий ИИ-разговор
 (бесплатно): понимает поздравления (Жума муборак → ответное поздравление), ведёт разговор о рекламе, личное — «Озод Жамол
@@ -28,7 +29,8 @@ import urllib.parse
 import urllib.request
 
 REPLY_EVERY = dt.timedelta(hours=24)        # не чаще одного ответа на чат в сутки
-OWNER_QUIET = dt.timedelta(hours=24)        # владелец сам писал в чат — бот молчит
+OWNER_QUIET = dt.timedelta(minutes=30)      # 30.10: молчит, только пока владелец сам ведёт живой разговор (было 24 ч)
+SHORT_TEXT = "Хабарингизни Озод Жамолга етказдим 🙏 Тез орада ўзи жавоб беради."
 
 PRICE = """📣 XO'JAOBOD CITY 24 — РЕКЛАМА
 1) 1 кун — 50 000 сўм
@@ -231,6 +233,14 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
         return "owner"
     o, r = (_ago(row["owner_at"], now), _ago(row["replied_at"], now)) if row else (None, None)
     text = m.get("text") or m.get("caption") or ""
+    mg = m.get("media_group_id")                         # альбом = несколько сообщений — отвечаем один раз
+    if mg:
+        if db.execute("SELECT 1 FROM kv WHERE k=?", (f"mg:{mg}",)).fetchone():
+            _log(db, chat["id"], "user", _incoming(m), now)
+            save_media(db, chat["id"], m, now)
+            return "album_dup"
+        db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (f"mg:{mg}", now.isoformat()))
+        db.commit()
     pick = PICK_NUM.get(text.strip())
     if pick and not (o is not None and o < OWNER_QUIET) and last_was_menu(db, chat["id"], now):
         _log(db, chat["id"], "user", text.strip(), now)
@@ -247,14 +257,16 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
             _log(db, chat["id"], "user", _incoming(m), now)
             return "quiet"
         res = ai_turn(db, c, m, chat, frm, row, api, ai, now)
-        if res != "ai_failed":
+        if res not in ("ai_failed", "limit"):
             return res
-        print("assistant: ИИ не ответил — шаблон", flush=True)
-    if (o is not None and o < OWNER_QUIET) or (r is not None and r < REPLY_EVERY):
+        print(f"assistant: ИИ не ответил ({res}) — шаблон", flush=True)
+    if o is not None and o < OWNER_QUIET:
         return "quiet"
     kind = kind_of(text)
     try:
-        if kind == "ad":
+        if r is not None and r < REPLY_EVERY:             # 30.10: уже здоровались сегодня — всё равно отвечаем, коротко
+            api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT if kind == "ad" else SHORT_TEXT)
+        elif kind == "ad":
             api("sendMessage", chat_id=chat["id"], business_connection_id=c["id"], text=AD_TEXT)
         else:
             send_menu(db, api, c, chat["id"], now)          # 30.10: вместо «передал» — приветствие и меню
@@ -286,7 +298,7 @@ def handle(db, upd: dict, api, now: dt.datetime | None = None, ai=None) -> str:
 
 
 # ---------- 30.10: настоящий ИИ-разговор (Gemini, бесплатно) ----------
-AI_PER_CHAT_DAY = 20            # не больше ответов ИИ одному человеку в сутки
+AI_PER_CHAT_DAY = 40            # не больше ответов ИИ одному человеку в сутки
 AI_PER_DAY = 300                # общий предел в сутки (бесплатный лимит Gemini)
 HISTORY = 12                    # сколько последних сообщений помнит
 HISTORY_FOR = dt.timedelta(hours=48)
@@ -520,11 +532,10 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
         db.commit()
         return "ai_failed"
     kind, reply = out["kind"], out["reply"]
-    if known and kind != "congrats":                  # 30.10: знакомым — только ответное поздравление, остальное — сам владелец
-        return "contact_quiet"
+    # 30.10 (владелец: «всегда надо отвечать, хоть 5 раз, хоть 10»): знакомым тоже отвечаем — ограничение «знакомый» убрано
     first_today = not (row and row["replied_at"] and _ago(row["replied_at"], now) < REPLY_EVERY)
     menu = False
-    if first_today and not known:                     # 30.10: первый раз за сутки — тёплое приветствие
+    if first_today:                                   # 30.10: первый раз за сутки — тёплое приветствие
         if kind in ("greeting", "other") or not reply:
             reply, menu = "", True                    # просто салом / непонятно → приветствие + меню
         elif kind == "congrats":
@@ -548,7 +559,7 @@ def ai_turn(db, c, m: dict, chat: dict, frm: dict, row, api, ai, now: dt.datetim
                (cid, now.isoformat() if reply else None, kind, name))
     db.commit()
     # владельцу: новый человек — первое обращение за сутки; реклама — каждый раз
-    if c["owner_chat"] and not known and (first_today or kind == "ad"):
+    if c["owner_chat"] and (first_today or kind == "ad"):
         head = {"ad": "📣 РЕКЛАМА", "greeting": "🤝 Салом", "congrats": "🤝 Табрик", "work": "🎬 Работа (видео/сайт/бот)",
                 "personal": "👤 Личное"}.get(kind, "💬 Сообщение")
         user = f" (@{frm['username']})" if frm.get("username") else ""

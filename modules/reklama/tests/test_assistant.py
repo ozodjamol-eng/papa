@@ -56,11 +56,12 @@ class Assistant(unittest.TestCase):
         self.assertEqual(len(r["reply_markup"]["inline_keyboard"]), 3)     # 3 кнопки меню
         self.assertNotIn("50 000", r["text"])
 
-    def test_only_first_message_per_day(self):
+    def test_always_answers(self):
         A.handle(self.db, msg("салом"), self.api, T0)
-        self.assertEqual(A.handle(self.db, msg("реклама керак"), self.api, T0 + dt.timedelta(hours=2)), "quiet")
-        self.assertEqual(len(self.sent(555)), 1)
-        self.assertEqual(A.handle(self.db, msg("салом"), self.api, T0 + dt.timedelta(hours=25)), "personal")
+        self.assertEqual(A.handle(self.db, msg("салом"), self.api, T0 + dt.timedelta(hours=2)), "personal")
+        self.assertEqual(len(self.sent(555)), 2)                    # 30.10: отвечает всегда
+        self.assertIn("етказдим", self.sent(555)[1]["text"])        # второй раз — коротко, без меню
+        self.assertNotIn("reply_markup", self.sent(555)[1])
 
     def test_owner_wrote_bot_silent(self):
         self.assertEqual(A.handle(self.db, msg("Ваалайкум ассалом!", uid=OWNER), self.api, T0), "owner")
@@ -155,15 +156,15 @@ class AiTest(unittest.TestCase):
         self.assertEqual(self.seen[1][0][-1][0], "ai")            # ИИ видит свою прошлую реплику
         self.assertIn("📣 РЕКЛАМА", self.sent(OWNER)[-1])
 
-    def test_known_contact_only_greetings(self):
+    def test_known_contact_also_answered(self):
         A.handle(self.db, msg("салом", uid=OWNER), self.api, T0)
-        later = T0 + dt.timedelta(hours=30)
-        self.assertEqual(A.handle(self.db, msg("Пул керак эди"), self.api, later, ai=self.ai("personal", "Етказаман")), "contact_quiet")
-        self.assertEqual(self.sent(555), [])
-        self.assertEqual(A.handle(self.db, msg("салом"), self.api, later, ai=self.ai("greeting", "Ваалайкум")), "contact_quiet")
-        self.assertEqual(self.sent(555), [])                       # знакомым меню не шлём
-        self.assertEqual(A.handle(self.db, msg("Жума муборак"), self.api, later, ai=self.ai("congrats", "Сизга ҳам!")), "congrats")
-        self.assertEqual(self.sent(555), ["Сизга ҳам!"])
+        self.assertEqual(A.handle(self.db, msg("Хорменг ака"), self.api, T0 + dt.timedelta(minutes=40),
+                                  ai=self.ai("greeting", "Ваалайкум")), "greeting")
+        self.assertIn("ИИ-ёрдамчисиман", self.sent(555)[0])         # 30.10: знакомым тоже приветствие + меню
+        self.assertTrue(self.seen[-1][2])                          # ИИ знает, что это знакомый
+        for i in range(5):                                         # хоть 5 раз — всегда ответ
+            A.handle(self.db, msg(f"ака {i}"), self.api, T0 + dt.timedelta(minutes=41 + i), ai=self.ai("personal", f"Етказаман {i}"))
+        self.assertEqual(len(self.sent(555)), 6)
         self.assertTrue(self.seen[-1][2])                          # ИИ знает, что это знакомый
 
     def test_owner_wrote_ai_silent(self):
@@ -181,7 +182,8 @@ class AiTest(unittest.TestCase):
         f = self.ai("other", "ок")
         for i in range(A.AI_PER_CHAT_DAY):
             A.handle(self.db, msg(f"м{i}"), self.api, T0 + dt.timedelta(minutes=i), ai=f)
-        self.assertEqual(A.handle(self.db, msg("ещё"), self.api, T0 + dt.timedelta(minutes=50), ai=f), "limit")
+        A.handle(self.db, msg("ещё"), self.api, T0 + dt.timedelta(minutes=50), ai=f)
+        self.assertIn("етказдим", self.sent(555)[-1])              # предел ИИ — всё равно короткий ответ
 
 
 class ImageTest(unittest.TestCase):
@@ -270,6 +272,18 @@ class MenuTest(unittest.TestCase):
         self.assertIn("1️⃣ Реклама бўйича", calls[0]["text"])
         self.assertEqual(A.handle(self.db, msg("3"), api, T0 + dt.timedelta(minutes=1)), "pick_me")
         self.assertIn("албатта етказаман", [p for p in calls if p["chat_id"] == 555][-1]["text"])
+
+    def test_album_answered_once(self):
+        for i in range(3):
+            m = msg(""); m["business_message"].pop("text"); m["business_message"]["photo"] = [{"file_id": f"p{i}"}]
+            m["business_message"]["media_group_id"] = "G1"
+            A.handle(self.db, m, self.api, T0)
+        self.assertEqual(len(self.sent(555)), 1)
+
+    def test_owner_quiet_only_30_min(self):
+        A.handle(self.db, msg("ассалом", uid=OWNER), self.api, T0)
+        self.assertEqual(A.handle(self.db, msg("ака"), self.api, T0 + dt.timedelta(minutes=10)), "quiet")
+        self.assertEqual(A.handle(self.db, msg("ака"), self.api, T0 + dt.timedelta(minutes=31)), "personal")
 
     def test_number_without_menu_is_ordinary(self):
         self.assertEqual(A.handle(self.db, msg("2"), self.api, T0), "personal")
