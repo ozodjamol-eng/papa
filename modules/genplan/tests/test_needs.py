@@ -25,7 +25,7 @@ class T(unittest.TestCase):
         d = needs.build(db, cfg, now)
         x = d["channels"]["xojaobod"]
         hours = [e["h"] for e in x["empty"]]
-        self.assertNotIn("21", hours)                  # кулги в запасе закрывает 21:00
+        self.assertNotIn("18", hours)                  # 31.10: кулги в запасе закрывает пиковый 18:00 (раньше — 21:00)
         e17 = next(e for e in x["empty"] if e["h"] == "17")
         self.assertEqual(e17["want"][0], "Огоҳлантириш")
         self.assertIn("warn", e17["codes"])
