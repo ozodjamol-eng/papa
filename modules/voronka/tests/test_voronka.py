@@ -214,3 +214,21 @@ class TestLang(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JoinLinkTest(unittest.TestCase):
+    def test_with_join(self):
+        import voronka.__main__ as M
+        from voronka import store as S
+        db = S.connect(":memory:")
+
+        class B:
+            def call(self, method, **p):
+                self.p = p
+                return {"invite_link": "https://t.me/+ABC"}
+        b = B()
+        c = M.with_join({"dm_channel": "kattadavrauz", "dm_text": "👇 {join}", "page_url": "P"}, db, b)
+        self.assertEqual(c["dm_text"], "👇 https://t.me/+ABC")
+        self.assertEqual(b.p["name"], "instagram-dm")
+        c2 = M.with_join({"dm_channel": "kattadavrauz", "dm_text": "{join}"}, db, None)   # из базы, без бота
+        self.assertEqual(c2["dm_text"], "https://t.me/+ABC")

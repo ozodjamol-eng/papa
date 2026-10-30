@@ -66,6 +66,24 @@ def cfg() -> dict:
     return c
 
 
+def with_join(c: dict, db, b=None) -> dict:
+    """30.10 владелец: директ — сразу ссылка-заявка в канал (в один клик, считаем пришедших), не визитка.
+    Ссылка создаётся ботом один раз (имя «instagram-dm») и хранится в базе. Нет ссылки — визитка, как раньше."""
+    ch = c.get("dm_channel")
+    link = store.kv_get(db, "dm_join_link")
+    if ch and not link and b is not None:
+        try:
+            link = joins.make_invite(b, "@" + ch, "instagram-dm")
+            store.kv_set(db, "dm_join_link", link)
+            print(f"ссылка для директа создана: {link}", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"ссылка для директа: {e}", flush=True)
+    for k in ("dm_text", "dm_text_ru", "dm_text_both"):
+        if c.get(k):
+            c[k] = c[k].replace("{join}", link or c.get("page_url", ""))
+    return c
+
+
 def read_env(p: Path) -> dict:
     return dict(l.split("=", 1) for l in p.read_text().splitlines() if "=" in l and not l.startswith("#"))
 
@@ -135,7 +153,7 @@ def loop(db, c: dict) -> None:
                     store.kv_set(db, "token_refreshed", now_iso())
                 elif dt.datetime.fromisoformat(last) < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7):
                     refresh(db)
-                cc = cfg()
+                cc = with_join(cfg(), db, b)
                 i = ig()
                 s = engine.run_once(i, db, cc)
                 if s["new"] or s["error"]:

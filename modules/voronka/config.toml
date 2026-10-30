@@ -22,18 +22,22 @@ retention_days = 90        # личные данные удаляются чер
 page_url = "https://ozodjamol-eng.github.io/papa-site/"   # страница-визитка
 
 # Директ на языке комментария: латиница/узбекская кириллица — dm_text; русский — dm_text_ru; язык неясен — оба сразу.
-dm_text = """Assalomu alaykum! 😊
-O'zbekistondagi eng dolzarb yangiliklar, foydali va qiziqarli videolar — Telegram kanallarimizda 🔥
-👉 {page}"""
+# 30.10 владелец: директ — сразу ссылка-заявка в КАТТА ДАВРА ({join}, бот создаёт сам, имя «instagram-dm»), не визитка.
+dm_channel = "kattadavrauz"
+dm_text = """Ассалому алайкум! 😊
+Энг сара кулгили, қизиқарли ва фойдали видеолар — ҳар куни КАТТА ДАВРА Telegram каналимизда 🔥
+👇 Бир босишда қўшилинг:
+{join}"""
 
 dm_text_ru = """Здравствуйте! 😊
-Самые актуальные новости Узбекистана, полезные и интересные видео — в наших Telegram-каналах 🔥
-👉 {page}"""
+Самые смешные, интересные и полезные видео — каждый день в нашем Telegram-канале КАТТА ДАВРА 🔥
+👇 Вступайте в один клик:
+{join}"""
 
-dm_text_both = """Assalomu alaykum! 😊
-O'zbekistondagi eng dolzarb yangiliklar, foydali va qiziqarli videolar — Telegram kanallarimizda 🔥
-Здравствуйте! Самые актуальные новости Узбекистана и полезные видео — в наших Telegram-каналах 🔥
-👉 {page}"""
+dm_text_both = """Ассалому алайкум! 😊
+Энг сара кулгили, қизиқарли ва фойдали видеолар — ҳар куни КАТТА ДАВРА Telegram каналимизда 🔥
+Самые интересные и полезные видео — в Telegram-канале КАТТА ДАВРА 🔥
+👇 {join}"""
 
 # Каналы, в которых бот PAPA принимает заявки (ссылки-заявки с панели и директа) и приветствует.
 [[channels]]

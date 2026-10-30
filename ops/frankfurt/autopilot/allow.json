@@ -47,7 +47,8 @@
     "razvedka-scout",
     "insta-run",
     "insta-install",
-    "sources-auto-install"
+    "sources-auto-install",
+    "voronka-restart"
   ],
   "approve": [
     "morning-pool-clear",
