@@ -54,11 +54,20 @@ def main(folder):
     msgs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() == ".msg")
     if not vids and not docs and not msgs:
         sys.exit("NO_VIDEO")
+    routes = {}  # 30.10: отчёты разведчиков рынка — в свои каналы (razvedka-rynok-channels), иначе владельцу в личку
+    env = Path("/etc/papa-genplan/razvedka-rynok.env")
+    if env.exists():
+        for line in env.read_text().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                routes[k.strip()] = int(v.strip())
     for m in msgs:
         text = m.read_text(encoding="utf-8").strip()
-        for o in owners:
+        key = {"razvedka-voda": "RAZVEDKA_VODA_CHAT", "razvedka-mebel": "RAZVEDKA_MEBEL_CHAT"}.get(m.stem)
+        targets = [routes[key]] if key in routes else owners
+        for o in targets:
             r = send_message(token, o, text)
-            print(f"{m.name} (текст) → владельцу: {'OK' if r.get('ok') else r}")
+            print(f"{m.name} (текст) → {'канал' if key in routes else 'владельцу'}: {'OK' if r.get('ok') else r}")
     for d in docs:
         cap = d.with_suffix(".txt").read_text(encoding="utf-8").strip() if d.with_suffix(".txt").exists() else d.stem
         size = d.stat().st_size / 1048576
