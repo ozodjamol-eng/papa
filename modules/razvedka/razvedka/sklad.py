@@ -47,7 +47,9 @@ TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Му
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar"}      # якорь: сначала свежий пост, нет нового — следующий из архива
 FRESH_DAYS = {"NEWS INBOX": 2, "@madaniyatvazirligi": 2}   # новости: только свежие, архив не берём
 # 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
-FIXED = {"davra": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1},
+# 30.10 сверка: часы Давры «час = рубрика» — мотивация 07/20, музыка 12/15/21, бизнес 11, ибрат 19 — свои нормы
+FIXED = {"davra": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1,
+                   "МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1},
          "xojaobod": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
          "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "РАЗВЛЕКАТЕЛЬНО": 2, "РЕТРО КЛИПЛАР": 4,
                        "@AbduraxmonQiziq": 1, "@sanatdunyosi": 2, "@madaniyat_marifat_tv": 2, "@madaniyatvazirligi": 1}}
