@@ -104,6 +104,8 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
 
 
 BANK_FOLDER = "KATTA BANK"
+BANK_EXTRA_USERS = ["shayx_nuriddinxoliqnazar"]          # 30.10 владелец: канал Муфтия — в банк
+BANK_EXTRA_TITLES = ("POOL", "ПУЛ")                      # 30.10: утренний и вечерний пулы — в банк
 
 
 async def make_bank(client, log=print) -> dict:
@@ -118,5 +120,34 @@ async def make_bank(client, log=print) -> dict:
             continue
         chans.append({"entity": ent})
         log(f"  🏦 {name}: {'есть' if ent else 'нет'}")
-    done = await create_folders(client, {BANK_FOLDER: chans}, log=log)
+    # 30.10 владелец: «всё в одном месте» — в банк ещё канал Муфтия и наши пулы (утренний, вечерний и др. POOL)
+    for u in BANK_EXTRA_USERS:
+        try:
+            chans.append({"entity": await client.get_entity(u)})
+            log(f"  🏦 @{u}: есть")
+        except Exception:  # noqa: BLE001
+            missing.append("@" + u)
+    async for d in client.iter_dialogs():
+        t = (d.title or "").upper()
+        if d.is_channel and not d.is_group and any(w in t for w in BANK_EXTRA_TITLES):
+            chans.append({"entity": d.entity})
+            log(f"  🏦 {d.title}: есть")
+    # что владелец сам добавил в папку — не теряем
+    try:
+        from telethon.tl.functions.messages import GetDialogFiltersRequest
+        res = await client(GetDialogFiltersRequest())
+        for f in getattr(res, "filters", res):
+            t = getattr(f, "title", "")
+            if getattr(t, "text", t) == BANK_FOLDER:
+                chans += [{"entity": pe} for pe in getattr(f, "include_peers", [])]
+    except Exception:  # noqa: BLE001
+        pass
+    seen, uniq = set(), []
+    for c in chans:
+        e = c["entity"]
+        k = getattr(e, "id", None) or getattr(e, "channel_id", None) or getattr(e, "chat_id", None) or getattr(e, "user_id", None) or id(e)
+        if k not in seen:
+            seen.add(k)
+            uniq.append(c)
+    done = await create_folders(client, {BANK_FOLDER: uniq}, log=log)
     return {"папка": done, "нет хаба": missing}
