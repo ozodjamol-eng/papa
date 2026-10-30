@@ -35,7 +35,8 @@ DIRECTIONS = {
     "faith":  ("🕌 Маънавият", "Хўжаобод", "Маънавият", ["islom", "duo"], 1),
     "local":  ("📍 Андижон/водий", "Хўжаобод", "Хўжаобод/Андижон", ["andijon", "fargona"], 1),
 }
-HUB_TITLE = "📸 PAPA ТРЕНДЫ"
+HUB_TITLE = "PAPA РАЗВЕДКА · ТРЕНДЫ"     # 30.10 владелец: в одной семье с «PAPA РАЗВЕДКА · ВОДА / · МЕБЕЛЬ»
+OLD_TITLES = ("📸 PAPA ТРЕНДЫ",)
 MARK = "🏷 PAPA ТРЕНД:"
 
 
@@ -177,8 +178,13 @@ def download(url: str) -> bytes | None:
 async def hub(client):
     """Свой закрытый канал-хаб трендов (создаём, если нет). Владелец — профиль Разведки (= профиль владельца)."""
     from telethon.tl.functions.channels import CreateChannelRequest
+    from telethon.tl.functions.channels import EditTitleRequest
     async for d in client.iter_dialogs():
-        if d.is_channel and not d.is_group and (d.title or "").strip() == HUB_TITLE:
+        t = (d.title or "").strip()
+        if d.is_channel and not d.is_group and t == HUB_TITLE:
+            return d.entity
+        if d.is_channel and not d.is_group and t in OLD_TITLES:      # прежнее имя — переименовать, не плодить каналы
+            await client(EditTitleRequest(d.entity, HUB_TITLE))
             return d.entity
     r = await client(CreateChannelRequest(title=HUB_TITLE, about="Тренды Instagram по рубрикам — для каналов PAPA",
                                           megagroup=False))
