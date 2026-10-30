@@ -224,6 +224,22 @@ async def _sort_folders() -> dict:
         await c.disconnect()
 
 
+async def _scout() -> str:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:
+        return f"Разведка занята ({', '.join(busy)}) — повторите через 5–10 минут"
+    from . import scout
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return scout.render(await scout.run(c, "xojaobod", log=lambda s: print(s, flush=True)))
+    finally:
+        await c.disconnect()
+
+
 async def _curate() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain") if subprocess.run(
@@ -377,6 +393,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "sources":
         print("SOURCES_DONE", asyncio.run(_sources()))
+        return
+    if cmd == "scout":                          # 🔭 30.10: разведчик каналов (только поиск и список)
+        print(asyncio.run(_scout()))
         return
     if cmd == "curate":
         print("CURATE_DONE", asyncio.run(_curate()))
