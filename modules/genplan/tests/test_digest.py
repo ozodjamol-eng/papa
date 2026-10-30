@@ -320,10 +320,15 @@ class TestEveningBg(unittest.TestCase):
         from pathlib import Path
         with tempfile.TemporaryDirectory() as t:
             d = Path(t)
-            for n in (1, 2):
+            for n in (1, 2, 3, 4, 5):
                 (d / f"kuz-{n}.mp4").write_bytes(b"0" * 300_000)
-            (d / "kuz-3.mp4").write_bytes(b"0")                       # битый — не берём
+            (d / "kuz-9.mp4").write_bytes(b"0")                       # битый — не берём
+            seen = {digest.evening_bg(dt.date(2026, 10, 30) + dt.timedelta(days=i), d, slot=k).name
+                    for i in range(5) for k in (0, 1)}
+            self.assertEqual(seen, {f"kuz-{n}.mp4" for n in (1, 2, 3, 4, 5)})   # по кругу — все, битый — нет
             a = digest.evening_bg(dt.date(2026, 10, 30), d)
             b = digest.evening_bg(dt.date(2026, 10, 31), d)
-            self.assertEqual({a.name, b.name}, {"kuz-1.mp4", "kuz-2.mp4"})
+            self.assertNotEqual(a, b)
             self.assertIsNone(digest.evening_bg(dt.date(2026, 12, 5), d))   # зимнего нет — фон по умолчанию
+            day = dt.date(2026, 11, 2)
+            self.assertNotEqual(digest.evening_bg(day, d, slot=0), digest.evening_bg(day, d, slot=1))  # два канала — разные

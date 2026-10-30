@@ -23,9 +23,12 @@ from pathlib import Path
 
 POOL_TITLE = "PAPA ВЕЧЕР ПУЛ"
 OUT = Path(os.environ.get("PAPA_EVENING_DIR", "/var/lib/papa-evening"))
-TARGET = 14                    # видео на сезон — две недели без повторов
-ADD_PER_RUN = 3
-KEEP = 40                      # сколько последних видео канала держать на диске
+# 30.10 владелец: «зачем ждать — собрать сразу на весь сезон». Дайджест в двух каналах (КАТТА ДАВРА, Хўжаобод),
+# у каждого свой фон в один вечер → 2 видео на каждый оставшийся день сезона (не меньше 14).
+PER_DAY = 2
+MIN_TARGET = 14
+ADD_PER_RUN = 70               # первый прогон добирает весь сезон сразу; дальше — только недостающее
+KEEP = 120                     # сколько последних видео канала держать на диске
 QUERIES = {
     "kuz": ["autumn sunset", "sunset clouds", "evening city lights", "golden hour trees", "autumn evening",
             "rain window evening", "sunset sky timelapse", "night city timelapse"],
@@ -41,6 +44,18 @@ NO_PEOPLE = {"person", "people", "man", "woman", "girl", "boy", "couple", "child
 def season(day: dt.date) -> str:
     m = day.month
     return "qish" if m in (12, 1, 2) else "bahor" if m in (3, 4, 5) else "yoz" if m in (6, 7, 8) else "kuz"
+
+
+def season_end(day: dt.date) -> dt.date:
+    """Первый день следующего сезона."""
+    y, m = day.year, day.month
+    nxt = {12: (y + 1, 3), 1: (y, 3), 2: (y, 3), 3: (y, 6), 4: (y, 6), 5: (y, 6), 6: (y, 9), 7: (y, 9), 8: (y, 9),
+           9: (y, 12), 10: (y, 12), 11: (y, 12)}[m]
+    return dt.date(nxt[0], nxt[1], 1)
+
+
+def target(day: dt.date) -> int:
+    return max(MIN_TARGET, PER_DAY * (season_end(day) - day).days)
 
 
 def ok(h: dict) -> bool:
@@ -106,19 +121,25 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     in_season = [m for m in msgs if (st.get("season_of", {}).get(str(m.id)) or s) == s]
     added = 0
     key = os.environ.get("PIXABAY_API_KEY", "").strip()
-    if len(in_season) < TARGET and key:
+    need = min(ADD_PER_RUN, target(now.date()) - len(in_season))
+    if need > 0 and key:
         queries = QUERIES[s]
-        start = now.toordinal() % len(queries)
-        for i in range(len(queries)):
-            if added >= ADD_PER_RUN:
-                break
-            q = queries[(start + i) % len(queries)]
+        found: dict[str, list[dict]] = {}
+        for q in queries:                        # по запросу — список годных, потом берём по кругу (разнообразие)
             try:
-                hits = [h for h in search(key, q) if ok(h) and str(h["id"]) not in used]
+                found[q] = [h for h in search(key, q) if ok(h) and str(h["id"]) not in used]
             except Exception as e:  # noqa: BLE001
                 log(f"  Pixabay «{q}»: {type(e).__name__}")
-                continue
-            for h in hits[:1]:
+                found[q] = []
+        start = now.toordinal() % len(queries)
+        order = [queries[(start + i) % len(queries)] for i in range(len(queries))]
+        while added < need and any(found.values()):
+            for q in order:
+                if added >= need or not found[q]:
+                    continue
+                h = found[q].pop(0)
+                if str(h["id"]) in used:
+                    continue
                 f = best_file(h)
                 with tempfile.TemporaryDirectory() as tmp:
                     raw, ver = Path(tmp) / "raw.mp4", Path(tmp) / "v.mp4"
@@ -129,12 +150,19 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                                                    supports_streaming=True)
                     except Exception as e:  # noqa: BLE001
                         log(f"  #{h['id']}: {type(e).__name__}")
+                        used.add(str(h["id"]))
                         continue
+                    import shutil
+                    shutil.copyfile(ver, OUT / f"{s}-{m.id}.mp4")      # сразу на диск — обратно не скачивать
+                    os.chmod(OUT / f"{s}-{m.id}.mp4", 0o640)
                 used.add(str(h["id"]))
                 st.setdefault("season_of", {})[str(m.id)] = s
                 added += 1
-                log(f"  🌆 + {q} (Pixabay #{h['id']})")
-                await asyncio.sleep(3)
+                st["pixabay"] = sorted(used)                     # прогресс — после каждого видео (прогон долгий)
+                sf.parent.mkdir(parents=True, exist_ok=True)
+                sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+                log(f"  🌆 {added}/{need} {q} (Pixabay #{h['id']})")
+                await asyncio.sleep(2)
         msgs = [m async for m in client.iter_messages(ent, limit=200) if getattr(m, "video", None)]
     # канал → диск (свои видео владельца — текущий сезон)
     keep, got = set(), 0
@@ -168,7 +196,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             "фонов сезона": len(have)}
 
 
-def pick(day: dt.date, folder: Path = OUT) -> Path | None:
-    """Фон вечера: по кругу среди фонов сезона (каждый день — следующий)."""
+def pick(day: dt.date, folder: Path = OUT, slot: int = 0) -> Path | None:
+    """Фон вечера: по кругу среди фонов сезона; slot — номер канала (у каналов в один вечер — разные фоны)."""
     files = sorted(folder.glob(f"{season(day)}-*.mp4")) if folder.exists() else []
-    return files[day.toordinal() % len(files)] if files else None
+    return files[(day.toordinal() * PER_DAY + slot) % len(files)] if files else None

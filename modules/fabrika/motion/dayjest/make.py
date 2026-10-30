@@ -237,7 +237,10 @@ if __name__ == "__main__":
         d = json.loads(Path(os.environ["DAYJEST_JSON"]).read_text(encoding="utf-8"))
     else:
         d = data(mode, fk, (fk or {}).get("channel") or "xojaobod")
-    if len(sys.argv) > 3 and (Path(sys.argv[3]).parent / f"bg_{mode}.mp4").exists():
-        d["_bg"] = str(Path(sys.argv[3]).parent / f"bg_{mode}.mp4")
+    if len(sys.argv) > 3:                                    # 🌆 30.10: свой фон канала из вечернего пула
+        for cand in (f"bg_{mode}_{Path(sys.argv[3]).stem}.mp4", f"bg_{mode}.mp4"):
+            if (Path(sys.argv[3]).parent / cand).exists():
+                d["_bg"] = str(Path(sys.argv[3]).parent / cand)
+                break
     print(json.dumps(d, ensure_ascii=False), flush=True)
     print(build(mode, out, d), flush=True)

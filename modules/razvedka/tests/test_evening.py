@@ -42,3 +42,58 @@ class TestEvening(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeMsg:
+    def __init__(self, i):
+        self.id, self.video = i, True
+
+
+class FakeClient:
+    def __init__(self):
+        self.msgs, self.n = [], 100
+
+    async def iter_messages(self, ent, limit=200):
+        for m in reversed(self.msgs):
+            yield m
+
+    async def send_file(self, ent, path, caption=None, supports_streaming=True):
+        self.n += 1
+        m = FakeMsg(self.n)
+        self.msgs.append(m)
+        return m
+
+    async def download_media(self, m, file=None):
+        raise AssertionError("не должен скачивать — файл уже на диске")
+
+
+class TestEveningRun(unittest.TestCase):
+    def test_fills_whole_season_once(self):
+        import asyncio
+        import os
+        import shutil
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as t:
+            out, stdir = Path(t) / "out", Path(t) / "st"
+            hits = {q: [hit(i * 100 + k) for k in range(20)] for i, q in enumerate(evening.QUERIES["kuz"])}
+            fake = FakeClient()
+
+            async def ent(c):
+                return "pool"
+
+            def to_v(src, dst):
+                Path(dst).write_bytes(b"v")
+                return dst
+            now = dt.datetime(2026, 11, 20, 15, 30, tzinfo=dt.timezone(dt.timedelta(hours=5)))
+            with mock.patch.object(evening, "OUT", out), mock.patch.object(evening, "pool_entity", ent), \
+                    mock.patch.object(evening, "search", lambda key, q: hits[q]), \
+                    mock.patch.object(evening, "to_vertical", to_v), \
+                    mock.patch.object(evening.urllib.request, "urlretrieve", lambda u, p: Path(p).write_bytes(b"r")), \
+                    mock.patch.object(evening.asyncio, "sleep", mock.AsyncMock()), \
+                    mock.patch.dict(os.environ, {"PIXABAY_API_KEY": "k"}):
+                r = asyncio.run(evening.run(fake, stdir, now, log=lambda *_: None))
+                self.assertEqual(r["добавлено"], 2 * 11)          # 11 дней до 1 декабря × 2 канала
+                self.assertEqual(r["фонов сезона"], 22)
+                r2 = asyncio.run(evening.run(fake, stdir, now, log=lambda *_: None))
+                self.assertEqual(r2["добавлено"], 0)              # уже полно — ничего не добирает
+            shutil.rmtree(out, ignore_errors=True)
