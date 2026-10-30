@@ -442,6 +442,11 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
             if not ok:
                 store.update(db, m["id"], status="failed")
             break                                             # обычные — по одному за проход: промежуток сохраняется
+    try:                                                      # 🧠 30.10: заказ штаба для куратора (пустые часы)
+        from . import needs
+        needs.write(db, cfg, now)
+    except Exception as e:  # noqa: BLE001 — заказ не должен ломать публикации
+        log(f"needs: {type(e).__name__}: {e}")
     return out
 
 

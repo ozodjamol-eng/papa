@@ -80,7 +80,34 @@ def is_ad(text: str, has_buttons: bool) -> bool:
     return bool(AD.search(t)) or len(URL.findall(t)) > 1 or (has_buttons and bool(URL.search(t)))
 
 
-def pick(cands: list[dict], n: int, history: list[dict]) -> list[dict]:
+NEEDS = Path(os.environ.get("SOURCES_NEEDS", "/var/lib/papa-sources-choice/needs.json"))
+NEAR = dt.timedelta(hours=6)
+
+
+def load_needs(path: Path | None = None) -> dict:
+    """🧠 30.10: заказ штаба от GENPLAN — пустые часы с рубриками. Нет файла — пустой заказ (работаем как раньше)."""
+    try:
+        return json.loads((path or NEEDS).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def need_codes(needs: dict, channel: str, now: dt.datetime) -> list[str]:
+    """Коды рубрик, которые нужны в ближайшие часы — по порядку часов (первый — самый срочный)."""
+    out = []
+    for e in ((needs.get("channels") or {}).get(channel) or {}).get("empty", []):
+        try:
+            if dt.datetime.fromisoformat(e["at"]) - now > NEAR:
+                continue
+        except (KeyError, ValueError):
+            continue
+        for c in e.get("codes", [])[:1]:              # главная рубрика часа
+            if c not in out:
+                out.append(c)
+    return out
+
+
+def pick(cands: list[dict], n: int, history: list[dict], need: list[str] | None = None) -> list[dict]:
     """Лучшие по score; одна новость — один раз (за этот запуск и последние 3 дня).
     30.10: рубрики по кругу — сначала те, которых за сутки было меньше всего (чтобы часы сетки не пустовали)."""
     seen = [set(h["sig"]) for h in history]
@@ -93,7 +120,9 @@ def pick(cands: list[dict], n: int, history: list[dict]) -> list[dict]:
     for c in sorted(cands, key=lambda c: -c["score"]):
         by_rub.setdefault(c.get("rub") or "", []).append(c)
     order = []
-    queues = sorted(by_rub.values(), key=lambda q: recent.get(q[0].get("rub") or "", 0))
+    need = need or []
+    queues = sorted(by_rub.values(), key=lambda q: (need.index(q[0].get("rub")) if q[0].get("rub") in need else len(need),
+                                                    recent.get(q[0].get("rub") or "", 0)))
     while any(queues):
         for q in queues:
             if q:
@@ -286,6 +315,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     hist = [h for h in st.get("history", []) if h["ts"] > (now - dt.timedelta(days=3)).isoformat()]
     folders = await folder_peers(client)
     report = {}
+    needs = load_needs()
     gemini_ok = bool(os.environ.get("GEMINI_API_KEY"))
     if gemini_ok:      # 30.10: куратор теперь каждый час — кадры на «лёгкой» модели (свой дневной лимит, как у отбора)
         os.environ["GEMINI_MODEL"] = os.environ.get("CURATOR_GEMINI_MODEL", "gemini-flash-lite-latest")
@@ -324,10 +354,11 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             except Exception as e:  # noqa: BLE001 — один канал не роняет куратора
                 log(f"  {type(e).__name__}: {str(e)[:80]}")
             await asyncio.sleep(1)
-        want = PER_RUN.get(channel, 4)
+        need = need_codes(needs, channel, now)          # 🧠 заказ штаба: сначала рубрики пустых часов
+        want = max(PER_RUN.get(channel, 4), min(5, len(need)))
         sent, checked, skipped = 0, 0, 0
         blocked = LOGO_SOURCES | set(st.get("logo_sources", []))
-        for c in pick(cands, want * 3, hist):
+        for c in pick(cands, want * 3, hist, need):
             if sent >= want:
                 break
             if c["source"].lower() in blocked:          # источник ставит своё лого на видео — не берём

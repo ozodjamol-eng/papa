@@ -253,3 +253,69 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             await notify(f"📦 Склад «{s}» почти пуст: осталось {n}. Пополните, когда будет время.", SKLAD[s][0])
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     return report
+
+
+# ---------- ⚓ 30.10: якорь — пустой час скоро, свежего нет → из архива-склада этой рубрики ----------
+FULL_HOURS = {8, 12, 17}                           # полный проход складов (нормы дня) — как раньше, 3 раза в день
+ANCHOR_AHEAD = dt.timedelta(hours=2, minutes=30)
+
+
+def anchor_plan(needs: dict, now: dt.datetime) -> dict[str, list[str]]:
+    """Канал → склады (по порядку), из которых нужен 1 пост: пустой час в ближайшие 2.5 ч, у рубрики есть склад."""
+    out: dict[str, list[str]] = {}
+    for ch, d in ((needs or {}).get("channels") or {}).items():
+        for e in d.get("empty", []):
+            try:
+                at = dt.datetime.fromisoformat(e["at"])
+            except (KeyError, ValueError):
+                continue
+            if not (now < at <= now + ANCHOR_AHEAD) or not e.get("stash"):
+                continue
+            out.setdefault(ch, []).append(e["stash"][0])
+    return out
+
+
+async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None = None, log=print) -> dict:
+    """По одному посту из склада на каждый скоро пустой час (сверх дневной нормы). Читает только нужные склады."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    want = anchor_plan(needs, now)
+    if not want:
+        return {}
+    sf = state_dir / "sklad.json"
+    try:
+        st = json.loads(sf.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        st = {}
+    used = st.setdefault("used", {})
+    ents = await find(client, log)
+    cache: dict[str, list[dict]] = {}
+    report: dict[str, int] = {}
+    for ch, names in want.items():
+        if ch == "xojaobod" and not curate.XOJAOBOD_FLAG.exists():
+            continue
+        sent = 0
+        for name in names:
+            if name not in ents or ch not in SKLAD.get(name, ()) or external(name):
+                continue                               # якорь — только свои доверенные склады (без проверки лого)
+            if name not in cache:
+                try:
+                    cache[name] = await read(client, ents[name], 3000)
+                except Exception as e:  # noqa: BLE001
+                    log(f"  якорь {name}: {type(e).__name__}")
+                    cache[name] = []
+            it = next((x for x in order(cache[name], ch, now) if eligible(x, name, ch, now)
+                       and str(x["id"]) not in used.get(f"{ch}|{name}", [])), None)
+            if not it:
+                continue
+            try:
+                await client.forward_messages(curate.BOTS[ch], it["ids"], from_peer=ents[name])
+            except Exception as e:  # noqa: BLE001
+                log(f"  якорь → {ch}: {type(e).__name__}")
+                continue
+            used.setdefault(f"{ch}|{name}", []).append(str(it["id"]))
+            sent += 1
+            log(f"  ⚓ {name} → {ch}: #{it['id']} {it['text'][:50]!r}")
+            await asyncio.sleep(4)
+        report[ch] = sent
+    sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+    return report

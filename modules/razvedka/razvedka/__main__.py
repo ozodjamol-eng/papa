@@ -247,7 +247,12 @@ async def _curate() -> dict:
                 tok, ids = pult_bot(channel)
                 if not (tok and ids and all(bot_send(tok, o, text) for o in ids)):
                     await send_report(c, text)
-            res["склад"] = await sklad.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True), notify=notify)
+            from .curate import load_needs
+            hour = dt_now().hour
+            if hour in sklad.FULL_HOURS:             # 30.10: нормы складов — 3 раза в день, как раньше
+                res["склад"] = await sklad.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True), notify=notify)
+            else:                                    # в остальные часы — только якорь под скоро пустые часы
+                res["якорь"] = await sklad.anchor(c, Path(PUB) / "curator", load_needs(), log=lambda s: print(s, flush=True))
         except Exception as e:  # noqa: BLE001 — склад не роняет куратора
             res["склад"] = f"ошибка: {type(e).__name__}: {e}"[:200]
         return res
