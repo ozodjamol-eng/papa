@@ -263,7 +263,7 @@ def _table(c: Card, cols: list[tuple[str, int, str]], rows: list[tuple[list[str]
 def card_leaders(a: dict) -> bytes:
     rivals = [x for x in a["channels"] if not x["is_own"]][:10]
     own = [x for x in a["channels"] if x["is_own"]]
-    c = Card("ЛИДЕРЫ ПО ПРОСМОТРАМ", "медиана просмотров поста · ERR = просмотры / подписчики", 2200)
+    c = Card("ЛИДЕРЫ ПО ПРОСМОТРАМ", "медиана просмотров поста · ERR = просмотры / подписчики", 2800)
     cols = [("№", 60, "l"), ("Канал", 370, "l"), ("Просм.", 180, "r"), ("ERR", 120, "r"),
             ("Пост/д", 130, "r"), ("Рекл/д", 124, "r")]
     mx = max([x["median_views"] or 0 for x in rivals + own] or [1]) or 1
@@ -280,6 +280,13 @@ def card_leaders(a: dict) -> bytes:
                    f"{x['err']}%" if x["err"] is not None else "—",
                    str(x["per_day"]), _n(x["subscribers"])], True) for x in own]
         _table(c, cols2, rows2, [(x["median_views"] or 0) / mx for x in own])
+    if a.get("own_week"):        # 30.10: наши каналы по дням недели — для тематических дней
+        c.section("ПО ДНЯМ · 4 НЕД. · ГРУППА — ПО РЕАКЦИЯМ")
+        cols3 = [("Канал", 270, "l")] + [(d, 102, "r") for d in WEEKDAYS]
+        rows3 = [([o["title"]]
+                  + [f"×{d['strength']}" if d["strength"] is not None else "—" for d in o["days"]], True)
+                 for o in a["own_week"]]
+        _table(c, cols3, rows3)
     return c.done()
 
 

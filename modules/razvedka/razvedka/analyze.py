@@ -133,9 +133,39 @@ def analyze(db, days: int = 7, now: dt.datetime | None = None) -> dict:
                   "snippet": " ".join((p["text"] or "").split())[:90]} for p in top]
     from . import daymap   # 30.10: карта дня конкурентов по папкам-темам
     return {
+        "own_week": own_week(db, now),
         "daymap": daymap.build(posts, chans),
         "days": days, "generated": now.astimezone(TZ).strftime("%d.%m.%Y %H:%M"),
         "channels": channel_stats, "posts_total": len(posts),
         "hours": hours, "weekdays": weekdays, "media": media,
         "ad_hours": dict(sorted(ad_hours.items())), "top_posts": top_posts,
     }
+
+
+OWN_WEEK_DAYS = 28   # 30.10 владелец: тематические дни — только по цифрам НАШИХ каналов, 4 недели
+
+
+def own_week(db, now: dt.datetime | None = None, days: int = OWN_WEEK_DAYS) -> list[dict]:
+    """Сила дней недели у наших каналов: пост / медиана своего канала. Канал — просмотры; группа — реакции."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    posts, chans = load(db, days, now)
+    out = []
+    for cid, ch in chans.items():
+        if not ch.get("is_own"):
+            continue
+        ps = [p for p in posts if p["channel_id"] == cid and p["age_h"] >= 24 and not p["ad"]]
+        by_views = any(p["views"] for p in ps)
+        val = (lambda p: p["views"] or 0) if by_views else (lambda p: p["reactions"] or 0)
+        vals = [val(p) for p in ps if val(p)]
+        if len(vals) < 7:
+            continue
+        med = median(vals)
+        wd: dict[int, list[float]] = defaultdict(list)
+        for p in ps:
+            wd[p["local"].weekday()].append(val(p) / med)
+        out.append({"title": ch.get("title", str(cid)), "metric": "просмотры" if by_views else "реакции",
+                    "weeks": round(days / 7), "posts": len(ps),
+                    "days": [{"key": k, "posts": len(wd.get(k, [])),
+                              "strength": round(median(wd[k]), 2) if len(wd.get(k, [])) >= 3 else None}
+                             for k in range(7)]})
+    return out

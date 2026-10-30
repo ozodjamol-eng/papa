@@ -55,6 +55,13 @@ def render(a: dict) -> str:
                      f"{c['per_day']} пост/день, подписчиков {_n(c['subscribers'])}")
         L.append("")
 
+    if a.get("own_week"):
+        L.append("📅 НАШИ КАНАЛЫ ПО ДНЯМ (×1.0 = обычный день канала, 4 недели):")
+        for o in a["own_week"]:
+            L.append(f"  {o['title'][:22]} ({o['metric']}): " + " · ".join(
+                f"{WEEKDAYS[d['key']]} {'×' + str(d['strength']) if d['strength'] is not None else '—'}" for d in o["days"]))
+        L.append("")
+
     ads = sorted(a["channels"], key=lambda c: c["ads"], reverse=True)
     ads = [c for c in ads if c["ads"] and not c["is_own"]][:8]
     if ads:
