@@ -272,7 +272,9 @@ def hub_clean_once(db, cfg: dict, env: dict, pubs: dict, log=print) -> dict:
             out["deleted"] += len(part)
         else:
             out["errors"] += 1
-    if not out["errors"]:
+    tries = int(store.kv_get(db, "hub_clean_tries", "0") or 0) + 1
+    store.kv_set(db, "hub_clean_tries", str(tries))
+    if not out["errors"] or tries >= 3:            # 31.10 аудит: одна вечная ошибка — чистка шла при каждом запуске
         store.kv_set(db, "hub_clean_v1", "done")
     log(f"PAPA HUB очищен: перенесено {out['moved']}, удалено {out['deleted']}, ошибок {out['errors']}")
     return out
@@ -307,6 +309,10 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
             log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — после ИИ текст не узбекский, повтор в {later:%H:%M}")
             return HELD
     own = tuple(c["username"] for c in cfg["channels"].values())
+    if smart.is_sklad(ch, m):
+        # 31.10 аудит: в КАТТА ДАВРА вышел пост склада с чужой для неё строкой «👉@XOJAOBODCITY24- Обуна бўлишни унутманг».
+        # Материал склада/выбранного канала оставляет только юзернейм СВОЕГО канала; посты владельца — как раньше.
+        own = (ch["username"],)
     is_ad = (m["rubric"] or "").lower().startswith("реклама")
     tag = "#РЕКЛАМА" if is_ad else tag_for(cfg, ch, m)
     from . import tails

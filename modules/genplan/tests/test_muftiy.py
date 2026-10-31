@@ -82,6 +82,21 @@ class T(unittest.TestCase):
         d = needs.build(self.db, self.cfg, at("20:00"))["channels"]["davra"]
         self.assertIn("22", [e["h"] for e in d["empty"]])
 
+    def test_same_stock_post_not_in_both_channels_same_day(self):
+        """31.10 аудит: «ФАРҒОНАЛИК МАҲКАМ ТОҒАМДАН…» вышел и в Хўжаобод 08:00, и в КАТТА ДАВРА 19:00."""
+        x = self.add("Ибрат видео", "xojaobod", fp="v:9")
+        store.update(self.db, x, rubric="Ибрат", status="published", stock=0, scheduled_at=at("08:00").isoformat())
+        d = self.add("Ибрат видео", "davra", fp="v:9")
+        store.update(self.db, d, rubric="Ибрат")
+        self.assertNotIn(d, smart.fill_from_stock(self.db, self.cfg, "davra", at("18:00")))
+
+    def test_sklad_post_keeps_only_own_username(self):
+        """31.10 аудит: в КАТТА ДАВРА вышла строка «👉@XOJAOBODCITY24- Обуна бўлишни унутманг»."""
+        from genplan import text
+        body = text.finalize("Фойдали видео\n👉@XOJAOBODCITY24- Обуна бўлишни унутманг", "🎉 @kattadavrauz",
+                             own=("kattadavrauz",))
+        self.assertNotIn("XOJAOBODCITY24", body)
+
 
 if __name__ == "__main__":
     unittest.main()

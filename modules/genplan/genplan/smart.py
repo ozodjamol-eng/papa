@@ -504,6 +504,16 @@ def twin_taken(db, channel: str, m) -> bool:
                       (m["fp"], m["id"])).fetchone() is not None
 
 
+def twin_today(db, channel: str, m, now: dt.datetime) -> bool:
+    """31.10 аудит: один и тот же пост склада вышел в обоих каналах за день («ФАРҒОНАЛИК МАҲКАМ ТОҒАМДАН…»:
+    Хўжаобод 08:00, КАТТА ДАВРА 19:00). Материал запаса, который другой канал поставил/выпустил за сутки, не берём."""
+    if not m["fp"]:
+        return False
+    since = (now - dt.timedelta(days=1)).isoformat()
+    return db.execute("SELECT 1 FROM materials WHERE fp=? AND channel<>? AND status IN ('queued','published') "
+                      "AND COALESCE(scheduled_at, created_at)>=? LIMIT 1", (m["fp"], channel, since)).fetchone() is not None
+
+
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
@@ -516,7 +526,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     pool = [m for m in store.stock(db, channel)
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
             and not waits_text(cfg, m) and not _stale(ch, m, now)
-            and minbar_ok(m) and not twin_taken(db, channel, m) and (not full or m["rubric"] == MINBAR)]
+            and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now) and (not full or m["rubric"] == MINBAR)]
     if not pool:
         return []
     used: list[int] = []
