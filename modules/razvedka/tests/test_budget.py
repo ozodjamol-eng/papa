@@ -41,3 +41,20 @@ class TestBudget(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GoogleReset(unittest.TestCase):
+    """31.10: флаг экономии, поставленный до полуночи PT, после обнуления лимита Google не действует."""
+
+    def test_old_flag_off(self):
+        import os, tempfile, datetime as dt
+        from pathlib import Path
+        from razvedka import budget
+        now = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.timezone.utc)          # 14:00 Ташкент, после сброса (07:00 UTC)
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "gemini-saver"
+            f.write_text("2026-10-31")
+            os.utime(f, (now.timestamp() - 4 * 3600,) * 2)                     # 05:00 UTC — до сброса
+            self.assertFalse(budget.saver_on(now, Path(d)))
+            os.utime(f, (now.timestamp() - 600,) * 2)                          # после сброса
+            self.assertTrue(budget.saver_on(now, Path(d)))

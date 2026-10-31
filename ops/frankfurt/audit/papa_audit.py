@@ -482,9 +482,11 @@ def gemini_limit_hit() -> bool:
 def saver_guard(now: dt.datetime, state: dict, hit=gemini_limit_hit, flag: Path = SAVER,
                 shared: Path | None = SAVER_SHARED) -> list[str]:
     today = now.date().isoformat()
-    try:
-        on = flag.read_text().strip() == today
-    except OSError:
+    try:                                          # 31.10: флаг до обнуления лимита Google (полночь PT) — считаем снятым
+        from zoneinfo import ZoneInfo
+        reset = now.astimezone(ZoneInfo("America/Los_Angeles")).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        on = flag.read_text().strip() == today and flag.stat().st_mtime >= reset
+    except (OSError, ValueError):
         on = False
     if on or not hit():
         return []

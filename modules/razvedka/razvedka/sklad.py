@@ -276,8 +276,9 @@ FULL_HOURS = {8, 12, 17}                           # полный проход �
 ANCHOR_AHEAD = dt.timedelta(hours=2, minutes=30)
 
 
-def anchor_plan(needs: dict, now: dt.datetime) -> dict[str, list[str]]:
-    """Канал → склады (по порядку), из которых нужен 1 пост: пустой час в ближайшие 2.5 ч, у рубрики есть склад."""
+def anchor_plan(needs: dict, now: dt.datetime) -> dict[str, list[list[str]]]:
+    """Канал → [на каждый пустой час: склады по порядку] — нужен 1 пост: пустой час в ближайшие 2.5 ч, у рубрики есть склад.
+    31.10: первый склад пуст/грязный — пробуем следующий того же часа (раньше час оставался пустым)."""
     out: dict[str, list[str]] = {}
     for ch, d in ((needs or {}).get("channels") or {}).items():
         for e in d.get("empty", []):
@@ -287,7 +288,7 @@ def anchor_plan(needs: dict, now: dt.datetime) -> dict[str, list[str]]:
                 continue
             if not (now < at <= now + ANCHOR_AHEAD) or not e.get("stash"):
                 continue
-            out.setdefault(ch, []).append(e["stash"][0])
+            out.setdefault(ch, []).append(list(dict.fromkeys(e["stash"])))   # 31.10: все склады часа по порядку, не только первый
     return out
 
 
@@ -310,7 +311,8 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
         if ch == "xojaobod" and not curate.XOJAOBOD_FLAG.exists():
             continue
         sent = 0
-        for name in names:
+        for opts in names:
+          for name in (opts if isinstance(opts, list) else [opts]):
             if name not in ents or ch not in SKLAD.get(name, ()):
                 continue
             if name not in cache:
@@ -351,6 +353,7 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
             sent += 1
             log(f"  ⚓ {name} → {ch}: #{it['id']} {it['text'][:50]!r}")
             await asyncio.sleep(4)
+            break                                      # этот час закрыт — к следующему
         report[ch] = sent
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     return report

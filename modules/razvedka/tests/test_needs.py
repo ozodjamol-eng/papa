@@ -27,4 +27,4 @@ class T(unittest.TestCase):
         self.assertEqual(got, ["b", "d"])
 
     def test_anchor_plan(self):
-        self.assertEqual(sklad.anchor_plan(NEEDS, NOW), {"xojaobod": ["ФОЙДАЛИК"]})   # 13:00 — скоро, есть склад
+        self.assertEqual(sklad.anchor_plan(NEEDS, NOW), {"xojaobod": [["ФОЙДАЛИК"]]})   # 13:00 — скоро, есть склад

@@ -28,11 +28,20 @@ def _today(now: dt.datetime | None = None) -> str:
     return (now or dt.datetime.now(TZ)).astimezone(TZ).date().isoformat()
 
 
+def google_reset(now: dt.datetime | None = None) -> float:
+    """31.10: бесплатный лимит Gemini обнуляется в полночь по Тихоокеанскому времени (~12:00–13:00 Ташкент), а не в нашу
+    полночь. Флаг экономии, поставленный ДО последнего обнуления, больше не действует (иначе фон стоит до ночи зря)."""
+    from zoneinfo import ZoneInfo
+    pt = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo("America/Los_Angeles"))
+    return pt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+
+
 def saver_on(now: dt.datetime | None = None, shared: Path | None = None) -> bool:
     today = _today(now)
+    reset = google_reset(now)
     for p in (*SAVER_FILES, str((shared or _shared()) / "gemini-saver")):
         try:
-            if Path(p).read_text(encoding="utf-8").strip() == today:
+            if Path(p).read_text(encoding="utf-8").strip() == today and Path(p).stat().st_mtime >= reset:
                 return True
         except OSError:
             continue

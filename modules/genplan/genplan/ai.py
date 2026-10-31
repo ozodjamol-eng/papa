@@ -209,10 +209,12 @@ def saver_on() -> bool:
     """27.10: страж ставит флаг (дата), когда Gemini упёрся в лимит — проверка кадров ждёт до завтра."""
     today = dt.datetime.now(dt.timezone(dt.timedelta(hours=5))).date().isoformat()
     shared = os.path.join(os.environ.get("PAPA_GEMINI_DIR", "/var/lib/papa-sources-choice"), "gemini-saver")
+    from zoneinfo import ZoneInfo                # 31.10: флаг до обнуления лимита Google (полночь PT) — уже не действует
+    reset = dt.datetime.now(ZoneInfo("America/Los_Angeles")).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     for p in (SAVER, shared):                   # 30.10: страж пишет флаг и в общую папку (её видит и Разведка)
         try:
             with open(p, encoding="utf-8") as f:
-                if f.read().strip() == today:
+                if f.read().strip() == today and os.path.getmtime(p) >= reset:
                     return True
         except OSError:
             continue
