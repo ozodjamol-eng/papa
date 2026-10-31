@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (uid INTEGER PRIMARY KEY, first TEXT, username 
     created TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS leads (n INTEGER PRIMARY KEY, uid INTEGER NOT NULL, kind TEXT NOT NULL, details TEXT,
     place TEXT, phone TEXT, photos TEXT, src TEXT, status TEXT NOT NULL DEFAULT 'new', created TEXT NOT NULL,
-    urgency TEXT, rating INTEGER, reminded INTEGER NOT NULL DEFAULT 0);
+    urgency TEXT, rating INTEGER, reminded INTEGER NOT NULL DEFAULT 0, obj TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 """
 PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
@@ -41,7 +41,7 @@ def connect(path: str) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
     have = {r[1] for r in db.execute("PRAGMA table_info(leads)")}
-    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0")):
+    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT")):
         if col not in have:
             db.execute(f"ALTER TABLE leads ADD COLUMN {col} {typ}")
     db.commit()
@@ -117,10 +117,26 @@ class Bot:
             return "contact"
         kind = next((k for k, (btn, _) in T.KINDS.items() if text == btn), None)
         if kind:
-            self.set_step(frm["id"], "details", {"kind": kind})
-            self.say(chat, T.KINDS[kind][1], {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True})
+            if kind in T.OBJ_KINDS:
+                self.set_step(frm["id"], "obj", {"kind": kind})
+                self.say(chat, T.ASK_OBJ, {"keyboard": [[{"text": v}] for v in T.OBJ.values()] + [[{"text": T.BACK}]],
+                                           "resize_keyboard": True})
+            else:
+                self.set_step(frm["id"], "details", {"kind": kind})
+                self.say(chat, T.KINDS[kind][1], {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True})
             return "kind"
         step, data = u["step"] or "", json.loads(u["data"] or "{}")
+        if step == "obj" and text:
+            obj = next((k for k, v in T.OBJ.items() if v == text), None)
+            if not obj:
+                self.say(chat, T.UNKNOWN, {"keyboard": [[{"text": v}] for v in T.OBJ.values()] + [[{"text": T.BACK}]],
+                                           "resize_keyboard": True})
+                return "badobj"
+            data["obj"] = obj
+            self.set_step(frm["id"], "details", data)
+            q = T.KINDS[data["kind"]][1] + ("\n\n" + T.FASAD_NOTE if data["kind"] == "fasad" else "")
+            self.say(chat, q, {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True})
+            return "obj"
         if step == "details" and text:
             data["details"] = text[:500]
             self.set_step(frm["id"], "when", data)
@@ -169,11 +185,11 @@ class Bot:
 
     def finish(self, frm: dict, chat: int, data: dict, phone: str) -> str:
         u = self.db.execute("SELECT src FROM users WHERE uid=?", (frm["id"],)).fetchone()
-        cur = self.db.execute("INSERT INTO leads(uid, kind, details, place, phone, photos, src, created, urgency)"
-                              " VALUES (?,?,?,?,?,?,?,?,?)",
+        cur = self.db.execute("INSERT INTO leads(uid, kind, details, place, phone, photos, src, created, urgency, obj)"
+                              " VALUES (?,?,?,?,?,?,?,?,?,?)",
                               (frm["id"], data.get("kind", "?"), data.get("details"), data.get("place"), phone,
                                json.dumps(data.get("photos") or []), u["src"] if u else None, now().isoformat(),
-                               data.get("urgency")))
+                               data.get("urgency"), data.get("obj")))
         self.db.commit()
         n = cur.lastrowid
         self.set_step(frm["id"], "")
@@ -188,7 +204,8 @@ class Bot:
         if r["rating"]:
             st += " · " + "⭐" * r["rating"]
         when = T.WHEN.get(r["urgency"] or "", r["urgency"] or "—")
-        return (f"📥 <b>Ариза №{r['n']}</b> · {T.KINDS.get(r['kind'], (r['kind'],))[0]}\n"
+        obj = f" · {T.OBJ.get(r['obj'], r['obj'])}" if r["obj"] else ""
+        return (f"📥 <b>Ариза №{r['n']}</b> · {T.KINDS.get(r['kind'], (r['kind'],))[0]}{obj}\n"
                 f"👤 {who}{(' @' + un) if un else ''}\n📞 {esc(r['phone'])}\n📍 {esc(r['place'])}\n"
                 f"⏱ {esc(when)}\n📝 {esc(r['details'])}\n🔗 манба: {esc(r['src'] or '—')}\n{st}")
 

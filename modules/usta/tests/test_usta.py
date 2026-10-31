@@ -38,6 +38,8 @@ class T1(unittest.TestCase):
         h = self.b.handle
         self.assertEqual(h(msg("/start xojaobod")), "start")
         self.assertEqual(h(msg(T.KINDS["dizayn"][0])), "kind")
+        self.assertEqual(h(msg("ихтиёрий")), "badobj")
+        self.assertEqual(h(msg(T.OBJ["ofis"])), "obj")
         self.assertEqual(h(msg("80 м²")), "details")
         self.assertEqual(h(msg(T.WHEN["week"])), "when")
         self.assertEqual(h(msg("Навоий маҳалла")), "place")
@@ -46,6 +48,7 @@ class T1(unittest.TestCase):
         r = self.b.db.execute("SELECT * FROM leads").fetchone()
         self.assertEqual((r["kind"], r["src"], r["phone"], r["place"], r["urgency"]),
                          ("dizayn", "xojaobod", "+998901234567", "Навоий маҳалла", "week"))
+        self.assertEqual(r["obj"], "ofis")
         card = [p for p in self.api.to(OWNER) if "text" in p][0]["text"]
         self.assertIn("Ариза №1", card); self.assertIn("xojaobod", card)
         self.assertTrue(any(m == "copyMessage" and p["chat_id"] == OWNER for m, p in self.api.calls))   # фото владельцу
@@ -116,6 +119,11 @@ class T1(unittest.TestCase):
         finally:
             B.sqlite3.connect = orig
         self.assertIn("rating", {r[1] for r in d.execute("PRAGMA table_info(leads)")})
+
+    def test_fasad_note(self):
+        h = self.b.handle
+        h(msg("/start")); h(msg(T.KINDS["fasad"][0])); h(msg(T.OBJ["hovli"]))
+        self.assertIn("лойиҳа эмас", self.api.to(42)[-1]["text"])
 
     def test_groups_ignored(self):
         u = msg("салом"); u["message"]["chat"]["type"] = "supergroup"
