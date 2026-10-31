@@ -1,0 +1,20 @@
+[
+ {
+  "name": "1_minimalizm",
+  "prompt": "Photorealistic interior design visualization, professional 3D render quality (Corona/V-Ray look), natural daylight. Use the attached image as the EXACT layout and camera: keep the same room geometry, wall positions, ceiling height 2.8 m, the curved glazed bay window (erker) at the back right, the glass partition with black frames on the right, the doorways, and the same furniture positions: 8-seat dining table with chairs and a pendant lamp above it, an L-shaped sofa in front, a low TV unit, a tall built-in wardrobe on the right near the camera. Do not add or remove walls or windows. Apartment living room in Uzbekistan, 8 x 5.8 m. No people, no text, no logos, no watermark. Style: warm modern minimalism: light warm-grey walls, light oak herringbone parquet, beige boucle sofa, dark wood dining chairs, slim black magnetic track lights in a white gypsum ceiling with hidden LED cove, linen curtains, a large abstract painting, green plants.",
+  "ref": "hall_a.png",
+  "aspect": "16:9"
+ },
+ {
+  "name": "2_haytek",
+  "prompt": "Photorealistic interior design visualization, professional 3D render quality (Corona/V-Ray look), natural daylight. Use the attached image as the EXACT layout and camera: keep the same room geometry, wall positions, ceiling height 2.8 m, the curved glazed bay window (erker) at the back right, the glass partition with black frames on the right, the doorways, and the same furniture positions: 8-seat dining table with chairs and a pendant lamp above it, an L-shaped sofa in front, a low TV unit, a tall built-in wardrobe on the right near the camera. Do not add or remove walls or windows. Apartment living room in Uzbekistan, 8 x 5.8 m. No people, no text, no logos, no watermark. Style: high-tech: graphite and black palette, glossy large-format porcelain floor, matte black kitchen-glass frames, metal and glass dining table, black leather sofa, linear LED strips in a multi-level ceiling, cool neutral light, minimal decor.",
+  "ref": "hall_a.png",
+  "aspect": "16:9"
+ },
+ {
+  "name": "3_sharqona",
+  "prompt": "Photorealistic interior design visualization, professional 3D render quality (Corona/V-Ray look), natural daylight. Use the attached image as the EXACT layout and camera: keep the same room geometry, wall positions, ceiling height 2.8 m, the curved glazed bay window (erker) at the back right, the glass partition with black frames on the right, the doorways, and the same furniture positions: 8-seat dining table with chairs and a pendant lamp above it, an L-shaped sofa in front, a low TV unit, a tall built-in wardrobe on the right near the camera. Do not add or remove walls or windows. Apartment living room in Uzbekistan, 8 x 5.8 m. No people, no text, no logos, no watermark. Style: modern oriental Uzbek style: warm cream walls with subtle carved ganch plaster ornament panels, carved walnut wood screen accents, terracotta and deep blue accents, suzani embroidered cushions and a Bukhara rug, brass pendant lamp with oriental pattern, walnut dining table, elegant and modern, not kitsch.",
+  "ref": "hall_a.png",
+  "aspect": "16:9"
+ }
+]
