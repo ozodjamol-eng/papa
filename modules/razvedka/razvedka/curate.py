@@ -153,7 +153,7 @@ def vision(jpeg: bytes, background: bool = True) -> dict:
     errs = []
     for attempt in range(3):                     # 503 «модель перегружена» — подождать и повторить
         for m in dict.fromkeys([model, "gemini-flash-latest"]):
-            req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+            req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{m}:generateContent",
                                          data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
             try:
                 data = json.loads(urllib.request.urlopen(req, timeout=60).read())

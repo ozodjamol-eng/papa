@@ -38,7 +38,7 @@ def gen(key, prompt, ref: Path | None, aspect="16:9"):
             "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": aspect}}}
     errs = []
     for m in dict.fromkeys(MODELS):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{m}:generateContent",
                                      data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "x-goog-api-key": key})
         try:
             with urllib.request.urlopen(req, timeout=180) as r:

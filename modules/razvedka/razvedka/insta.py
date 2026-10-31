@@ -167,7 +167,7 @@ def write_text(caption: str, title: str) -> str:
             "contents": [{"role": "user", "parts": [{"text": f"Рилс матни:\n{(caption or '(матн йўқ)')[:2000]}"}]}],
             "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.6}}
     for model in dict.fromkeys([os.environ.get("INSTA_TEXT_MODEL", "gemini-flash-latest"), "gemini-flash-lite-latest"]):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
@@ -245,7 +245,7 @@ def write_signal(caption: str) -> str:
             "contents": [{"role": "user", "parts": [{"text": f"Интервью матни:\n{caption[:2000]}"}]}],
             "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.5}}
     for model in dict.fromkeys([os.environ.get("INSTA_TEXT_MODEL", "gemini-flash-latest"), "gemini-flash-lite-latest"]):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
         try:
             with urllib.request.urlopen(req, timeout=60) as r:

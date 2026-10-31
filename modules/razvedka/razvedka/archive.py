@@ -74,7 +74,7 @@ def classify(text: str, jpeg: bytes | None) -> dict:
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024, "responseMimeType": "application/json"}}
     last = None
     for model in dict.fromkeys([os.environ.get("ARCHIVE_MODEL", "gemini-flash-lite-latest"), "gemini-flash-latest"]):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
@@ -115,7 +115,7 @@ def classify_batch(posts: list[tuple[str, bytes | None]]) -> list[dict]:
                                  "responseMimeType": "application/json"}}
     last = None
     for model in dict.fromkeys([os.environ.get("ARCHIVE_MODEL", "gemini-flash-lite-latest"), "gemini-flash-latest"]):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
         try:
             with urllib.request.urlopen(req, timeout=120) as r:

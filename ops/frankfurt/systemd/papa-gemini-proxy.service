@@ -1,0 +1,15 @@
+[Unit]
+Description=PAPA 🔀 прокси Gemini — бесплатный Google, при лимите OpenRouter (предоплата $5)
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/papa-gemini-proxy/env
+ExecStart=/usr/bin/python3 -I /opt/papa/ops/frankfurt/gemini_proxy.py
+DynamicUser=yes
+StateDirectory=papa-gemini-proxy
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

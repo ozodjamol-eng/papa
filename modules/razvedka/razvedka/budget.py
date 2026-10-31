@@ -15,7 +15,8 @@ TZ = dt.timezone(dt.timedelta(hours=5))
 def _shared() -> Path:
     return Path(os.environ.get("PAPA_GEMINI_DIR", "/var/lib/papa-sources-choice"))
 # Бесплатный дневной лимит Gemini делят все; число — с запасом (flash-lite ≈ 1000/день, flash меньше).
-DAY_BUDGET = int(os.environ.get("GEMINI_DAY_BUDGET", "600"))
+_PROXY = os.path.exists("/etc/papa-gemini-proxy/on")   # 31.10: прокси — бесплатный лимит + предоплата OpenRouter ($5 потолок ключа)
+DAY_BUDGET = int(os.environ.get("GEMINI_DAY_BUDGET", "2500" if _PROXY else "600"))
 BACKGROUND_SHARE = float(os.environ.get("GEMINI_BACKGROUND_SHARE", "0.6"))
 SAVER_FILES = ("/var/lib/papa-genplan/gemini-saver",)   # + SHARED/gemini-saver
 

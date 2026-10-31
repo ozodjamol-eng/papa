@@ -96,7 +96,7 @@ def gemini(system: str, user: str) -> str:
     for model in dict.fromkeys([m for m in (first, "gemini-flash-latest") if m]):
         for b in (body, {**body, "generationConfig": {k: v for k, v in body["generationConfig"].items()
                                                        if k != "responseMimeType"}}):
-            req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                          data=json.dumps(b).encode(),
                                          headers={"content-type": "application/json", "x-goog-api-key": key})
             try:

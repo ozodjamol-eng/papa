@@ -83,7 +83,7 @@ def _gemini(system: str, user: str, http=None) -> str:
             "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.6}}
     models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
     for i, model in enumerate(models):          # перегрузка (503) — следующая бесплатная модель Gemini
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(),
                                      headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
         try:
@@ -242,7 +242,7 @@ def vision(db, prompt: str, images: list[bytes], http=None) -> dict:
     models = list(dict.fromkeys([os.environ.get("GENPLAN_VISION_MODEL", "gemini-flash-lite-latest"), "gemini-flash-latest"]))
     data, err = None, None
     for model in models:
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(),
                                      headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
         try:

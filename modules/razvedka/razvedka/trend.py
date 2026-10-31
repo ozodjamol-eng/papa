@@ -70,7 +70,10 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{m}:genera
 
 
 def _gpost(model: str, body: dict, key: str, timeout: int = 300) -> dict:
-    req = urllib.request.Request(GEMINI_URL.format(m=model), data=json.dumps(body).encode(), method="POST",
+    url = GEMINI_URL.format(m=model)
+    if os.path.exists("/etc/papa-gemini-proxy/on"):           # 31.10: через прокси (Google бесплатно → OpenRouter при лимите)
+        url = url.replace("https://generativelanguage.googleapis.com", "http://127.0.0.1:8790")
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"content-type": "application/json", "x-goog-api-key": key})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

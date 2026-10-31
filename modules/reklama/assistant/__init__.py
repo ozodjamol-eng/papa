@@ -444,7 +444,7 @@ def gemini_ai(system: str, history: list[tuple[str, str]], incoming: str, known:
     models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-lite-latest"]))
     data, last = None, None
     for i, model in enumerate(models):
-        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(),
                                      headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
         try:
