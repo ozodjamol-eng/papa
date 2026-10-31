@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cadcraft": {
+      "command": "bash",
+      "args": ["-c", "command -v cadcraft-cli >/dev/null || bash ops/common/cadcraft-install.sh >&2; exec \"$HOME/.local/bin/cadcraft-cli\" mcp"]
+    }
+  }
+}
