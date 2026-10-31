@@ -88,7 +88,7 @@ E += [sock(0.85, L, "1", "n"), sock(0.45, L, "2", "n"), sock(0, 3.15, "3", "w"),
       sw(2.95, L, "А", "n"), sw(2.25, 0, "Б", "s")]
 E.append(f'<rect x="{X(0.55)}" y="{Y(L)+4}" width="26" height="12" class="fan"/>')
 
-PAGE = """<section class="page">{c}<div class="foot"><b>OZOD JAMOL</b> · ДИЗАЙН · {n}/5</div></section>"""
+PAGE = """<section class="page">{c}<div class="foot"><b>OZOD JAMOL</b> · ДИЗАЙН</div></section>"""
 pages = []
 pages.append(PAGE.format(n=1, c=f'''<div class="cover"><img src="v1.png"/><div class="ct">
 <div class="tag">ОФИС ДИЗАЙНИ</div><h1>ИЛИҚ<br/>МИНИМАЛИЗМ</h1>
