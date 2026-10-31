@@ -81,7 +81,38 @@ def still(name, lines, dur, pos="mid"):
          "-map", "[o]", "-map", "2:a", "-t", str(dur), "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast",
          "-crf", "17", "-c:a", "aac", "-ar", "48000", "-ac", "2", out]); parts.append(out)
 still("pak", [("СИЗ ОЛАСИЗ:", 100, YL), ("3D ВИЗУАЛ", 92, WH), ("ЧИЗМАЛАР", 92, WH), ("ЭЛЕКТР РЕЖАСИ", 92, WH), ("РАНГЛАР", 92, WH)], 3.4)
-still("cta", [("ЛОЙИҲАНГИЗНИ", 100, WH), ("БУГУН", 100, YL), ("БОШЛАНГ", 100, YL), ("БОТГА ЁЗИНГ", 84, WH)], 3.6)
+# --- сцена «роль бота»: логотип + 3 шага по очереди
+def botscene(dur=6.0):
+    from PIL import Image as I
+    logo = I.open(f"{T}/logo.png").convert("RGBA").resize((470, 470), I.LANCZOS)
+    mk = I.new("L", (470, 470), 0); ImageDraw.Draw(mk).ellipse([4, 4, 466, 466], fill=255); logo.putalpha(mk)
+    steps = [("1", "УЙ ЁКИ ХОНАНИ", "ТАНЛАНГ"), ("2", "ЎЛЧАМ ВА РАСМ", "ЮБОРИНГ"), ("3", "3D ЛОЙИҲАНИ", "ОЛИНГ")]
+    fT = ImageFont.truetype(FB, 78); fN = ImageFont.truetype(FB, 84); fS = ImageFont.truetype(FB, 64)
+    base = I.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(base)
+    base.alpha_composite(logo, ((W - 470) // 2, 150))
+    t = "БОТ ОРҚАЛИ — 3 ҚАДАМ"; d.text(((W - d.textlength(t, font=fT)) / 2, 660), t, font=fT, fill=YL)
+    base.save(f"{T}/b0.png")
+    for k, (n, a, b) in enumerate(steps):
+        im = I.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+        y = 820 + k * 300
+        d.rounded_rectangle([70, y, W - 70, y + 250], 36, fill=(12, 12, 14, 225), outline=(235, 60, 50, 255), width=6)
+        d.ellipse([110, y + 50, 260, y + 200], fill=(235, 60, 50, 255))
+        d.text((185 - d.textlength(n, font=fN) / 2, y + 70), n, font=fN, fill=WH)
+        d.text((300, y + 42), a, font=fS, fill=WH); d.text((300, y + 128), b, font=fS, fill=YL)
+        im.save(f"{T}/b{k+1}.png")
+    out = f"{T}/bot.mp4"
+    fc = "[1:v]format=rgba,fade=in:st=0:d=0.3:alpha=1[l];[0:v][l]overlay=0:0[v0];"
+    for k in range(3):
+        st = 0.7 + k * 1.1
+        fc += f"[{k+2}:v]format=rgba,fade=in:st={st}:d=0.3:alpha=1[s{k}];[v{k}][s{k}]overlay=0:0[v{k+1}];"
+    fc += "[v3]format=yuv420p[o]"
+    cmd = ["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", f"{T}/bg.jpg"]
+    for k in range(4): cmd += ["-loop", "1", "-i", f"{T}/b{k}.png"]
+    cmd += ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-filter_complex", fc, "-map", "[o]", "-map", "5:a",
+            "-t", str(dur), "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-c:a", "aac", "-ar", "48000", "-ac", "2", out]
+    run(cmd); parts.append(out)
+botscene()
+still("cta", [("ЛОЙИҲАНГИЗНИ", 100, WH), ("БУГУН БОШЛАНГ", 96, YL), ("@OZODJAMOL", 92, WH), ("DIZAYNBOT", 92, WH)], 3.4)
 parts.append("/mnt/user-data/uploads/Downloads/OZOD_JAMOL_KONCOVKA_CHERNAYA.mp4")
 
 # склейка
