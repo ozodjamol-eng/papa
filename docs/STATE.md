@@ -97,7 +97,7 @@
 ## 2026-10-30 вечер — план выходных (автоматизация до понедельника)
 - `/var/lib/papa-ads-inbox` (papa-assistant:papa-genplan 2770), drop-in ReadWritePaths у papa-assistant и papa-genplan (`ads-inbox.conf`). Задача `ads-inbox-install`.
 - `papa-weekly.timer` → `papa-razvedka@weekly.service` (сб 23:30 UTC): `razvedka weekly` = clean + humor. Задача `weekly-install`.
-- Отдел Архив (31.10): каналы ozodjamoll + kattadavrauz, 3 прохода в день (00:40, 03:40, 12:40), до 120 постов/канал за проход, пачка 6 постов на 1 запрос Gemini, кадр проверяется на чужое лого. Задачи `archive-install` (таймер) и `archive-run`.
+- Отдел Архив (31.10): каналы ozodjamoll + kattadavrauz + группа xojaobodcity24 + «АРХИВ МУЗЫКА» (когда владелец создаст), 3 прохода в день (00:40, 03:40, 12:40), до 120 постов/канал за проход, пачка 6 постов на 1 запрос Gemini, кадр проверяется на чужое лого. Задачи `archive-install` (таймер) и `archive-run`.
 
 ## Выкладка 2026-10-30 22:17 (Франкфурт)
 - GENPLAN (`genplan-restart`, тесты на сервере 316 ✅): протокол «реклама → закрывающий пост» (`smart.ad_closer`), сверка A/B/C — две рекламы подряд, умное время рекламы учитывает дайджест, лимит 20 постов в день, короткая узбекская латиница → кириллица, русский после ИИ не выходит, нормы складов Давры, promo_hooks без «Реклама учун» в Давре/PaparazziUZ, переход в соседний канал раз в 5.

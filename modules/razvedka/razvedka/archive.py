@@ -19,7 +19,11 @@ from pathlib import Path
 
 from . import curate, hubs, sklad
 
-CHANNELS = ["ozodjamoll", "kattadavrauz"]     # 30.10: PaparazziUZ + КАТТА ДАВРА. xojaobodcity24 — группа, просмотров нет → не годится
+CHANNELS = ["ozodjamoll", "kattadavrauz", "xojaobodcity24", "АРХИВ МУЗЫКА"]
+# 30.10: PaparazziUZ + КАТТА ДАВРА. 31.10 владелец: + группа Хўжаобод (просмотров нет → берём всех кандидатов,
+# Gemini сам отсеивает новости/лого) + «АРХИВ МУЗЫКА» — закрытый канал, куда владелец сбрасывает музыку из своего
+# чата с @SaveYoutubeBot (чат с ботом Разведке не виден). Нет канала — пропуск без ошибки.
+AGE_FREE = {"АРХИВ МУЗЫКА"}                  # пересланное туда — дата пересылки свежая, правило «старше 6 мес.» не к месту
 MIN_AGE = dt.timedelta(days=180)
 SCAN = 1500                                   # постов просмотреть за запуск (31.10: отдел Архив — было 400)
 PACE = 5                                      # сек между запросами к Gemini
@@ -38,18 +42,20 @@ CLASSIFY = """Сен — медиа-архив муҳаррирсан. Telegram-
 Жавоб — ФАҚАТ JSON: {"hub": "...", "text": "..."}"""
 
 
-def is_candidate(it: dict, now: dt.datetime) -> bool:
+def is_candidate(it: dict, now: dt.datetime, age_free: bool = False) -> bool:
     if it["kind"] not in ("video", "photo") or it["ad"]:
         return False
-    if now - it["date"] < MIN_AGE:
+    if not age_free and now - it["date"] < MIN_AGE:
         return False
     t = it["text"] or ""
     return not sklad.STALE.search(t) and not curate.off_policy(t, "paparazzi")
 
 
 def strong(items: list[dict]) -> list[dict]:
-    """Сильнее обычного своего времени: просмотры против медианы порции."""
+    """Сильнее обычного своего времени: просмотры против медианы порции. Просмотров нет (группа, свой склад) — все."""
     vs = [it["views"] for it in items if it.get("views")]
+    if not vs:
+        return list(items)
     med = statistics.median(vs) if vs else 0
     return [it for it in items if it.get("views") and it["views"] >= med * 1.1]
 
@@ -152,13 +158,21 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     cache: dict = {}
     report: dict[str, dict] = {}
     for ch in CHANNELS:
-        ent = await client.get_entity(ch)
+        try:
+            ent = await (hubs.entity(client, ch, cache) if not ch.isascii() else client.get_entity(ch))
+        except Exception as e:  # noqa: BLE001
+            ent = None
+            log(f"  {ch}: {type(e).__name__}")
+        if not ent:
+            report[ch] = {"нет": "канал не найден у профиля Разведки"}
+            continue
         pos = int((st.get("pos") or {}).get(ch) or 0)          # до какого id дошли (идём к старым)
         if pos == -1:
             report[ch] = {"готово": "весь архив пройден"}
             continue
         items, groups = [], {}
-        kw = {"offset_id": pos} if pos else {"offset_date": now - MIN_AGE}
+        free = ch in AGE_FREE
+        kw = {"offset_id": pos} if pos else ({} if free else {"offset_date": now - MIN_AGE})
         last_id = None
         async for m in client.iter_messages(ent, limit=SCAN, wait_time=1, **kw):
             last_id = m.id
@@ -177,7 +191,11 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             items.append(it)
         # 31.10: молодой канал (старше 6 мес. ещё ничего нет) — не «пройден навсегда», проверим завтра снова
         st.setdefault("pos", {})[ch] = last_id if last_id and len(items) else (-1 if pos else 0)
-        picks = strong([it for it in items if is_candidate(it, now)])
+        seen = set(st.setdefault("seen", {}).setdefault(ch, [])) if free else set()
+        if free:                                    # свой склад пополняется — не «пройден навсегда», а «эти уже разобраны»
+            st["pos"][ch] = 0
+            items = [it for it in items if it["id"] not in seen]
+        picks = strong([it for it in items if is_candidate(it, now, free)])
         done, skip, logo, per = 0, 0, 0, {}
         queue = picks[:TAKE]
         if len(picks) > TAKE:
@@ -208,6 +226,8 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                 st["pos"][ch] = chunk[0]["id"] + 1               # продолжим с этой пачки
                 break
             for it, r in zip(chunk, res):
+                if free:
+                    st["seen"][ch].append(it["id"])
                 if r["hub"] == "SKIP":
                     skip += 1
                     logo += r["logo"]

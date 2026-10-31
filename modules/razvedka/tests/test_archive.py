@@ -39,3 +39,15 @@ class Batch(unittest.TestCase):
     def test_parse_no_numbers(self):
         r = archive.parse_batch('[{"hub":"ИБРАТ","text":"a"},{"hub":"SKIP","text":""}]', 2)
         self.assertEqual([x["hub"] for x in r], ["ИБРАТ", "SKIP"])
+
+
+class Sources(unittest.TestCase):
+    """31.10: группа без просмотров и свой музыкальный склад."""
+
+    def test_no_views_take_all(self):
+        got = archive.strong([it(1, views=0), it(2, views=0)])
+        self.assertEqual([x["id"] for x in got], [1, 2])
+
+    def test_age_free(self):
+        self.assertFalse(archive.is_candidate(it(1, days=1), NOW))
+        self.assertTrue(archive.is_candidate(it(1, days=1), NOW, True))
