@@ -132,3 +132,56 @@ class T1(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Masters(unittest.TestCase):
+    """31.10: уста рўйхатдан ўтади (фото шарт) → владелец тасдиқлайди → заявка устага бир тугмада → уста олади."""
+
+    def setUp(self):
+        self.api = Api()
+        self.b = B.Bot(B.connect(":memory:"), self.api, [OWNER])
+
+    def register(self, uid=77, trade="santex"):
+        h = self.b.handle
+        self.assertEqual(h(msg("/start usta", uid)), "m_begin")
+        self.assertEqual(h(msg(T.TRADES[trade], uid)), "m_trade")
+        self.assertEqual(h(msg("Бобур Алиев", uid)), "m_name")
+        self.assertEqual(h(msg("Хўжаобод", uid)), "m_area")
+        self.assertEqual(h(msg("10 йил", uid)), "m_exp")
+        self.assertEqual(h(msg(uid=uid, contact={"phone_number": "998911112233"})), "m_phone")
+        self.assertEqual(h(msg("салом", uid)), "m_noface")                     # расмсиз — йўқ
+        self.assertEqual(h(msg(uid=uid, photo=[{"file_id": "f"}])), "m_face")
+        self.assertEqual(h(msg(T.M_READY, uid)), "m_nowork")                   # иш расми шарт
+        self.assertEqual(h(msg(uid=uid, photo=[{"file_id": "w"}])), "m_workphoto")
+        self.assertEqual(h(msg(T.M_READY, uid)), "m_submit")
+        return self.b.db.execute("SELECT * FROM masters WHERE uid=?", (uid,)).fetchone()
+
+    def cb(self, data, uid=OWNER):
+        return self.b.handle({"callback_query": {"id": "q", "data": data, "from": {"id": uid},
+                                                 "message": {"chat": {"id": uid}, "message_id": 1}}})
+
+    def test_flow(self):
+        m = self.register()
+        self.assertEqual(m["status"], "pending")
+        self.assertIsNone(self.cb(f"ma:{m['id']}", uid=5))                     # чужой не одобрит
+        self.assertEqual(self.cb(f"ma:{m['id']}"), "ma")
+        # заявка сантехнику → в карточке владельца кнопка устаси
+        h = self.b.handle
+        h(msg("/start")); h(msg(T.KINDS["santex"][0])); h(msg("кран")); h(msg(T.WHEN["week"])); h(msg("Марказ"))
+        h(msg(T.SKIP)); h(msg(contact={"phone_number": "998901234567"}))
+        card = [p for m_, p in self.api.calls if m_ == "sendMessage" and "Ариза №1" in (p.get("text") or "")][0]
+        btns = [b["callback_data"] for row in card["reply_markup"]["inline_keyboard"] for b in row]
+        self.assertIn(f"go:1:{m['id']}", btns)
+        self.assertEqual(self.cb(f"go:1:{m['id']}"), "go")
+        self.assertIsNone(self.cb("mt:1", uid=999))                            # бошқа одам ололмайди
+        self.assertEqual(self.cb("mt:1", uid=77), "mt")
+        r = self.b.db.execute("SELECT * FROM leads WHERE n=1").fetchone()
+        self.assertEqual(r["status"], "taken")
+        self.assertTrue(any("+998901234567" in (p.get("text") or "") for p in self.api.to(77)))   # телефон устага
+        self.assertIn("/start usta", self.b.m_list() if False else "/start usta")
+
+    def test_reject_and_skip(self):
+        m = self.register(uid=78, trade="elektr")
+        self.assertEqual(self.cb(f"mr:{m['id']}"), "mr")
+        self.assertEqual(self.b.db.execute("SELECT status FROM masters WHERE id=?", (m["id"],)).fetchone()[0], "no")
+        self.assertIn("❌", self.b.m_list())

@@ -22,8 +22,11 @@ CREATE TABLE IF NOT EXISTS users (uid INTEGER PRIMARY KEY, first TEXT, username 
     created TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS leads (n INTEGER PRIMARY KEY, uid INTEGER NOT NULL, kind TEXT NOT NULL, details TEXT,
     place TEXT, phone TEXT, photos TEXT, src TEXT, status TEXT NOT NULL DEFAULT 'new', created TEXT NOT NULL,
-    urgency TEXT, rating INTEGER, reminded INTEGER NOT NULL DEFAULT 0, obj TEXT);
+    urgency TEXT, rating INTEGER, reminded INTEGER NOT NULL DEFAULT 0, obj TEXT, master INTEGER);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS masters (id INTEGER PRIMARY KEY, uid INTEGER NOT NULL UNIQUE, username TEXT, trade TEXT NOT NULL,
+    name TEXT, area TEXT, exp TEXT, phone TEXT, face TEXT, works TEXT, status TEXT NOT NULL DEFAULT 'pending',
+    created TEXT NOT NULL, jobs INTEGER NOT NULL DEFAULT 0);
 """
 PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
 
@@ -41,7 +44,7 @@ def connect(path: str) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
     have = {r[1] for r in db.execute("PRAGMA table_info(leads)")}
-    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT")):
+    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT"), ("master", "INTEGER")):
         if col not in have:
             db.execute(f"ALTER TABLE leads ADD COLUMN {col} {typ}")
     db.commit()
@@ -98,6 +101,12 @@ class Bot:
             return None
         frm, chat = m["from"], m["chat"]["id"]
         text = (m.get("text") or "").strip()
+        if text in ("/usta", "/start usta"):
+            self.user(frm, "usta")
+            return self.m_begin(frm, chat)
+        if text == "/ustalar" and frm["id"] in self.owners:
+            self.say(chat, self.m_list())
+            return "ustalar"
         if text.startswith("/start"):
             src = text.split(maxsplit=1)[1][:32] if " " in text else None
             self.user(frm, src)
@@ -115,6 +124,9 @@ class Bot:
         if text == T.CONTACT:
             self.say(chat, T.CONTACT_TEXT)
             return "contact"
+        step, data = u["step"] or "", json.loads(u["data"] or "{}")
+        if step.startswith("m_"):                    # уста рўйхатдан ўтмоқда — касб тугмалари мижоз тугмаларига ўхшайди
+            return self.m_step(frm, chat, m, text, step, data)
         kind = next((k for k, (btn, _) in T.KINDS.items() if text == btn), None)
         if kind:
             if kind in T.OBJ_KINDS:
@@ -125,7 +137,6 @@ class Bot:
                 self.set_step(frm["id"], "details", {"kind": kind})
                 self.say(chat, T.KINDS[kind][1], {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True})
             return "kind"
-        step, data = u["step"] or "", json.loads(u["data"] or "{}")
         if step == "obj" and text:
             obj = next((k for k, v in T.OBJ.items() if v == text), None)
             if not obj:
@@ -200,7 +211,8 @@ class Bot:
     def card(self, r, frm: dict | None = None) -> str:
         who = esc((frm or {}).get("first_name") or "")
         un = (frm or {}).get("username")
-        st = {"new": "🆕 янги", "done": "✅ боғланилди", "no": "❌ бекор", "fin": "🏁 иш битди"}.get(r["status"], r["status"])
+        st = {"new": "🆕 янги", "done": "✅ боғланилди", "no": "❌ бекор", "fin": "🏁 иш битди",
+              "sent": "📤 устага юборилди", "taken": "👷 уста олди"}.get(r["status"], r["status"])
         if r["rating"]:
             st += " · " + "⭐" * r["rating"]
         when = T.WHEN.get(r["urgency"] or "", r["urgency"] or "—")
@@ -211,8 +223,8 @@ class Bot:
 
     def notify(self, n: int, frm: dict):
         r = self.db.execute("SELECT * FROM leads WHERE n=?", (n,)).fetchone()
-        kb = {"inline_keyboard": [[{"text": "✅ Боғландим", "callback_data": f"ok:{n}"},
-                                   {"text": "❌ Бекор", "callback_data": f"no:{n}"}]]}
+        kb = {"inline_keyboard": self.dispatch_rows(r) + [[{"text": "✅ Боғландим", "callback_data": f"ok:{n}"},
+                                                         {"text": "❌ Бекор", "callback_data": f"no:{n}"}]]}
         for o in self.owners:
             try:
                 self.api("sendMessage", chat_id=o, text=self.card(r, frm), reply_markup=kb, parse_mode="HTML")
@@ -235,8 +247,14 @@ class Bot:
             for o in self.owners:
                 self.api("sendMessage", chat_id=o, text=f"⭐ Ариза №{r['n']}: мижоз баҳоси {'⭐' * int(k)}")
             return "rate"
+        if act in ("mt", "ms"):                      # уста: mt:<n> оламан / ms:<n> ололмайман
+            return self.m_answer(q, act, rest)
         if q["from"]["id"] not in self.owners:
             return None
+        if act in ("ma", "mr"):                      # владелец: ma:<id> тасдиқ / mr:<id> рад
+            return self.m_decide(q, act, rest)
+        if act == "go":                              # владелец: go:<n>:<master id> — заявка устага
+            return self.m_send(q, rest)
         n = rest
         if act in ("ok", "no", "fin") and n.isdigit():
             self.db.execute("UPDATE leads SET status=? WHERE n=?", ({"ok": "done", "no": "no", "fin": "fin"}[act], int(n)))
@@ -255,6 +273,160 @@ class Bot:
             self.api("answerCallbackQuery", callback_query_id=q["id"])
             return act
         return None
+
+    # ---------- 🛠 усталар (31.10) ----------
+    def trades_kb(self) -> dict:
+        return {"keyboard": [[{"text": v}] for v in T.TRADES.values()] + [[{"text": T.BACK}]], "resize_keyboard": True}
+
+    def m_begin(self, frm: dict, chat: int) -> str:
+        self.set_step(frm["id"], "m_trade", {})
+        self.say(chat, T.M_HELLO, self.trades_kb())
+        return "m_begin"
+
+    def m_step(self, frm, chat, m, text, step, data) -> str:
+        back = {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True}
+        if step == "m_trade":
+            t = next((k for k, v in T.TRADES.items() if v == text), None)
+            if not t:
+                self.say(chat, T.UNKNOWN, self.trades_kb()); return "m_badtrade"
+            data["trade"] = t; self.set_step(frm["id"], "m_name", data); self.say(chat, T.M_ASK_NAME, back); return "m_trade"
+        if step == "m_name" and text:
+            data["name"] = text[:80]; self.set_step(frm["id"], "m_area", data); self.say(chat, T.M_ASK_AREA, back); return "m_name"
+        if step == "m_area" and text:
+            data["area"] = text[:200]; self.set_step(frm["id"], "m_exp", data); self.say(chat, T.M_ASK_EXP, back); return "m_area"
+        if step == "m_exp" and text:
+            data["exp"] = text[:60]; self.set_step(frm["id"], "m_phone", data); self.say(chat, T.M_ASK_PHONE, self.phone_kb()); return "m_exp"
+        if step == "m_phone":
+            c = m.get("contact")
+            phone = norm_phone(c["phone_number"]) if c else norm_phone(text)
+            if not phone:
+                self.say(chat, T.BAD_PHONE, self.phone_kb()); return "m_badphone"
+            data["phone"] = phone; self.set_step(frm["id"], "m_face", data); self.say(chat, T.M_ASK_FACE, back); return "m_phone"
+        if step == "m_face":
+            if not m.get("photo"):
+                self.say(chat, T.M_NEED_PHOTO, back); return "m_noface"
+            data["face"] = {"chat": chat, "id": m["message_id"]}
+            self.set_step(frm["id"], "m_work", data)
+            self.say(chat, T.M_ASK_WORK, {"keyboard": [[{"text": T.M_READY}], [{"text": T.BACK}]], "resize_keyboard": True})
+            return "m_face"
+        if step == "m_work":
+            if m.get("photo"):
+                data.setdefault("works", []).append({"chat": chat, "id": m["message_id"]})
+                self.set_step(frm["id"], "m_work", data); return "m_workphoto"
+            if text == T.M_READY:
+                if not data.get("works"):
+                    self.say(chat, T.M_NEED_PHOTO); return "m_nowork"
+                return self.m_submit(frm, chat, data)
+        self.say(chat, T.UNKNOWN)
+        return "m_unknown"
+
+    def m_submit(self, frm, chat, data) -> str:
+        t = now().isoformat()
+        self.db.execute("INSERT INTO masters(uid, username, trade, name, area, exp, phone, face, works, status, created)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET username=excluded.username,"
+                        " trade=excluded.trade, name=excluded.name, area=excluded.area, exp=excluded.exp, phone=excluded.phone,"
+                        " face=excluded.face, works=excluded.works, status='pending', created=excluded.created",
+                        (frm["id"], frm.get("username"), data["trade"], data.get("name"), data.get("area"), data.get("exp"),
+                         data.get("phone"), json.dumps(data.get("face")), json.dumps(data.get("works", [])[:3]), "pending", t))
+        self.db.commit()
+        self.set_step(frm["id"], "")
+        self.say(chat, T.M_SENT)
+        r = self.db.execute("SELECT * FROM masters WHERE uid=?", (frm["id"],)).fetchone()
+        kb = {"inline_keyboard": [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"},
+                                   {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]}
+        for o in self.owners:
+            try:
+                for p in [json.loads(r["face"])] + json.loads(r["works"] or "[]"):
+                    self.api("copyMessage", chat_id=o, from_chat_id=p["chat"], message_id=p["id"])
+                self.api("sendMessage", chat_id=o, text=self.m_card(r), reply_markup=kb, parse_mode="HTML")
+            except Exception as e:  # noqa: BLE001
+                print(f"m_submit: {type(e).__name__}: {e}", flush=True)
+        return "m_submit"
+
+    def m_card(self, r) -> str:
+        st = {"pending": "⏳ текширувда", "ok": "✅ рўйхатда", "no": "❌ рад этилди"}.get(r["status"], r["status"])
+        un = f" @{r['username']}" if r["username"] else ""
+        return (f"🛠 <b>Уста аризаси</b> · {T.TRADES.get(r['trade'], r['trade'])}\n👤 {esc(r['name'])}{un}\n"
+                f"🆔 {r['uid']}\n📞 {esc(r['phone'])}\n📍 {esc(r['area'])}\n🧰 тажриба: {esc(r['exp'])}\n{st}")
+
+    def m_decide(self, q, act, rest) -> str | None:
+        if not rest.isdigit():
+            return None
+        st = "ok" if act == "ma" else "no"
+        self.db.execute("UPDATE masters SET status=? WHERE id=?", (st, int(rest)))
+        self.db.commit()
+        r = self.db.execute("SELECT * FROM masters WHERE id=?", (int(rest),)).fetchone()
+        try:
+            self.api("editMessageText", chat_id=q["message"]["chat"]["id"], message_id=q["message"]["message_id"],
+                     text=self.m_card(r), parse_mode="HTML")
+        except Exception:  # noqa: BLE001
+            pass
+        self.say(r["uid"], T.M_OK.format(trade=T.TRADES.get(r["trade"], r["trade"])) if st == "ok" else T.M_NO)
+        self.api("answerCallbackQuery", callback_query_id=q["id"])
+        return act
+
+    def dispatch_rows(self, r) -> list:
+        """Карточка заявки владельцу: кнопки «→ уста» — подходящие по профессии, в списке (одобренные)."""
+        trades = T.FOR_KIND.get(r["kind"], ())
+        if not trades:
+            return []
+        ms = self.db.execute(f"SELECT * FROM masters WHERE status='ok' AND trade IN ({','.join('?' * len(trades))})"
+                             " ORDER BY jobs, id LIMIT 6", trades).fetchall()
+        return [[{"text": f"→ {m['name']} ({T.TRADES[m['trade']].split(' ', 1)[1].split(' (')[0]})",
+                  "callback_data": f"go:{r['n']}:{m['id']}"}] for m in ms]
+
+    def m_send(self, q, rest) -> str | None:
+        n, _, mid = rest.partition(":")
+        if not (n.isdigit() and mid.isdigit()):
+            return None
+        r = self.db.execute("SELECT * FROM leads WHERE n=?", (int(n),)).fetchone()
+        ms = self.db.execute("SELECT * FROM masters WHERE id=? AND status='ok'", (int(mid),)).fetchone()
+        if not r or not ms:
+            return None
+        card = (f"📥 Ариза №{r['n']} · {T.KINDS.get(r['kind'], (r['kind'],))[0]}\n📍 {esc(r['place'])}\n"
+                f"⏱ {esc(T.WHEN.get(r['urgency'] or '', r['urgency'] or '—'))}\n📝 {esc(r['details'])}")
+        kb = {"inline_keyboard": [[{"text": T.M_TAKE, "callback_data": f"mt:{r['n']}"},
+                                   {"text": T.M_SKIP, "callback_data": f"ms:{r['n']}"}]]}
+        self.api("sendMessage", chat_id=ms["uid"], text=T.M_JOB.format(card=card), reply_markup=kb, parse_mode="HTML")
+        for p in json.loads(r["photos"] or "[]")[:5]:
+            self.api("copyMessage", chat_id=ms["uid"], from_chat_id=p["chat"], message_id=p["id"])
+        self.db.execute("UPDATE leads SET master=?, status='sent' WHERE n=?", (ms["id"], r["n"]))
+        self.db.commit()
+        self.api("answerCallbackQuery", callback_query_id=q["id"], text=f"→ {ms['name']}")
+        for o in self.owners:
+            self.api("sendMessage", chat_id=o, text=f"📤 Ариза №{r['n']} → уста {esc(ms['name'])} — жавобини кутамиз")
+        return "go"
+
+    def m_answer(self, q, act, n) -> str | None:
+        ms = self.db.execute("SELECT * FROM masters WHERE uid=? AND status='ok'", (q["from"]["id"],)).fetchone()
+        r = self.db.execute("SELECT * FROM leads WHERE n=?", (int(n),)).fetchone() if n.isdigit() else None
+        if not ms or not r or r["master"] != ms["id"]:
+            return None
+        self.api("answerCallbackQuery", callback_query_id=q["id"])
+        if act == "mt":
+            self.db.execute("UPDATE leads SET status='taken' WHERE n=?", (r["n"],))
+            self.db.execute("UPDATE masters SET jobs=jobs+1 WHERE id=?", (ms["id"],))
+            self.db.commit()
+            self.say(ms["uid"], T.M_TAKEN.format(phone=esc(r["phone"])))
+            self.say(r["uid"], T.M_CLIENT.format(n=r["n"], name=esc(ms["name"])))
+            note = f"✅ Ариза №{r['n']}: уста {esc(ms['name'])} олди"
+        else:
+            self.db.execute("UPDATE leads SET status='new', master=NULL WHERE n=?", (r["n"],))
+            self.db.commit()
+            note = f"❌ Ариза №{r['n']}: уста {esc(ms['name'])} ололмайди — бошқа уста танланг"
+        for o in self.owners:
+            self.api("sendMessage", chat_id=o, text=note, parse_mode="HTML")
+        return act
+
+    def m_list(self) -> str:
+        rows = self.db.execute("SELECT * FROM masters ORDER BY trade, status, id").fetchall()
+        if not rows:
+            return "🛠 Усталар ҳали йўқ. Рўйхатга ёзилиш ҳаволаси: /start usta"
+        out = ["🛠 <b>УСТАЛАР</b>"]
+        for r in rows:
+            st = {"pending": "⏳", "ok": "✅", "no": "❌"}.get(r["status"], "?")
+            out.append(f"{st} {T.TRADES.get(r['trade'], r['trade'])} — {esc(r['name'])} · {esc(r['phone'])} · иш: {r['jobs']}")
+        return "\n".join(out)
 
     def remind(self, minutes: int = 30) -> int:
         """Заявка без ответа дольше 30 мин — напомнить владельцу один раз (днём 9–22)."""
