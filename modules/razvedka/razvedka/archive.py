@@ -151,7 +151,7 @@ def parse_batch(out: str, n: int) -> list[dict]:
 
 # 31.10 владелец: «в папке Paparazzi UZ уже собраны готовые каналы — я не зря собирал». Куратор берёт оттуда только СВЕЖЕЕ;
 # их архивы (старые клипы, концерты) — теперь работа Архива. Чужое: кадр — на лого, текст — всегда наш (Gemini пишет заново).
-FOLDERS = ("Paparazzi UZ",)
+FOLDERS = ("Paparazzi UZ", "KATTA DAVRA", "XOJAOBOD CITY", "XOJAOBODCITY")   # 31.10: + папки Давры и Хўжаобода
 FOLDER_AGE = dt.timedelta(days=30)              # чужие клипы вечные; свежее берёт куратор, Архиву — старше месяца
 FOLDER_TAKE = 15                                # постов в банк с одного канала за проход
 FOLDER_PER_RUN = 4                              # каналов папки за проход (по кругу) — бережём бесплатный Gemini
@@ -166,7 +166,12 @@ def pick_round(keys: list[str], start: int, n: int) -> list[str]:
 
 async def folder_targets(client, st: dict, state_dir: Path, log=print) -> list[tuple]:
     folders = await curate.folder_peers(client)
-    peers = curate.peers_in(folders, FOLDERS)
+    peers, ids = [], set()
+    for p in curate.peers_in(folders, FOLDERS):     # канал в двух папках — один раз
+        cid = getattr(p, "channel_id", None)
+        if cid and cid not in ids:
+            ids.add(cid)
+            peers.append(p)
     try:
         cur = json.loads((state_dir / "curator.json").read_text(encoding="utf-8"))
         blocked = set(cur.get("logo_sources", []))
@@ -196,7 +201,7 @@ async def folder_targets(client, st: dict, state_dir: Path, log=print) -> list[t
         if u in curate.OWN or u in blocked or f"@{u}" in blocked:
             continue                             # свои — уже в списке; ставит своё лого — не тратим Gemini
         out.append((k, by[k], FOLDER_AGE, FOLDER_TAKE))
-    log(f"  папка {FOLDERS[0]}: каналов {len(peers)}, в этом проходе {len(out)}")
+    log(f"  папки-источники: каналов {len(peers)}, в этом проходе {len(out)}")
     return out
 
 
