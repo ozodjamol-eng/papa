@@ -59,6 +59,22 @@ def send_post(token, chat, folder: Path, spec: dict) -> list:
         req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendPhoto", data=b"".join(parts),
                                      headers={"Content-Type": f"multipart/form-data; boundary={b}"})
         out.append(json.loads(urllib.request.urlopen(req, timeout=120).read()))
+    if spec.get("video"):   # 31.10: готовый пост с видео — подпись уже жирная (HTML), владелец пересылает
+        path = folder / spec["video"]
+        b = uuid.uuid4().hex
+        parts = []
+        for k, v in (("chat_id", str(chat)), ("caption", spec.get("caption_html", "")[:1024]), ("parse_mode", "HTML"),
+                     ("supports_streaming", "true")):
+            parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+        parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"video\"; filename=\"{path.name}\"\r\n"
+                     f"Content-Type: video/mp4\r\n\r\n".encode() + path.read_bytes() + b"\r\n")
+        parts.append(f"--{b}--\r\n".encode())
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendVideo", data=b"".join(parts),
+                                     headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        try:
+            out.append(json.loads(urllib.request.urlopen(req, timeout=300).read()))
+        except urllib.error.HTTPError as e:
+            out.append({"ok": False, "err": e.read()[:300].decode(errors="replace")})
     poll = spec.get("poll")
     if poll:
         body = json.dumps({"chat_id": chat, "question": poll["question"], "is_anonymous": poll.get("anonymous", True),
@@ -86,7 +102,9 @@ def main(folder):
     docs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() in DOC_EXT)
     msgs = sorted(f for f in Path(folder).iterdir() if f.suffix.lower() == ".msg")
     posts = sorted(f for f in Path(folder).iterdir() if f.name.endswith(".post.json"))
-    used = {json.loads(p.read_text(encoding="utf-8")).get("photo") for p in posts}
+    used = set()
+    for p in posts:
+        sp_ = json.loads(p.read_text(encoding="utf-8")); used |= {sp_.get("photo"), sp_.get("video")}
     docs = [d for d in docs if d.name not in used]      # фото поста идёт фото, не документом
     if not vids and not docs and not msgs and not posts:
         sys.exit("NO_VIDEO")
