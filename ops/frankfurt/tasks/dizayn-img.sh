@@ -5,7 +5,7 @@ set -Eeuo pipefail
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 git -C /opt/papa fetch -q origin dizayn 2>/dev/null || { echo "NO_DIZAYN_BRANCH"; exit 1; }
 mkdir -p "$T/in" "$T/out"; git -C /opt/papa archive FETCH_HEAD dizayn | tar -x -C "$T/in"
-set -a; . /etc/papa-genplan/ai.env; set +a
+set -a; . /etc/papa-genplan/ai.env; [ -f /etc/papa-dizayn/img.env ] && . /etc/papa-dizayn/img.env; set +a   # платный ключ картинок — свой
 python3 -I /opt/papa/ops/frankfurt/dizayn_img.py "$T/in/dizayn" "$T/out/dizayn-out"
 ls "$T/out/dizayn-out"/*.png >/dev/null 2>&1 || { echo "== DIZAYN_IMG_DONE (картинок нет)"; exit 0; }
 KEY=/etc/papa-motion/deploy_key
