@@ -342,8 +342,8 @@ async def _scout() -> str:
     await c.connect()
     try:
         out = []
-        for t, title in (("afisha", "🎫 АФИША: рынок Долины и Узбекистана"), ("xojaobod", "XOJAOBOD RAQIB"),
-                         ("davra", "КАТТА ДАВРА: бизнес, мотивация, кулги")):
+        for t, title in (("xojaobod", "XOJAOBOD RAQIB"), ("davra", "КАТТА ДАВРА: бизнес, мотивация, кулги"),
+                         ("afisha", "🎫 АФИША: рынок Долины и Узбекистана"))   # последней — отчёт задачи видит хвост:
             out.append(f"=== {title} ===\n" + scout.render(await scout.run(c, t, log=lambda s: print(s, flush=True))))
         return "\n\n".join(out)
     finally:
