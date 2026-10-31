@@ -83,8 +83,8 @@ def sw(x, y, n, side):
     dx, dy = {"n": (0, 18), "s": (0, -18), "w": (18, 0), "e": (-18, 0)}[side]
     cx, cy = X(x) + dx, Y(y) + dy
     return f'<rect x="{cx-14}" y="{cy-14}" width="28" height="28" rx="4" class="sw"/><text x="{cx}" y="{cy}" class="swt" text-anchor="middle" dominant-baseline="central">{n}</text>'
-E += [sock(0.85, L, "1", "n"), sock(0.45, L, "2", "n"), sock(0, 2.75, "3", "w"),
-      sock(W, 2.70, "4", "e"), sock(3.32, L, "5", "n"), sock(W, 0.75, "6", "e"),
+E += [sock(0.85, L, "1", "n"), sock(0.45, L, "2", "n"), sock(0, 3.15, "3", "w"),
+      sock(0, 0.45, "4", "w"), sock(W, 2.70, "5", "e"), sock(3.32, L, "6", "n"), sock(W, 0.75, "7", "e"),
       sw(2.95, L, "А", "n"), sw(2.25, 0, "Б", "s")]
 E.append(f'<rect x="{X(0.55)}" y="{Y(L)+4}" width="26" height="12" class="fan"/>')
 
@@ -96,20 +96,21 @@ pages.append(PAGE.format(n=1, c=f'''<div class="cover"><img src="v1.png"/><div c
 pages.append(PAGE.format(n=2, c=f'''<h2>ВИЗУАЛ</h2><div class="two wide"><img src="v2.png"/><div class="pts">
 <p><b>1.</b> Деворлар — илиқ оқ, силлиқ</p><p><b>2.</b> ТВ девори — оч эман рейкалар</p>
 <p><b>3.</b> Шифт бўйлаб илиқ LED ёруғлик</p><p><b>4.</b> Оч кулранг диван ва кресло</p>
-<p><b>5.</b> Пол — оч эман ламинат</p><p><b>6.</b> Кириш — зиғир рулон парда</p></div></div>'''))
+<p><b>5.</b> Пол — оч эман ламинат</p><p><b>6.</b> Кириш — зиғир рулон парда</p><p class="warn">Бу расм — материал ва кайфият намунаси. Жиҳозлар жойи — 3-бетдаги режа бўйича</p></div></div>'''))
 pages.append(PAGE.format(n=3, c=f'''<h2>ЎЛЧАМЛИ РЕЖА</h2><div class="two">{svg(p3)}<div class="pts">
 <p><b>Хона:</b> 3,95 × 3,45 м (13,5 м²)</p><p><b>Шифт:</b> 2,10 м</p>
 <p><b>Кириш эшиги:</b> 1,23 м</p><p><b>2-хона эшиги:</b> 0,94 м</p>
 <p class="warn">Деворлар тўғри бурчак эмас — уста жойида қайта ўлчайди</p></div></div>'''))
 pages.append(PAGE.format(n=4, c=f'''<h2>ЭЛЕКТР РЕЖАСИ</h2><div class="two">{svg(E)}<div class="pts tbl">
-<p><span class="c">1</span> ТВ: 2 розетка + интернет — <b>1,10 м</b></p>
-<p><span class="c">2</span> Тумба: 2 розетка — <b>0,30 м</b></p>
-<p><span class="c">3</span> Диван: 2 розетка + USB — <b>0,30 м</b></p>
-<p><span class="c">4</span> Кресло (съёмка чироғи): 2 розетка — <b>0,30 м</b></p>
-<p><span class="c">5</span> Кондиционер — <b>2,00 м</b></p>
-<p><span class="c">6</span> Хизмат розеткаси — <b>0,30 м</b></p>
-<p><span class="s">А</span> Кириш: 3 клавиш — <b>0,90 м</b><br/>(спот / LED / рейка)</p>
-<p><span class="s">Б</span> 2-хона: 2 клавиш — <b>0,90 м</b><br/>(спот / вытяжка)</p>
+<p><span class="c">1</span><span class="tx">ТВ ортида: 2 розетка + интернет — <b>1,10 м</b><br/>экран ортида, сим кўринмайди</span></p>
+<p><span class="c">2</span><span class="tx">Тумба: 2 розетка — <b>0,30 м</b><br/>роутер, приставка</span></p>
+<p><span class="c">3</span><span class="tx">Диван боши: 2 розетка + USB — <b>0,75 м</b><br/>қўлтиқ устида: телефон, ноутбук</span></p>
+<p><span class="c">4</span><span class="tx">Диван бурчаги: 1 розетка + USB — <b>0,90 м</b><br/>суянчиқдан баланд</span></p>
+<p><span class="c">5</span><span class="tx">Съёмка: 2 розетка — <b>0,30 м</b><br/>диванга қарши: ҳалқа чироқ, камера</span></p>
+<p><span class="c">6</span><span class="tx">Кондиционер — <b>2,00 м</b></span></p>
+<p><span class="c">7</span><span class="tx">Хизмат (чангютгич) — <b>0,30 м</b></span></p>
+<p><span class="s">А</span><span class="tx">Кириш: 3 клавиш — <b>0,90 м</b><br/>спот / LED / рейка</span></p>
+<p><span class="s">Б</span><span class="tx">2-хона эшиги: 2 клавиш — <b>0,90 м</b><br/>спот / вытяжка, тутқич томонда</span></p>
 <p><span class="sp"></span> Спот LED 7 Вт, 3000K — 5 дона</p>
 <p><span class="ln"></span> LED тасма 2700K шифт бўйлаб</p></div></div>'''))
 pal = [("Деворлар", "Илиқ оқ", "#F2EEE6"), ("Рейка, тумба", "Оч эман", "#C9A27C"), ("Пол", "Оч эман ламинат", "#D3B48C"),
@@ -119,7 +120,7 @@ sw_html = "".join(f'<div class="swc"><div class="chip" style="background:{c}"></
 mat_rows = [("Ламинат 33 класс, оч эман", "15 м²"), ("Плинтус", "13 м"), ("Девор бўёғи, илиқ оқ, мат", "5 л (2 қават)"),
             ("Рейкали панел MDF, оч эман", "1,5 × 2,1 м"), ("Натяжной шифт, мат оқ", "13,5 м²"),
             ("LED тасма 2700K 24V + профил", "18 м"), ("Блок питания 24V 150 Вт", "2 дона"), ("Спот LED 7 Вт", "5 дона"),
-            ("Розетка / USB / интернет", "9 / 1 / 1"), ("Ўчиргич 3 + 2 клавиш", "1 + 1"), ("Рулон парда, зиғир", "1,25 × 2,2 м")]
+            ("Розетка / USB / интернет", "11 / 2 / 1"), ("Ўчиргич 3 + 2 клавиш", "1 + 1"), ("Рулон парда, зиғир", "1,25 × 2,2 м")]
 mt = "".join(f"<tr><td>{a}</td><td>{b}</td></tr>" for a, b in mat_rows)
 pages.append(PAGE.format(n=5, c=f'''<h2>РАНГЛАР ВА МАТЕРИАЛЛАР</h2><div class="two"><div class="pal">{sw_html}</div>
 <div><table>{mt}</table><p class="warn">Натяжной шифт 3–5 см пасайтиради — шифт 2,05 м бўлади</p></div></div>'''))
@@ -138,7 +139,7 @@ h1{font-size:120px;font-weight:900;line-height:1;margin:10px 0 16px}.meta{font-s
 .two{display:grid;grid-template-columns:1.1fr 1fr;gap:50px;align-items:start}
 .wide{grid-template-columns:1.9fr 1fr}.two img{width:100%;border-radius:14px}
 .pts p{font-size:30px;margin:0 0 20px;line-height:1.25}.pts p b{font-weight:900}
-.tbl p{font-size:25px;margin-bottom:15px;display:flex;align-items:center;gap:14px;line-height:1.2}
+.tx{display:block}.tbl p{font-size:22px;margin-bottom:10px;display:flex;align-items:center;gap:14px;line-height:1.2}
 .c,.s{display:inline-flex;width:40px;height:40px;flex:none;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:22px}
 .c{background:#C0392B;border-radius:50%}.s{background:#1F4E79;border-radius:6px}
 .sp{width:40px;height:40px;flex:none;border-radius:50%;border:4px solid #E3A400;background:#fff3cc}
