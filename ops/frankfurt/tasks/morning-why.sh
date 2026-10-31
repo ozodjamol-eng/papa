@@ -16,4 +16,6 @@ except sqlite3.OperationalError as e:
 PY
 echo "== журнал утра"
 journalctl -u papa-genplan -u papa-fabrika --since "-14h" --no-pager -o cat | grep -iE "morning|утр|хайрли|видео|pool|vision" | tail -40
+echo "== ошибки подготовки (morning:)"
+journalctl -u papa-genplan -u papa-fabrika --since "-20h" --no-pager -o cat | grep -E "^morning:|Видео не получилось|нет годного" | sort | uniq -c | sort -rn | head -25
 echo "== MORNING_WHY_DONE"
