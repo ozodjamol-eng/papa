@@ -43,6 +43,7 @@ SKLAD = {
     "@sanatdunyosi": ("paparazzi",),
     "@madaniyat_marifat_tv": ("paparazzi",),
     "@madaniyatvazirligi": ("paparazzi",),
+    "@RizaNovaUZ": ("paparazzi",),                  # 31.10 владелец: музыкальный лейбл, клипы; лого — проверка кадров
 }
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar"}      # якорь: сначала свежий пост, нет нового — следующий из архива
@@ -53,7 +54,7 @@ FIXED = {"davra": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@A
                    "МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1},
          "xojaobod": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
          "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "РАЗВЛЕКАТЕЛЬНО": 2, "РЕТРО КЛИПЛАР": 4,
-                       "@AbduraxmonQiziq": 1, "@sanatdunyosi": 2, "@madaniyat_marifat_tv": 2, "@madaniyatvazirligi": 1}}
+                       "@AbduraxmonQiziq": 1, "@sanatdunyosi": 2, "@madaniyat_marifat_tv": 2, "@madaniyatvazirligi": 1, "@RizaNovaUZ": 2}}
 FRIDAY = {("xojaobod", "МАЪНАВИЯТ"): 3}                    # в пятницу маънавият — 3
 # вечный склад: пост со словами «сегодня/вчера/в этом году», годом или датой — устарел, не берём
 STALE = re.compile(r"(?<![\w'])(?:бугун|кеча|эртага|шу\s+йил|bugun|kecha|ertaga|shu\s+yil|сегодня|вчера|завтра)(?![\w'])"
