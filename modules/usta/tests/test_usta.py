@@ -96,10 +96,10 @@ class T1(unittest.TestCase):
 
     def test_remind_once_after_30_min(self):
         self.lead()
-        old = (B.now() - B.dt.timedelta(minutes=31)).isoformat()
-        self.b.db.execute("UPDATE leads SET created=?", (old,))
         orig = B.now
-        B.now = lambda: orig().replace(hour=12)
+        noon = orig().replace(hour=12, minute=0)
+        self.b.db.execute("UPDATE leads SET created=?", ((noon - B.dt.timedelta(minutes=31)).isoformat(),))
+        B.now = lambda: noon
         try:
             self.assertEqual(self.b.remind(), 1)
             self.assertEqual(self.b.remind(), 0)                     # бир марта
@@ -128,6 +128,40 @@ class T1(unittest.TestCase):
     def test_groups_ignored(self):
         u = msg("салом"); u["message"]["chat"]["type"] = "supergroup"
         self.assertIsNone(self.b.handle(u))
+
+
+
+class TMiniApp(unittest.TestCase):
+    """31.10: 3D дизайн из Mini App — $3/м², дальше обычный путь до заявки."""
+    def setUp(self):
+        self.api = Api()
+        self.b = B.Bot(B.connect(":memory:"), self.api, [OWNER])
+
+    def test_web_app_data_to_lead(self):
+        h = self.b.handle
+        h(msg("/start xojaobod"))
+        wd = {"data": '{"v":1,"kind":"dizayn","obj":"kv","m2":72,"style":"haytek","price":216}', "button_text": "x"}
+        self.assertEqual(h(msg(web_app_data=wd)), "dz")
+        self.assertIn("$216", self.api.to(42)[-1]["text"])
+        self.assertEqual(h(msg(T.WHEN["week"])), "when")
+        self.assertEqual(h(msg("Марказ")), "place")
+        self.assertEqual(h(msg(T.SKIP)), "skip")
+        self.assertEqual(h(msg(contact={"phone_number": "998901234567"})), "lead")
+        r = self.b.db.execute("SELECT * FROM leads").fetchone()
+        self.assertEqual((r["kind"], r["obj"], r["src"]), ("dizayn", "kv", "xojaobod"))
+        self.assertIn("72 м²", r["details"]); self.assertIn("Хай-тек", r["details"]); self.assertIn("$216", r["details"])
+
+    def test_start_link_and_bad_input(self):
+        h = self.b.handle
+        self.assertEqual(h(msg("/start d_hovli_120_sharq")), "dz")
+        self.assertIn("$360", self.api.to(42)[-1]["text"])
+        self.assertEqual(h(msg("/start d_kv_3_minimal", uid=43)), "dz_bad")
+        self.assertEqual(h(msg(web_app_data={"data": "не json"}, uid=44)), "dz_bad")
+        self.assertEqual(h(msg(web_app_data={"data": '{"obj":"zz","m2":50,"style":"minimal"}'}, uid=45)), "dz_bad")
+
+    def test_main_kb_has_web_app(self):
+        kb = B.main_kb()["keyboard"]
+        self.assertTrue(any(b.get("web_app", {}).get("url") == T.MINIAPP_URL for row in kb for b in row))
 
 
 if __name__ == "__main__":

@@ -65,7 +65,8 @@ def norm_phone(text: str) -> str | None:
 
 
 def main_kb() -> dict:
-    rows = [[{"text": T.KINDS[k][0]}] for k in T.KINDS] + [[{"text": T.CONTACT}]]
+    rows = [[{"text": T.KINDS[k][0], "web_app": {"url": T.MINIAPP_URL}} if k == "dizayn" else {"text": T.KINDS[k][0]}]
+            for k in T.KINDS] + [[{"text": T.CONTACT}]]
     return {"keyboard": rows, "resize_keyboard": True}
 
 
@@ -116,6 +117,17 @@ class Bot:
         if text == "/ustalar" and frm["id"] in self.owners:
             self.say(chat, self.m_list())
             return "ustalar"
+        if m.get("web_app_data"):                    # Mini App (кнопка клавиатуры): JSON с объектом, м², стилем
+            try:
+                d = json.loads(m["web_app_data"].get("data") or "{}")
+            except ValueError:
+                d = {}
+            return self.dz_begin(frm, chat, d.get("obj"), d.get("m2"), d.get("style"))
+        if text.startswith("/start d_"):              # Mini App из меню/ссылки: /start d_<obj>_<m2>_<style>
+            parts = text.split(maxsplit=1)[1].split("_")
+            if len(parts) == 4:
+                self.user(frm)
+                return self.dz_begin(frm, chat, parts[1], parts[2], parts[3])
         if text.startswith("/start"):
             src = text.split(maxsplit=1)[1][:32] if " " in text else None
             self.user(frm, src)
@@ -196,6 +208,24 @@ class Bot:
             return self.finish(frm, chat, data, phone)
         self.say(chat, T.UNKNOWN)
         return "unknown"
+
+    def dz_begin(self, frm: dict, chat: int, obj, m2, style) -> str:
+        """31.10: заявка на 3D дизайн из Mini App — объект, м², стиль уже выбраны, цена $3/м²; дальше обычный путь (когда → место → фото → телефон)."""
+        try:
+            m2 = int(float(m2))
+        except (TypeError, ValueError):
+            m2 = 0
+        if obj not in T.OBJ or style not in T.STYLES or not 5 <= m2 <= 1000:
+            self.say(chat, T.UNKNOWN)
+            return "dz_bad"
+        self.user(frm)
+        price = m2 * T.PRICE_M2
+        data = {"kind": "dizayn", "obj": obj,
+                "details": f"{m2} м² · {T.STYLES[style]} · ${price} (Mini App)"}
+        self.set_step(frm["id"], "when", data)
+        self.say(chat, T.DZ_GOT.format(obj=T.OBJ[obj], m2=m2, style=T.STYLES[style], price=price),
+                 {"keyboard": [[{"text": v} for v in T.WHEN.values()], [{"text": T.BACK}]], "resize_keyboard": True})
+        return "dz"
 
     def phone_kb(self) -> dict:
         return {"keyboard": [[{"text": T.SEND_PHONE, "request_contact": True}], [{"text": T.BACK}]], "resize_keyboard": True}
@@ -553,6 +583,10 @@ def main():
     except Exception:  # noqa: BLE001
         uname = "ozodjamoldizaynbot"
     bot = Bot(connect(os.environ.get("USTA_DB", "usta.sqlite3")), api, owners, uname)
+    try:  # 31.10: кнопка меню бота → Mini App 3D дизайна
+        api("setChatMenuButton", menu_button={"type": "web_app", "text": T.MENU_BTN, "web_app": {"url": T.MINIAPP_URL}})
+    except Exception as e:  # noqa: BLE001
+        print(f"menu: {e}", flush=True)
     off = 0
     print("usta: запущен", flush=True)
     while True:
