@@ -16,21 +16,31 @@ QUERIES = {
               "O'z ustida ishlash", "Ўз устида ишлаш", "Biznes g'oya", "Бизнес ғоя", "Kulgili videolar", "Qiziqarli videolar",
               "Foydali maslahatlar", "Klip", "Yangi qo'shiqlar"],
 }
+# 31.10 владелец: «афиша — нам этого не хватает, я работал в этой сфере». Изучение рынка: какие каналы-афиши есть
+# по Долине и Узбекистану (концерты, театр, билеты). Для изучения показываем ВСЕ, даже уже лежащие в папках.
+QUERIES["afisha"] = ["Afisha", "Афиша", "Andijon afisha", "Андижон афиша", "Farg'ona afisha", "Namangan afisha",
+                     "Konsert", "Концерт", "Konsertlar", "Концертлар", "Konsert chiptalari", "Chipta", "Билеты концерт",
+                     "Andijon konsert", "Андижон концерт", "Farg'ona konsert", "Namangan konsert", "Teatr Andijon",
+                     "Andijon tadbirlar", "Tadbirlar", "Тадбирлар", "Vodiy konsert", "Shou konsert", "Gastrol"]
 MIN_SUBS = 20000
+MIN_BY = {"afisha": 300}                            # региональные афиши маленькие — смотрим от 300
+KEEP_KNOWN = {"afisha"}                             # изучение рынка: известные тоже в списке (с пометкой)
 SHOW = 15
+SHOW_BY = {"afisha": 40}
 
 
-def rank(found: list[dict], skip_ids: set[int], skip_names: set[str]) -> list[dict]:
+def rank(found: list[dict], skip_ids: set[int], skip_names: set[str], min_subs: int = MIN_SUBS,
+         show: int = SHOW) -> list[dict]:
     """Без уже известных, только каналы с аудиторией; по подписчикам."""
     out, seen = [], set()
     for c in found:
         if c["id"] in skip_ids or c["id"] in seen or (c.get("username") or "").lower() in skip_names:
             continue
-        if not c.get("broadcast") or (c.get("subscribers") or 0) < MIN_SUBS:
+        if not c.get("broadcast") or (c.get("subscribers") or 0) < min_subs:
             continue
         seen.add(c["id"])
         out.append(c)
-    return sorted(out, key=lambda c: -(c.get("subscribers") or 0))[:SHOW]
+    return sorted(out, key=lambda c: -(c.get("subscribers") or 0))[:show]
 
 
 async def run(client, target: str = "xojaobod", log=print) -> list[dict]:
@@ -58,14 +68,19 @@ async def run(client, target: str = "xojaobod", log=print) -> list[dict]:
                 found.append({"id": ch.id, "title": ch.title, "username": ch.username, "broadcast": bool(ch.broadcast),
                               "subscribers": getattr(ch, "participants_count", None), "q": q})
         await asyncio.sleep(3)
-    return rank(found, known, OWN)
+    if target in KEEP_KNOWN:
+        for c in found:
+            c["known"] = c["id"] in known
+        known = set()
+    return rank(found, known, OWN, MIN_BY.get(target, MIN_SUBS), SHOW_BY.get(target, SHOW))
 
 
 def render(rows: list[dict]) -> str:
     L = ["🔭 РАЗВЕДЧИК КАНАЛОВ · новые большие каналы (нет в ваших папках)", ""]
     for i, r in enumerate(rows, 1):
         u = "@" + r["username"] if r.get("username") else "без @"
-        L.append(f"{i}. {r['title'][:40]} ({u}) — {r['subscribers']:,} подп. · поиск «{r['q']}»".replace(",", " "))
+        mark = " · уже в папках" if r.get("known") else ""
+        L.append(f"{i}. {r['title'][:40]} ({u}) — {r['subscribers']:,} подп. · поиск «{r['q']}»{mark}".replace(",", " "))
     return "\n".join(L) if rows else "🔭 Новых больших каналов не нашлось."
 
 
