@@ -616,6 +616,37 @@ class Juma2310(unittest.TestCase):
         sat = fri + dt.timedelta(days=1)
         self.assertEqual(morning.pool_pick(self.db, sat)["key"], "g")   # в другой день правило старое
 
+    def test_no_text_only_greeting_31_10(self):
+        """31.10 владелец: «Хайрли тонг» голым текстом — запрещено. Видео на 3 канала не хватило — то же видео,
+        что в другом канале; совсем нет — пост не выходит (не текст)."""
+        sat = FRI + dt.timedelta(days=1)
+        self.db.execute("INSERT INTO morning_pool(key,file,status,weekday,season,quality,views) VALUES "
+                        "('a','a.mp4','ok','Шанба','autumn',5,10), ('b','b.mp4','ok','Шанба','neutral',5,10)")
+        picks = []
+        for i, c in enumerate(("davra", "paparazzi", "xojaobod")):
+            morning.ensure_day(self.db, CFG, c, sat, at("18:00", FRI))
+            k = morning.pool_pick(self.db, sat, salt=i)["key"]
+            self.db.execute("UPDATE fixed_posts SET source=? WHERE channel=? AND day=? AND key='greeting'",
+                            (f"pool:{k}", c, sat.isoformat()))
+            picks.append(k)
+        self.assertEqual(len(set(picks[:2])), 2)                 # первые два — разные
+        self.assertIn(picks[2], picks[:2])                       # третьему — повтор, а не пусто
+        self.db.execute("DELETE FROM morning_pool")
+        self.assertIsNone(morning.pool_pick(self.db, sat + dt.timedelta(days=1)))
+
+    def test_greeting_without_video_never_published(self):
+        sat = FRI + dt.timedelta(days=1)
+        morning.ensure_day(self.db, CFG, "xojaobod", sat, at("18:00", FRI))
+        r = self.db.execute("SELECT * FROM fixed_posts WHERE channel='xojaobod' AND key='greeting'").fetchone()
+        morning.update(self.db, r["id"], text="#ХАЙРЛИ_ТОНГ\nтекст", prepared=1, approved=1, hub_msg=None)
+        pub = Pub()
+        n = asyncio.run(service.tick_morning(self.db, CFG, {"HUB_CHAT_ID": "-100", "OWNER_IDS": ""},
+                                             {"bot": pub, "account": pub, "test": pub},
+                                             dt.datetime.fromisoformat(r["at"]), log=lambda *_: None))
+        self.assertEqual(morning.get(self.db, r["id"])["status"], "skipped")
+        self.assertEqual(getattr(pub, "sent", []), [])
+        self.assertTrue(any("без видео" in e for e in service.ERRORS))
+
     def test_pinned_time_is_not_reset(self):
         now = at("04:00", FRI)
         morning.ensure_day(self.db, CFG, "paparazzi", FRI, now)

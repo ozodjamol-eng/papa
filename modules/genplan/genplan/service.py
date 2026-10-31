@@ -570,6 +570,11 @@ async def tick_morning(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, l
             hub_chat = int(env["HUB_CHAT_ID"]) if r["hub_msg"] else None
             own = pubs.get(f"bot:{channel}")              # 18.10: у канала свой бот-пульт — утро публикует он
             f = morning.own_file(r["id"])
+            if r["key"] == "greeting" and not r["hub_msg"]:   # 31.10 владелец: «Хайрли тонг» без видео — никогда
+                morning.update(db, r["id"], status="skipped", error="нет видео — голым текстом не публикуем (31.10)")
+                ERRORS.append(f"⛔ {ch['title']}: «Хайрли тонг» без видео — не опубликован (голый текст запрещён)")
+                log(f"{channel} утро greeting: нет видео — пропуск")
+                continue
             try:
                 if ch["publisher"] == "bot" and own is not None:
                     if r["hub_msg"]:

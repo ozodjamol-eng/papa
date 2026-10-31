@@ -722,7 +722,12 @@ def pool_pick(db, day: dt.date, salt: int = 0, avail=None):
         row = db.execute("SELECT max(used_at) FROM stock_used WHERE source='pool' AND item_id=?", (str(x["key"]),)).fetchone()
         return (row[0] if row else None) or ""
     old = sorted((x for x in [*mine, *common] if not used_on(db, x["key"], day)), key=last)
-    return take(old) if old else None
+    r = take(old) if old else None
+    if r:
+        return r
+    # 31.10 владелец: «пустые посты без фото — запрещено». Своих видео под день не хватило на все каналы —
+    # то же видео, что сегодня в другом канале (как в пятницу), лучше голого текста.
+    return take([x for x in [*mine, *common] if used_on(db, x["key"], day)])
 
 
 def _curl(url: str, dst: Path | None = None, timeout: int = 30, limit: int | None = None) -> bytes:
@@ -1023,6 +1028,21 @@ def preview(bot, db, cfg: dict, env: dict, rid: int, note: str = "") -> None:
     update(db, rid, preview_sent=1)
 
 
+def no_video_alert(bot, cfg: dict, env: dict, r, why: str) -> None:
+    """31.10: утро без видео не выходит — владельцу сразу строка в пульт канала, чтобы успел бросить своё видео."""
+    from . import bots
+    ch = cfg["channels"][r["channel"]]
+    at = dt.datetime.fromisoformat(r["at"])
+    b = bots.for_channel(r["channel"], bots.REG.get("main", bot))
+    txt = (f"⛔ {ch['title']} · «Хайрли тонг» {at:%d.%m %H:%M} НЕ выйдет: нет видео ({why[:150]}).\n"
+           "Голым текстом не публикуем (ваше правило 31.10). Нужен пост — бросьте видео в NEXUS MORNING POOL.")
+    for o in [int(x) for x in str(env.get("OWNER_IDS", "")).split(",") if x.strip()]:
+        try:
+            b("sendMessage", chat_id=o, text=txt, disable_web_page_preview=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"morning: no_video_alert: {type(e).__name__}: {e}", flush=True)
+
+
 def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, work_root: Path | None = None,
                  fetch=_http_json, upload=None) -> bool:
     """Один шаг подготовки (вызывается Fabrika, когда нет других заданий). True — что-то сделано."""
@@ -1063,11 +1083,10 @@ def prepare_next(bot, db, cfg: dict, env: dict, now: dt.datetime | None = None, 
             preview(bot, db, cfg, env, r["id"], note)
     except Exception as e:  # noqa: BLE001
         tries = r["tries"] + 1
-        if r["key"] == "greeting" and tries >= MAX_TRIES:         # видео не получилось — выходит текстом
+        if r["key"] == "greeting" and tries >= MAX_TRIES:         # 31.10 владелец: без видео — НЕ выходит (голый текст запрещён)
             ch = cfg["channels"][r["channel"]]
-            update(db, r["id"], tries=tries, text=greeting_caption(ch, opts(ch), dt.date.fromisoformat(r["day"])),
-                   prepared=1, error=str(e)[:300], preview_sent=0)
-            preview(bot, db, cfg, env, r["id"], f"⚠️ Видео не получилось ({e}) — выйдет текстом")
+            update(db, r["id"], tries=tries, status="skipped", prepared=0, error=str(e)[:300])
+            no_video_alert(bot, cfg, env, r, str(e))
         else:
             update(db, r["id"], tries=tries, next_try=(now + RETRY).isoformat(), error=str(e)[:300])
     return True
