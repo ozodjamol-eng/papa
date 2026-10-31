@@ -1,0 +1,32 @@
+{
+ "channel": "davra",
+ "day": "2026-10-31",
+ "date": "ШАНБА · 31 ОКТЯБРЬ",
+ "cities": [
+  {
+   "name": "Тошкент",
+   "hi": 20,
+   "lo": 9,
+   "kind": "cloudy"
+  },
+  {
+   "name": "Самарқанд",
+   "hi": 19,
+   "lo": 7,
+   "kind": "clear"
+  },
+  {
+   "name": "Андижон",
+   "hi": 18,
+   "lo": 8,
+   "kind": "rain"
+  }
+ ],
+ "rates": [],
+ "news": [],
+ "user": "@kattadavrauz",
+ "brand": [
+  "КАТТА",
+  "ДАВРА"
+ ]
+}
