@@ -1,0 +1,108 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, c = document.getElementById('c'), x = c.getContext('2d');
+let IMG = null, D = null;
+const CYAN = '#8FEAFF', AMB = '#FFB43A';
+const cl = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const eo = t => 1 - Math.pow(1 - t, 3);               // easeOutCubic
+const eio = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
+const back = t => { const s = 1.9; t = t - 1; return 1 + (s + 1)*t*t*t + s*t*t; };
+const prog = (t, a, b) => cl((t - a) / (b - a));
+const S = p => [p[0]*W, p[1]*H];
+
+function partial(seg, p) {                       // нарисовать долю p ломаной
+  if (p <= 0 || seg.length < 2) return;
+  const pts = seg.map(S); let tot = 0; const ls = [];
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]); ls.push(l); tot += l; }
+  let rem = tot * p; x.beginPath(); x.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length; i++) {
+    if (rem >= ls[i-1]) { x.lineTo(...pts[i]); rem -= ls[i-1]; }
+    else { const k = rem / ls[i-1]; x.lineTo(pts[i-1][0] + (pts[i][0]-pts[i-1][0])*k, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*k); break; }
+  }
+  x.stroke();
+}
+function glow(color, w, blur, alpha = 1, dash = null) {
+  x.strokeStyle = color; x.lineWidth = w; x.shadowColor = color; x.shadowBlur = blur; x.globalAlpha = alpha;
+  x.lineCap = 'round'; x.lineJoin = 'round'; x.setLineDash(dash || []);
+}
+function pill(cx, cy, text, sc, border, fs = 34) {
+  if (sc <= 0) return;
+  x.save(); x.translate(cx, cy); x.scale(sc, sc); x.shadowBlur = 0; x.globalAlpha = 1; x.setLineDash([]);
+  x.font = `900 ${fs}px "Inter Display","Inter"`; const tw = x.measureText(text).width, ph = fs*1.5, pw = tw + fs*1.1;
+  x.fillStyle = 'rgba(8,14,20,0.82)'; x.strokeStyle = border; x.lineWidth = 3;
+  x.beginPath(); x.roundRect(-pw/2, -ph/2, pw, ph, ph/2); x.fill(); x.stroke();
+  x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 0, 2); x.restore();
+}
+function txt(s, cx, cy, fs, color, alpha, dy) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha; x.font = `900 ${fs}px "Inter Display","Inter"`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.shadowColor = 'rgba(0,0,0,0.75)'; x.shadowBlur = 28; x.fillStyle = color; x.fillText(s, cx, cy + dy); x.restore();
+}
+
+function draw(t) {
+  x.setTransform(1,0,0,1,0,0); x.globalAlpha = 1; x.shadowBlur = 0; x.fillStyle = '#000'; x.fillRect(0,0,W,H);
+  const z = 1 + 0.075 * eio(cl(t / 5)), ox = 0.56*W, oy = 0.46*H;
+  x.setTransform(z, 0, 0, z, ox - ox*z, oy - oy*z);
+  x.drawImage(IMG, 0, 0, W, H);
+  // лёгкое затемнение, чтобы светились линии
+  const dim = 0.28 * eo(prog(t, 0.9, 1.8));
+  x.fillStyle = `rgba(4,10,18,${dim})`; x.fillRect(0, 0, W, H);
+
+  // сетка на полу
+  glow(CYAN, 1.6, 6, 0.30 * eo(prog(t, 1.3, 2.2)));
+  D.grid.forEach((s, i) => partial(s, eo(prog(t, 1.3 + i*0.04, 2.3 + i*0.04))));
+  // контур пола, углы, потолок, окно
+  glow(CYAN, 5, 18, 1); D.floor.forEach(s => partial(s, eio(prog(t, 1.0, 2.0))));
+  glow(CYAN, 4, 16, 0.95); D.vert.forEach(s => partial(s, eo(prog(t, 1.45, 2.05))));
+  glow(CYAN, 3, 12, 0.7); D.ceil.forEach(s => partial(s, eio(prog(t, 1.65, 2.5))));
+  glow(CYAN, 4, 16, 0.95); D.window.forEach(s => partial(s, eo(prog(t, 1.85, 2.5))));
+  // мебель на плане (пунктир)
+  glow(AMB, 4, 14, 0.95, [18, 12]);
+  D.furn.forEach((s, i) => partial(s, eo(prog(t, 2.75 + i*0.12, 3.55 + i*0.12))));
+  x.setLineDash([]);
+  // размеры
+  D.dims.forEach((d, i) => {
+    const a = 2.2 + i*0.18;
+    glow('#FFFFFF', 3, 10, 0.95); d.seg.forEach(s => partial(s, eo(prog(t, a, a + 0.55))));
+    glow('#FFFFFF', 3, 8, 0.95); d.ticks.forEach(s => partial(s, eo(prog(t, a, a + 0.25))));
+    const [mx, my] = S(d.m); pill(mx, my, d.label + ' см', back(prog(t, a + 0.45, a + 0.75)) * (t > a + 0.45 ? 1 : 0), CYAN);
+  });
+  // розетки
+  D.sock.forEach((k, i) => {
+    const a = 3.25 + i*0.2, p = prog(t, a, a + 0.35); if (p <= 0) return;
+    const [sx, sy] = S(k.p), sc = back(p);
+    const ring = prog(t, a, a + 0.8);
+    x.save(); x.globalAlpha = (1 - ring) * 0.9; x.strokeStyle = AMB; x.lineWidth = 4; x.shadowBlur = 0;
+    x.beginPath(); x.arc(sx, sy, 16 + 50*eo(ring), 0, 7); x.stroke(); x.restore();
+    x.save(); x.globalAlpha = 1; x.fillStyle = AMB; x.shadowColor = AMB; x.shadowBlur = 22;
+    x.beginPath(); x.arc(sx, sy, 13*sc, 0, 7); x.fill(); x.restore();
+    const ly = sy - 78;
+    glow('#FFFFFF', 2.5, 0, 0.9); x.beginPath(); x.moveTo(sx, sy - 14); x.lineTo(sx, sy - 14 - 40*eo(p)); x.stroke();
+    pill(sx, ly, 'Розетка ' + k.t, sc, AMB, 30);
+  });
+
+  // ---- тексты (без зума)
+  x.setTransform(1,0,0,1,0,0); x.shadowBlur = 0;
+  const hin1 = eo(prog(t, 0.25, 0.7)), hin2 = eo(prog(t, 0.38, 0.85)), hout = eo(prog(t, 2.0, 2.35));
+  txt('КВАРТИРА', W/2, 330, 128, '#FFFFFF', hin1 * (1 - hout), (1 - hin1)*50 - hout*40);
+  txt('ОЛДИНГИЗМИ?', W/2, 470, 128, '#FFFFFF', hin2 * (1 - hout), (1 - hin2)*50 - hout*40);
+  const b1 = eo(prog(t, 2.4, 2.85)), b2 = eo(prog(t, 2.55, 3.0));
+  txt('АВВАЛ —', W/2, 1560, 104, '#FFFFFF', b1, (1 - b1)*50);
+  txt('АНИҚ ЧИЗМА', W/2, 1690, 118, CYAN, b2, (1 - b2)*50);
+  // бренд
+  const br = eo(prog(t, 3.9, 4.4));
+  if (br > 0) { x.save(); x.globalAlpha = br; x.font = '900 34px "Inter Display","Inter"'; x.textAlign = 'center';
+    x.fillStyle = 'rgba(255,255,255,0.9)'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 16; x.fillText('OZOD JAMOL · ДИЗАЙН', W/2, 1820); x.restore(); }
+  // вход из чёрного
+  const fi = 1 - eo(prog(t, 0, 0.35)); if (fi > 0) { x.fillStyle = `rgba(0,0,0,${fi})`; x.fillRect(0,0,W,H); }
+}
+window.ready = (async () => {
+  D = await (await fetch('lines.json')).json();
+  IMG = new Image(); IMG.src = 'room.png'; await IMG.decode();
+  await document.fonts.load('900 60px "Inter Display"');
+  draw(0); return true;
+})();
+window.draw = draw;
+</script></body></html>
