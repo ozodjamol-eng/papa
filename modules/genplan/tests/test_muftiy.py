@@ -97,6 +97,13 @@ class T(unittest.TestCase):
                              own=("kattadavrauz",))
         self.assertNotIn("XOJAOBODCITY24", body)
 
+    def test_same_lesson_text_other_video_not_repeated(self):
+        """31.10 аудит: «Одобимиз – қалқонимиз» шёл Якуний постом и снова лежал в запасе с другим fp."""
+        old = self.add("#muftiy_minbari\nОдобимиз – қалқонимиз\n🎙 Шайх Нуриддин Холиқназар ҳазратлари", "xojaobod", fp="m:1")
+        store.update(self.db, old, status="published", stock=0)
+        again = self.add("#muftiy_minbari\nОдобимиз – қалқонимиз\n🎙 Шайх Нуриддин Холиқназар ҳазратлари", "davra", fp="m:2")
+        self.assertTrue(smart.twin_taken(self.db, "davra", store.get(self.db, again)))
+
 
 if __name__ == "__main__":
     unittest.main()

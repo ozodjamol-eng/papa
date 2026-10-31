@@ -72,6 +72,7 @@ class TestGithub(unittest.TestCase):
                     "usageMetadata": {"promptTokenCount": 3000, "candidatesTokenCount": 400}}
         with tempfile.TemporaryDirectory() as d:
             os.environ["GEMINI_API_KEY"] = "g-test"
+            old_dir = os.environ.get("PAPA_GEMINI_DIR")   # 31.10: вернуть как было, а не на боевой каталог
             os.environ["PAPA_GEMINI_DIR"] = d
             try:
                 text = github.run(Path(d), now=NOW, get=get, gpost=gpost)
@@ -83,7 +84,7 @@ class TestGithub(unittest.TestCase):
                 self.assertIn("не найдено", text2)
             finally:
                 os.environ.pop("GEMINI_API_KEY", None)
-                os.environ.pop("PAPA_GEMINI_DIR", None)
+                os.environ.pop("PAPA_GEMINI_DIR", None) if old_dir is None else os.environ.__setitem__("PAPA_GEMINI_DIR", old_dir)
 
     def test_run_without_key_plain(self):
         os.environ.pop("GEMINI_API_KEY", None)

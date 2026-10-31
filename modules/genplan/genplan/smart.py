@@ -498,10 +498,22 @@ def twin_taken(db, channel: str, m) -> bool:
     материал, который другой канал уже поставил или выпустил, этому каналу не берём.
     31.10 разбор: один и тот же урок вышел в Хўжаобод 30.10 и 31.10 (копии одного поста в запасе) —
     теперь урок с тем же отпечатком не берём и в СВОЁМ канале, если он уже стоит или вышел."""
-    if m["rubric"] != MINBAR or not m["fp"]:
+    if m["rubric"] != MINBAR:
         return False
-    return db.execute("SELECT 1 FROM materials WHERE fp=? AND id<>? AND status IN ('queued','published') LIMIT 1",
-                      (m["fp"], m["id"])).fetchone() is not None
+    if m["fp"] and db.execute("SELECT 1 FROM materials WHERE fp=? AND id<>? AND status IN ('queued','published') LIMIT 1",
+                              (m["fp"], m["id"])).fetchone():
+        return True
+    # 31.10 аудит: Муфтий выкладывает тот же урок заново (другое видео — другой fp): «Одобимиз – қалқонимиз» три дня
+    # выходил Якуний постом и снова лежал в запасе. Сверяем и по тексту — с вышедшими/стоящими уроками и Якуний постами.
+    key = _nrm(m["text"])[:120]
+    if len(key) < 20:
+        return False
+    rows = db.execute("SELECT text FROM materials WHERE id<>? AND (rubric=? AND status IN ('queued','published') "
+                      "OR rubric='Якуний пост')", (m["id"], MINBAR)).fetchall()
+    finals = [store.kv_get(db, f"final_{c}", "") for c in ("xojaobod", "davra", "paparazzi")]
+    import json as _json
+    texts = [r[0] for r in rows] + [(_json.loads(f).get("text") if f else "") for f in finals]
+    return any(_nrm(t)[:120] == key for t in texts if t)
 
 
 def twin_today(db, channel: str, m, now: dt.datetime) -> bool:

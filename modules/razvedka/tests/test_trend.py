@@ -34,6 +34,7 @@ class TestTrend(unittest.TestCase):
         gpost = fake_gpost([ANSWER, ANSWER])
         with tempfile.TemporaryDirectory() as d:
             os.environ["GEMINI_API_KEY"] = "g-test"
+            old_dir = os.environ.get("PAPA_GEMINI_DIR")   # 31.10: вернуть как было, а не на боевой каталог
             os.environ["PAPA_GEMINI_DIR"] = d
             try:
                 out = trend.run("daily", Path(d), now=NOW, gpost=gpost)
@@ -48,7 +49,7 @@ class TestTrend(unittest.TestCase):
                 self.assertEqual(len(json.loads((Path(d) / "history-daily.json").read_text())), 2)
             finally:
                 os.environ.pop("GEMINI_API_KEY", None)
-                os.environ.pop("PAPA_GEMINI_DIR", None)
+                os.environ.pop("PAPA_GEMINI_DIR", None) if old_dir is None else os.environ.__setitem__("PAPA_GEMINI_DIR", old_dir)
 
     def test_no_key(self):
         os.environ.pop("GEMINI_API_KEY", None)
@@ -95,10 +96,14 @@ class TestGemini(unittest.TestCase):
                                     "groundingMetadata": {"webSearchQueries": ["q1", "q2"]}}],
                     "usageMetadata": {"promptTokenCount": 1000, "candidatesTokenCount": 500}}
         os.environ["GEMINI_API_KEY"] = "g-test"
-        try:
-            text, u = trend.ask("x", gpost=gpost)
-        finally:
-            del os.environ["GEMINI_API_KEY"]
+        with tempfile.TemporaryDirectory() as d:          # 31.10 аудит: не боевой счётчик/флаг экономии Gemini
+            old_dir = os.environ.get("PAPA_GEMINI_DIR")
+            os.environ["PAPA_GEMINI_DIR"] = d
+            try:
+                text, u = trend.ask("x", gpost=gpost)
+            finally:
+                del os.environ["GEMINI_API_KEY"]
+                os.environ.pop("PAPA_GEMINI_DIR", None) if old_dir is None else os.environ.__setitem__("PAPA_GEMINI_DIR", old_dir)
         self.assertIn("ТРЕНДЫ", text)
         self.assertEqual((u["searches"], u["model"], seen["key"]), (2, "gemini", "g-test"))
         self.assertEqual(seen["body"]["tools"], [{"google_search": {}}])
