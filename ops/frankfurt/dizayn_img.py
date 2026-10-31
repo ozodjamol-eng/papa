@@ -6,12 +6,12 @@ from pathlib import Path
 MODELS = [os.environ.get("DIZAYN_IMG_MODEL", "gemini-2.5-flash-image"), "gemini-2.5-flash-image-preview",
           "gemini-3-pro-image-preview"]
 
-def gen_openrouter(key, prompt, ref: Path | None, aspect="16:9"):
+def gen_openrouter(key, prompt, ref: Path | None, aspect="16:9", model=None):
     """OpenRouter (31.10 владелец: карта без проверки $50) — та же модель Gemini Flash Image."""
     content = [{"type": "text", "text": prompt}]
     if ref and ref.exists():
         content.append({"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(ref.read_bytes()).decode()}})
-    body = {"model": os.environ.get("DIZAYN_OR_MODEL", "google/gemini-2.5-flash-image"),
+    body = {"model": model or os.environ.get("DIZAYN_OR_MODEL", "google/gemini-2.5-flash-image"),
             "messages": [{"role": "user", "content": content}], "modalities": ["image", "text"],
             "image_config": {"aspect_ratio": aspect}}
     req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=json.dumps(body).encode(),
@@ -28,9 +28,9 @@ def gen_openrouter(key, prompt, ref: Path | None, aspect="16:9"):
     raise RuntimeError(f"OpenRouter: нет картинки {str(d)[:300]}")
 
 
-def gen(key, prompt, ref: Path | None, aspect="16:9"):
+def gen(key, prompt, ref: Path | None, aspect="16:9", model=None):
     if os.environ.get("OPENROUTER_API_KEY"):
-        return gen_openrouter(os.environ["OPENROUTER_API_KEY"], prompt, ref, aspect)
+        return gen_openrouter(os.environ["OPENROUTER_API_KEY"], prompt, ref, aspect, model)
     parts = [{"text": prompt}]
     if ref and ref.exists():
         parts.append({"inline_data": {"mime_type": "image/png", "data": base64.b64encode(ref.read_bytes()).decode()}})
@@ -57,13 +57,18 @@ def main(src, out):
     key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GEMINI_API_KEY") or sys.exit("нет ключа")
     src, out = Path(src), Path(out); out.mkdir(parents=True, exist_ok=True)
     jobs = json.loads((src / "job.json").read_text(encoding="utf-8"))
-    cap = int(os.environ.get("DIZAYN_IMG_CAP", "12"))   # предел за один заход: 12 картинок ≈ $0,5
+    cap = int(os.environ.get("DIZAYN_IMG_CAP", "14"))   # предел за один заход: 12 картинок ≈ $0,5
     if len(jobs) > cap:
         print(f"предел {cap} картинок за заход — лишние пропущены"); jobs = jobs[:cap]
     ok = 0
     for j in jobs:
         try:
-            img, m = gen(key, j["prompt"], src / j["ref"] if j.get("ref") else None, j.get("aspect", "16:9"))
+            # 31.10: цепочка — "ref": "@имя" берёт уже готовую картинку этого захода (поэтапная сборка)
+            r = j.get("ref")
+            refp = (out / f"{r[1:]}.png") if r and r.startswith("@") else (src / r if r else None)
+            if r and r.startswith("@") and not refp.exists():
+                raise RuntimeError(f"нет звена цепочки {r}")
+            img, m = gen(key, j["prompt"], refp, j.get("aspect", "16:9"), j.get("model"))
             (out / f"{j['name']}.png").write_bytes(img); ok += 1
             print(f"OK {j['name']} ({m}, {len(img)//1024} КБ)", flush=True)
         except Exception as e:  # noqa: BLE001
