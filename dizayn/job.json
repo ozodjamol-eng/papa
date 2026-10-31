@@ -1,26 +1,85 @@
 [
  {
-  "name": "b_1_vhod",
-  "prompt": "Turn this 3D model render into a photorealistic interior photograph (professional architectural photo, Corona/V-Ray realism, warm evening light). This render is an EXACT measured model: keep EVERY object, its position, size and proportions, the camera angle, the walls, doors, glazing, air conditioner, ceiling height and the LED lines EXACTLY as they are. Do NOT add, remove or move anything. Do NOT add windows, doors, curtains, pictures, text or logos. Only replace the simple shapes and flat colours with real materials and fine detail: warm white smooth plaster walls; charcoal-black real wood vertical slat panels on the accent wall with warm LED glow; light oak laminate floor with natural wood grain; matte white ceiling with small recessed downlights; light grey woven fabric upholstery with soft seams on the sofa and armchair, dark grey cushions; natural light oak veneer on the coffee table and floating TV console; soft light wool rug; brown wood-look PVC entrance door with frosted textured glass; white PVC interior door with dark tinted glass; real white split air conditioner; real indoor plant (dracaena) in a ceramic pot; black wall-mounted TV. No people.",
-  "ref": "1_vhod.png",
-  "aspect": "4:3"
+  "name": "s0_korobka",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "prompt": "Realistic vertical phone photo (9:16) taken at eye level inside an empty new-build apartment in Uzbekistan in 'korobka' condition (shell, free layout): bare grey monolithic concrete walls and ceiling, rough concrete floor, one wide modern white PVC window on the far wall with city view and soft daylight, one concrete column at the right, an electrical wire hanging from the ceiling, no interior partitions yet, a little construction dust, two cement bags in the corner. Straight-on view toward the window wall, wide angle, natural light. Looks like a real photo, not a 3D render. No people, no text."
  },
  {
-  "name": "b_2_divan",
-  "prompt": "Turn this 3D model render into a photorealistic interior photograph (professional architectural photo, Corona/V-Ray realism, warm evening light). This render is an EXACT measured model: keep EVERY object, its position, size and proportions, the camera angle, the walls, doors, glazing, air conditioner, ceiling height and the LED lines EXACTLY as they are. Do NOT add, remove or move anything. Do NOT add windows, doors, curtains, pictures, text or logos. Only replace the simple shapes and flat colours with real materials and fine detail: warm white smooth plaster walls; charcoal-black real wood vertical slat panels on the accent wall with warm LED glow; light oak laminate floor with natural wood grain; matte white ceiling with small recessed downlights; light grey woven fabric upholstery with soft seams on the sofa and armchair, dark grey cushions; natural light oak veneer on the coffee table and floating TV console; soft light wool rug; brown wood-look PVC entrance door with frosted textured glass; white PVC interior door with dark tinted glass; real white split air conditioner; real indoor plant (dracaena) in a ceramic pot; black wall-mounted TV. No people.",
-  "ref": "2_divan.png",
-  "aspect": "4:3"
+  "name": "s1_peregorodki",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s0_korobka",
+  "prompt": "Add new interior partition walls made of white aerated concrete blocks (gas blocks) with visible mortar joints: one partition on the left side with an empty door opening, dividing the space into rooms. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
  },
  {
-  "name": "b_3_dlinny",
-  "prompt": "Turn this 3D model render into a photorealistic interior photograph (professional architectural photo, Corona/V-Ray realism, warm evening light). This render is an EXACT measured model: keep EVERY object, its position, size and proportions, the camera angle, the walls, doors, glazing, air conditioner, ceiling height and the LED lines EXACTLY as they are. Do NOT add, remove or move anything. Do NOT add windows, doors, curtains, pictures, text or logos. Only replace the simple shapes and flat colours with real materials and fine detail: warm white smooth plaster walls; charcoal-black real wood vertical slat panels on the accent wall with warm LED glow; light oak laminate floor with natural wood grain; matte white ceiling with small recessed downlights; light grey woven fabric upholstery with soft seams on the sofa and armchair, dark grey cushions; natural light oak veneer on the coffee table and floating TV console; soft light wool rug; brown wood-look PVC entrance door with frosted textured glass; white PVC interior door with dark tinted glass; real white split air conditioner; real indoor plant (dracaena) in a ceramic pot; black wall-mounted TV. No people.",
-  "ref": "3_dlinny.png",
-  "aspect": "4:3"
+  "name": "s2_elektrika",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s1_peregorodki",
+  "prompt": "Rough electrical and plumbing works: cut wall chases with grey cables in the block and concrete walls, round orange socket back-boxes at about 30 cm and 110 cm height, a switch box next to the door opening, cables in the ceiling for future lights. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
  },
  {
-  "name": "b_4_kreslo",
-  "prompt": "Turn this 3D model render into a photorealistic interior photograph (professional architectural photo, Corona/V-Ray realism, warm evening light). This render is an EXACT measured model: keep EVERY object, its position, size and proportions, the camera angle, the walls, doors, glazing, air conditioner, ceiling height and the LED lines EXACTLY as they are. Do NOT add, remove or move anything. Do NOT add windows, doors, curtains, pictures, text or logos. Only replace the simple shapes and flat colours with real materials and fine detail: warm white smooth plaster walls; charcoal-black real wood vertical slat panels on the accent wall with warm LED glow; light oak laminate floor with natural wood grain; matte white ceiling with small recessed downlights; light grey woven fabric upholstery with soft seams on the sofa and armchair, dark grey cushions; natural light oak veneer on the coffee table and floating TV console; soft light wool rug; brown wood-look PVC entrance door with frosted textured glass; white PVC interior door with dark tinted glass; real white split air conditioner; real indoor plant (dracaena) in a ceramic pot; black wall-mounted TV. No people.",
-  "ref": "4_kreslo.png",
-  "aspect": "4:3"
+  "name": "s3_shtukaturka",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s2_elektrika",
+  "prompt": "All walls and the partition are now smoothly plastered with fresh light grey gypsum plaster, the floor has a fresh smooth cement screed. Socket boxes stay in place. Cement bags and dust removed. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "s4_potolok",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s3_shtukaturka",
+  "prompt": "Add a white matte suspended ceiling with small recessed spotlights and a hidden warm LED light line along the walls; the lights are on and glow warm. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "s5_otdelka",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s4_potolok",
+  "prompt": "Finishing: light oak laminate floor, walls painted warm white, white skirting boards, a light interior door installed in the opening, white sockets and switches installed. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "s6_mebel",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s5_otdelka",
+  "prompt": "Furnish in warm minimalism: a light grey fabric sofa, a TV wall with light oak vertical slats and a wall-mounted TV, a low oak coffee table, a soft beige rug, light linen curtains on the window, a tall plant. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "s7_vecher",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s6_mebel",
+  "prompt": "Make it a cozy evening: warm interior light, city lights visible through the window, a few decor items on the table, throw blanket on the sofa. Everything else identical. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "st_haytek",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s6_mebel",
+  "prompt": "Restyle the same room as hi-tech: graphite and white palette, black glass and metal, linear LED lights, dark grey leather sofa. Same furniture positions. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "st_klassika",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s6_mebel",
+  "prompt": "Restyle the same room as modern classic: cream walls with white moulding panels, crystal chandelier, emerald velvet sofa, walnut furniture. Same furniture positions. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "st_japandi",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s6_mebel",
+  "prompt": "Restyle the same room as Japandi: natural wood, paper pendant lamps, low linen sofa, beige and sage tones. Same furniture positions. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
+ },
+ {
+  "name": "st_sharq",
+  "model": "google/gemini-3-pro-image-preview",
+  "aspect": "9:16",
+  "ref": "@s6_mebel",
+  "prompt": "Restyle the same room as modern Uzbek oriental: carved ganch plaster panel, walnut carved screen, suzani cushions, terracotta and deep blue accents. Same furniture positions. Keep EXACTLY the same photo: same camera position, angle and lens, same window, same walls, same ceiling height, same daylight direction. Change ONLY what is described. Photorealistic phone photo, not a render, no people, no text, no logos, no watermark."
  }
 ]
