@@ -159,6 +159,10 @@ class TMiniApp(unittest.TestCase):
         self.assertEqual(h(msg(web_app_data={"data": "не json"}, uid=44)), "dz_bad")
         self.assertEqual(h(msg(web_app_data={"data": '{"obj":"zz","m2":50,"style":"minimal"}'}, uid=45)), "dz_bad")
 
+    def test_master_button(self):
+        self.assertEqual(self.b.handle(msg(T.M_BTN, uid=77)), "m_begin")
+        self.assertTrue(any(b.get("text") == T.M_BTN for row in B.main_kb()["keyboard"] for b in row))
+
     def test_main_kb_has_web_app(self):
         kb = B.main_kb()["keyboard"]
         self.assertTrue(any(b.get("web_app", {}).get("url") == T.MINIAPP_URL for row in kb for b in row))

@@ -66,7 +66,7 @@ def norm_phone(text: str) -> str | None:
 
 def main_kb() -> dict:
     rows = [[{"text": T.KINDS[k][0], "web_app": {"url": T.MINIAPP_URL}} if k == "dizayn" else {"text": T.KINDS[k][0]}]
-            for k in T.KINDS] + [[{"text": T.CONTACT}]]
+            for k in T.KINDS] + [[{"text": T.M_BTN}], [{"text": T.CONTACT}]]
     return {"keyboard": rows, "resize_keyboard": True}
 
 
@@ -106,7 +106,7 @@ class Bot:
             return None
         frm, chat = m["from"], m["chat"]["id"]
         text = (m.get("text") or "").strip()
-        if text in ("/usta", "/start usta"):
+        if text in ("/usta", "/start usta", T.M_BTN):
             self.user(frm, "usta")
             return self.m_begin(frm, chat)
         if text == "/menim":
