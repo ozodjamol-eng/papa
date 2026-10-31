@@ -18,7 +18,8 @@ def _shared() -> Path:
 _PROXY = os.path.exists("/etc/papa-gemini-proxy/on")   # 31.10: прокси — бесплатный лимит + предоплата OpenRouter ($5 потолок ключа)
 DAY_BUDGET = int(os.environ.get("GEMINI_DAY_BUDGET", "2500" if _PROXY else "600"))
 BACKGROUND_SHARE = float(os.environ.get("GEMINI_BACKGROUND_SHARE", "0.6"))
-SAVER_FILES = ("/var/lib/papa-genplan/gemini-saver",)   # + SHARED/gemini-saver
+# + SHARED/gemini-saver. 31.10 аудит: автотесты на сервере читали боевой флаг и падали — путь можно подменить (пусто = нет)
+SAVER_FILES = tuple(x for x in os.environ.get("PAPA_GEMINI_SAVER_FILES", "/var/lib/papa-genplan/gemini-saver").split(",") if x)
 
 
 class BudgetStop(RuntimeError):
@@ -40,7 +41,7 @@ def google_reset(now: dt.datetime | None = None) -> float:
 def saver_on(now: dt.datetime | None = None, shared: Path | None = None) -> bool:
     today = _today(now)
     reset = google_reset(now)
-    for p in (*SAVER_FILES, str((shared or _shared()) / "gemini-saver")):
+    for p in ((() if shared else SAVER_FILES) + (str((shared or _shared()) / "gemini-saver"),)):   # свой каталог — только он
         try:
             if Path(p).read_text(encoding="utf-8").strip() == today and Path(p).stat().st_mtime >= reset:
                 return True

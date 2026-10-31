@@ -243,7 +243,9 @@ class Audit:
             for k in ("GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"):
                 env.pop(k, None)
             env.update({"HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9",
-                        "http_proxy": "http://127.0.0.1:9", "https_proxy": "http://127.0.0.1:9", "NO_PROXY": "", "no_proxy": ""})
+                        "http_proxy": "http://127.0.0.1:9", "https_proxy": "http://127.0.0.1:9", "NO_PROXY": "", "no_proxy": "",
+                        # 31.10: тесты не читают боевые счётчик и флаг экономии Gemini (иначе вечером падали «страж»)
+                        "PAPA_GEMINI_DIR": sh("mktemp", "-d"), "PAPA_GEMINI_SAVER_FILES": ""})
             p = subprocess.run([PY, "-m", "unittest", "discover", "-q", "-s", "tests"], cwd=REPO / "modules" / mod,
                                capture_output=True, text=True, env=env, timeout=300)
             ran = re.search(r"Ran (\d+)", p.stderr)

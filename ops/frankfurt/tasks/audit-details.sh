@@ -3,7 +3,7 @@
 set -uo pipefail
 echo "== автотесты razvedka (как в аудите: без сети и ключей):"
 cd /opt/papa/modules/razvedka
-env -u GEMINI_API_KEY -u ANTHROPIC_API_KEY -u GITHUB_TOKEN PAPA_GENPLAN_STATE="$(mktemp -d)" \
+env -u GEMINI_API_KEY -u ANTHROPIC_API_KEY -u GITHUB_TOKEN PAPA_GENPLAN_STATE="$(mktemp -d)" PAPA_GEMINI_DIR="$(mktemp -d)" PAPA_GEMINI_SAVER_FILES= \
   HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 \
   timeout 280 /opt/papa-venv/razvedka/bin/python -m unittest discover -s tests 2>&1 \
   | grep -E -A14 "^(FAIL|ERROR):" | grep -vE "^\s*$" | cut -c1-220 | head -90
