@@ -185,3 +185,29 @@ class Masters(unittest.TestCase):
         self.assertEqual(self.cb(f"mr:{m['id']}"), "mr")
         self.assertEqual(self.b.db.execute("SELECT status FROM masters WHERE id=?", (m["id"],)).fetchone()[0], "no")
         self.assertIn("❌", self.b.m_list())
+
+
+class Referral(Masters):
+    """31.10: уста ҳаволаси → мижоз шу устага ёзилади → тўлов → 10% улуш → /berildi."""
+
+    def test_referral(self):
+        m = self.register(uid=90, trade="pardoz")
+        self.cb(f"ma:{m['id']}")
+        self.assertTrue(any(f"start=r{m['id']}" in (p.get("text") or "") for p in self.api.to(90)))   # ҳавола устага
+        h = self.b.handle
+        h(msg("/start xojaobod", uid=55))                                       # аввал гуруҳдан келган
+        h(msg(f"/start r{m['id']}", uid=55))                                    # кейин уста ҳаволаси — устун
+        h(msg(T.KINDS["dizayn"][0], uid=55)); h(msg(T.OBJ["kv"], uid=55)); h(msg("60 м²", uid=55))
+        h(msg(T.WHEN["week"], uid=55)); h(msg("Марказ", uid=55)); h(msg(T.SKIP, uid=55))
+        h(msg(uid=55, contact={"phone_number": "998905556677"}))
+        r = self.b.db.execute("SELECT * FROM leads WHERE uid=55").fetchone()
+        self.assertEqual(r["ref"], m["id"])
+        card = [p for m_, p in self.api.calls if m_ == "sendMessage" and f"Ариза №{r['n']}" in (p.get("text") or "")][0]
+        self.assertEqual(card["reply_markup"]["inline_keyboard"][0][0]["callback_data"], f"go:{r['n']}:{m['id']}")  # реферал — биринчи
+        self.assertEqual(h(msg(f"/tolandi {r['n']} 1800000", uid=OWNER)), "money")
+        st = self.b.m_stats(m["id"])
+        self.assertEqual((st["paid"], st["share"], st["owed"]), (1, 180000, 180000))
+        h(msg(f"/berildi {m['id']} 100000", uid=OWNER))
+        self.assertEqual(self.b.m_stats(m["id"])["owed"], 80000)
+        self.assertEqual(h(msg("/menim", uid=90)), "mine")
+        self.assertEqual(h(msg("/tolandi 1 5", uid=55)), "unknown")             # мижоз тўлов ёза олмайди

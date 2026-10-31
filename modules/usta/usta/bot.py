@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS leads (n INTEGER PRIMARY KEY, uid INTEGER NOT NULL, k
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS masters (id INTEGER PRIMARY KEY, uid INTEGER NOT NULL UNIQUE, username TEXT, trade TEXT NOT NULL,
     name TEXT, area TEXT, exp TEXT, phone TEXT, face TEXT, works TEXT, status TEXT NOT NULL DEFAULT 'pending',
-    created TEXT NOT NULL, jobs INTEGER NOT NULL DEFAULT 0);
+    created TEXT NOT NULL, jobs INTEGER NOT NULL DEFAULT 0, paid_out INTEGER NOT NULL DEFAULT 0);
 """
 PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
 
@@ -44,9 +44,12 @@ def connect(path: str) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
     have = {r[1] for r in db.execute("PRAGMA table_info(leads)")}
-    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT"), ("master", "INTEGER")):
+    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT"), ("master", "INTEGER"), ("ref", "INTEGER"), ("paid", "INTEGER")):
         if col not in have:
             db.execute(f"ALTER TABLE leads ADD COLUMN {col} {typ}")
+    mh = {r[1] for r in db.execute("PRAGMA table_info(masters)")}
+    if "paid_out" not in mh:
+        db.execute("ALTER TABLE masters ADD COLUMN paid_out INTEGER NOT NULL DEFAULT 0")
     db.commit()
     return db
 
@@ -67,8 +70,8 @@ def main_kb() -> dict:
 
 
 class Bot:
-    def __init__(self, db, api, owners: list[int]):
-        self.db, self.api, self.owners = db, api, owners
+    def __init__(self, db, api, owners: list[int], username: str = "ozodjamoldizaynbot"):
+        self.db, self.api, self.owners, self.username = db, api, owners, username
 
     # ---------- состояние ----------
     def user(self, frm: dict, src: str | None = None):
@@ -78,7 +81,8 @@ class Bot:
         if not r:
             self.db.execute("INSERT INTO users(uid, first, username, src, step, data, created, updated) VALUES (?,?,?,?,?,?,?,?)",
                             (uid, frm.get("first_name"), frm.get("username"), src, "", "{}", t, t))
-        elif src and not r["src"]:
+        elif src and (not r["src"] or (src[:1] == "r" and src[1:].isdigit() and not (r["src"] or "")[1:].isdigit())):
+            # 31.10: ҳавола устаники бўлса — умумий манбадан устун (биринчи келтирган уста ўзгармайди)
             self.db.execute("UPDATE users SET src=? WHERE uid=?", (src, uid))
         self.db.commit()
         return self.db.execute("SELECT * FROM users WHERE uid=?", (uid,)).fetchone()
@@ -104,6 +108,11 @@ class Bot:
         if text in ("/usta", "/start usta"):
             self.user(frm, "usta")
             return self.m_begin(frm, chat)
+        if text == "/menim":
+            return self.m_mine(frm, chat)
+        if frm["id"] in self.owners and text.startswith(("/tolandi", "/berildi")):
+            self.say(chat, self.money_cmd(text))
+            return "money"
         if text == "/ustalar" and frm["id"] in self.owners:
             self.say(chat, self.m_list())
             return "ustalar"
@@ -196,11 +205,16 @@ class Bot:
 
     def finish(self, frm: dict, chat: int, data: dict, phone: str) -> str:
         u = self.db.execute("SELECT src FROM users WHERE uid=?", (frm["id"],)).fetchone()
-        cur = self.db.execute("INSERT INTO leads(uid, kind, details, place, phone, photos, src, created, urgency, obj)"
-                              " VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ref = None
+        src = (u["src"] if u else None) or ""
+        if src[:1] == "r" and src[1:].isdigit():
+            row = self.db.execute("SELECT id FROM masters WHERE id=? AND status='ok'", (int(src[1:]),)).fetchone()
+            ref = row["id"] if row else None
+        cur = self.db.execute("INSERT INTO leads(uid, kind, details, place, phone, photos, src, created, urgency, obj, ref)"
+                              " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                               (frm["id"], data.get("kind", "?"), data.get("details"), data.get("place"), phone,
                                json.dumps(data.get("photos") or []), u["src"] if u else None, now().isoformat(),
-                               data.get("urgency"), data.get("obj")))
+                               data.get("urgency"), data.get("obj"), ref))
         self.db.commit()
         n = cur.lastrowid
         self.set_step(frm["id"], "")
@@ -217,6 +231,11 @@ class Bot:
             st += " · " + "⭐" * r["rating"]
         when = T.WHEN.get(r["urgency"] or "", r["urgency"] or "—")
         obj = f" · {T.OBJ.get(r['obj'], r['obj'])}" if r["obj"] else ""
+        if r["ref"]:
+            mm = self.db.execute("SELECT name FROM masters WHERE id=?", (r["ref"],)).fetchone()
+            st += f"\n🤝 реферал: {esc(mm['name'] if mm else r['ref'])}"
+        if r["paid"]:
+            st += f"\n💰 тўланди: {r['paid']:,} сўм".replace(",", " ")
         return (f"📥 <b>Ариза №{r['n']}</b> · {T.KINDS.get(r['kind'], (r['kind'],))[0]}{obj}\n"
                 f"👤 {who}{(' @' + un) if un else ''}\n📞 {esc(r['phone'])}\n📍 {esc(r['place'])}\n"
                 f"⏱ {esc(when)}\n📝 {esc(r['details'])}\n🔗 манба: {esc(r['src'] or '—')}\n{st}")
@@ -362,6 +381,8 @@ class Bot:
         except Exception:  # noqa: BLE001
             pass
         self.say(r["uid"], T.M_OK.format(trade=T.TRADES.get(r["trade"], r["trade"])) if st == "ok" else T.M_NO)
+        if st == "ok":
+            self.say(r["uid"], T.M_LINK.format(link=self.ref_link(r["id"]), pct=T.REF_PCT))
         self.api("answerCallbackQuery", callback_query_id=q["id"])
         return act
 
@@ -370,8 +391,8 @@ class Bot:
         trades = T.FOR_KIND.get(r["kind"], ())
         if not trades:
             return []
-        ms = self.db.execute(f"SELECT * FROM masters WHERE status='ok' AND trade IN ({','.join('?' * len(trades))})"
-                             " ORDER BY jobs, id LIMIT 6", trades).fetchall()
+        ms = self.db.execute(f"SELECT * FROM masters WHERE status='ok' AND (trade IN ({','.join('?' * len(trades))}) OR id=?)"
+                             " ORDER BY (id=?) DESC, jobs, id LIMIT 6", (*trades, r["ref"] or -1, r["ref"] or -1)).fetchall()
         return [[{"text": f"→ {m['name']} ({T.TRADES[m['trade']].split(' ', 1)[1].split(' (')[0]})",
                   "callback_data": f"go:{r['n']}:{m['id']}"}] for m in ms]
 
@@ -425,8 +446,58 @@ class Bot:
         out = ["🛠 <b>УСТАЛАР</b>"]
         for r in rows:
             st = {"pending": "⏳", "ok": "✅", "no": "❌"}.get(r["status"], "?")
-            out.append(f"{st} {T.TRADES.get(r['trade'], r['trade'])} — {esc(r['name'])} · {esc(r['phone'])} · иш: {r['jobs']}")
+            x = self.m_stats(r["id"])
+            out.append(f"{st} #{r['id']} {T.TRADES.get(r['trade'], r['trade'])} — {esc(r['name'])} · {esc(r['phone'])}"
+                       f" · иш: {r['jobs']} · 🤝 мижоз: {x['users']}, тўлов: {x['paid']} · қарз: {x['owed']:,}".replace(",", " "))
         return "\n".join(out)
+
+    # ---------- 🤝 рефералка ----------
+    def ref_link(self, mid: int) -> str:
+        return f"https://t.me/{self.username}?start=r{mid}"
+
+    def m_stats(self, mid: int) -> dict:
+        users = self.db.execute("SELECT count(*) FROM users WHERE src=?", (f"r{mid}",)).fetchone()[0]
+        leads = self.db.execute("SELECT count(*) FROM leads WHERE ref=?", (mid,)).fetchone()[0]
+        paid, total = self.db.execute("SELECT count(paid), coalesce(sum(paid),0) FROM leads WHERE ref=? AND paid>0", (mid,)).fetchone()
+        out = self.db.execute("SELECT paid_out FROM masters WHERE id=?", (mid,)).fetchone()[0]
+        share = total * T.REF_PCT // 100
+        return {"users": users, "leads": leads, "paid": paid, "sum": total, "share": share, "out": out, "owed": share - out}
+
+    def m_mine(self, frm, chat) -> str:
+        ms = self.db.execute("SELECT * FROM masters WHERE uid=? AND status='ok'", (frm["id"],)).fetchone()
+        if not ms:
+            self.say(chat, "Бу бўлим фақат рўйхатдаги усталар учун. Рўйхатдан ўтиш: /usta")
+            return "mine_no"
+        f = lambda x: f"{x:,}".replace(",", " ")
+        st = self.m_stats(ms["id"])
+        self.say(chat, T.M_MINE.format(pct=T.REF_PCT, **{k: (f(v) if k in ("sum", "share", "out", "owed") else v) for k, v in st.items()})
+                 + "\n\n🔗 " + self.ref_link(ms["id"]))
+        return "mine"
+
+    def money_cmd(self, text: str) -> str:
+        """Владелец: /tolandi <ариза №> <сўм> — мижоз дизайн учун тўлади; /berildi <уста id> <сўм> — устага улуш берилди."""
+        p = text.split()
+        if len(p) != 3 or not p[1].isdigit() or not p[2].replace(" ", "").isdigit():
+            return "Формат: /tolandi 12 1500000  ёки  /berildi 3 150000"
+        a, b = int(p[1]), int(p[2])
+        if p[0] == "/tolandi":
+            r = self.db.execute("SELECT * FROM leads WHERE n=?", (a,)).fetchone()
+            if not r:
+                return f"Ариза №{a} йўқ"
+            self.db.execute("UPDATE leads SET paid=? WHERE n=?", (b, a)); self.db.commit()
+            if r["ref"]:
+                share = b * T.REF_PCT // 100
+                ms = self.db.execute("SELECT * FROM masters WHERE id=?", (r["ref"],)).fetchone()
+                self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({T.REF_PCT}%). Ҳисоб: /menim".replace(",", " "))
+                return f"✅ Ариза №{a}: {b:,} сўм. Реферал {esc(ms['name'])}: {share:,} сўм".replace(",", " ")
+            return f"✅ Ариза №{a}: {b:,} сўм (рефералсиз)".replace(",", " ")
+        ms = self.db.execute("SELECT * FROM masters WHERE id=?", (a,)).fetchone()
+        if not ms:
+            return f"Уста #{a} йўқ"
+        self.db.execute("UPDATE masters SET paid_out=paid_out+? WHERE id=?", (b, a)); self.db.commit()
+        st = self.m_stats(a)
+        self.say(ms["uid"], f"✅ Сизга {b:,} сўм тўланди. Қолдиқ: {st['owed']:,} сўм".replace(",", " "))
+        return f"✅ {esc(ms['name'])}: +{b:,} сўм берилди, қолдиқ {st['owed']:,} сўм".replace(",", " ")
 
     def remind(self, minutes: int = 30) -> int:
         """Заявка без ответа дольше 30 мин — напомнить владельцу один раз (днём 9–22)."""
@@ -477,7 +548,11 @@ def make_api(token: str):
 def main():
     api = make_api(os.environ["USTA_BOT_TOKEN"])
     owners = [int(x) for x in os.environ.get("OWNER_IDS", "").split(",") if x.strip()]
-    bot = Bot(connect(os.environ.get("USTA_DB", "usta.sqlite3")), api, owners)
+    try:
+        uname = api("getMe")["username"]
+    except Exception:  # noqa: BLE001
+        uname = "ozodjamoldizaynbot"
+    bot = Bot(connect(os.environ.get("USTA_DB", "usta.sqlite3")), api, owners, uname)
     off = 0
     print("usta: запущен", flush=True)
     while True:
