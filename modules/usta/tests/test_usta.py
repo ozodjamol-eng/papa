@@ -249,3 +249,60 @@ class Referral(Masters):
         self.assertEqual(self.b.m_stats(m["id"])["owed"], 80000)
         self.assertEqual(h(msg("/menim", uid=90)), "mine")
         self.assertEqual(h(msg("/tolandi 1 5", uid=55)), "unknown")             # мижоз тўлов ёза олмайди
+
+
+class TOwnerPanel(unittest.TestCase):
+    """31.10: пульт владельца кнопками — без /команд."""
+    def setUp(self):
+        self.api = Api()
+        self.b = B.Bot(B.connect(":memory:"), self.api, [OWNER])
+        h = self.b.handle
+        h(msg("/start x", uid=42)); h(msg(T.KINDS["santex"][0], uid=42)); h(msg("кран", uid=42))
+        h(msg(T.WHEN["today"], uid=42)); h(msg("Марказ", uid=42)); h(msg(T.SKIP, uid=42))
+        h(msg(contact={"phone_number": "998901234567"}, uid=42))
+        h(msg(T.M_BTN, uid=77)); h(msg(T.TRADES["santex"], uid=77)); h(msg("Бегзод", uid=77)); h(msg("Хўжаобод", uid=77))
+        h(msg("10", uid=77)); h(msg(contact={"phone_number": "998907777777"}, uid=77))
+        h(msg(photo=[{"file_id": "f"}], uid=77)); h(msg(photo=[{"file_id": "w"}], uid=77)); h(msg(T.M_READY, uid=77))
+
+    def cb(self, data):
+        return self.b.handle({"callback_query": {"id": "q", "data": data, "from": {"id": OWNER},
+                                                 "message": {"chat": {"id": OWNER}, "message_id": 1}}})
+
+    def test_owner_sees_panel_not_client_menu(self):
+        self.assertEqual(self.b.handle(msg("/start", uid=OWNER)), "o_panel")
+        kb = self.api.to(OWNER)[-1]["reply_markup"]["keyboard"]
+        self.assertTrue(any(b["text"] == T.O_MASTERS for row in kb for b in row))
+        self.assertFalse(any(b["text"] == T.O_MASTERS for row in B.main_kb()["keyboard"] for b in row))  # клиент не видит
+
+    def test_buttons_show_everything(self):
+        h = self.b.handle
+        self.assertEqual(h(msg(T.O_STATS, uid=OWNER)), "o_stats")
+        self.assertIn("Усталар", self.api.to(OWNER)[-1]["text"])
+        self.assertEqual(h(msg(T.O_PENDING, uid=OWNER)), "o_pending")
+        self.assertIn("Бегзод", self.api.to(OWNER)[-1]["text"])
+        mid = self.b.db.execute("SELECT id FROM masters").fetchone()[0]
+        self.assertEqual(self.cb(f"ma:{mid}"), "ma")
+        self.assertEqual(h(msg(T.O_MASTERS, uid=OWNER)), "o_masters")
+        self.assertIn("Бегзод", self.api.to(OWNER)[-1]["text"])
+        self.assertEqual(self.cb(f"mv:{mid}"), "mv")
+        self.assertEqual(h(msg(T.O_LEADS, uid=OWNER)), "o_leads")
+        self.assertIn("№1", self.api.to(OWNER)[-1]["text"])
+        self.assertEqual(self.cb("lv:1"), "lv")
+        self.assertEqual(h(msg(T.O_MONEY, uid=OWNER)), "o_money")
+
+    def test_pay_by_buttons(self):
+        h = self.b.handle
+        self.assertEqual(self.cb("pd:1"), "pd")
+        self.assertEqual(h(msg("abc", uid=OWNER)), "o_badnum")
+        self.assertEqual(h(msg("1 500 000", uid=OWNER)), "o_money")
+        self.assertEqual(self.b.db.execute("SELECT paid FROM leads WHERE n=1").fetchone()[0], 1500000)
+
+    def test_client_preview_and_back(self):
+        h = self.b.handle
+        self.assertEqual(h(msg(T.O_CLIENT, uid=OWNER)), "o_client")
+        self.assertEqual(h(msg(T.O_PANEL, uid=OWNER)), "o_panel")
+
+    def test_not_owner_cannot_use_panel(self):
+        self.assertNotIn(self.b.handle(msg(T.O_MASTERS, uid=42)), ("o_masters",))
+        self.assertIsNone(self.b.handle({"callback_query": {"id": "q", "data": "lv:1", "from": {"id": 42},
+                                                            "message": {"chat": {"id": 42}, "message_id": 1}}}))

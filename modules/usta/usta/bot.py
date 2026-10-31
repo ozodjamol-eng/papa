@@ -70,6 +70,11 @@ def main_kb() -> dict:
     return {"keyboard": rows, "resize_keyboard": True}
 
 
+def owner_kb() -> dict:
+    return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_LEADS}], [{"text": T.O_MASTERS}, {"text": T.O_PENDING}],
+                         [{"text": T.O_MONEY}, {"text": T.O_CLIENT}]], "resize_keyboard": True}
+
+
 class Bot:
     def __init__(self, db, api, owners: list[int], username: str = "ozodjamoldizaynbot"):
         self.db, self.api, self.owners, self.username = db, api, owners, username
@@ -94,7 +99,9 @@ class Bot:
         self.db.commit()
 
     def say(self, chat: int, text: str, kb: dict | None = None):
-        return self.api("sendMessage", chat_id=chat, text=text, reply_markup=kb or main_kb(), parse_mode="HTML",
+        if kb is None:
+            kb = owner_kb() if chat in self.owners else main_kb()
+        return self.api("sendMessage", chat_id=chat, text=text, reply_markup=kb, parse_mode="HTML",
                         disable_web_page_preview=True)
 
     # ---------- сообщения ----------
@@ -106,6 +113,10 @@ class Bot:
             return None
         frm, chat = m["from"], m["chat"]["id"]
         text = (m.get("text") or "").strip()
+        if frm["id"] in self.owners:
+            r = self.owner(frm, chat, text)
+            if r:
+                return r
         if text in ("/usta", "/start usta", T.M_BTN):
             self.user(frm, "usta")
             return self.m_begin(frm, chat)
@@ -272,8 +283,7 @@ class Bot:
 
     def notify(self, n: int, frm: dict):
         r = self.db.execute("SELECT * FROM leads WHERE n=?", (n,)).fetchone()
-        kb = {"inline_keyboard": self.dispatch_rows(r) + [[{"text": "✅ Боғландим", "callback_data": f"ok:{n}"},
-                                                         {"text": "❌ Бекор", "callback_data": f"no:{n}"}]]}
+        kb = self.lead_kb(r)
         for o in self.owners:
             try:
                 self.api("sendMessage", chat_id=o, text=self.card(r, frm), reply_markup=kb, parse_mode="HTML")
@@ -300,6 +310,8 @@ class Bot:
             return self.m_answer(q, act, rest)
         if q["from"]["id"] not in self.owners:
             return None
+        if act in ("lv", "mv", "pd", "po"):          # 31.10 пульт: просмотр заявки/мастера, оплата
+            return self.o_callback(q, act, rest)
         if act in ("ma", "mr"):                      # владелец: ma:<id> тасдиқ / mr:<id> рад
             return self.m_decide(q, act, rest)
         if act == "go":                              # владелец: go:<n>:<master id> — заявка устага
@@ -510,17 +522,21 @@ class Bot:
         if len(p) != 3 or not p[1].isdigit() or not p[2].replace(" ", "").isdigit():
             return "Формат: /tolandi 12 1500000  ёки  /berildi 3 150000"
         a, b = int(p[1]), int(p[2])
-        if p[0] == "/tolandi":
-            r = self.db.execute("SELECT * FROM leads WHERE n=?", (a,)).fetchone()
-            if not r:
-                return f"Ариза №{a} йўқ"
-            self.db.execute("UPDATE leads SET paid=? WHERE n=?", (b, a)); self.db.commit()
-            if r["ref"]:
-                share = b * T.REF_PCT // 100
-                ms = self.db.execute("SELECT * FROM masters WHERE id=?", (r["ref"],)).fetchone()
-                self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({T.REF_PCT}%). Ҳисоб: /menim".replace(",", " "))
-                return f"✅ Ариза №{a}: {b:,} сўм. Реферал {esc(ms['name'])}: {share:,} сўм".replace(",", " ")
-            return f"✅ Ариза №{a}: {b:,} сўм (рефералсиз)".replace(",", " ")
+        return self.pay_lead(a, b) if p[0] == "/tolandi" else self.pay_out(a, b)
+
+    def pay_lead(self, a: int, b: int) -> str:
+        r = self.db.execute("SELECT * FROM leads WHERE n=?", (a,)).fetchone()
+        if not r:
+            return f"Ариза №{a} йўқ"
+        self.db.execute("UPDATE leads SET paid=? WHERE n=?", (b, a)); self.db.commit()
+        if r["ref"]:
+            share = b * T.REF_PCT // 100
+            ms = self.db.execute("SELECT * FROM masters WHERE id=?", (r["ref"],)).fetchone()
+            self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({T.REF_PCT}%). Ҳисоб: /menim".replace(",", " "))
+            return f"✅ Ариза №{a}: {b:,} сўм. Реферал {esc(ms['name'])}: {share:,} сўм".replace(",", " ")
+        return f"✅ Ариза №{a}: {b:,} сўм (рефералсиз)".replace(",", " ")
+
+    def pay_out(self, a: int, b: int) -> str:
         ms = self.db.execute("SELECT * FROM masters WHERE id=?", (a,)).fetchone()
         if not ms:
             return f"Уста #{a} йўқ"
@@ -528,6 +544,166 @@ class Bot:
         st = self.m_stats(a)
         self.say(ms["uid"], f"✅ Сизга {b:,} сўм тўланди. Қолдиқ: {st['owed']:,} сўм".replace(",", " "))
         return f"✅ {esc(ms['name'])}: +{b:,} сўм берилди, қолдиқ {st['owed']:,} сўм".replace(",", " ")
+
+    # ---------- 👑 пульт владельца (31.10) ----------
+    def owner(self, frm: dict, chat: int, text: str) -> str | None:
+        uid = frm["id"]
+        u = self.user(frm)
+        step = u["step"] or ""
+        if text in ("/start", "/panel", T.O_PANEL):
+            self.set_step(uid, "")
+            self.say(chat, T.O_HELLO, owner_kb())
+            return "o_panel"
+        if text == T.O_CLIENT:
+            kb = main_kb(); kb["keyboard"] = kb["keyboard"] + [[{"text": T.O_PANEL}]]
+            self.say(chat, "👀 Мижоз шундай кўради. Қайтиш — «👑 Бошқарув».", kb)
+            return "o_client"
+        if step.startswith("o_") and text and text not in T.O_BUTTONS:
+            num = re.sub(r"\D", "", text)
+            if not num:
+                self.say(chat, T.O_BAD_NUM, {"keyboard": [[{"text": T.O_PANEL}]], "resize_keyboard": True})
+                return "o_badnum"
+            kind, _, ident = step.partition(":")
+            self.set_step(uid, "")
+            res = self.pay_lead(int(ident), int(num)) if kind == "o_pay" else self.pay_out(int(ident), int(num))
+            self.say(chat, res, owner_kb())
+            return "o_money"
+        if text == T.O_STATS:
+            self.say(chat, self.stats() + self.o_summary(), owner_kb()); return "o_stats"
+        if text == T.O_LEADS:
+            return self.o_leads(chat)
+        if text == T.O_MASTERS:
+            return self.o_masters(chat)
+        if text == T.O_PENDING:
+            return self.o_pending(chat)
+        if text == T.O_MONEY:
+            return self.o_money(chat)
+        return None
+
+    def o_summary(self) -> str:
+        def c(table, st):
+            return self.db.execute(f"SELECT count(*) FROM {table} WHERE status=?", (st,)).fetchone()[0]
+        return (f"\n\n<b>Аризалар ҳолати:</b> 🆕 {c('leads', 'new')} · 📤 {c('leads', 'sent')} · "
+                f"👷 {c('leads', 'taken')} · 🏁 {c('leads', 'fin')}\n"
+                f"<b>Усталар:</b> ✅ {c('masters', 'ok')} · ⏳ {c('masters', 'pending')}")
+
+    ST_ICON = {"new": "🆕", "done": "✅", "no": "❌", "fin": "🏁", "sent": "📤", "taken": "👷"}
+
+    def o_leads(self, chat: int) -> str:
+        rows = self.db.execute("SELECT * FROM leads ORDER BY n DESC LIMIT 15").fetchall()
+        if not rows:
+            self.say(chat, "📥 Аризалар ҳали йўқ.", owner_kb()); return "o_leads"
+        lines = ["📥 <b>ОХИРГИ АРИЗАЛАР</b> (батафсил — рақамни босинг)"]
+        btns = []
+        for r in rows:
+            lines.append(f"{self.ST_ICON.get(r['status'], '•')} №{r['n']} · {T.KINDS.get(r['kind'], (r['kind'],))[0]} · "
+                         f"{esc((r['place'] or '')[:25])} · {r['created'][5:16].replace('T', ' ')}")
+            btns.append({"text": f"№{r['n']}", "callback_data": f"lv:{r['n']}"})
+        kb = {"inline_keyboard": [btns[i:i + 5] for i in range(0, len(btns), 5)]}
+        self.say(chat, "\n".join(lines), kb)
+        return "o_leads"
+
+    def lead_kb(self, r) -> dict:
+        rows = self.dispatch_rows(r) + [[{"text": "✅ Боғландим", "callback_data": f"ok:{r['n']}"},
+                                         {"text": "❌ Бекор", "callback_data": f"no:{r['n']}"}],
+                                        [{"text": "🏁 Иш битди", "callback_data": f"fin:{r['n']}"},
+                                         {"text": "💰 Тўланди", "callback_data": f"pd:{r['n']}"}]]
+        return {"inline_keyboard": rows}
+
+    def o_masters(self, chat: int) -> str:
+        rows = self.db.execute("SELECT * FROM masters WHERE status='ok' ORDER BY trade, id").fetchall()
+        if not rows:
+            self.say(chat, "🛠 Рўйхатда уста ҳали йўқ.\nТекширувдагилар — «⏳ Текширувда».\n"
+                     f"Усталарни чақириш ҳаволаси:\nhttps://t.me/{self.username}?start=usta", owner_kb())
+            return "o_masters"
+        lines = ["🛠 <b>РЎЙХАТДАГИ УСТАЛАР</b> (батафсил — исмни босинг)"]
+        btns = []
+        for r in rows:
+            x = self.m_stats(r["id"])
+            lines.append(f"✅ {T.TRADES.get(r['trade'], r['trade'])} — {esc(r['name'])} · 📞 {esc(r['phone'])} · "
+                         f"иш: {r['jobs']} · 🤝 {x['users']} · қарз: {x['owed']:,}".replace(",", " "))
+            btns.append([{"text": f"{esc(r['name'])[:28]}", "callback_data": f"mv:{r['id']}"}])
+        self.say(chat, "\n".join(lines), {"inline_keyboard": btns})
+        return "o_masters"
+
+    def o_pending(self, chat: int) -> str:
+        rows = self.db.execute("SELECT * FROM masters WHERE status='pending' ORDER BY id").fetchall()
+        if not rows:
+            self.say(chat, "⏳ Текширувда ҳеч ким йўқ.", owner_kb()); return "o_pending"
+        for r in rows:
+            self.m_show(chat, r, {"inline_keyboard": [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"},
+                                                         {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]})
+        return "o_pending"
+
+    def m_show(self, chat: int, r, kb: dict):
+        try:
+            for p in [json.loads(r["face"] or "null")] + json.loads(r["works"] or "[]"):
+                if p:
+                    self.api("copyMessage", chat_id=chat, from_chat_id=p["chat"], message_id=p["id"])
+        except Exception as e:  # noqa: BLE001 — фото могли удалить, карточку всё равно показываем
+            print(f"m_show: {e}", flush=True)
+        self.api("sendMessage", chat_id=chat, text=self.m_card(r), reply_markup=kb, parse_mode="HTML")
+
+    def o_money(self, chat: int) -> str:
+        f = lambda x: f"{x:,}".replace(",", " ")
+        paid = self.db.execute("SELECT count(*), coalesce(sum(paid),0) FROM leads WHERE paid>0").fetchone()
+        lines = [f"💰 <b>ТЎЛОВЛАР</b>\nТўланган дизайнлар: {paid[0]} та · {f(paid[1])} сўм"]
+        owed = []
+        for r in self.db.execute("SELECT * FROM masters WHERE status='ok'").fetchall():
+            x = self.m_stats(r["id"])
+            if x["share"]:
+                lines.append(f"🤝 {esc(r['name'])}: улуш {f(x['share'])} · берилди {f(x['out'])} · <b>қарз {f(x['owed'])}</b>")
+                if x["owed"] > 0:
+                    owed.append([{"text": f"💸 {r['name'][:20]} — бердим", "callback_data": f"po:{r['id']}"}])
+        if len(lines) == 1:
+            lines.append("Реферал улушлари ҳали йўқ.")
+        lines.append("\nМижоз тўлаган бўлса — «📥 Аризалар» → ариза → «💰 Тўланди».")
+        self.say(chat, "\n".join(lines), {"inline_keyboard": owed} if owed else owner_kb())
+        return "o_money"
+
+    def o_callback(self, q: dict, act: str, rest: str) -> str | None:
+        chat = q["from"]["id"]
+        self.user(q["from"])                         # строка владельца для шага ввода суммы
+        self.api("answerCallbackQuery", callback_query_id=q["id"])
+        if not rest.isdigit():
+            return None
+        if act == "lv":
+            r = self.db.execute("SELECT * FROM leads WHERE n=?", (int(rest),)).fetchone()
+            if not r:
+                return None
+            u = self.db.execute("SELECT first, username FROM users WHERE uid=?", (r["uid"],)).fetchone()
+            frm = {"first_name": u["first"], "username": u["username"]} if u else None
+            self.api("sendMessage", chat_id=chat, text=self.card(r, frm), reply_markup=self.lead_kb(r), parse_mode="HTML")
+            for p in json.loads(r["photos"] or "[]")[:5]:
+                try:
+                    self.api("copyMessage", chat_id=chat, from_chat_id=p["chat"], message_id=p["id"])
+                except Exception:  # noqa: BLE001
+                    pass
+            return "lv"
+        if act == "mv":
+            r = self.db.execute("SELECT * FROM masters WHERE id=?", (int(rest),)).fetchone()
+            if not r:
+                return None
+            x = self.m_stats(r["id"])
+            kb = {"inline_keyboard": [[{"text": "💸 Улуш бердим", "callback_data": f"po:{r['id']}"},
+                                       {"text": "🚫 Рўйхатдан чиқариш", "callback_data": f"mr:{r['id']}"}]]}
+            self.m_show(chat, r, kb)
+            self.api("sendMessage", chat_id=chat, parse_mode="HTML",
+                     text=(f"🤝 Ҳавола: {self.ref_link(r['id'])}\nКелганлар: {x['users']} · аризалар: {x['leads']} · "
+                           f"тўловлар: {x['paid']} · қарз: {x['owed']:,} сўм").replace(",", " "))
+            return "mv"
+        if act == "pd":
+            self.set_step(chat, f"o_pay:{rest}")
+            self.say(chat, T.O_ASK_PAID.format(n=rest), {"keyboard": [[{"text": T.O_PANEL}]], "resize_keyboard": True})
+            return "pd"
+        if act == "po":
+            r = self.db.execute("SELECT name FROM masters WHERE id=?", (int(rest),)).fetchone()
+            if not r:
+                return None
+            self.set_step(chat, f"o_out:{rest}")
+            self.say(chat, T.O_ASK_OUT.format(name=esc(r["name"])), {"keyboard": [[{"text": T.O_PANEL}]], "resize_keyboard": True})
+            return "po"
+        return None
 
     def remind(self, minutes: int = 30) -> int:
         """Заявка без ответа дольше 30 мин — напомнить владельцу один раз (днём 9–22)."""
