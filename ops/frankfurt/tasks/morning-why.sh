@@ -11,6 +11,14 @@ for r in db.execute("SELECT channel, key, substr(at,1,16), status, prepared, tri
     print(" | ".join(str(x) for x in r))
 try:
     print("пул:", dict(db.execute("SELECT status, count(*) FROM morning_pool GROUP BY status").fetchall()))
+    import os
+    from pathlib import Path
+    d = Path("/var/lib/papa-genplan/pool")
+    rows = db.execute("SELECT key, file, msg_id, weekday, season FROM morning_pool WHERE status='ok'").fetchall()
+    on = sum(1 for r in rows if r[1] and (d / r[1]).exists())
+    mid = sum(1 for r in rows if r[2])
+    print(f"годные: {len(rows)} · файл на сервере: {on} · есть пост в пуле (msg_id): {mid} · папка {d} есть: {d.is_dir()}")
+    print("годные по дню/сезону:", dict(db.execute("SELECT coalesce(weekday,'общ')||'/'||coalesce(season,'neutral'), count(*) FROM morning_pool WHERE status='ok' GROUP BY 1").fetchall()))
 except sqlite3.OperationalError as e:
     print("пул:", e)
 PY
