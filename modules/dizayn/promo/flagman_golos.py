@@ -150,7 +150,7 @@ h = L_(1) / 2; parts.append(seg_clip("p1a", "c2a", h, CHIPS[1][:2])); parts.appe
 parts.append(seg_clip("p2", "c4a", L_(2)))
 # фраза 4: бот → логотип + ник, потом реальный кадр с чипом
 h = min(2.2, L_(3) * 0.5)
-parts.append(still_seg("p3a", bot_frame("b3", [], True), h)); parts.append(seg_clip("p3b", "c5a", L_(3) - h, CHIPS[3]))
+parts.append(seg_clip("p3", "c5a", L_(3), CHIPS[3]))
 parts.append(seg_clip("p4", "c6a", L_(4), CHIPS[4]))
 parts.append(seg_clip("p5", "c7b", L_(5), CHIPS[5]))
 q = L_(6) / 4
@@ -159,7 +159,7 @@ for j, f in enumerate(["st_japandi", "st_haytek", "st_klassika", "st_sharq"]):
     im = Image.open(f"{T}/{f}.jpg").convert("RGBA"); chip_png(f"stc{j}", [STYLES[j]], 250)
     im.alpha_composite(Image.open(f"{T}/stc{j}.png")); im.convert("RGB").save(f"{T}/{f}_c.jpg", quality=95)
     parts.append(still_seg(f"p6{j}", f"{T}/{f}_c.jpg", q))
-parts.append(still_seg("p7", bot_frame("b7", CHIPS[7], True), L_(7)))
+parts.append(seg_clip("p7", "c7b", L_(7), CHIPS[7], 3.5))
 parts.append(seg_clip("p8", "c7a", L_(8), None, 2.0))
 
 # ---------- склейка видео
@@ -212,8 +212,43 @@ seq.append((blank, BODY - t + 0.1))
 cl = f"{T}/subs.txt"
 open(cl, "w").write("".join(f"file '{p}'\nduration {d:.3f}\n" for p, d in seq) + f"file '{blank}'\n")
 run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", cl, "-vf", f"fps={FPS},format=rgba", "-c:v", "qtrle", f"{T}/subs.mov"])
-run(["ffmpeg", "-v", "error", "-y", "-i", f"{T}/body_v.mp4", "-i", f"{T}/subs.mov", "-filter_complex",
-     f"[0:v][1:v]overlay=0:0:shortest=0,trim=0:{BODY},setpts=PTS-STARTPTS,format=yuv420p[o]", "-map", "[o]",
+import math
+BW, BH = 900, 190; LG = 150
+lg = Image.open(f"{D}/tmp/logo.png").convert("RGBA").resize((LG, LG), Image.LANCZOS)
+m2 = Image.new("L", (LG, LG), 0); ImageDraw.Draw(m2).ellipse([2, 2, LG - 2, LG - 2], fill=255); lg.putalpha(m2)
+ring = Image.new("RGBA", (LG + 12, LG + 12), (0, 0, 0, 0)); ImageDraw.Draw(ring).ellipse([0, 0, LG + 11, LG + 11], fill=(255, 255, 255, 255))
+fP = ImageFont.truetype(FB, 46); HANDLE = "@ozodjamoldizaynbot"
+tw = ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(HANDLE, font=fP); PW = int(tw + 70); PH = 92
+GW = LG + 12 + 18 + PW; GX = (BW - GW) // 2; CY = BH // 2
+def ease(x): x = min(1, max(0, x)); return 1 - (1 - x) ** 3
+def badge(t, dur):
+    im = Image.new("RGBA", (BW, BH), (0, 0, 0, 0))
+    a = 1.0 if t < dur - 0.35 else max(0, (dur - t) / 0.35)
+    # вращение: вход — 2 оборота за 0.9 с; потом раз в 4 с один оборот
+    if t < 0.9: ang = (1 - ease(t / 0.9)) * 4 * math.pi; sc = ease(t / 0.5)
+    else:
+        k = (t - 0.9) % 4.0; ang = (1 - ease(k / 0.8)) * 2 * math.pi if k < 0.8 else 0; sc = 1
+    sx = max(0.04, abs(math.cos(ang))) * sc
+    cw = max(2, int((LG + 12) * sx)); ch = max(2, int((LG + 12) * sc))
+    coin = ring.copy(); coin.alpha_composite(lg, (6, 6)); coin = coin.resize((cw, ch), Image.LANCZOS)
+    cx = GX + (LG + 12) // 2
+    # плашка с ником выезжает после входа логотипа
+    r = ease((t - 0.7) / 0.45)
+    if r > 0:
+        pw = int(PW * r); x0 = GX + LG + 12 + 18
+        pill = Image.new("RGBA", (PW, PH), (0, 0, 0, 0)); d = ImageDraw.Draw(pill)
+        d.rounded_rectangle([0, 0, PW - 1, PH - 1], PH // 2, fill=(12, 12, 14, 225), outline=(235, 60, 50, 255), width=4)
+        d.text((35, (PH - 52) // 2 - 2), HANDLE, font=fP, fill=(255, 255, 255, 255))
+        im.alpha_composite(pill.crop((0, 0, max(1, pw), PH)), (x0, CY - PH // 2))
+    im.alpha_composite(coin, (cx - cw // 2, CY - ch // 2))
+    if a < 1: im.putalpha(im.getchannel("A").point(lambda v: int(v * a)))
+    return im
+B0, B1 = pstart[3], pstart[8]; bd = B1 - B0; bdir = f"{T}/badge"; os.makedirs(bdir, exist_ok=True)
+for i in range(int(bd * FPS) + 1): badge(i / FPS, bd).save(f"{bdir}/b{i:04d}.png")
+run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", f"{bdir}/b%04d.png", "-c:v", "qtrle", f"{T}/badge.mov"])
+BY = 1655  # под субтитрами (1400–1610), выше нижнего края
+run(["ffmpeg", "-v", "error", "-y", "-i", f"{T}/body_v.mp4", "-i", f"{T}/subs.mov", "-itsoffset", f"{B0:.3f}", "-i", f"{T}/badge.mov", "-filter_complex",
+     f"[0:v][1:v]overlay=0:0:shortest=0[s];[s][2:v]overlay={(W-BW)//2}:{BY}:eof_action=pass,trim=0:{BODY},setpts=PTS-STARTPTS,format=yuv420p[o]", "-map", "[o]",
      "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-r", str(FPS), f"{T}/body_s.mp4"])
 
 # ---------- звук: голос + музыка тихо с приглушением под голос + «вжух» на стилях
