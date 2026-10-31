@@ -43,10 +43,10 @@ CLASSIFY = """Сен — медиа-архив муҳаррирсан. Telegram-
 Жавоб — ФАҚАТ JSON: {"hub": "...", "text": "..."}"""
 
 
-def is_candidate(it: dict, now: dt.datetime, age_free: bool = False) -> bool:
+def is_candidate(it: dict, now: dt.datetime, age_free: bool = False, min_age: dt.timedelta = MIN_AGE) -> bool:
     if it["kind"] not in ("video", "photo") or it["ad"]:
         return False
-    if not age_free and now - it["date"] < MIN_AGE:
+    if not age_free and now - it["date"] < min_age:
         return False
     t = it["text"] or ""
     return not sklad.STALE.search(t) and not curate.off_policy(t, "paparazzi")
@@ -149,6 +149,57 @@ def parse_batch(out: str, n: int) -> list[dict]:
     return res
 
 
+# 31.10 владелец: «в папке Paparazzi UZ уже собраны готовые каналы — я не зря собирал». Куратор берёт оттуда только СВЕЖЕЕ;
+# их архивы (старые клипы, концерты) — теперь работа Архива. Чужое: кадр — на лого, текст — всегда наш (Gemini пишет заново).
+FOLDERS = ("Paparazzi UZ",)
+FOLDER_AGE = dt.timedelta(days=30)              # чужие клипы вечные; свежее берёт куратор, Архиву — старше месяца
+FOLDER_TAKE = 15                                # постов в банк с одного канала за проход
+FOLDER_PER_RUN = 4                              # каналов папки за проход (по кругу) — бережём бесплатный Gemini
+
+
+def pick_round(keys: list[str], start: int, n: int) -> list[str]:
+    if not keys:
+        return []
+    start %= len(keys)
+    return (keys[start:] + keys[:start])[:n]
+
+
+async def folder_targets(client, st: dict, state_dir: Path, log=print) -> list[tuple]:
+    folders = await curate.folder_peers(client)
+    peers = curate.peers_in(folders, FOLDERS)
+    try:
+        cur = json.loads((state_dir / "curator.json").read_text(encoding="utf-8"))
+        blocked = set(cur.get("logo_sources", []))
+    except (OSError, ValueError):
+        blocked = set()
+    keys, by = [], {}
+    for p in peers:
+        cid = getattr(p, "channel_id", None)
+        if not cid:
+            continue
+        k = f"f{cid}"
+        keys.append(k)
+        by[k] = p
+    done = {k for k, v in (st.get("pos") or {}).items() if v == -1}
+    keys = [k for k in keys if k not in done]
+    rr = int(st.get("folder_rr", 0))
+    chosen = pick_round(keys, rr, FOLDER_PER_RUN)
+    st["folder_rr"] = rr + len(chosen)
+    out = []
+    for k in chosen:
+        try:
+            ent = await client.get_entity(by[k])
+        except Exception as e:  # noqa: BLE001
+            log(f"  папка {k}: {type(e).__name__}")
+            continue
+        u = (getattr(ent, "username", "") or "").lower()
+        if u in curate.OWN or u in blocked or f"@{u}" in blocked:
+            continue                             # свои — уже в списке; ставит своё лого — не тратим Gemini
+        out.append((k, by[k], FOLDER_AGE, FOLDER_TAKE))
+    log(f"  папка {FOLDERS[0]}: каналов {len(peers)}, в этом проходе {len(out)}")
+    return out
+
+
 async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     sf = state_dir / "archive.json"
@@ -158,9 +209,17 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         st = {}
     cache: dict = {}
     report: dict[str, dict] = {}
-    for ch in CHANNELS:
+    targets = [(ch, None, MIN_AGE, TAKE) for ch in CHANNELS]
+    try:                                          # 31.10: + архивы каналов из папок-источников владельца, по кругу
+        targets += await folder_targets(client, st, state_dir, log)
+    except Exception as e:  # noqa: BLE001
+        log(f"  папки: {type(e).__name__}")
+    for ch, peer, min_age, take in targets:
         try:
-            ent = await (hubs.entity(client, ch, cache) if not ch.isascii() else client.get_entity(ch))
+            if peer is not None:
+                ent = await client.get_entity(peer)
+            else:
+                ent = await (hubs.entity(client, ch, cache) if not ch.isascii() else client.get_entity(ch))
         except Exception as e:  # noqa: BLE001
             ent = None
             log(f"  {ch}: {type(e).__name__}")
@@ -173,7 +232,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             continue
         items, groups = [], {}
         free = ch in AGE_FREE
-        kw = {"offset_id": pos} if pos else ({} if free else {"offset_date": now - MIN_AGE})
+        kw = {"offset_id": pos} if pos else ({} if free else {"offset_date": now - min_age})
         last_id = None
         async for m in client.iter_messages(ent, limit=SCAN, wait_time=1, **kw):
             last_id = m.id
@@ -196,12 +255,12 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         if free:                                    # свой склад пополняется — не «пройден навсегда», а «эти уже разобраны»
             st["pos"][ch] = 0
             items = [it for it in items if it["id"] not in seen]
-        cands = [it for it in items if is_candidate(it, now, free)]
+        cands = [it for it in items if is_candidate(it, now, free, min_age)]
         picks = cands if ch in NO_VIEWS else strong(cands)
         done, skip, logo, per = 0, 0, 0, {}
-        queue = picks[:TAKE]
-        if len(picks) > TAKE:
-            st["pos"][ch] = picks[TAKE]["id"] + 1                # остальные сильные — в следующий запуск
+        queue = picks[:take]
+        if len(picks) > take:
+            st["pos"][ch] = picks[take]["id"] + 1                # остальные сильные — в следующий запуск
         for b in range(0, len(queue), BATCH):
             chunk = queue[b:b + BATCH]
             thumbs = []
