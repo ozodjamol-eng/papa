@@ -24,3 +24,18 @@ class T(unittest.TestCase):
     def test_strong(self):
         got = archive.strong([it(1, views=100), it(4, views=500), it(2, views=1000), it(3, views=5000)])
         self.assertEqual([x["id"] for x in got], [2, 3])                       # медиана 750 ×1.1
+
+
+class Batch(unittest.TestCase):
+    """31.10 отдел Архив: пачка постов за один запрос; чужое лого и непонятное — SKIP."""
+
+    def test_parse(self):
+        out = '[{"n":1,"hub":"РАЗВЛЕКАТЕЛЬНО","text":"😂 КУЛГИ","logo":false},' \
+              '{"n":2,"hub":"ФОЙДАЛИК","text":"x","logo":true},{"n":3,"hub":"???","text":"y"}]'
+        r = archive.parse_batch(out, 4)
+        self.assertEqual([x["hub"] for x in r], ["РАЗВЛЕКАТЕЛЬНО", "SKIP", "SKIP", "SKIP"])
+        self.assertTrue(r[1]["logo"])
+
+    def test_parse_no_numbers(self):
+        r = archive.parse_batch('[{"hub":"ИБРАТ","text":"a"},{"hub":"SKIP","text":""}]', 2)
+        self.assertEqual([x["hub"] for x in r], ["ИБРАТ", "SKIP"])

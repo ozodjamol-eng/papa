@@ -1,7 +1,10 @@
 [Unit]
-Description=PAPA 📚 архивариус — старое сильное из наших каналов → KATTA BANK (каждый день 12:40 Ташкент)
+Description=PAPA 📚 отдел Архив — старое сильное из наших каналов → KATTA BANK (00:40, 03:40, 12:40 Ташкент)
 
 [Timer]
+# 31.10 владелец: «пусть архивариус работает, банк почти пуст» — 3 прохода в день (ночью Gemini свободен; в каналы архивариус не публикует)
+OnCalendar=*-*-* 19:40:00 UTC
+OnCalendar=*-*-* 22:40:00 UTC
 OnCalendar=*-*-* 07:40:00 UTC
 RandomizedDelaySec=3min
 Persistent=false

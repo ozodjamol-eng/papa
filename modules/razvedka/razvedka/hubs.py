@@ -104,7 +104,17 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
     try:
         await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
     except TypeError:                     # альбом со смешанным медиа — кладём первое (30.10, 2 случая у архивариуса)
-        await client.send_file(hub_ent, media[0], caption=text or None)
+        try:
+            await client.send_file(hub_ent, media[0], caption=text or None)
+        except TypeError:                 # 31.10: Telegram не даёт переслать это медиа ссылкой — скачать и залить заново
+            m = next(x for x in msgs if getattr(x, "media", None))
+            data = await client.download_media(m, file=bytes)
+            if not data:
+                return False
+            import io
+            f = io.BytesIO(data)
+            f.name = "video.mp4" if getattr(m, "video", None) else "photo.jpg"
+            await client.send_file(hub_ent, f, caption=text or None, supports_streaming=bool(getattr(m, "video", None)))
     return True
 
 

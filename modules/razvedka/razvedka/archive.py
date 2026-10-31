@@ -21,9 +21,10 @@ from . import curate, hubs, sklad
 
 CHANNELS = ["ozodjamoll", "kattadavrauz"]     # 30.10: PaparazziUZ + КАТТА ДАВРА. xojaobodcity24 — группа, просмотров нет → не годится
 MIN_AGE = dt.timedelta(days=180)
-SCAN = 400                                    # постов просмотреть за запуск
+SCAN = 1500                                   # постов просмотреть за запуск (31.10: отдел Архив — было 400)
 PACE = 5                                      # сек между запросами к Gemini
-TAKE = 30                                     # положить в банк за запуск (на канал)
+TAKE = 120                                    # положить в банк за запуск (на канал; 31.10 — было 30)
+BATCH = 6                                     # 31.10: постов за ОДИН запрос Gemini (было по одному) — в 6 раз дешевле по лимиту
 CLASSIFY = """Сен — медиа-архив муҳаррирсан. Telegram-каналимизнинг эски постини (матн ва кадр) кўриб чиқ.
 Вазифа: 1) пост қайси бўлимга тегишли — фақат шулардан бири:
 "РАЗВЛЕКАТЕЛЬНО" (кулги, ҳажвия, прикол), "Jonlik ijrolar" (қўшиқ, клип, жонли ижро, концерт, мусиқа),
@@ -85,6 +86,62 @@ def classify(text: str, jpeg: bytes | None) -> dict:
     raise RuntimeError(f"Gemini: {last}")
 
 
+CLASSIFY_BATCH = CLASSIFY.split("Жавоб —")[0] + """3) Кадрда бошқа каналнинг логотипи, сув белгиси, @юзернейм ёки TikTok/Instagram/Telegram белгиси борми — "logo": true/false.
+Сенга бир нечта пост берилади (№1, №2 …), ҳар бирининг матни ва кадри.
+Жавоб — ФАҚАТ JSON рўйхат, ҳар пост учун биттадан, тартиб билан: [{"n": 1, "hub": "...", "text": "...", "logo": false}, …]"""
+
+
+def classify_batch(posts: list[tuple[str, bytes | None]]) -> list[dict]:
+    """31.10 отдел Архив: несколько постов за один запрос. Возвращает [{hub, text, logo}] по порядку; чужое лого → SKIP."""
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("нет ключа Gemini")
+    from . import budget
+    budget.gate()
+    parts = [{"text": CLASSIFY_BATCH}]
+    for i, (text, jpeg) in enumerate(posts, 1):
+        parts.append({"text": f"\n№{i}. Пост матни:\n{(text or '(матн йўқ)')[:1200]}"})
+        if jpeg:
+            parts.append({"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}})
+    body = {"contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 600 * len(posts) + 400,
+                                 "responseMimeType": "application/json"}}
+    last = None
+    for model in dict.fromkeys([os.environ.get("ARCHIVE_MODEL", "gemini-flash-lite-latest"), "gemini-flash-latest"]):
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                     data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": key})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                data = json.loads(r.read())
+            out = "".join(p.get("text", "") for p in ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+                          if not p.get("thought"))
+            return parse_batch(out, len(posts))
+        except urllib.error.HTTPError as e:
+            last = f"HTTP {e.code}"
+            if e.code == 429:
+                raise RuntimeError("лимит Gemini") from None
+        except Exception as e:  # noqa: BLE001
+            last = type(e).__name__
+    raise RuntimeError(f"Gemini: {last}")
+
+
+def parse_batch(out: str, n: int) -> list[dict]:
+    """Ответ Gemini → ровно n решений по порядку. Чего нет / непонятно / с чужим лого — SKIP (лучше пропустить)."""
+    arr = json.loads(out[out.find("["): out.rfind("]") + 1])
+    by = {}
+    for k, r in enumerate(arr if isinstance(arr, list) else [], 1):
+        if isinstance(r, dict):
+            by[int(r.get("n") or k)] = r
+    res = []
+    for i in range(1, n + 1):
+        r = by.get(i) or {}
+        hub = r.get("hub") if r.get("hub") in hubs.HUBS else "SKIP"
+        if r.get("logo") is True or str(r.get("logo")).lower() == "true":
+            hub = "SKIP"
+        res.append({"hub": hub, "text": hubs.clean(r.get("text") or ""), "logo": bool(r.get("logo") is True)})
+    return res
+
+
 async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     sf = state_dir / "archive.json"
@@ -121,46 +178,52 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         # 31.10: молодой канал (старше 6 мес. ещё ничего нет) — не «пройден навсегда», проверим завтра снова
         st.setdefault("pos", {})[ch] = last_id if last_id and len(items) else (-1 if pos else 0)
         picks = strong([it for it in items if is_candidate(it, now)])
-        done, skip, per = 0, 0, {}
-        for it in picks:
-            if done >= TAKE:
-                st["pos"][ch] = it["id"] + 1                     # остальные сильные — в следующий запуск
-                break
-            jpeg = None
-            try:
-                jpeg = await client.download_media(it["msgs"][0], file=bytes, thumb=-1)
-            except Exception:  # noqa: BLE001
-                pass
+        done, skip, logo, per = 0, 0, 0, {}
+        queue = picks[:TAKE]
+        if len(picks) > TAKE:
+            st["pos"][ch] = picks[TAKE]["id"] + 1                # остальные сильные — в следующий запуск
+        for b in range(0, len(queue), BATCH):
+            chunk = queue[b:b + BATCH]
+            thumbs = []
+            for it in chunk:
+                jpeg = None
+                try:
+                    jpeg = await client.download_media(it["msgs"][0], file=bytes, thumb=-1)
+                except Exception:  # noqa: BLE001
+                    pass
+                thumbs.append((it["text"], jpeg))
             res = None
-            for wait in (0, 65):                                 # 31.10: 429 — чаще всего лимит в минуту; пауза и ещё раз
+            for wait in (0, 65):                                 # 429 — чаще всего лимит в минуту; пауза и ещё раз
                 if wait:
                     await asyncio.sleep(wait)
                 try:
-                    res = await asyncio.to_thread(classify, it["text"], jpeg)
+                    res = await asyncio.to_thread(classify_batch, thumbs)
                     break
                 except RuntimeError as e:
                     if "лимит" not in str(e) or wait:
                         log(f"  {e} — остальное в следующий раз")
                         break
-            await asyncio.sleep(PACE)                            # бесплатный Gemini: не больше ~12 запросов в минуту
+            await asyncio.sleep(PACE)
             if res is None:
-                st["pos"][ch] = it["id"]                         # продолжим с этого места
+                st["pos"][ch] = chunk[0]["id"] + 1               # продолжим с этой пачки
                 break
-            if res["hub"] == "SKIP":
-                skip += 1
-                continue
-            hub_ent = await hubs.entity(client, res["hub"], cache)
-            try:
-                if not hub_ent or not await hubs.put(client, hub_ent, sorted(it["msgs"], key=lambda x: x.id), res["text"]):
+            for it, r in zip(chunk, res):
+                if r["hub"] == "SKIP":
+                    skip += 1
+                    logo += r["logo"]
                     continue
-            except Exception as e:  # noqa: BLE001
-                log(f"  в хаб: {type(e).__name__}")
-                continue
-            done += 1
-            per[res["hub"]] = per.get(res["hub"], 0) + 1
-            log(f"  📚 {ch} #{it['id']} ({it['date']:%Y-%m}) → {res['hub']}")
-            await asyncio.sleep(3)
-        report[ch] = {"просмотрено": len(items), "сильных": len(picks), "в банк": done, "пропуск": skip, "по хабам": per}
+                hub_ent = await hubs.entity(client, r["hub"], cache)
+                try:
+                    if not hub_ent or not await hubs.put(client, hub_ent, sorted(it["msgs"], key=lambda x: x.id), r["text"]):
+                        continue
+                except Exception as e:  # noqa: BLE001
+                    log(f"  в хаб: {type(e).__name__}")
+                    continue
+                done += 1
+                per[r["hub"]] = per.get(r["hub"], 0) + 1
+                log(f"  📚 {ch} #{it['id']} ({it['date']:%Y-%m}) → {r['hub']}")
+                await asyncio.sleep(3)
+        report[ch] = {"просмотрено": len(items), "сильных": len(picks), "в банк": done, "пропуск": skip, "чужое лого": logo, "по хабам": per}
     state_dir.mkdir(parents=True, exist_ok=True)
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     return report
