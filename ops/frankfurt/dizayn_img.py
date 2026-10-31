@@ -33,6 +33,9 @@ def main(src, out):
     key = os.environ.get("GEMINI_API_KEY") or sys.exit("нет GEMINI_API_KEY")
     src, out = Path(src), Path(out); out.mkdir(parents=True, exist_ok=True)
     jobs = json.loads((src / "job.json").read_text(encoding="utf-8"))
+    cap = int(os.environ.get("DIZAYN_IMG_CAP", "12"))   # предел за один заход: 12 картинок ≈ $0,5
+    if len(jobs) > cap:
+        print(f"предел {cap} картинок за заход — лишние пропущены"); jobs = jobs[:cap]
     ok = 0
     for j in jobs:
         try:
