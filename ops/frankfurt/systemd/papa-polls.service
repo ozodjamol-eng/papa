@@ -1,0 +1,6 @@
+[Unit]
+Description=PAPA 🗳 опрос дня — готовый пост владельцу в PAPA ШТАБ для пересылки в группу
+
+[Service]
+Type=oneshot
+ExecStart=/opt/papa/ops/frankfurt/polls-send.sh

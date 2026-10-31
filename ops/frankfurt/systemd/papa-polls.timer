@@ -1,0 +1,10 @@
+[Unit]
+Description=PAPA 🗳 опрос дня — вт/чт/сб 19:00 Ташкент (31.10 владелец)
+
+[Timer]
+OnCalendar=Tue,Thu,Sat *-*-* 14:00:00 UTC
+Persistent=false
+Unit=papa-polls.service
+
+[Install]
+WantedBy=timers.target
