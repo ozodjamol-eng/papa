@@ -139,9 +139,12 @@ def pick(cands: list[dict], n: int, history: list[dict], need: list[str] | None 
 
 
 # ---------- Gemini: проверка кадра ----------
-def vision(jpeg: bytes) -> dict:
+def vision(jpeg: bytes, background: bool = True) -> dict:
     from . import budget
-    budget.gate()                                # 30.10: лимит Gemini общий — BudgetStop (RuntimeError) = «лимит»
+    if background:
+        budget.gate()                            # 30.10: лимит Gemini общий — BudgetStop (RuntimeError) = «лимит»
+    else:
+        budget.spend(1)                          # 31.10: проверка перед ВЫХОДОМ поста (склады) — как GENPLAN, не фон
     key = os.environ["GEMINI_API_KEY"].strip().strip('"').strip("'")
     model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest").strip().strip('"').removeprefix("models/") or "gemini-flash-latest"
     body = {"contents": [{"role": "user", "parts": [{"text": VISION},
@@ -277,7 +280,7 @@ async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel:
     return out
 
 
-async def clean_frame(client, c: dict) -> bool | None:
+async def clean_frame(client, c: dict, background: bool = True) -> bool | None:
     """True — кадры чистые; False — чужое лого/реклама/жестокость; None — проверить нельзя (не берём)."""
     if c["kind"] == "audio":
         return True
@@ -301,7 +304,7 @@ async def clean_frame(client, c: dict) -> bool | None:
             jpeg = None
     if not jpeg:
         return None
-    v = await asyncio.to_thread(vision, jpeg)
+    v = await asyncio.to_thread(vision, jpeg, background)
     c["foreign_logo"] = bool(v.get("foreign_logo"))
     return not (v.get("foreign_logo") or v.get("ad") or v.get("bad"))
 

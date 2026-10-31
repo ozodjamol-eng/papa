@@ -23,6 +23,7 @@ CHANNELS = ["ozodjamoll", "kattadavrauz", "xojaobodcity24", "АРХИВ МУЗЫ
 # 30.10: PaparazziUZ + КАТТА ДАВРА. 31.10 владелец: + группа Хўжаобод (просмотров нет → берём всех кандидатов,
 # Gemini сам отсеивает новости/лого) + «АРХИВ МУЗЫКА» — закрытый канал, куда владелец сбрасывает музыку из своего
 # чата с @SaveYoutubeBot (чат с ботом Разведке не виден). Нет канала — пропуск без ошибки.
+NO_VIEWS = {"xojaobodcity24"}                # группа: просмотры есть только у пересланных — медиана врёт, берём всех
 AGE_FREE = {"АРХИВ МУЗЫКА"}                  # пересланное туда — дата пересылки свежая, правило «старше 6 мес.» не к месту
 MIN_AGE = dt.timedelta(days=180)
 SCAN = 1500                                   # постов просмотреть за запуск (31.10: отдел Архив — было 400)
@@ -195,7 +196,8 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
         if free:                                    # свой склад пополняется — не «пройден навсегда», а «эти уже разобраны»
             st["pos"][ch] = 0
             items = [it for it in items if it["id"] not in seen]
-        picks = strong([it for it in items if is_candidate(it, now, free)])
+        cands = [it for it in items if is_candidate(it, now, free)]
+        picks = cands if ch in NO_VIEWS else strong(cands)
         done, skip, logo, per = 0, 0, 0, {}
         queue = picks[:TAKE]
         if len(picks) > TAKE:

@@ -235,7 +235,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                 if not gemini_ok:
                     continue
                 try:
-                    ok = await curate.clean_frame(client, {"kind": it["kind"], "msg": it["msg"]})
+                    ok = await curate.clean_frame(client, {"kind": it["kind"], "msg": it["msg"]}, background=False)
                 except RuntimeError as e:               # лимит Gemini — остальные в следующий раз (без проверки не шлём)
                     log(f"  склад: {e}")
                     gemini_ok = False
@@ -327,7 +327,7 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
                     break                              # нечем проверить — без проверки не шлём
                 if needs_check(name):                  # 31.10: и якорь — только после проверки кадров на чужое лого
                     try:
-                        ok = await curate.clean_frame(client, {"kind": x["kind"], "msg": x["msg"]})
+                        ok = await curate.clean_frame(client, {"kind": x["kind"], "msg": x["msg"]}, background=False)
                     except RuntimeError as e:
                         log(f"  якорь {name}: {e}")
                         break
