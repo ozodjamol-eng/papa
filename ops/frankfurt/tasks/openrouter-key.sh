@@ -37,5 +37,5 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json
   http://127.0.0.1:8790/v1beta/models/gemini-flash-lite-latest:generateContent || true)
 echo "проба через прокси: HTTP $code"
 touch /etc/papa-gemini-proxy/on
-echo "✅ Прокси включён: агенты идут через него (Google бесплатно → OpenRouter при лимите). Потолок трат — $5 на счёте."
+echo "✅ Прокси включён: агенты идут через него (Google бесплатно → OpenRouter при лимите). Потолок трат — 5 долларов на счёте."
 echo "== OPENROUTER_KEY_DONE"
