@@ -41,6 +41,7 @@ for c in ("davra", "xojaobod"):
     n = db.execute("SELECT source, COUNT(*) FROM pulse WHERE channel=? AND at>=? GROUP BY source",
                    (c, plan.slot_time(now.date(), "00:00").isoformat())).fetchall()
     print("   пульс сегодня по источникам:", [tuple(x) for x in n])
+print("== Якуний пост (final) Хўжаобода:", (store.kv_get(db, "final_xojaobod", "") or "—")[:300])
 PY
 echo "== журнал GENPLAN 20:00–22:30:"
 journalctl -u papa-genplan --since "$(date +%F) 20:00" --until "$(date +%F) 22:30" --no-pager -o short-iso \
