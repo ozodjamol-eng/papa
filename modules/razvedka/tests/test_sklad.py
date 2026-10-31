@@ -100,3 +100,14 @@ class TestSklad(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LogoCheckAllStashes(unittest.TestCase):
+    """31.10: в Хўжаобод вышло видео ФОЙДАЛИК с чужим @OPER_UZ — проверка лого для всех складов."""
+
+    def test_own_stash_checked(self):
+        for s in ("ФОЙДАЛИК", "РАЗВЛЕКАТЕЛЬНО", "NEWS INBOX", "@AbduraxmonQiziq"):
+            self.assertTrue(sklad.needs_check(s), s)
+
+    def test_muftiy_not_checked(self):
+        self.assertFalse(sklad.needs_check("@shayx_nuriddinxoliqnazar"))

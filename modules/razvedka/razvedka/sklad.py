@@ -2,7 +2,7 @@
 
 Владелец: «у нас есть готовые каналы-хабы, я собирал туда год; оттуда свободно брать, ставить нижний юзер и
 публиковать — схему упрощать». Склады — его закрытые каналы: отбор, конкурс по просмотрам и проверка кадров на лого
-им НЕ нужны. Полный проход куратора в 08, 12 и 17 ч, якорь — каждый час 07–20 (30.10), профиль Разведки пересылает из складов в пульт канала
+им не нужны, НО проверка кадров на чужое лого — нужна всем (31.10, кроме Муфтия). Полный проход куратора в 08, 12 и 17 ч, якорь — каждый час 07–20 (30.10), профиль Разведки пересылает из складов в пульт канала
 несколько постов (ФОЙДАЛИК — закреплённая норма FIXED, остальные склады — по кругу PER_DAY); пульт кладёт их в 📦 запас (config: sklad = …), и пост сам выходит в свободный час сетки —
 карточка с 🗑 в пульте даёт вето (выбрано владельцем: «сам по сетке, с вето»).
 
@@ -16,6 +16,7 @@ import asyncio
 import datetime as dt
 import json
 import math
+import os
 import re
 from pathlib import Path
 
@@ -67,6 +68,12 @@ RUNS = 3                                           # запусков курат
 
 def external(stash: str) -> bool:
     return stash.startswith("@")
+
+
+def needs_check(stash: str) -> bool:
+    """31.10 владелец («не работает протокол»): в Хўжаобод вышло видео ФОЙДАЛИК с чужим @OPER_UZ.
+    Правило «только чистое, без чужого лого» — для ВСЕХ складов, свои тоже. Без проверки лого — только Муфтий."""
+    return stash not in TRUSTED_EXT
 
 
 def _norm(s: str) -> str:
@@ -224,13 +231,13 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             continue                                    # группа ещё не на PAPA — её бот не трогаем
         sent = 0
         for stash, it, key in picks:
-            if external(stash) and stash not in TRUSTED_EXT:   # чужой архив: кадр — на чужое лого, перед каждой отправкой
+            if needs_check(stash):                     # 31.10: кадр — на чужое лого перед КАЖДОЙ отправкой (и свои склады)
                 if not gemini_ok:
                     continue
                 try:
                     ok = await curate.clean_frame(client, {"kind": it["kind"], "msg": it["msg"]})
-                except RuntimeError as e:               # лимит Gemini — остальные чужие в следующий раз
-                    log(f"  чужой архив: {e}")
+                except RuntimeError as e:               # лимит Gemini — остальные в следующий раз (без проверки не шлём)
+                    log(f"  склад: {e}")
                     gemini_ok = False
                     continue
                 if ok is None:
@@ -303,16 +310,35 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
             continue
         sent = 0
         for name in names:
-            if name not in ents or ch not in SKLAD.get(name, ()) or (external(name) and name not in TRUSTED_EXT):
-                continue                               # якорь — только доверенные склады (без проверки лого)
+            if name not in ents or ch not in SKLAD.get(name, ()):
+                continue
             if name not in cache:
                 try:
                     cache[name] = await read(client, ents[name], 3000)
                 except Exception as e:  # noqa: BLE001
                     log(f"  якорь {name}: {type(e).__name__}")
                     cache[name] = []
-            it = next((x for x in order(cache[name], ch, now, name) if eligible(x, name, ch, now)
-                       and str(x["id"]) not in used.get(f"{ch}|{name}", [])), None)
+            it = None
+            for x in order(cache[name], ch, now, name):
+                if not eligible(x, name, ch, now) or str(x["id"]) in used.get(f"{ch}|{name}", []) \
+                        or str(x["id"]) in used.get(f"bad|{name}", []):
+                    continue
+                if needs_check(name) and not os.environ.get("GEMINI_API_KEY"):
+                    break                              # нечем проверить — без проверки не шлём
+                if needs_check(name):                  # 31.10: и якорь — только после проверки кадров на чужое лого
+                    try:
+                        ok = await curate.clean_frame(client, {"kind": x["kind"], "msg": x["msg"]})
+                    except RuntimeError as e:
+                        log(f"  якорь {name}: {e}")
+                        break
+                    if ok is None:
+                        continue
+                    if not ok:
+                        used.setdefault(f"bad|{name}", []).append(str(x["id"]))
+                        log(f"  🚫 {name} #{x['id']}: чужое лого — пропуск навсегда")
+                        continue
+                it = x
+                break
             if not it:
                 continue
             try:
