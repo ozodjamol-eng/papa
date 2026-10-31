@@ -495,11 +495,13 @@ def minbar_ok(m) -> bool:
 
 def twin_taken(db, channel: str, m) -> bool:
     """30.10 владелец: посты Муфтия в КАТТА ДАВРА и Хўжаобод Сити 24 должны отличаться —
-    материал, который другой канал уже поставил или выпустил, этому каналу не берём."""
+    материал, который другой канал уже поставил или выпустил, этому каналу не берём.
+    31.10 разбор: один и тот же урок вышел в Хўжаобод 30.10 и 31.10 (копии одного поста в запасе) —
+    теперь урок с тем же отпечатком не берём и в СВОЁМ канале, если он уже стоит или вышел."""
     if m["rubric"] != MINBAR or not m["fp"]:
         return False
-    return db.execute("SELECT 1 FROM materials WHERE fp=? AND channel<>? AND status IN ('queued','published') LIMIT 1",
-                      (m["fp"], channel)).fetchone() is not None
+    return db.execute("SELECT 1 FROM materials WHERE fp=? AND id<>? AND status IN ('queued','published') LIMIT 1",
+                      (m["fp"], m["id"])).fetchone() is not None
 
 
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:

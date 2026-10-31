@@ -51,6 +51,14 @@ class T(unittest.TestCase):
         self.assertNotEqual(store.get(self.db, d[0])["fp"], store.get(self.db, x[0])["fp"])
         self.assertNotIn(x1, x)
 
+    def test_same_lesson_not_repeated_in_own_channel(self):
+        """31.10: урок «Соғлом турмуш тарзи» вышел в Хўжаобод два дня подряд — копия того же поста из запаса."""
+        old = self.add("#muftiy_minbari\nДарс 1", "xojaobod", fp="m:1")
+        store.update(self.db, old, status="published", stock=0)
+        self.add("#muftiy_minbari\nДарс 1", "xojaobod", fp="m:1")
+        new = self.add("#muftiy_minbari\nДарс 2", "xojaobod", fp="m:2")
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("21:00")), [new])
+
 
 if __name__ == "__main__":
     unittest.main()
