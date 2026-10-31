@@ -6,7 +6,31 @@ from pathlib import Path
 MODELS = [os.environ.get("DIZAYN_IMG_MODEL", "gemini-2.5-flash-image"), "gemini-2.5-flash-image-preview",
           "gemini-3-pro-image-preview"]
 
+def gen_openrouter(key, prompt, ref: Path | None, aspect="16:9"):
+    """OpenRouter (31.10 владелец: карта без проверки $50) — та же модель Gemini Flash Image."""
+    content = [{"type": "text", "text": prompt}]
+    if ref and ref.exists():
+        content.append({"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(ref.read_bytes()).decode()}})
+    body = {"model": os.environ.get("DIZAYN_OR_MODEL", "google/gemini-2.5-flash-image"),
+            "messages": [{"role": "user", "content": content}], "modalities": ["image", "text"],
+            "image_config": {"aspect_ratio": aspect}}
+    req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=240) as r:
+            d = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"OpenRouter HTTP {e.code} {e.read()[:300].decode(errors='replace')}")
+    for im in ((d.get("choices") or [{}])[0].get("message") or {}).get("images") or []:
+        url = (im.get("image_url") or {}).get("url", "")
+        if url.startswith("data:"):
+            return base64.b64decode(url.split(",", 1)[1]), body["model"]
+    raise RuntimeError(f"OpenRouter: нет картинки {str(d)[:300]}")
+
+
 def gen(key, prompt, ref: Path | None, aspect="16:9"):
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return gen_openrouter(os.environ["OPENROUTER_API_KEY"], prompt, ref, aspect)
     parts = [{"text": prompt}]
     if ref and ref.exists():
         parts.append({"inline_data": {"mime_type": "image/png", "data": base64.b64encode(ref.read_bytes()).decode()}})
@@ -30,7 +54,7 @@ def gen(key, prompt, ref: Path | None, aspect="16:9"):
     raise RuntimeError(" | ".join(errs))
 
 def main(src, out):
-    key = os.environ.get("GEMINI_API_KEY") or sys.exit("нет GEMINI_API_KEY")
+    key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GEMINI_API_KEY") or sys.exit("нет ключа")
     src, out = Path(src), Path(out); out.mkdir(parents=True, exist_ok=True)
     jobs = json.loads((src / "job.json").read_text(encoding="utf-8"))
     cap = int(os.environ.get("DIZAYN_IMG_CAP", "12"))   # предел за один заход: 12 картинок ≈ $0,5
