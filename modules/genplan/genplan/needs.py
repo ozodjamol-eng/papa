@@ -32,6 +32,8 @@ def build(db, cfg: dict, now: dt.datetime) -> dict:
                 stash.setdefault(r, []).append(name)
         stock: dict[str, int] = {}
         for m in store.stock(db, channel):
+            if not smart.minbar_ok(m) or smart.twin_taken(db, channel, m):
+                continue                               # 31.10: #kun_oyati/копия урока — час Муфтия не закрывает, заказываем урок
             stock[m["rubric"]] = stock.get(m["rubric"], 0) + 1
         left = dict(stock)
         empty = []

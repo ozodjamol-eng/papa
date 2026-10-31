@@ -59,6 +59,29 @@ class T(unittest.TestCase):
         new = self.add("#muftiy_minbari\nДарс 2", "xojaobod", fp="m:2")
         self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("21:00")), [new])
 
+    def test_final_post_off_in_config(self):
+        """31.10 владелец: «остальное лишнее убрать» — в 22:00 только Муфтий, Якуний пост выключен."""
+        self.assertNotIn("final_post", CFG["channels"]["xojaobod"])
+
+    def test_minbar_beyond_day_limit(self):
+        """31.10: КАТТА ДАВРА — лимит 20 кончился к 20:30, Муфтий не вышел. Час Муфтия — вне лимита."""
+        lesson = self.add("#muftiy_minbari\nДарс", "davra", fp="m:1")
+        other = self.add("видео", "davra", fp="v:1")
+        store.update(self.db, other, rubric="Мусиқа")
+        for i in range(25):
+            self.db.execute("INSERT INTO pulse(channel, at, source) VALUES (?,?,?)", ("davra", at("08:00").isoformat(), "bot"))
+        self.db.commit()
+        self.assertLessEqual(smart.day_room(self.db, self.cfg, "davra", at("21:00")), 0)
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "davra", at("21:00")), [lesson])
+        self.assertEqual(store.get(self.db, lesson)["scheduled_at"], at("22:00").isoformat())
+
+    def test_needs_orders_lesson_when_stock_is_not_lesson(self):
+        """31.10: в запасе Давры был только #kun_oyati — заказ думал, что 22:00 закрыт. Теперь час заказывается."""
+        from genplan import needs
+        self.add("#kun_oyati\nОят", "davra", fp="m:k")
+        d = needs.build(self.db, self.cfg, at("20:00"))["channels"]["davra"]
+        self.assertIn("22", [e["h"] for e in d["empty"]])
+
 
 if __name__ == "__main__":
     unittest.main()

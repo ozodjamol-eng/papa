@@ -508,15 +508,19 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
     room = day_room(db, cfg, channel, now)              # 30.10 сверка №10: дневной лимит 20
-    if room is not None and room <= 0:
+    # 31.10 владелец: «в обоих каналах должен идти Муфтий» — час Муфтия (22:00) — протокол дня, вне лимита 20
+    # (в КАТТА ДАВРА 31.10 лимит кончился к 20:30 и Муфтий не вышел). Лимит исчерпан — запас ставит только Муфтия.
+    full = room is not None and room <= 0
+    if full and not hourly(ch):
         return []
     pool = [m for m in store.stock(db, channel)
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
             and not waits_text(cfg, m) and not _stale(ch, m, now)
-            and minbar_ok(m) and not twin_taken(db, channel, m)]
+            and minbar_ok(m) and not twin_taken(db, channel, m) and (not full or m["rubric"] == MINBAR)]
     if not pool:
         return []
     used: list[int] = []
+    counted = 0
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
         for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1)):
             wants = hour_wants(ch, t)
@@ -524,13 +528,15 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
                 pick = next((m for r in wants for m in pool if m["rubric"] == r and m["id"] not in used
                              and allowed(ch, t, r) and _fits(ch, m, t, now)), None)
                 if pick is None and ch.get("hour_rubrics_loose"):
-                    pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
+                    pick = next((m for m in pool if m["id"] not in used and m["rubric"] != MINBAR
+                                 and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
             else:
                 pick = next((m for m in pool if m["id"] not in used and allowed(ch, t, m["rubric"]) and _fits(ch, m, t, now)), None)
             if pick:
                 store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
                 used.append(pick["id"])
-                if room is not None and len(used) >= room:
+                counted += pick["rubric"] != MINBAR
+                if room is not None and counted >= room:
                     break
         return used
     for t, s in grid(ch, now.date()):

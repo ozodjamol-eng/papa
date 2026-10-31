@@ -16,6 +16,7 @@ CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
 for _c in CFG["channels"].values():   # 25.10: здесь — прежняя сетка рубрик (PaparazziUZ); часовая — test_hourly.py
     _c.pop("hourly", None)
 CFG["channels"]["xojaobod"]["mode"] = "live"
+CFG["channels"]["xojaobod"]["final_post"] = {"at": "22:00"}   # 31.10: в боевом config выключен, механизм проверяем
 ENV = {"OWNER_IDS": "42", "HUB_CHAT_ID": "-100777", "TEST_GROUP_ID": "-100111", "TEST_CHANNEL_ID": "-100222"}
 TZ = plan.TZ
 

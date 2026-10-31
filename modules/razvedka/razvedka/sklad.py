@@ -47,12 +47,17 @@ SKLAD = {
 }
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar"}      # якорь: сначала свежий пост, нет нового — следующий из архива
+# 31.10 владелец: «в обоих каналах должен идти Муфтий, но разными постами». Склад Муфтия — один урок на ОДИН канал:
+# пост, который уже взял другой канал (по id или по тому же тексту — Муфтий повторяет уроки), не берём; и только уроки
+# (#muftiy_minbari) — поздравления (#tabrik) и #kun_oyati в слот 22:00 не годятся. Откат: очистить оба множества.
+UNIQUE = {"@shayx_nuriddinxoliqnazar"}
+LESSON_ONLY = {"@shayx_nuriddinxoliqnazar"}
 FRESH_DAYS = {"NEWS INBOX": 2, "@madaniyatvazirligi": 2}   # новости: только свежие, архив не берём
 # 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
 # 30.10 сверка: часы Давры «час = рубрика» — мотивация 07/20, музыка 12/15/21, бизнес 11, ибрат 19 — свои нормы
-FIXED = {"davra": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1,
+FIXED = {"davra": {"@shayx_nuriddinxoliqnazar": 1, "ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1,
                    "МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1},
-         "xojaobod": {"ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
+         "xojaobod": {"@shayx_nuriddinxoliqnazar": 1, "ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
          "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "РАЗВЛЕКАТЕЛЬНО": 2, "РЕТРО КЛИПЛАР": 4,
                        "@AbduraxmonQiziq": 1, "@sanatdunyosi": 2, "@madaniyat_marifat_tv": 2, "@madaniyatvazirligi": 1, "@RizaNovaUZ": 2}}
 FRIDAY = {("xojaobod", "МАЪНАВИЯТ"): 3}                    # в пятницу маънавият — 3
@@ -81,6 +86,27 @@ def _norm(s: str) -> str:
     return re.sub(r"[\W_]+", "", str(s or "")).casefold()
 
 
+def text_key(text: str) -> str:
+    """Отпечаток урока по тексту (первые 120 букв без знаков) — один урок Муфтий выкладывает несколько раз."""
+    return _norm(text)[:120]
+
+
+def taken(used: dict, stash: str, channel: str, item: dict) -> bool:
+    """31.10: склад UNIQUE — урок уже взял любой канал (тот же id у другого канала или тот же текст где угодно)."""
+    if stash not in UNIQUE:
+        return False
+    if any(str(item["id"]) in used.get(f"{c}|{stash}", []) for c in SKLAD.get(stash, ()) if c != channel):
+        return True
+    k = text_key(item.get("text") or "")
+    return bool(k) and k in used.get(f"txt|{stash}", [])
+
+
+def mark_used(used: dict, stash: str, channel: str, item: dict) -> None:
+    used.setdefault(f"{channel}|{stash}", []).append(str(item["id"]))
+    if stash in UNIQUE and text_key(item.get("text") or ""):
+        used.setdefault(f"txt|{stash}", []).append(text_key(item.get("text") or ""))
+
+
 def run_no(now: dt.datetime) -> int:
     """Какой это запуск дня (1–3) по местному времени: 08:00 / 12:30 / 17:00."""
     h = now.astimezone(TZ).hour
@@ -100,6 +126,8 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
     """Пост склада годится для канала: с медиа, не реклама, свежий (для NEWS INBOX), по политике канала."""
     if item["kind"] not in ("video", "photo") or item["ad"]:
         return False
+    if stash in LESSON_ONLY and not re.search(r"minbar|минбар", _norm(item["text"])):
+        return False                                   # 31.10: в слот Муфтия — только уроки с минбара
     days = FRESH_DAYS.get(stash)
     if days and item["date"] < now - dt.timedelta(days=days):
         return False
@@ -125,7 +153,7 @@ def plan(stashes: dict[str, list[dict]], used: dict, sent_today: dict, now: dt.d
     out: dict[str, list[tuple]] = {}
     fresh = lambda ch, s: [x for x in order(stashes[s], ch, now) if eligible(x, s, ch, now)
                            and str(x["id"]) not in used.get(f"{ch}|{s}", [])
-                           and str(x["id"]) not in used.get(f"bad|{s}", [])]
+                           and str(x["id"]) not in used.get(f"bad|{s}", []) and not taken(used, s, ch, x)]
     for ch in PER_DAY:
         pick: list[tuple] = []
         for s, n in FIXED.get(ch, {}).items():
@@ -252,7 +280,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             except Exception as e:  # noqa: BLE001
                 log(f"  склад → {ch}: {type(e).__name__}")
                 continue
-            used.setdefault(f"{ch}|{stash}", []).append(str(it["id"]))
+            mark_used(used, stash, ch, it)
             st["sent"][key] = int(st["sent"].get(key, 0)) + 1
             if key == ch:
                 st["sent"][f"rr_{ch}"] = int(st["sent"].get(f"rr_{ch}", 0)) + 1
@@ -324,7 +352,7 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
             it = None
             for x in order(cache[name], ch, now, name):
                 if not eligible(x, name, ch, now) or str(x["id"]) in used.get(f"{ch}|{name}", []) \
-                        or str(x["id"]) in used.get(f"bad|{name}", []):
+                        or str(x["id"]) in used.get(f"bad|{name}", []) or taken(used, name, ch, x):
                     continue
                 if needs_check(name) and not os.environ.get("GEMINI_API_KEY"):
                     break                              # нечем проверить — без проверки не шлём
@@ -349,7 +377,7 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
             except Exception as e:  # noqa: BLE001
                 log(f"  якорь → {ch}: {type(e).__name__}")
                 continue
-            used.setdefault(f"{ch}|{name}", []).append(str(it["id"]))
+            mark_used(used, name, ch, it)
             sent += 1
             log(f"  ⚓ {name} → {ch}: #{it['id']} {it['text'][:50]!r}")
             await asyncio.sleep(4)

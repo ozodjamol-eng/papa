@@ -97,6 +97,24 @@ class TestSklad(unittest.TestCase):
     def test_titles_match_without_case_and_emoji(self):
         self.assertEqual(sklad._norm("📦 Фойдалик  овкат"), sklad._norm("ФОЙДАЛИК ОВКАТ"))
 
+    def test_muftiy_lessons_only_and_different_per_channel(self):
+        """31.10 владелец: Муфтий в обоих каналах, разными постами; в слот — только уроки."""
+        M = "@shayx_nuriddinxoliqnazar"
+        now = dt.datetime(2026, 10, 31, 3, 0, tzinfo=dt.timezone.utc)   # 08:00 Ташкент, 1-й запуск
+        items = [it(1, text="#muftiy_minbari Дарс А"), it(2, text="#kun_oyati Оят"), it(3, text="#tabrik Табрик"),
+                 it(4, text="#muftiy_minbari Дарс Б"), it(5, text="#muftiy_minbari Дарс А")]
+        self.assertFalse(sklad.eligible(items[1], M, "davra", now))
+        self.assertFalse(sklad.eligible(items[2], M, "davra", now))
+        used = {}
+        p = sklad.plan({M: items}, used, {}, now)
+        d = [x["id"] for s, x, _ in p["davra"] if s == M]
+        self.assertEqual(len(d), 1)
+        sklad.mark_used(used, M, "davra", next(x for x in items if x["id"] == d[0]))
+        p = sklad.plan({M: items}, used, {}, now)
+        x = [x for s, x, _ in p["xojaobod"] if s == M]
+        self.assertEqual(len(x), 1)
+        self.assertNotEqual(sklad.text_key(x[0]["text"]), sklad.text_key(next(i for i in items if i["id"] == d[0])["text"]))
+
 
 if __name__ == "__main__":
     unittest.main()
