@@ -118,7 +118,7 @@ def classify_batch(posts: list[tuple[str, bytes | None]]) -> list[dict]:
             return parse_batch(out, len(posts))
         except urllib.error.HTTPError as e:
             last = f"HTTP {e.code}"
-            if e.code == 429:
+            if e.code in (429, 500, 503):                # 31.10: 503 «перегружен» — тоже пауза и ещё раз
                 raise RuntimeError("лимит Gemini") from None
         except Exception as e:  # noqa: BLE001
             last = type(e).__name__
