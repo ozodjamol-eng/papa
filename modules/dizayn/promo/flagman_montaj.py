@@ -18,26 +18,26 @@ def card(name, lines, pos="top", tag=None, corner=True):
     ws = [d.textlength(t, font=f) for (t, _, _), f in zip(lines, fonts)]
     bw = max(ws) + 2 * pad
     sh = Image.new("RGBA", (W, H), (0, 0, 0, 0)); sd = ImageDraw.Draw(sh)
-    sd.rounded_rectangle([(W - bw) / 2, y - 34, (W + bw) / 2, y + total + 40], 34, fill=(10, 10, 12, 175))
+    sd.rounded_rectangle([(W - bw) / 2, y - 34, (W + bw) / 2, y + total + 40], 34, fill=(10, 10, 12, 205))
     im = Image.alpha_composite(im, sh); d = ImageDraw.Draw(im)
     for (t, s, c), f, h, w in zip(lines, fonts, hs, ws):
         d.text(((W - w) / 2, y - f.getbbox(t)[1]), t, font=f, fill=c)
         y += h + 26
     if corner:
-        f = ImageFont.truetype(FX, 28); t = "3D визуализация"
-        d.text((W - d.textlength(t, font=f) - 36, H - 70), t, font=f, fill=(255, 255, 255, 170))
+        f = ImageFont.truetype(FB, 40); t = "3D ВИЗУАЛИЗАЦИЯ"
+        d.text((W - d.textlength(t, font=f) - 36, H - 110), t, font=f, fill=(255, 255, 255, 255), stroke_width=3, stroke_fill=(0, 0, 0, 255))
     im.save(f"{T}/{name}.png")
 
 WH, YL, RED = (255, 255, 255, 255), (255, 200, 90, 255), (235, 60, 50, 255)
 # сегменты: (клип, скорость, длина_выхода, плашка)
 segs = [
-    ("c1a", 1.6, 4.9, [("КВАРТИРА", 104, WH), ("ҚУТИ ҲОЛАТИДАМИ?", 92, YL)], "top"),
-    ("c2a", 2.0, 3.9, [("Электр ва сантехника", 64, WH), ("— лойиҳа бўйича", 52, YL)], "top"),
-    ("c3a", 2.0, 3.9, [("Сувоқ ва стяжка", 70, WH)], "top"),
-    ("c4a", 2.0, 3.9, [("Шифт ва ёритиш", 70, WH)], "top"),
-    ("c5a", 2.0, 3.9, [("Пол, бўёқ, эшик", 70, WH)], "top"),
-    ("c6a", 2.0, 3.9, [("Мебел ва безак", 70, WH)], "top"),
-    ("c7b", 1.6, 4.9, [("МАНА —", 96, WH), ("СИЗНИНГ УЙИНГИЗ", 96, YL)], "bottom"),
+    ("c1a", 1.6, 4.9, [("КВАРТИРА", 112, WH), ("ҚУТИ", 112, YL), ("ҲОЛАТИДАМИ?", 104, YL)], "top"),
+    ("c2a", 2.0, 3.9, [("ЭЛЕКТР ВА", 96, WH), ("САНТЕХНИКА", 96, YL)], "top"),
+    ("c3a", 2.0, 3.9, [("СУВОҚ ВА", 96, WH), ("СТЯЖКА", 96, YL)], "top"),
+    ("c4a", 2.0, 3.9, [("ШИФТ ВА", 96, WH), ("ЁРИТИШ", 96, YL)], "top"),
+    ("c5a", 2.0, 3.9, [("ПОЛ, БЎЁҚ,", 96, WH), ("ЭШИК", 96, YL)], "top"),
+    ("c6a", 2.0, 3.9, [("МЕБЕЛ ВА", 96, WH), ("БЕЗАК", 96, YL)], "top"),
+    ("c7b", 1.6, 4.9, [("МАНА —", 112, WH), ("СИЗНИНГ", 112, YL), ("УЙИНГИЗ", 112, YL)], "bottom"),
 ]
 parts = []
 for i, (c, sp_, dur, lines, pos) in enumerate(segs):
@@ -60,7 +60,7 @@ for j, (f, nm) in enumerate(styles):
     if im.height < H: im = im.resize((int(im.width * H / im.height), H), Image.LANCZOS); im = im.crop(((im.width - W)//2, 0, (im.width - W)//2 + W, H))
     else: im = im.crop((0, top, W, top + H))
     im.save(f"{T}/{f}.jpg", quality=95)
-    card(f"st{j}", [("УСЛУБНИ ТАНЛАНГ", 70, WH), (nm, 96, YL)], "top")
+    card(f"st{j}", [("УСЛУБНИ", 92, WH), ("ТАНЛАНГ", 92, WH), (nm, 112, YL)], "top")
     out = f"{T}/st{j}.mp4"; dur = 1.25
     run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", f"{T}/{f}.jpg", "-loop", "1", "-i", f"{T}/st{j}.png",
          "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-filter_complex",
@@ -80,8 +80,8 @@ def still(name, lines, dur, pos="mid"):
          f"[1:v]format=rgba,fade=in:st=0:d=0.3:alpha=1[t];[0:v][t]overlay=0:0,format=yuv420p[o]",
          "-map", "[o]", "-map", "2:a", "-t", str(dur), "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast",
          "-crf", "17", "-c:a", "aac", "-ar", "48000", "-ac", "2", out]); parts.append(out)
-still("pak", [("СИЗ ОЛАСИЗ:", 72, YL), ("3D визуал", 72, WH), ("Чизмалар", 72, WH), ("Электр режаси", 72, WH), ("Ранглар ва материаллар", 62, WH)], 3.2)
-still("cta", [("ЛОЙИҲАНГИЗНИ", 86, WH), ("БУГУН БОШЛАНГ", 86, YL), ("@ozodjamoldizaynbot", 58, WH), ("Хўжаобод", 52, (220, 220, 220, 255))], 3.4)
+still("pak", [("СИЗ ОЛАСИЗ:", 100, YL), ("3D ВИЗУАЛ", 92, WH), ("ЧИЗМАЛАР", 92, WH), ("ЭЛЕКТР РЕЖАСИ", 92, WH), ("РАНГЛАР", 92, WH)], 3.4)
+still("cta", [("ЛОЙИҲАНГИЗНИ", 100, WH), ("БУГУН", 100, YL), ("БОШЛАНГ", 100, YL), ("БОТГА ЁЗИНГ", 84, WH)], 3.6)
 parts.append("/mnt/user-data/uploads/Downloads/OZOD_JAMOL_KONCOVKA_CHERNAYA.mp4")
 
 # склейка
