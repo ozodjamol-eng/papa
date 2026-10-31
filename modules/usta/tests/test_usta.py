@@ -39,11 +39,13 @@ class T1(unittest.TestCase):
         self.assertEqual(h(msg("/start xojaobod")), "start")
         self.assertEqual(h(msg(T.KINDS["dizayn"][0])), "kind")
         self.assertEqual(h(msg("80 м²")), "details")
+        self.assertEqual(h(msg(T.WHEN["week"])), "when")
         self.assertEqual(h(msg("Навоий маҳалла")), "place")
         self.assertEqual(h(msg(photo=[{"file_id": "x"}])), "photo")
         self.assertEqual(h(msg(contact={"phone_number": "998901234567"})), "lead")
         r = self.b.db.execute("SELECT * FROM leads").fetchone()
-        self.assertEqual((r["kind"], r["src"], r["phone"], r["place"]), ("dizayn", "xojaobod", "+998901234567", "Навоий маҳалла"))
+        self.assertEqual((r["kind"], r["src"], r["phone"], r["place"], r["urgency"]),
+                         ("dizayn", "xojaobod", "+998901234567", "Навоий маҳалла", "week"))
         card = [p for p in self.api.to(OWNER) if "text" in p][0]["text"]
         self.assertIn("Ариза №1", card); self.assertIn("xojaobod", card)
         self.assertTrue(any(m == "copyMessage" and p["chat_id"] == OWNER for m, p in self.api.calls))   # фото владельцу
@@ -51,14 +53,14 @@ class T1(unittest.TestCase):
 
     def test_skip_photo_and_typed_phone(self):
         h = self.b.handle
-        h(msg("/start")); h(msg(T.KINDS["elektr"][0])); h(msg("розетка")); h(msg("Марказ"))
+        h(msg("/start")); h(msg(T.KINDS["elektr"][0])); h(msg("розетка")); h(msg(T.WHEN["today"])); h(msg("Марказ"))
         self.assertEqual(h(msg(T.SKIP)), "skip")
         self.assertEqual(h(msg("салом")), "badphone")
         self.assertEqual(h(msg("90 123 45 67")), "lead")
 
     def test_owner_buttons_and_stats(self):
         h = self.b.handle
-        h(msg("/start ig")); h(msg(T.KINDS["mebel"][0])); h(msg("шкаф")); h(msg("Ҳ")); h(msg(T.SKIP)); h(msg("+998911112233"))
+        h(msg("/start ig")); h(msg(T.KINDS["mebel"][0])); h(msg("шкаф")); h(msg(T.WHEN["later"])); h(msg("Ҳ")); h(msg(T.SKIP)); h(msg("+998911112233"))
         q = {"callback_query": {"id": "q", "from": {"id": OWNER}, "data": "ok:1", "message": {"chat": {"id": OWNER}, "message_id": 5}}}
         self.assertEqual(h(q), "ok")
         self.assertEqual(self.b.db.execute("SELECT status FROM leads").fetchone()[0], "done")
@@ -67,6 +69,53 @@ class T1(unittest.TestCase):
         self.assertEqual(h(msg("/stats", uid=OWNER)), "stats")
         self.assertIn("Аризалар: 1", self.api.to(OWNER)[-1]["text"])
         self.assertEqual(h(msg("/stats")), "unknown")               # клиенту статистика не видна
+
+    def lead(self):
+        h = self.b.handle
+        h(msg("/start")); h(msg(T.KINDS["santex"][0])); h(msg("кран")); h(msg(T.WHEN["today"])); h(msg("М"))
+        h(msg(T.SKIP)); h(msg("+998911112233"))
+
+    def cb(self, data, uid=OWNER):
+        return self.b.handle({"callback_query": {"id": "q", "from": {"id": uid}, "data": data,
+                                                 "message": {"chat": {"id": uid}, "message_id": 5}}})
+
+    def test_finish_and_client_rating(self):
+        self.lead()
+        self.assertEqual(self.cb("ok:1"), "ok")
+        self.assertEqual(self.cb("fin:1"), "fin")
+        self.assertIn("баҳо", self.api.to(42)[-1]["text"])          # мижоздан баҳо сўралди
+        self.assertIsNone(self.cb("rate:1:5", uid=777))              # бегона баҳо қўёлмайди
+        self.assertIsNone(self.cb("rate:1:9", uid=42))               # нотўғри баҳо
+        self.assertEqual(self.cb("rate:1:5", uid=42), "rate")
+        self.assertEqual(self.b.db.execute("SELECT rating, status FROM leads").fetchone()[:], (5, "fin"))
+        self.b.handle(msg("/stats", uid=OWNER))
+        self.assertIn("5.0", self.api.to(OWNER)[-1]["text"])
+
+    def test_remind_once_after_30_min(self):
+        self.lead()
+        old = (B.now() - B.dt.timedelta(minutes=31)).isoformat()
+        self.b.db.execute("UPDATE leads SET created=?", (old,))
+        orig = B.now
+        B.now = lambda: orig().replace(hour=12)
+        try:
+            self.assertEqual(self.b.remind(), 1)
+            self.assertEqual(self.b.remind(), 0)                     # бир марта
+        finally:
+            B.now = orig
+        self.assertIn("30 дақиқа", self.api.to(OWNER)[-1]["text"])
+
+    def test_old_db_migrates(self):
+        import sqlite3
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE leads (n INTEGER PRIMARY KEY, uid INTEGER NOT NULL, kind TEXT NOT NULL, details TEXT,"
+                   " place TEXT, phone TEXT, photos TEXT, src TEXT, status TEXT NOT NULL DEFAULT 'new', created TEXT NOT NULL)")
+        orig = sqlite3.connect
+        B.sqlite3.connect = lambda *a, **k: db
+        try:
+            d = B.connect("x")
+        finally:
+            B.sqlite3.connect = orig
+        self.assertIn("rating", {r[1] for r in d.execute("PRAGMA table_info(leads)")})
 
     def test_groups_ignored(self):
         u = msg("салом"); u["message"]["chat"]["type"] = "supergroup"
