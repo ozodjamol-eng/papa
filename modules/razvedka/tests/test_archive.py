@@ -58,6 +58,11 @@ class Folder(unittest.TestCase):
         self.assertEqual(archive.pick_round(["a", "b", "c", "d", "e"], 4, 3), ["e", "a", "b"])
         self.assertEqual(archive.pick_round([], 3, 2), [])
 
+    def test_only_own_channels(self):
+        # 01.11 правило владельца: чужие каналы в банк не присылать
+        self.assertFalse(archive.FOREIGN_FOLDERS)
+        self.assertEqual(set(archive.CHANNELS), {"ozodjamoll", "kattadavrauz", "xojaobodcity24", "АРХИВ МУЗЫКА"})
+
     def test_folder_age(self):
         self.assertTrue(archive.is_candidate(it(1, days=40), NOW, False, archive.FOLDER_AGE))
         self.assertFalse(archive.is_candidate(it(1, days=10), NOW, False, archive.FOLDER_AGE))

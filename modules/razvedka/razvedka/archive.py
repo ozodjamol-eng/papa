@@ -156,6 +156,10 @@ FOLDERS = ("Paparazzi UZ", "KATTA DAVRA", "XOJAOBOD CITY", "XOJAOBODCITY",   # 3
 FOLDER_AGE = dt.timedelta(days=30)              # чужие клипы вечные; свежее берёт куратор, Архиву — старше месяца
 FOLDER_TAKE = 15                                # постов в банк с одного канала за проход
 FOLDER_PER_RUN = 4                              # каналов папки за проход (по кругу) — бережём бесплатный Gemini
+# 01.11 10:29 ПРАВИЛО владельца (отменяет 31.10 «архивы каналов из папок»): архивариус прислал в банк два чужих вирусных
+# поста (каналы Johnny / Джо) — «вообще другие каналы не присылать. Это правило». Архив берёт ТОЛЬКО свои CHANNELS.
+# Включать обратно — только по новому письменному решению владельца.
+FOREIGN_FOLDERS = False
 
 
 def pick_round(keys: list[str], start: int, n: int) -> list[str]:
@@ -219,10 +223,11 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     cache: dict = {}
     report: dict[str, dict] = {}
     targets = [(ch, None, MIN_AGE, TAKE) for ch in CHANNELS]
-    try:                                          # 31.10: + архивы каналов из папок-источников владельца, по кругу
-        targets += await folder_targets(client, st, state_dir, log)
-    except Exception as e:  # noqa: BLE001
-        log(f"  папки: {type(e).__name__}")
+    if FOREIGN_FOLDERS:                           # 01.11: выключено правилом владельца — только свои каналы
+        try:
+            targets += await folder_targets(client, st, state_dir, log)
+        except Exception as e:  # noqa: BLE001
+            log(f"  папки: {type(e).__name__}")
     for ch, peer, min_age, take in targets:
         try:
             if peer is not None:
