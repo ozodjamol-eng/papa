@@ -29,7 +29,7 @@ TAGS = ["kulgili", "kulgu", "qiziqarli", "ozbekcha", "uzbekistan", "foydali", "v
 DIRECTIONS = {
     "music":  ("🎵 Мусиқа/клип", "PaparazziUZ / КАТТА ДАВРА", "Мусиқа", ["qoshiq", "jonliijro", "uzbekmusic"], 3),
     "humor":  ("😂 Кулги", "КАТТА ДАВРА", "Ҳажвия", ["kulgili", "prikol_uz", "vaynlar"], 2),
-    "fun_world": ("😂 Дунё кулгиси", "КАТТА ДАВРА", "Ҳажвия", ["funnyvideos", "fails", "funnyanimals"], 3),   # 30.10: смех — основа
+    # 01.11 ПРАВИЛО владельца: «вообще другие каналы не присылать» — иностранный «Дунё кулгиси» (funnyvideos/fails) выключен.
     "fun":    ("✨ Қизиқарли", "КАТТА ДАВРА", "Қизиқарли", ["qiziqarli", "ajoyib"], 1),
     "useful": ("💡 Фойдали", "КАТТА ДАВРА", "Фойдали видео", ["foydali", "maslahat"], 2),
     "food":   ("🍲 Таом/соғлиқ", "Хўжаобод", "Соғлиқ/Оила", ["retsept", "taom"], 1),
@@ -328,20 +328,26 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
             video = await asyncio.to_thread(download, it["videoUrl"])
             if not video:
                 continue
-            if gemini:                                 # чужое лого/@ на кадрах — не берём (правило владельца)
-                try:
-                    grid = await asyncio.to_thread(curate.frames_grid, video, float(it.get("videoDuration") or 15))
-                    v = await asyncio.to_thread(curate.vision, grid) if grid else {}
-                    if v.get("foreign_logo") or v.get("ad") or v.get("bad"):
-                        log(f"  🚫 {label} @{it['_owner']}: лого/реклама на кадрах")
-                        continue
-                except RuntimeError as e:
-                    log(f"  кадры: {e}")
+            if not gemini:                             # 01.11: без проверки кадров ничего не кладём
+                log("  нет Gemini — проверка кадров невозможна, пропуск")
+                break
+            try:                                       # чужое лого/@ на кадрах — не берём (правило владельца)
+                grid = await asyncio.to_thread(curate.frames_grid, video, float(it.get("videoDuration") or 15))
+                v = await asyncio.to_thread(curate.vision, grid) if grid else None
+            except RuntimeError as e:                  # 01.11: лимит/ошибка — НЕ отправлять непроверенное (было: отправлял)
+                log(f"  кадры не проверены ({e}) — пропуск")
+                continue
+            if not v or v.get("foreign_logo") or v.get("ad") or v.get("bad"):
+                log(f"  🚫 {label} @{it['_owner']}: лого/реклама на кадрах или не проверено")
+                continue
             from . import hubs as H                  # 🗃 30.10: направление с хабом — сразу в хаб (чисто, без подписи)
             hub_name = H.hub_for_direction(code)
             dest = (await H.entity(client, hub_name, hub_cache)) if hub_name else None
             if dest is not None:
                 cap = await asyncio.to_thread(H.write, it.get("caption") or "")
+                if not cap:                            # 01.11: сырой чужой текст в банк — никогда
+                    log(f"  ✋ {label} @{it['_owner']}: нет нашего кириллического текста — пропуск")
+                    continue
             else:
                 text = await asyncio.to_thread(write_text, it.get("caption") or "", chan)
                 cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])

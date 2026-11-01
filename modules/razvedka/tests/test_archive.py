@@ -66,3 +66,18 @@ class Folder(unittest.TestCase):
     def test_folder_age(self):
         self.assertTrue(archive.is_candidate(it(1, days=40), NOW, False, archive.FOLDER_AGE))
         self.assertFalse(archive.is_candidate(it(1, days=10), NOW, False, archive.FOLDER_AGE))
+
+
+class HubTextRule(unittest.TestCase):
+    def test_raw_foreign_never(self):
+        import os
+        from razvedka import hubs, insta
+        self.assertFalse(hubs.is_ours("Mention your harami 😐 follow karlo plz🎀"))
+        self.assertTrue(hubs.is_ours("🤲 ДУО ВАҚТИ\nАллоҳ барчамизни ҳидоятда собит қилсин."))
+        old = os.environ.pop("GEMINI_API_KEY", None)
+        try:
+            self.assertEqual(hubs.write("Mention your harami follow karlo plz"), "")
+        finally:
+            if old is not None:
+                os.environ["GEMINI_API_KEY"] = old
+        self.assertNotIn("fun_world", insta.DIRECTIONS)

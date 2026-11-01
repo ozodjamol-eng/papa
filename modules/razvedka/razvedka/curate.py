@@ -401,6 +401,8 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                     ent = await H.entity(client, hub_name, hub_cache)
                     msgs = [m for m in await client.get_messages(c["ent"], ids=c["ids"]) if m]
                     text = await asyncio.to_thread(H.write, c["text"])
+                    if not text:                   # 01.11: нет нашего текста — в банк не кладём (сырой чужой — никогда)
+                        raise RuntimeError("нет нашего текста (Gemini)")
                     if not ent or not await H.put(client, ent, msgs, text):
                         raise RuntimeError("нет хаба/медиа")
                 except Exception as e:  # noqa: BLE001

@@ -45,8 +45,18 @@ def clean(text: str) -> str:
     return re.sub(r"[ \t]+\n", "\n", re.sub(r"\n{3,}", "\n\n", t)).strip()
 
 
+CYR = re.compile(r"[А-Яа-яЎўҚқҒғҲҳЁё]")
+
+
+def is_ours(text: str) -> bool:
+    """01.11: наш текст = узбекская кириллица (букв кириллицы больше половины). Иначе в банк не кладём."""
+    letters = [ch for ch in (text or "") if ch.isalpha()]
+    return len(letters) >= 10 and sum(1 for ch in letters if CYR.match(ch)) >= 0.5 * len(letters)
+
+
 def write(text: str) -> str:
-    """Наш текст (Gemini, бесплатно); без ключа/ошибка — исходный, очищенный."""
+    """Наш текст (Gemini, бесплатно). 01.11 владелец (в МАЪНАВИЯТ ушёл сырой «Mention your harami… follow karlo plz»):
+    без ключа / лимит / ошибка / ответ не кириллицей — ПУСТО, материал не кладётся. Чужой текст как есть — никогда."""
     import json
     import urllib.request
     key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -55,7 +65,7 @@ def write(text: str) -> str:
         try:
             budget.gate()                        # 30.10: лимит общий — без Gemini берём исходный текст
         except budget.BudgetStop:
-            return clean(text)[:900]
+            return ""
         body = {"systemInstruction": {"parts": [{"text": PROMPT}]},
                 "contents": [{"role": "user", "parts": [{"text": f"Матн:\n{(text or '(матн йўқ)')[:2500]}"}]}],
                 "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.5}}
@@ -68,11 +78,11 @@ def write(text: str) -> str:
                     data = json.loads(r.read())
                 parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
                 out = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
-                if out:
+                if out and is_ours(clean(out)):
                     return clean(out)[:900]
             except Exception:  # noqa: BLE001
                 continue
-    return clean(text)[:900]
+    return ""
 
 
 async def entity(client, name: str, cache: dict):

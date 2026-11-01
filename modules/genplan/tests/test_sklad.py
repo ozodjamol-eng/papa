@@ -79,7 +79,7 @@ class T(unittest.TestCase):
         import json, tempfile
         from genplan import sources_choice
         f = Path(tempfile.mkdtemp()) / "choice.json"
-        f.write_text(json.dumps({"version": 2, "channels": {"davra": {"news": [{"id": 1234567890, "title": "BUGUNGI GAP"}]}}}))
+        f.write_text(json.dumps({"version": 2, "channels": {"davra": {"humor": [{"id": 1234567890, "title": "BUGUNGI GAP"}], "news": [{"id": 1234500000, "title": "NEWS"}]}}}))
         old, sources_choice.CHOICE = sources_choice.CHOICE, f
         try:
             bot = Bot()
@@ -92,6 +92,12 @@ class T(unittest.TestCase):
             hub.intake(Bot(), self.db, self.cfg, {42}, 42, [13], [fwd(13, "Чужой", "Бошқа", chat_id=-1009999)],
                        reply_chat=42, channel="davra")
             self.assertEqual(store.get(self.db, 2)["stock"], 0)                      # не выбран — карточка, как раньше
+            nb = Bot()                                                               # 01.11: новостной источник Давры — не выходит
+            hub.intake(nb, self.db, self.cfg, {42}, 42, [14], [fwd(14, "NEWS", "Хабар", chat_id=-1001234500000, username="Nws")],
+                       reply_chat=42, channel="davra")
+            r3 = store.get(self.db, 3)
+            self.assertEqual((r3["status"], r3["auto"], r3["stock"]), ("rejected", 0, 0))
+            self.assertIn("⛔ Новость", nb.calls[-1][1]["text"])
             self.assertFalse(sources_choice.is_chosen("paparazzi", -1001234567890))  # выбран только для Давры
         finally:
             sources_choice.CHOICE = old

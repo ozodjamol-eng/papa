@@ -367,6 +367,15 @@ def policy_hits(cfg: dict, body: str) -> list[str]:
     return hits
 
 
+NEWS_RUBRICS = {"Янгиликлар", "Эрталабки янгиликлар", "Тушки янгиликлар", "Кечки янгиликлар"}
+
+
+def news_banned(cfg: dict, channel: str | None, rubric: str | None, source_code: str | None) -> bool:
+    """01.11: канал с no_news (КАТТА ДАВРА, правило 30.10) — материал агентов из новостного источника или в новостной рубрике."""
+    ch = (cfg.get("channels") or {}).get(channel or "") or {}
+    return bool(ch.get("no_news")) and (source_code == "news" or (rubric or "") in NEWS_RUBRICS)
+
+
 def policy_note(cfg: dict, channel: str, body: str) -> str:
     """Предупреждение в карточку, если пост похож на запрещённое для канала. Не запрет — решает владелец."""
     rules = (cfg.get("channels", {}).get(channel) or {}).get("policy") or {}

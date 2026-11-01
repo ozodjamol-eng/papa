@@ -708,3 +708,14 @@ class TestPapaHubClean(Base):
         dels = [p["message_ids"] for mm, p in xb.calls if mm == "deleteMessages"]
         self.assertEqual(dels, [[501, 502, 503]])
         self.assertEqual(service.hub_clean_once(self.db, CFG, ENV, {"bot:xojaobod": xb}), {"moved": 0, "deleted": 0, "errors": 0})
+
+
+class NewsBanTest(unittest.TestCase):
+    def test_davra_news_banned(self):
+        import tomllib
+        from genplan import smart
+        cfg = tomllib.loads(open("config.toml", encoding="utf-8").read())
+        self.assertTrue(smart.news_banned(cfg, "davra", "Янгиликлар", None))
+        self.assertTrue(smart.news_banned(cfg, "davra", "Видео", "news"))
+        self.assertFalse(smart.news_banned(cfg, "davra", "Ҳажвия", "humor"))
+        self.assertFalse(smart.news_banned(cfg, "xojaobod", "Янгиликлар", "news"))
