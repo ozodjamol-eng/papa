@@ -149,6 +149,15 @@ def main(job_dir, out_dir):
                 print(err); continue
             (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
             print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ voice_id={vid}")
+        elif do == "music":  # 01.11: Eleven Music — своя инструментальная музыка по описанию (тратит кредиты подписки)
+            body = {"prompt": st["prompt"], "music_length_ms": int(st.get("ms", 40000)),
+                    "model_id": st.get("model", "music_v1"), "force_instrumental": True}
+            fmt = st.get("format", "mp3_44100_128")
+            audio, err = call("POST", f"/v1/music?output_format={fmt}", k, body, raw=True, timeout=600)
+            if err:
+                print("ERR music", st["name"], err); continue
+            (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
+            print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ")
         elif do == "fetch":  # 29.10: скачать аудио по ссылке (трек Suno/Pixabay) в out/ — для сведения с голосом
             u = st["url"]
             if not u.startswith(("https://cdn1.suno.ai/", "https://cdn2.suno.ai/", "https://audiopipe.suno.ai/", "https://cdn.pixabay.com/")):
