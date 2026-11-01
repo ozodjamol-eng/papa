@@ -420,7 +420,8 @@ async def srochno(client, state_dir: Path, now: dt.datetime | None = None, log=p
         for it in order(items, ch, now, URGENT):
             if sent >= URGENT_PER_RUN:
                 break
-            if not eligible(it, URGENT, ch, now) or str(it["id"]) in used.get(f"{ch}|{URGENT}", []) \
+            key = f"{ch}|{URGENT}#copy"                # копия (не пересылка) — свой журнал
+            if not eligible(it, URGENT, ch, now) or str(it["id"]) in used.get(key, []) \
                     or str(it["id"]) in used.get(f"bad|{URGENT}", []):
                 continue
             if needs_check(URGENT):
@@ -437,14 +438,33 @@ async def srochno(client, state_dir: Path, now: dt.datetime | None = None, log=p
                     used.setdefault(f"bad|{URGENT}", []).append(str(it["id"]))
                     log(f"  🚫 {URGENT} #{it['id']}: чужое лого — пропуск")
                     continue
-            try:
-                await client.forward_messages(curate.BOTS[ch], it["ids"], from_peer=ent)
+            try:      # 01.11: посты владелец сам пересылает из чужих каналов — пересылка показала бы пульту чужой
+                # источник (Dunyo TV) и пост отклонился бы. Поэтому — копия с меткой, пульт узнаёт «СРОЧНО НОВОСТИ» по ней.
+                await send_copy(client, curate.BOTS[ch], ent, it)
             except Exception as e:  # noqa: BLE001
                 log(f"  🚨 {URGENT} → {ch}: {type(e).__name__}")
                 continue
-            mark_used(used, URGENT, ch, it)
+            used.setdefault(key, []).append(str(it["id"]))
             sent += 1
             log(f"  🚨 {URGENT} → {ch}: #{it['id']} {it['text'][:50]!r}")
             await asyncio.sleep(4)
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     return sent
+
+
+MARK = "🏷 PAPA СРОЧНО"
+
+
+async def send_copy(client, to, ent, it: dict) -> None:
+    """Копия поста (альбом — одним) с меткой MARK в конце подписи; подпись ≤ 1024."""
+    msgs = [m for m in await client.get_messages(ent, ids=it["ids"]) if m and getattr(m, "media", None)]
+    if not msgs:
+        raise RuntimeError("нет медиа")
+    text = (it.get("text") or "").strip()
+    cap = (text[:1024 - len(MARK) - 3].rstrip() + "\n\n" + MARK) if text else MARK
+    media = [m.media for m in msgs]
+    try:
+        await client.send_file(to, media if len(media) > 1 else media[0], caption=cap)
+    except TypeError:                     # Telegram не даёт отправить медиа ссылкой — скачать и залить заново
+        data = await client.download_media(msgs[0], file=bytes)
+        await client.send_file(to, data, caption=cap, supports_streaming=True)

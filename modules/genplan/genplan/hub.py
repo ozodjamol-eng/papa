@@ -66,6 +66,8 @@ def duplicate_note(db, m) -> str:
 
 
 TREND_RE = re.compile(r"\n*🏷 PAPA ТРЕНД:[^\n]*?рубрика: ([^·\n]+)[^\n]*")
+SROCHNO_RE = re.compile(r"\n*🏷 PAPA СРОЧНО[^\n]*")    # 01.11: копия из «СРОЧНО НОВОСТИ» владельца (куратор, sklad.srochno)
+SROCHNO_SRC = "СРОЧНО НОВОСТИ"
 
 
 def rubrics(cfg: dict, channel: str) -> list[str]:
@@ -597,6 +599,9 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     if tm:
         trend_rub = tm.group(1).strip()
         text = TREND_RE.sub("", text).rstrip()
+    hot = bool(SROCHNO_RE.search(text))
+    if hot:
+        text = SROCHNO_RE.sub("", text).rstrip()
     media = [md for x in msgs for md in media_of(x)]
     fp = fingerprint(text, media)
     mid = store.add_material(db, hub, hub_ids[0], text, bool(media), media=media, hub_msgs=hub_ids, fp=fp)
@@ -609,7 +614,7 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     rub = smart.guess_rubric(cfg, channel, strip_sources(text), has_audio=has_audio)
     if trend_rub and trend_rub in rubrics(cfg, channel):
         rub = trend_rub
-    src = source_of(msgs[0])
+    src = SROCHNO_SRC if hot else source_of(msgs[0])
     store.update(db, mid, channel=channel, rubric=rub, guessed=1, status="draft", via=bots.key_of(bot), source=src)
     from .text import link_junk
     ents = next((x.get("entities") or x.get("caption_entities") for x in msgs if x.get("text") or x.get("caption")), None)

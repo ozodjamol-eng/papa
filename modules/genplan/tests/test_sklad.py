@@ -179,3 +179,17 @@ class SrochnoNewsTest(unittest.TestCase):
         self.assertEqual(store.get(self.db, 1)["status"], "rejected")
         self.assertEqual(store.get(self.db, 2)["stock"], 1)
         self.assertEqual(service.news_migrate(self.db, self.cfg), 0)   # один раз
+
+
+class SrochnoCopyTest(unittest.TestCase):
+    """01.11: в «СРОЧНО НОВОСТИ» посты пересланы из чужих каналов (Dunyo TV) — куратор шлёт копию с меткой."""
+    def test_marked_copy_is_srochno(self):
+        db = store.connect(":memory:")
+        cfg = {**CFG, "channels": {k: dict(v) for k, v in CFG["channels"].items()}}
+        m = {"message_id": 20, "from": {"id": 42}, "chat": {"id": 42, "type": "private"},
+             "video": {"file_id": "v1", "file_unique_id": "uv1"},
+             "caption": "Расман: 1 ноябрдан ҳайдовчилар учун янги тартиб\n\n🏷 PAPA СРОЧНО"}
+        hub.intake(Bot(), db, cfg, {42}, 42, [20], [m], reply_chat=42, channel="xojaobod")
+        r = store.get(db, 1)
+        self.assertEqual((r["source"], r["rubric"], r["stock"], r["status"]), ("СРОЧНО НОВОСТИ", "Янгиликлар", 1, "draft"))
+        self.assertNotIn("PAPA СРОЧНО", r["text"])
