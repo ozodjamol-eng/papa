@@ -61,7 +61,8 @@
     "muftiy-why",
     "audit-details",
     "content-audit",
-    "hubs-purge"
+    "hubs-purge",
+    "marker-probe"
   ],
   "approve": [
     "morning-pool-clear",
