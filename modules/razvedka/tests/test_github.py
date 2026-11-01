@@ -93,6 +93,23 @@ class TestGithub(unittest.TestCase):
         self.assertIn("без ИИ-оценки", text)
         self.assertIn("y/bot ⭐ 4.2k", text)
 
+    def test_skill_topics_reserved_and_queued(self):
+        """01.11: навыки (Скиллы Claude / Моушн кодом) не вытесняются и идут в очередь проверки."""
+        labels = [l for l, _ in github.search_queries(NOW.date())]
+        big = [repo(f"tg/bot{i}", 50000 + i, created="2020-01-01") for i in range(20)]
+        calls = [[] for _ in labels]
+        calls[0] = big
+        calls[labels.index("Моушн кодом")] = [repo("m/remotion-kit", 40, created="2026-10-10")]
+        cands, _ = github.collect(NOW.date(), set(), fake_get(calls))
+        self.assertEqual(len(cands), github.MAX_CANDIDATES)
+        self.assertIn("m/remotion-kit", [c["name"] for c in cands])
+        with tempfile.TemporaryDirectory() as d:
+            qp = Path(d) / "q.json"
+            q = github.save_queue(qp, cands, "01.11.2026")
+            q = github.save_queue(qp, cands, "08.11.2026")          # повтор не дублирует
+            self.assertEqual([x["name"] for x in q], ["m/remotion-kit"])
+            self.assertEqual(q[0]["status"], "ждёт проверки")
+
 
 if __name__ == "__main__":
     unittest.main()

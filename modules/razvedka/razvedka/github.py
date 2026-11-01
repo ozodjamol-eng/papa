@@ -7,12 +7,19 @@
   3) ИИ (Gemini, без веб-поиска) оценивает кандидатов по правилу «Копилки фишек»: берём / на заметку / не нужно,
      где применить в PAPA и какой расход. Нет ключа Gemini или лимит дня — короткий список без оценки.
   4) Отчёт → бот-пульт владельца (20.10: отчёты в бот, без отдельных каналов). Код с GitHub сам ничего НЕ ставит — только советует.
-Расход: $0 (GitHub и бесплатный Gemini)."""
+Расход: $0 (GitHub и бесплатный Gemini).
+
+01.11 владелец: «новинки всегда надо изучать — мы упускаем многое». Разведка навыков:
+  + темы «Скиллы Claude» и «Моушн кодом» (главный рост — навыки, а не просто инструменты);
+  + находки этих тем всегда попадают в отчёт (бронь до 4 мест) и в очередь navyki-queue.json;
+  + вердикт «🧪 в проверку» = в сессии по скиллу navyki-razvedka: skill-check → пробный рендер → в PAPA Motion.
+  Задача github-show показывает отчёт и очередь ассистенту (только чтение)."""
 from __future__ import annotations
 
 import datetime as dt
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +31,9 @@ SEARCH = "https://api.github.com/search/repositories"
 TZ = dt.timezone(dt.timedelta(hours=5))
 HISTORY_KEEP = 600
 MAX_CANDIDATES = 14
+SKILL_TOPICS = ("Скиллы Claude", "Моушн кодом")   # 01.11: разведка навыков — бронь в отчёте + очередь
+SKILL_RESERVE = 4
+QUEUE_KEEP = 60
 
 # (тема для отчёта, запрос GitHub). Звёзды/свежесть добавляются в search_queries().
 TOPICS = [
@@ -32,7 +42,8 @@ TOPICS = [
     ("Instagram", "instagram automation OR instagram graph api"),
     ("Монтаж видео", "ffmpeg video editing automation OR auto video editor"),
     ("ИИ-видео", "ai video generation OR text-to-video OR image-to-video"),
-    ("Навыки Claude", "claude code skills OR claude skill OR claude agent"),
+    ("Скиллы Claude", "claude skills OR claude code skill OR agent skills OR SKILL.md"),
+    ("Моушн кодом", "remotion OR hyperframes OR motion graphics OR kinetic typography"),
     ("Узбекский язык", "uzbek"),
 ]
 
@@ -44,7 +55,9 @@ Reklama, Fabrika (ИИ-контент, монтаж видео на Python+ffmpe
 Бюджет маленький. Правило «Копилки фишек»: не копируем — оцениваем, берём как есть / дорабатываем / берём часть, честно."""
 
 TASK = """Ниже кандидаты с GitHub (сегодня {today}). Оцени, какие РЕАЛЬНО полезны PAPA прямо сейчас.
-Выбери максимум 5 (самые полезные первыми); остальное — не упоминай. Если полезного нет — так и напиши одной строкой.
+Выбери максимум 6 (самые полезные первыми); остальное — не упоминай. Если полезного нет — так и напиши одной строкой.
+Темы «Скиллы Claude» и «Моушн кодом» — ГЛАВНОЕ (владелец 01.11: так ассистент растёт как режиссёр/аниматор):
+если там есть хоть что-то стоящее — минимум 2 места им, с вердиктом «🧪 в проверку» (проверим на нашем ролике).
 Опасайся: заброшенных проектов, непонятной лицензии, инструментов, требующих видеокарту/много памяти,
 сервисов, запрещённых правилами Telegram/Instagram (накрутки, спам, парсинг личных данных) — такие не советуй.
 
@@ -52,7 +65,7 @@ TASK = """Ниже кандидаты с GitHub (сегодня {today}). Оце
 🧭 GITHUB-РАЗВЕДКА — неделя до {today}
 N) owner/repo ⭐ звёзды · лицензия
    Что это: 1 строка простыми словами
-   Вердикт: ✅ берём / ⚠️ на заметку
+   Вердикт: ✅ берём / 🧪 в проверку (скиллы, моушн) / ⚠️ на заметку
    Где у нас: модуль PAPA и зачем (1 строка)
    💵 Расход: $
    🔗 ссылка
@@ -107,7 +120,10 @@ def collect(today: dt.date, seen: set[str], get=_get, token: str = "") -> tuple[
     found: dict[str, dict] = {}
     errors = []
     stale = today - dt.timedelta(days=60)
-    for label, q in search_queries(today):
+    pace = get is _get and not token        # без токена GitHub даёт 10 поисков в минуту — идём шагом
+    for i, (label, q) in enumerate(search_queries(today)):
+        if pace and i:
+            time.sleep(6.5)
         try:
             items = search(q, get, token)
         except GithubError as e:
@@ -133,7 +149,30 @@ def collect(today: dt.date, seen: set[str], get=_get, token: str = "") -> tuple[
                 "new": bool(created and created >= (today - dt.timedelta(days=45)).isoformat()),
             }
     ranked = sorted(found.values(), key=lambda x: x["stars"] * (3 if x["new"] else 1), reverse=True)
-    return ranked[:MAX_CANDIDATES], errors
+    # бронь навыков: лучшие находки «Скиллы Claude»/«Моушн кодом» не вытесняются большими Telegram-проектами
+    key = lambda x: x["stars"] * (3 if x["new"] else 1)
+    skills = [c for c in ranked if c["topic"] in SKILL_TOPICS][:SKILL_RESERVE]
+    others = [c for c in ranked if c not in skills]
+    top = sorted(skills + others[:MAX_CANDIDATES - len(skills)], key=key, reverse=True)
+    return top, errors
+
+
+def save_queue(path: Path, cands: list[dict], today: str) -> list[dict]:
+    """Очередь навыков на проверку в сессии (скилл navyki-razvedka). Новые — в конец, без повторов."""
+    try:
+        q = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        q = []
+    have = {x.get("name", "").lower() for x in q}
+    for c in cands:
+        if c["topic"] in SKILL_TOPICS and c["name"].lower() not in have:
+            q.append({"name": c["name"], "url": c["url"], "topic": c["topic"], "stars": c["stars"],
+                      "license": c["license"], "desc": c["desc"], "found": today, "status": "ждёт проверки"})
+    q = q[-QUEUE_KEEP:]
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(q, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, path)
+    return q
 
 
 def stars_h(n: int) -> str:
@@ -181,6 +220,10 @@ def run(out_dir: Path, now: dt.datetime | None = None, get=_get, gpost=_gpost) -
     # показанных кандидатов больше не предлагаем (даже если ИИ их отсеял) — история на 600 названий
     old_keep = old[-(HISTORY_KEEP - len(cands)):]
     save_history_n(hist, old_keep, [c["name"] for c in cands])
+    queue = save_queue(out_dir / "navyki-queue.json", cands, today_s)
+    waiting = sum(1 for x in queue if x.get("status") == "ждёт проверки")
+    if waiting:
+        text += f"\n🧪 Навыков в очереди на проверку: {waiting} — проверю в ближайшей сессии"
     (out_dir / "latest-github.txt").write_text(text, encoding="utf-8")
     return text + err_line
 

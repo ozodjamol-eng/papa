@@ -26,6 +26,9 @@ SERVICES = [
     ("Suno", "своя музыка — годовая подписка"),
     ("ByteDance Seedance / Seedream / Dreamina", "дешёвое видео и картинки"),
     ("MiniMax Hailuo, Vidu, Runway, Luma", "альтернативы для видео"),
+    ("Anthropic Claude: Claude Code, скиллы, Artifacts",
+     "главный мозг PAPA (01.11 владелец: новые возможности = новые навыки ассистента) — что нового можно взять в работу"),
+    ("Remotion, HyperFrames, GSAP", "моушн кодом — наш движок роликов и дайджестов"),
     ("Telegram и Instagram (Meta)", "новые функции каналов, ботов, Reels, API — наши площадки"),
 ]
 
