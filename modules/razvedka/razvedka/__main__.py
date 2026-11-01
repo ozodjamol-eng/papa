@@ -496,6 +496,17 @@ def main(argv: list[str]) -> None:
         if cmd == "github-auto" or "--send" in argv:
             asyncio.run(_send(ntext))
             print("NOVINKI_SENT")
+        # 01.11 владелец («Да, уши нам нужны»): 🎓 уроки мастеров YouTube — Gemini смотрит ролики целиком
+        from . import masters
+        try:
+            mtext = masters.run(out)
+        except Exception as e:
+            mtext = f"🎓 Уроки мастеров: ошибка — {type(e).__name__}: {e}"
+        print(mtext, flush=True)
+        if cmd == "github-auto" or "--send" in argv:
+            for part in masters.messages(mtext):
+                asyncio.run(_send(part))
+            print("MASTERS_SENT")
         print("GITHUB_DONE")
         return
     if cmd == "pain":
