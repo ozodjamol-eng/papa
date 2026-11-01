@@ -962,8 +962,17 @@ def prepare_one(bot, db, cfg: dict, env: dict, r, now: dt.datetime, work_root: P
         body, note = greeting_body(db, ch, day, fresh=bool(r["redo"]), source_text=p["text"])
         caption = greeting_caption(ch, o, day, body)
         work.mkdir(parents=True, exist_ok=True)
-        out = work / "out.mp4"                            # 23.10 владелец: видео как есть — без надписей и метки
-        shutil.copyfile(pool_dir() / p["file"], out)
+        out = work / "out.mp4"                            # 23.10: без надписей; 01.11: метка @ канала (Маркировщик)
+        from . import marker
+        mo = marker.opts(cfg)
+        try:
+            if not (mo and r["channel"] in mo.get("channels", [])):
+                raise LookupError
+            out = marker.render("video", pool_dir() / p["file"], work / "marked", marker.mark_text(ch))
+        except Exception as e:  # noqa: BLE001 — метка не должна сорвать утро
+            if not isinstance(e, LookupError):
+                print(f"morning: метка не встала: {type(e).__name__}: {e}", flush=True)
+            shutil.copyfile(pool_dir() / p["file"], out)
         src_note = f"🎬 Готовое видео ({p['weekday'] or 'Хайрли тонг'}) из «{p['channel']}», {int(p['duration'] or 0)} с"
         source = f"pool:{p['key']}"
         from . import bots, store

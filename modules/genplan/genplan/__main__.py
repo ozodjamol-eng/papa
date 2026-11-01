@@ -338,7 +338,9 @@ async def run() -> None:
                 off = u["update_id"] + 1
                 store.kv_set(db, "offset_shtab", off)
 
-    await asyncio.gather(tick_loop(), album_loop(), shtab_loop(), *(bot_loop(k, b) for k, b in reg.items()))
+    from . import marker                                  # 🏷 01.11: Маркировщик — своя очередь, публикации не ждут
+    await asyncio.gather(tick_loop(), album_loop(), shtab_loop(), *(bot_loop(k, b) for k, b in reg.items()),
+                         marker.loop(acc, DB, cfg, env, pubs, log=lambda s: print(s, flush=True)))
 
 
 def main(argv: list[str]) -> None:

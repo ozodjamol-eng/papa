@@ -40,3 +40,29 @@ class MarkerTest(unittest.TestCase):
     def test_mark_text(self):
         assert marker.mark_text(CH) == "@kattadavrauz"
         assert marker.mark_text({**CH, "watermark": "@KATTADAVRAUZ"}) == "@KATTADAVRAUZ"
+
+
+class CandidatesTest(unittest.TestCase):
+    def test_queue_first_then_stock_skip_marked_ads_textless(self):
+        import datetime as dt
+        import tomllib
+        from genplan import plan, store
+        cfg = tomllib.loads((Path(__file__).resolve().parent.parent / "config.toml").read_text(encoding="utf-8"))
+        db = store.connect(":memory:")
+        vid = [{"type": "video", "file_id": "f"}]
+        now = dt.datetime.now(plan.TZ)
+        a = store.add_material(db, -1, 1, "Кулгили видео матни", True, vid)
+        store.update(db, a, channel="davra", status="draft", stock=1, rubric="Ҳажвия")
+        b = store.add_material(db, -1, 2, "Фойдали видео матни", True, vid)
+        store.update(db, b, channel="davra", status="queued", rubric="Фойдали видео",
+                     scheduled_at=(now + dt.timedelta(hours=2)).isoformat())
+        c = store.add_material(db, -1, 3, "Реклама матни узун", True, vid)
+        store.update(db, c, channel="davra", status="queued", rubric="Реклама")
+        d = store.add_material(db, -1, 4, "", True, vid)               # без текста — подпись при выходе
+        store.update(db, d, channel="davra", status="queued", rubric="Ҳажвия")
+        e = store.add_material(db, -1, 5, "Уже помечен матни", True, vid)
+        store.update(db, e, channel="davra", status="queued", rubric="Ҳажвия")
+        store.kv_set(db, f"marked_{e}", "1")
+        ids = [r["id"] for r in marker.candidates(db, cfg, now)]
+        self.assertEqual(ids, [b, a])
+        self.assertEqual(marker.candidates(db, {**cfg, "marker": {"on": False}}, now), [])
