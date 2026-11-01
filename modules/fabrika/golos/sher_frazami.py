@@ -19,7 +19,15 @@ for i, (b, l, r, tg, txt) in enumerate(L):
     f = f"{pre}_{b}_{l}"
     subprocess.run(f"ffmpeg -v error -y -i {f}.mp3 -af 'silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.08,"
                    f"areverse,silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.2,areverse,atempo={AT},aresample={SR}' -ac 2 {f}_p.wav", shell=True)
-    x = load(f + "_p.wav"); d = x.shape[1] / SR
+    # 01.11 «пшикает»: срезать шумный вдох/выдох по краям — оставляем [первый голос −0,15 с … последний голос +0,12 с]
+    import parselmouth
+    ps = parselmouth.Sound(f + "_p.wav").convert_to_mono().to_pitch(time_step=0.01, pitch_floor=60, pitch_ceiling=300)
+    vi = np.where(ps.selected_array["frequency"] > 0)[0]
+    x = load(f + "_p.wav")
+    if len(vi):
+        a0 = max(0, int((ps.xs()[vi[0]] - 0.15) * SR)); a1 = min(x.shape[1], int((ps.xs()[vi[-1]] + 0.12) * SR))
+        x = x[:, a0:a1].copy(); fl = int(0.01 * SR); x[:, :fl] *= np.linspace(0, 1, fl); fo = int(0.06 * SR); x[:, -fo:] *= np.linspace(1, 0, fo)
+    d = x.shape[1] / SR
     a = int(t * SR); v[:, a:a + x.shape[1]] += x
     slot = bt * np.ceil((d + BREATH) / bt)
     last_in_stanza = i == len(L) - 1 or L[i + 1][0] != b
@@ -37,7 +45,7 @@ if need > m.shape[1]:
     m = np.concatenate([x1, mid_end * (1 - w) + tail[:, :cf] * w, tail[:, cf:]], axis=1)
     N = m.shape[1]; print(f"музыка продлена до {N/SR:.0f} с")
 sf.write("vg.wav", v.T, SR)
-HALL = ("asplit[d][w];[w]aecho=0.8:0.85:29|47|71|109|163|241|353|509|719|997:"
+HALL = ("deesser=i=0.7:m=0.6:f=0.45,highshelf=f=7000:g=-4,asplit[d][w];[w]aecho=0.8:0.85:29|47|71|109|163|241|353|509|719|997:"
         "0.50|0.44|0.40|0.35|0.30|0.25|0.20|0.15|0.10|0.06,lowpass=f=4800,highpass=f=200,volume=0.16[r];"
         "[d][r]amix=inputs=2:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11")
 subprocess.run(f"ffmpeg -v error -y -i vg.wav -filter_complex '[0:a]{HALL}' -ar {SR} vh.wav", shell=True)
