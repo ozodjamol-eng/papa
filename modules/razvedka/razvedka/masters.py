@@ -306,7 +306,7 @@ async def _channel_posts(client, ent, key: str, seen: dict, since: dt.datetime, 
             posts.append({"id": msg.id, "text": text, "date": msg.date.strftime("%d.%m") if msg.date else "",
                           "views": int(getattr(msg, "views", 0) or 0)})
     if posts:
-        seen[key] = max(p["id"] for p in posts)
+        seen.setdefault("_new", {})[key] = max(p["id"] for p in posts)   # отметка — только после удачного разбора (run_tg)
     return posts
 
 
@@ -329,7 +329,7 @@ async def read_tg(client, out_dir: Path, now: dt.datetime | None = None, singles
             posts = await _channel_posts(client, ent, m["username"], seen, since, 40)
             for x in posts:
                 x["link"], x["channel"] = f"https://t.me/{m['username']}/{x['id']}", m["name"]
-            out.append((m, sorted(posts, key=lambda x: x["id"])))
+            out.append((dict(m, _seen=seen.pop("_new", {})), sorted(posts, key=lambda x: x["id"])))
         except Exception as e:                                     # канал закрыт/переименован — не валим весь обход
             out.append((dict(m, error=f"{type(e).__name__}: {e}"), []))
     if TG_FOLDERS and folders:
@@ -357,9 +357,18 @@ async def read_tg(client, out_dir: Path, now: dt.datetime | None = None, singles
                 except Exception:
                     bad += 1
             top = sorted(posts, key=lambda x: x["views"], reverse=True)[:TG_TOP_POSTS]   # самое просматриваемое
-            out.append((dict(f, channels=len(peers), skipped=bad), sorted(top, key=lambda x: x["id"])))
-    _save(seen_p, seen)
+            out.append((dict(f, channels=len(peers), skipped=bad, _seen=seen.pop("_new", {})),
+                        sorted(top, key=lambda x: x["id"])))
+    seen.pop("_new", None)
     return out
+
+
+def _commit_seen(out_dir: Path, new: dict) -> None:
+    if new:
+        p = out_dir / "tg-masters-seen.json"
+        seen = _load(p, {})
+        seen.update(new)
+        _save(p, seen)
 
 
 def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime | None = None, ask=None,
@@ -376,6 +385,7 @@ def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime
             notes.append(f"⚠️ {m['name']}: не прочитан ({m['error'][:80]})")
             continue
         if not posts:
+            _commit_seen(out_dir, m.get("_seen", {}))
             continue
         joined, size = [], 0
         for p in sorted(posts, key=lambda x: (x.get('views', 0), x['id']), reverse=True):   # не влезает — важнее просматриваемое
@@ -389,9 +399,10 @@ def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime
                 prompt = prompt.replace("за неделю", "за сутки").replace("— неделя", "— день")
             text = ask(prompt)
         except Exception as e:
-            notes.append(f"⏸ {m['name']}: разбор не вышел ({type(e).__name__}) — посты перечитаю через неделю")
+            notes.append(f"⏸ {m['name']}: разбор не вышел ({type(e).__name__}) — посты перечитаю в следующий раз")
             continue
         blocks.append(text.strip())
+        _commit_seen(out_dir, m.get("_seen", {}))
         if "Ничего нового" not in text:
             queue_add.append({"name": f"{m['name']}: {'день' if daily else 'неделя до'} {today_s}",
                               "url": f"https://t.me/{m['username']}" if m.get("username") else f"папка «{m.get('folder', '')}»",

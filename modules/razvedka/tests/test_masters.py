@@ -197,5 +197,20 @@ class TestTgMasters(unittest.TestCase):
             self.assertTrue((Path(d) / "latest-neyro.txt").exists())
 
 
+    def test_gemini_fail_keeps_posts_for_next_time(self):
+        import asyncio
+        d0 = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.timezone.utc)
+        c = FakeClient([FakeMsg(60, "пост", d0)])
+
+        def boom(p):
+            raise RuntimeError("лимит")
+        with tempfile.TemporaryDirectory() as d:
+            text = masters.run_tg(Path(d), asyncio.run(masters.read_tg(c, Path(d), NOW)), NOW, ask=boom)
+            self.assertIn("перечитаю", text)
+            again = asyncio.run(masters.read_tg(c, Path(d), NOW))
+            self.assertEqual(c.min_ids[-1], 0)                     # не отмечен прочитанным
+            self.assertEqual([p["id"] for p in again[0][1]], [60])
+
+
 if __name__ == "__main__":
     unittest.main()
