@@ -41,9 +41,15 @@ for c in ("davra", "xojaobod"):
     n = db.execute("SELECT source, COUNT(*) FROM pulse WHERE channel=? AND at>=? GROUP BY source",
                    (c, plan.slot_time(now.date(), "00:00").isoformat())).fetchall()
     print("   пульс сегодня по источникам:", [tuple(x) for x in n])
+print("== посты 21:30–22:30 сегодня (что заняло час Муфтия):")
+a, b = plan.slot_time(now.date(), "21:30").isoformat(), plan.slot_time(now.date(), "22:30").isoformat()
+for r in db.execute("SELECT * FROM materials WHERE scheduled_at>=? AND scheduled_at<? ORDER BY scheduled_at", (a, b)):
+    d = dict(r)
+    print("  ", {k: d.get(k) for k in ("id", "channel", "rubric", "source", "auto", "stock", "urgent", "locked", "guessed", "status", "scheduled_at", "created_at")},
+          (d.get("text") or "")[:60].replace(chr(10), " "))
 print("== Якуний пост (final) Хўжаобода:", (store.kv_get(db, "final_xojaobod", "") or "—")[:300])
 PY
 echo "== журнал GENPLAN 20:00–22:30:"
 journalctl -u papa-genplan --since "$(date +%F) 20:00" --until "$(date +%F) 22:30" --no-pager -o short-iso \
-  | grep -iE "davra|xojaobod|муфт|minbar|лимит|запас|stock|опубл|publish|ошиб|error" | sed -E 's/bot[0-9]+:[A-Za-z0-9_-]+/bot***/g' | cut -c1-260 | tail -60
+  | grep -iE "davra|xojaobod|муфт|minbar|лимит|запас|stock|опубл|publish|ошиб|error|#590|#628|22:0|22:1" | sed -E 's/bot[0-9]+:[A-Za-z0-9_-]+/bot***/g' | cut -c1-260 | tail -60
 echo "== MUFTIY_WHY_DONE"
