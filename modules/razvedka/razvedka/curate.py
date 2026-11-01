@@ -49,6 +49,24 @@ POLICY = {g: re.compile(r"(?<![\w'])(?:" + rx + ")", re.I) for g, rx in _P.items
 FORBID = {"davra": ("politics", "crime", "showbiz"), "paparazzi": ("politics", "crime")}
 
 
+# 01.11 владелец: «отныне новостную часть на всех трёх каналах не ведём» — новости только из его «СРОЧНО НОВОСТИ».
+# Тот же список признаков, что в пульте (genplan/smart.py NEWS_TEXT): официоз, ведомства, «маълум қилди», «1 ноябрдан».
+_MON = r"(?:январ|феврал|март|апрел|май|июн|июл|август|сентябр|октябр|ноябр|декабр|yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentyabr|oktyabr|noyabr|dekabr)"
+NEWS_TEXT = re.compile(
+    r"(?<![\w'ʻ’])(?:расман|rasman|фармон|farmon|қарор\w*|qaror\w*|вазирлиг|vazirlig|ҳукумат|hukumat|ҳокимият|hokimiyat|"
+    r"солиқ|soliq|имтиёз|imtiyoz|жарима|jarima|қонун|qonun|прокуратур|prokuratur|ИИВ|IIV|суд(?:и|га|да|нинг)?(?![\w'ʻ’])|sud(?:i|ga|da|ning)?(?![\w'ʻ’])|"
+    r"маълум қил|ma[ʼ'ʻ’]?lum qil|хабар бер|xabar ber|хабар қилин|xabar qilin|эълон қил|e[ʼ'ʻ’]?lon qil|матбуот хизмат|matbuot xizmat|"
+    r"тезкор|tezkor|янгилик|yangilik|#news|ЙТҲ|YTH|йўл.транспорт ҳодиса|yo[ʻ'’]l.transport hodisa|"
+    r"\d{1,2}[- ]?" + _MON + r"\w*?(?:дан|гача|да|dan|gacha|da)(?![\w'ʻ’]))",
+    re.I)
+NEWS_CODES = {"news", "local"}           # 01.11: рубрики источников «новости» и «местное» — не берём ни в один канал
+NEWS_TEXT_CHANNELS = {"davra", "xojaobod"}   # PaparazziUZ: шоу-бизнес новость — профиль канала, текстом не режем
+
+
+def is_news(text: str | None) -> bool:
+    return bool(NEWS_TEXT.search(text or ""))
+
+
 def off_policy(text: str, channel: str) -> str:
     """Имя нарушенной группы политики канала или ''."""
     return next((g for g in FORBID.get(channel, ()) if POLICY[g].search(text or "")), "")
@@ -364,8 +382,10 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
                 log(f"  {type(e).__name__}: {str(e)[:80]}")
             await asyncio.sleep(1)
         need = need_codes(needs, channel, now)          # 🧠 заказ штаба: сначала рубрики пустых часов
-        if needs and "news" not in need:             # 30.10 владелец: новостей меньше — только под час новости
-            cands = [c for c in cands if c.get("rub") != "news"]
+        # 01.11 владелец: новостей нет во всех трёх каналах — новостные/местные источники не берём совсем, а в Давру и
+        # Хўжаобод (и в хабы направлений, откуда берут все) — ничего с новостным текстом
+        cands = [c for c in cands if c.get("rub") not in NEWS_CODES
+                 and not ((channel in NEWS_TEXT_CHANNELS or c.get("rub")) and is_news(c.get("text")))]
         want = max(PER_RUN.get(channel, 4), min(5, len(need)))
         sent, checked, skipped = 0, 0, 0
         blocked = LOGO_SOURCES | set(st.get("logo_sources", []))

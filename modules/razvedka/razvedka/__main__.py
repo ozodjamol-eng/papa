@@ -387,6 +387,10 @@ async def _curate() -> dict:
                     await send_report(c, text)
             from .curate import load_needs
             hour = dt_now().hour
+            try:                                     # 🚨 01.11: «СРОЧНО НОВОСТИ» — каждый час, первым делом
+                res["срочно"] = await sklad.srochno(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+            except Exception as e:  # noqa: BLE001
+                res["срочно"] = f"ошибка: {type(e).__name__}: {e}"[:200]
             if hour in sklad.FULL_HOURS:             # 30.10: нормы складов — 3 раза в день, как раньше
                 res["склад"] = await sklad.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True), notify=notify)
             else:                                    # в остальные часы — только якорь под скоро пустые часы

@@ -648,12 +648,13 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
             notes.append("✍️ ИИ-редактор перепишет текст в нашем стиле")
     elif src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
-    if src and smart.news_banned(cfg, channel, rub, sources_choice.rubric_code(channel, origin_id(msgs[0]))):
+    if src and smart.news_banned(cfg, channel, rub, sources_choice.rubric_code(channel, origin_id(msgs[0])),
+                                 text=strip_sources(text), source=src):
         # 01.11 владелец: «это развлекательный канал… разобраться по тематике». Правило 30.10: в КАТТА ДАВРА новостей нет.
         # Найденное агентами (не брошенное владельцем) новостное — не выходит само; владелец может вернуть кнопками карточки.
         store.update(db, mid, auto=0, stock=0, status="rejected")
         stock = sk = False
-        notes = ["⛔ Новость — не для КАТТА ДАВРА (правило 30.10), сама не выйдет"] + [n for n in (notes or []) if "выйдет сам" not in n]
+        notes = ["⛔ Новость — сама не выйдет (01.11: новости только из «СРОЧНО НОВОСТИ»)"] + [n for n in (notes or []) if "выйдет сам" not in n]
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
     if pol:
         notes = (notes or []) + [pol]

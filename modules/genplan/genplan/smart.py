@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 
 from . import plan, store
 
@@ -367,13 +368,40 @@ def policy_hits(cfg: dict, body: str) -> list[str]:
     return hits
 
 
-NEWS_RUBRICS = {"Янгиликлар", "Эрталабки янгиликлар", "Тушки янгиликлар", "Кечки янгиликлар"}
+NEWS_RUBRICS = {"Янгиликлар", "Эрталабки янгиликлар", "Тушки янгиликлар", "Кечки янгиликлар", "Хўжаобод/Андижон"}   # 01.11: местные новости — тоже новости
+NEWS_CODES = {"news", "local"}
 
 
-def news_banned(cfg: dict, channel: str | None, rubric: str | None, source_code: str | None) -> bool:
-    """01.11: канал с no_news (КАТТА ДАВРА, правило 30.10) — материал агентов из новостного источника или в новостной рубрике."""
+# 01.11 владелец: «отныне новостную часть на всех трёх каналах не ведём». Новость узнаём и по тексту — агенты клали
+# новости в склады направлений (пример: «ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ» в «УЙДА БИЗНЕС»). Признаки — официоз,
+# ведомства, «маълум қилди», «1 ноябрдан» и т.п. (кириллица и латиница). Шоу-бизнес PaparazziUZ это не задевает.
+_MON = r"(?:январ|феврал|март|апрел|май|июн|июл|август|сентябр|октябр|ноябр|декабр|yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentyabr|oktyabr|noyabr|dekabr)"
+NEWS_TEXT = re.compile(
+    r"(?<![\w'ʻ’])(?:расман|rasman|фармон|farmon|қарор\w*|qaror\w*|вазирлиг|vazirlig|ҳукумат|hukumat|ҳокимият|hokimiyat|"
+    r"солиқ|soliq|имтиёз|imtiyoz|жарима|jarima|қонун|qonun|прокуратур|prokuratur|ИИВ|IIV|суд(?:и|га|да|нинг)?(?![\w'ʻ’])|sud(?:i|ga|da|ning)?(?![\w'ʻ’])|"
+    r"маълум қил|ma[ʼ'ʻ’]?lum qil|хабар бер|xabar ber|хабар қилин|xabar qilin|эълон қил|e[ʼ'ʻ’]?lon qil|матбуот хизмат|matbuot xizmat|"
+    r"тезкор|tezkor|янгилик|yangilik|#news|ЙТҲ|YTH|йўл.транспорт ҳодиса|yo[ʻ'’]l.transport hodisa|"
+    r"\d{1,2}[- ]?" + _MON + r"\w*?(?:дан|гача|да|dan|gacha|da)(?![\w'ʻ’]))",
+    re.I)
+
+
+def looks_news(text: str | None) -> bool:
+    return bool(NEWS_TEXT.search(text or ""))
+
+
+def urgent_sklad(ch: dict, source: str | None) -> bool:
+    """01.11 владелец: новости — только из канала «СРОЧНО НОВОСТИ», который он сам наполняет; каждый пост — один раз."""
+    return bool(source) and any(_nrm(source) == _nrm(x) for x in (ch.get("urgent_sklad") or []))
+
+
+def news_banned(cfg: dict, channel: str | None, rubric: str | None, source_code: str | None,
+                text: str | None = None, source: str | None = None) -> bool:
+    """Канал с no_news (01.11 — все три): материал агентов/складов из новостного источника, в новостной рубрике
+    или с новостным текстом не выходит. Исключение — склад «СРОЧНО НОВОСТИ» владельца."""
     ch = (cfg.get("channels") or {}).get(channel or "") or {}
-    return bool(ch.get("no_news")) and (source_code == "news" or (rubric or "") in NEWS_RUBRICS)
+    if not ch.get("no_news") or urgent_sklad(ch, source) or (rubric or "") == "Муфтий минбари":
+        return False
+    return (source_code or "") in NEWS_CODES or (rubric or "") in NEWS_RUBRICS or (bool(ch.get("no_news_text", True)) and looks_news(text))
 
 
 def policy_note(cfg: dict, channel: str, body: str) -> str:
@@ -535,6 +563,9 @@ def twin_today(db, channel: str, m, now: dt.datetime) -> bool:
                       "AND COALESCE(scheduled_at, created_at)>=? LIMIT 1", (m["fp"], channel, since)).fetchone() is not None
 
 
+URGENT_TTL = dt.timedelta(hours=12)       # 01.11: срочная новость старше 12 ч — уже не срочная, не выходит
+
+
 def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     """Пустой слот рубрики в ближайшие 90 минут → берём из 📦 запаса материал этой рубрики (старые первыми)."""
     ch = cfg["channels"][channel]
@@ -547,7 +578,9 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     pool = [m for m in store.stock(db, channel)
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
             and not waits_text(cfg, m) and not _stale(ch, m, now)
-            and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now) and (not full or m["rubric"] == MINBAR)]
+            and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
+            and not (urgent_sklad(ch, m["source"]) and dt.datetime.fromisoformat(m["created_at"]) < now - URGENT_TTL)
+            and (not full or m["rubric"] == MINBAR or urgent_sklad(ch, m["source"]))]
     if not pool:
         return []
     used: list[int] = []
@@ -555,7 +588,11 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
         for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1)):
             wants = hour_wants(ch, t)
-            if wants is not None:                    # 30.10: в час берём только его рубрики; нет такой — час пустой
+            hot = None if MINBAR in (wants or [])[:1] else next(
+                (m for m in pool if m["id"] not in used and urgent_sklad(ch, m["source"]) and _fits(ch, m, t, now)), None)   # 01.11: «СРОЧНО НОВОСТИ» — в ближайший свободный час, любой
+            if hot is not None:
+                pick = hot
+            elif wants is not None:                    # 30.10: в час берём только его рубрики; нет такой — час пустой
                 pick = next((m for r in wants for m in pool if m["rubric"] == r and m["id"] not in used
                              and allowed(ch, t, r) and _fits(ch, m, t, now)), None)
                 if pick is None and ch.get("hour_rubrics_loose"):

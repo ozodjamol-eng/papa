@@ -83,7 +83,7 @@ class T(unittest.TestCase):
         old, sources_choice.CHOICE = sources_choice.CHOICE, f
         try:
             bot = Bot()
-            hub.intake(bot, self.db, self.cfg, {42}, 42, [12], [fwd(12, "BUGUNGI GAP", "Янгилик матни",
+            hub.intake(bot, self.db, self.cfg, {42}, 42, [12], [fwd(12, "BUGUNGI GAP", "Кулгили видео матни",
                                                                     chat_id=-1001234567890, username="BugungiGap")],
                        reply_chat=42, channel="davra")
             r = store.get(self.db, 1)
@@ -135,3 +135,47 @@ class T(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SrochnoNewsTest(unittest.TestCase):
+    """01.11 владелец: новости — только из «СРОЧНО НОВОСТИ»; пост из склада направления с новостью — не выходит."""
+    def setUp(self):
+        self.db = store.connect(":memory:")
+        self.cfg = {**CFG, "channels": {k: dict(v) for k, v in CFG["channels"].items()}}
+
+    def test_srochno_goes_next_free_hour_any_rubric(self):
+        bot = Bot()
+        hub.intake(bot, self.db, self.cfg, {42}, 42, [10], [fwd(10, "СРОЧНО НОВОСТИ", "Расман: 1 ноябрдан янги тартиб")],
+                   reply_chat=42, channel="xojaobod")
+        r = store.get(self.db, 1)
+        self.assertEqual((r["stock"], r["status"], r["rubric"]), (1, "draft", "Янгиликлар"))
+        ids = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("13:05"))
+        self.assertEqual(ids, [1])
+        self.assertEqual(dt.datetime.fromisoformat(store.get(self.db, 1)["scheduled_at"]), at("14:00"))
+
+    def test_srochno_stale_after_12h(self):
+        bot = Bot()
+        hub.intake(bot, self.db, self.cfg, {42}, 42, [10], [fwd(10, "СРОЧНО НОВОСТИ", "Расман хабар")],
+                   reply_chat=42, channel="xojaobod")
+        self.db.execute("UPDATE materials SET created_at=?", ((at("13:05") - dt.timedelta(hours=13)).isoformat(),))
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("13:05")), [])
+
+    def test_news_in_direction_stash_rejected(self):
+        bot = Bot()
+        hub.intake(bot, self.db, self.cfg, {42}, 42, [10],
+                   [fwd(10, "УЙДА БИЗНЕС", "💼 ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ")], reply_chat=42, channel="xojaobod")
+        r = store.get(self.db, 1)
+        self.assertEqual((r["status"], r["stock"]), ("rejected", 0))
+
+    def test_migrate_removes_queued_news(self):
+        bot = Bot()
+        hub.intake(bot, self.db, self.cfg, {42}, 42, [10], [fwd(10, "УЙДА БИЗНЕС", "Уйда нон пишириш")],
+                   reply_chat=42, channel="xojaobod")
+        self.db.execute("UPDATE materials SET text=?, status='queued', stock=0, scheduled_at=?",
+                        ("ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ", at("14:00").isoformat()))
+        hub.intake(bot, self.db, self.cfg, {42}, 42, [11], [fwd(11, "ФОЙДАЛИК", "Уйда нон пишириш сири")],
+                   reply_chat=42, channel="xojaobod")
+        self.assertEqual(service.news_migrate(self.db, self.cfg), 1)
+        self.assertEqual(store.get(self.db, 1)["status"], "rejected")
+        self.assertEqual(store.get(self.db, 2)["stock"], 1)
+        self.assertEqual(service.news_migrate(self.db, self.cfg), 0)   # один раз

@@ -111,6 +111,9 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
     media = [m.media for m in msgs if getattr(m, "media", None)]
     if not media:
         return False
+    from .curate import is_news
+    if is_news(text) or any(is_news(getattr(m, "message", "") or "") for m in msgs):
+        return False                      # 01.11 владелец: новости в банк не кладём («ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ» в УЙДА БИЗНЕС)
     try:
         await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
     except TypeError:                     # альбом со смешанным медиа — кладём первое (30.10, 2 случая у архивариуса)

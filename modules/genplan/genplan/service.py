@@ -392,9 +392,33 @@ def hourly_migrate(db, cfg: dict) -> int:
     return n
 
 
+def news_migrate(db, cfg: dict) -> int:
+    """01.11 владелец: «отныне новостную часть на всех трёх каналах не ведём». Один раз: новости от агентов и складов,
+    уже стоящие в очереди или в 📦 запасе, снимаются (status=rejected — владелец может вернуть кнопками карточки).
+    Посты, брошенные владельцем самим (без источника), и «СРОЧНО НОВОСТИ» не трогаем. Откат: убрать no_news в config."""
+    n = 0
+    for channel, ch in cfg["channels"].items():
+        k = f"news_off_v1:{channel}"
+        if not ch.get("no_news") or store.kv_get(db, k):
+            continue
+        rows = db.execute("SELECT * FROM materials WHERE channel=? AND source IS NOT NULL AND source<>'' AND urgent=0 "
+                          "AND (status='queued' OR (status='draft' AND stock=1))", (channel,)).fetchall()
+        for m in rows:
+            if smart.is_ad_rubric(m["rubric"]):
+                continue
+            if smart.news_banned(cfg, channel, m["rubric"], None, text=m["text"], source=m["source"]) \
+                    or smart._nrm(m["source"]) == smart._nrm("NEWS INBOX"):
+                db.execute("UPDATE materials SET status='rejected', stock=0, scheduled_at=NULL WHERE id=?", (m["id"],))
+                n += 1
+        db.commit()
+        store.kv_set(db, k, "done")
+    return n
+
+
 def reconcile(db, cfg: dict, now: dt.datetime) -> int:
     """Посты из старой схемы (в очереди без точного времени) получают умное время."""
     hourly_migrate(db, cfg)
+    news_migrate(db, cfg)
     n = 0
     for m in db.execute("SELECT * FROM materials WHERE status='queued' AND scheduled_at IS NULL ORDER BY id").fetchall():
         if m["channel"] not in cfg["channels"]:

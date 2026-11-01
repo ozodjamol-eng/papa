@@ -33,10 +33,13 @@ class TestSklad(unittest.TestCase):
         self.assertTrue(sklad.eligible(it(1), "ФОЙДАЛИК", "davra", MORNING))
         self.assertFalse(sklad.eligible(it(1, kind=None), "ФОЙДАЛИК", "davra", MORNING))       # голая ссылка/текст
         self.assertFalse(sklad.eligible(it(1, ad=True), "ФОЙДАЛИК", "davra", MORNING))
-        self.assertFalse(sklad.eligible(it(1, days=3), "NEWS INBOX", "davra", MORNING))       # старая новость
-        self.assertTrue(sklad.eligible(it(1, days=1), "NEWS INBOX", "davra", MORNING))
-        self.assertFalse(sklad.eligible(it(1, days=1, text="Президент парламентда сўзлади"), "NEWS INBOX", "davra", MORNING))
-        self.assertTrue(sklad.eligible(it(1, days=1, text="Президент парламентда сўзлади"), "NEWS INBOX", "xojaobod", MORNING))
+        # 01.11 владелец: новости — только «СРОЧНО НОВОСТИ», свежие (≤ 12 ч), только в Хўжаобод
+        self.assertNotIn("NEWS INBOX", sklad.SKLAD)
+        self.assertEqual(sklad.SKLAD["СРОЧНО НОВОСТИ"], ("xojaobod",))
+        self.assertFalse(sklad.eligible(it(1, days=1), "СРОЧНО НОВОСТИ", "xojaobod", MORNING))   # сутки — уже не срочно
+        self.assertTrue(sklad.eligible(it(1, days=0.2, text="Расман: 1 ноябрдан"), "СРОЧНО НОВОСТИ", "xojaobod", MORNING))
+        self.assertFalse(sklad.eligible(it(1, text="ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ"), "УЙДА БИЗНЕС", "xojaobod", MORNING))
+        self.assertFalse(sklad.eligible(it(1, text="ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ"), "УЙДА БИЗНЕС", "davra", MORNING))
 
     def test_plan_fixed_foydalik_plus_round_robin(self):
         stashes = {"ФОЙДАЛИК": [it(i) for i in range(1, 21)], "РАЗВЛЕКАТЕЛЬНО": [it(i) for i in range(100, 103)],
@@ -124,7 +127,7 @@ class LogoCheckAllStashes(unittest.TestCase):
     """31.10: в Хўжаобод вышло видео ФОЙДАЛИК с чужим @OPER_UZ — проверка лого для всех складов."""
 
     def test_own_stash_checked(self):
-        for s in ("ФОЙДАЛИК", "РАЗВЛЕКАТЕЛЬНО", "NEWS INBOX", "@AbduraxmonQiziq"):
+        for s in ("ФОЙДАЛИК", "РАЗВЛЕКАТЕЛЬНО", "СРОЧНО НОВОСТИ", "@AbduraxmonQiziq"):
             self.assertTrue(sklad.needs_check(s), s)
 
     def test_muftiy_not_checked(self):

@@ -25,7 +25,9 @@ from . import curate
 TZ = dt.timezone(dt.timedelta(hours=5))
 # склад → каким нашим каналам служит (26.10 владелец: «как в плане»)
 SKLAD = {
-    "NEWS INBOX": ("xojaobod",),                   # 30.10 владелец: в КАТТА ДАВРА новостей минимум
+    # 01.11 владелец: «новостную часть на всех трёх каналах не ведём» — NEWS INBOX отключён. Новости — только его
+    # «СРОЧНО НОВОСТИ»: свежий пост (≤ 12 ч) — один раз, только в Хўжаобод, каждый час работы куратора (07–20)
+    "СРОЧНО НОВОСТИ": ("xojaobod",),
     "@shayx_nuriddinxoliqnazar": ("davra", "xojaobod"),   # 30.10: «закончить день с муфтием» — якорь 22:00
     "ФОЙДАЛИК": ("davra", "xojaobod", "paparazzi"),   # 26.10 владелец: «там очень много полезного — во все три»
     "ФОЙДАЛИК ОВКАТ": ("xojaobod", "davra"),
@@ -46,15 +48,17 @@ SKLAD = {
     "@RizaNovaUZ": ("paparazzi",),                  # 31.10 владелец: музыкальный лейбл, клипы; лого — проверка кадров
 }
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
-NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar"}      # якорь: сначала свежий пост, нет нового — следующий из архива
+NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar", "СРОЧНО НОВОСТИ"}      # якорь: сначала свежий пост, нет нового — следующий из архива
 # 31.10 владелец: «в обоих каналах должен идти Муфтий, но разными постами». Склад Муфтия — один урок на ОДИН канал:
 # пост, который уже взял другой канал (по id или по тому же тексту — Муфтий повторяет уроки), не берём; и только уроки
 # (#muftiy_minbari) — поздравления (#tabrik) и #kun_oyati в слот 22:00 не годятся. Откат: очистить оба множества.
 UNIQUE = {"@shayx_nuriddinxoliqnazar"}
 LESSON_ONLY = {"@shayx_nuriddinxoliqnazar"}
-FRESH_DAYS = {"NEWS INBOX": 2, "@madaniyatvazirligi": 2}   # новости: только свежие, архив не берём
+FRESH_DAYS = {"СРОЧНО НОВОСТИ": 0.5, "@madaniyatvazirligi": 2}   # новости: только свежие, архив не берём
 # 26.10 владелец: ФОЙДАЛИК — ровно 3 в день в КАТТА ДАВРА и Хўжаобод, 2 — в PaparazziUZ (сверх остальных складов)
 # 30.10 сверка: часы Давры «час = рубрика» — мотивация 07/20, музыка 12/15/21, бизнес 11, ибрат 19 — свои нормы
+URGENT = "СРОЧНО НОВОСТИ"                         # 01.11: отдельный проход каждый час, вне норм
+URGENT_PER_RUN = 3
 FIXED = {"davra": {"@shayx_nuriddinxoliqnazar": 1, "ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1,
                    "МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1},
          "xojaobod": {"@shayx_nuriddinxoliqnazar": 1, "ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
@@ -123,7 +127,7 @@ def allowed_now(channel: str, sent_today: int, now: dt.datetime) -> int:
 
 
 def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
-    """Пост склада годится для канала: с медиа, не реклама, свежий (для NEWS INBOX), по политике канала."""
+    """Пост склада годится для канала: с медиа, не реклама, свежий (для «СРОЧНО НОВОСТИ»), не новость, по политике канала."""
     if item["kind"] not in ("video", "photo") or item["ad"]:
         return False
     if stash in LESSON_ONLY and not re.search(r"minbar|минбар", _norm(item["text"])):
@@ -135,6 +139,8 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
         return False                                   # «бугун», «шу йил», дата — для вечного склада устарел
     if JUMA.search(item["text"] or "") and now.astimezone(TZ).weekday() != 4:
         return False                                   # «Жума» — только в пятницу
+    if stash != URGENT and stash not in LESSON_ONLY and channel in curate.NEWS_TEXT_CHANNELS and curate.is_news(item["text"]):
+        return False                                   # 01.11 владелец: новости — только из «СРОЧНО НОВОСТИ»
     return not curate.off_policy(item["text"], channel)
 
 
@@ -163,7 +169,7 @@ def plan(stashes: dict[str, list[dict]], used: dict, sent_today: dict, now: dt.d
                 k = allowed(n, int(sent_today.get(f"{ch}|{s}", 0)), now)
                 pick += [(s, x, f"{ch}|{s}") for x in fresh(ch, s)[:k]]
         n = allowed_now(ch, int(sent_today.get(ch, 0)), now)
-        mine = [s for s, chs in SKLAD.items() if ch in chs and s in stashes and s not in FIXED.get(ch, {})]
+        mine = [s for s, chs in SKLAD.items() if ch in chs and s in stashes and s not in FIXED.get(ch, {}) and s != URGENT]
         queues = [[(s, x, ch) for x in fresh(ch, s)] for s in mine]
         start = int(sent_today.get(f"rr_{ch}", 0))           # с какого склада начинать круг
         queues = queues[start % len(queues):] + queues[:start % len(queues)] if queues else []
@@ -385,3 +391,60 @@ async def anchor(client, state_dir: Path, needs: dict, now: dt.datetime | None =
         report[ch] = sent
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     return report
+
+
+# ---------- 🚨 01.11: «СРОЧНО НОВОСТИ» владельца — каждый час, свежее, один раз ----------
+async def srochno(client, state_dir: Path, now: dt.datetime | None = None, log=print) -> int:
+    """Свежие (≤ 12 ч) посты с фото/видео из «СРОЧНО НОВОСТИ» → пульт Хўжаобода (там — в ближайший свободный час).
+    Каждый пост — один раз (журнал used). Проверка кадров на чужое лого — как у всех складов (правило 31.10)."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if not curate.XOJAOBOD_FLAG.exists():
+        return 0
+    sf = state_dir / "sklad.json"
+    try:
+        st = json.loads(sf.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        st = {}
+    used = st.setdefault("used", {})
+    ent = None
+    async for d in client.iter_dialogs():
+        if d.is_channel and not d.is_group and _norm(d.title) == _norm(URGENT):
+            ent = d.entity
+            break
+    if ent is None:
+        log(f"  🚨 {URGENT}: канал не найден среди чатов профиля Разведки")
+        return 0
+    items = await read(client, ent, 50)
+    sent = 0
+    for ch in SKLAD[URGENT]:
+        for it in order(items, ch, now, URGENT):
+            if sent >= URGENT_PER_RUN:
+                break
+            if not eligible(it, URGENT, ch, now) or str(it["id"]) in used.get(f"{ch}|{URGENT}", []) \
+                    or str(it["id"]) in used.get(f"bad|{URGENT}", []):
+                continue
+            if needs_check(URGENT):
+                if not os.environ.get("GEMINI_API_KEY"):
+                    break
+                try:
+                    ok = await curate.clean_frame(client, {"kind": it["kind"], "msg": it["msg"]}, background=False)
+                except RuntimeError as e:
+                    log(f"  🚨 {URGENT}: {e}")
+                    break
+                if ok is None:
+                    continue
+                if not ok:
+                    used.setdefault(f"bad|{URGENT}", []).append(str(it["id"]))
+                    log(f"  🚫 {URGENT} #{it['id']}: чужое лого — пропуск")
+                    continue
+            try:
+                await client.forward_messages(curate.BOTS[ch], it["ids"], from_peer=ent)
+            except Exception as e:  # noqa: BLE001
+                log(f"  🚨 {URGENT} → {ch}: {type(e).__name__}")
+                continue
+            mark_used(used, URGENT, ch, it)
+            sent += 1
+            log(f"  🚨 {URGENT} → {ch}: #{it['id']} {it['text'][:50]!r}")
+            await asyncio.sleep(4)
+    sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+    return sent

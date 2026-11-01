@@ -728,4 +728,43 @@ class NewsBanTest(unittest.TestCase):
         self.assertTrue(smart.news_banned(cfg, "davra", "Янгиликлар", None))
         self.assertTrue(smart.news_banned(cfg, "davra", "Видео", "news"))
         self.assertFalse(smart.news_banned(cfg, "davra", "Ҳажвия", "humor"))
-        self.assertFalse(smart.news_banned(cfg, "xojaobod", "Янгиликлар", "news"))
+        self.assertTrue(smart.news_banned(cfg, "xojaobod", "Янгиликлар", "news"))      # 01.11: новостей нет во всех трёх
+
+
+class NewsOff0111Test(unittest.TestCase):
+    """01.11 владелец: новостей нет на всех трёх каналах; новости — только из «СРОЧНО НОВОСТИ», каждый пост один раз."""
+    def setUp(self):
+        import tomllib
+        self.cfg = tomllib.loads(open("config.toml", encoding="utf-8").read())
+
+    def test_text_news_detected(self):
+        from genplan import smart
+        for t in ["💼 ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ\nНогиронлиги бўлган болаларга…",
+                  "Расман: 1 ноябрдан нархлар ўзгаради", "Rasman: 1-noyabrdan yangi tartib", "ИИВ маълум қилди",
+                  "Вазирлик хабар берди"]:
+            self.assertTrue(smart.looks_news(t), t)
+        for t in ["😂 Кулгили видео — дўстларингизга юборинг", "Уйда нон пишириш сири", "Ota-onaga hurmat haqida",
+                  "Бугун кайфият зўр, мусиқа тингланг", "Судак балиқ рецепти"]:
+            self.assertFalse(smart.looks_news(t), t)
+
+    def test_all_three_channels(self):
+        from genplan import smart
+        c = self.cfg
+        tax = "ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ"
+        self.assertTrue(smart.news_banned(c, "xojaobod", "Уйда бизнес", None, text=tax, source="УЙДА БИЗНЕС"))
+        self.assertTrue(smart.news_banned(c, "davra", "Уйда бизнес", None, text=tax, source="УЙДА БИЗНЕС"))
+        self.assertTrue(smart.news_banned(c, "xojaobod", "Хўжаобод/Андижон", "local", text="", source="@x"))
+        self.assertTrue(smart.news_banned(c, "paparazzi", "Видео", "news"))
+        # PaparazziUZ: шоу-бизнес новость текстом не режем
+        self.assertFalse(smart.news_banned(c, "paparazzi", "Шоу-бизнес янгилик", None, text="Хонанда янги клипини эълон қилди"))
+        # «СРОЧНО НОВОСТИ» — разрешено, Муфтий — не трогаем
+        self.assertFalse(smart.news_banned(c, "xojaobod", "Янгиликлар", None, text="Расман: 1 ноябрдан", source="СРОЧНО НОВОСТИ"))
+        self.assertFalse(smart.news_banned(c, "xojaobod", "Муфтий минбари", None, text="қарор қилинг", source="@shayx_nuriddinxoliqnazar"))
+        self.assertFalse(smart.news_banned(c, "xojaobod", "Фойдали видео", "useful", text="Уйда нон пишириш"))
+
+    def test_no_news_hours_and_inbox(self):
+        for ch in ("davra", "xojaobod"):
+            for h, rubs in self.cfg["channels"][ch]["hour_rubrics"].items():
+                self.assertNotIn("Янгиликлар", rubs, (ch, h))
+        self.assertNotIn("NEWS INBOX", self.cfg["channels"]["xojaobod"]["sklad"])
+        self.assertEqual(self.cfg["channels"]["xojaobod"]["sklad"]["СРОЧНО НОВОСТИ"], "Янгиликлар")
