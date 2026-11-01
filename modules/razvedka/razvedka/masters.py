@@ -268,48 +268,93 @@ def messages(text: str, limit: int = 3900) -> list[str]:
 TG_MASTERS = [
     {"name": "Лабораторная YouTube", "username": "laboratornaya", "why": "YouTube на ИИ: инструменты, ниши, озвучка"},
 ]
+# 01.11 владелец: «таких каналов много, они в одной папке» — читаем ВСЮ папку (только каналы, не группы и не боты)
+TG_FOLDERS = [
+    {"name": "Нейросеть", "folder": "Нейросеть", "why": "каналы про ИИ: инструменты, приёмы, новинки, ниши"},
+]
+TG_PER_CHANNEL = 15
+TG_TOP_POSTS = 45
 TG_FIRST_DAYS = 7
-TG_MAX_CHARS = 12000
+TG_MAX_CHARS = 20000
 
-TG_PROMPT = """Ниже новые посты Telegram-канала практика «{name}» ({why}) за неделю.
+TG_PROMPT = """Ниже новые посты за неделю: «{name}» ({why}). Если это папка — посты многих каналов, самые просматриваемые;
+одна и та же новость у нескольких каналов — один пункт.
 Достань только то, что можно ВЗЯТЬ В РАБОТУ студии PAPA: новые инструменты, приёмы, ниши, цифры с источником.
 Наши правила (обязательно учитывай в вердикте):
 - серые перепродажи аккаунтов и «безлимитные» боты (FunPay, ClaudeHub, «безлимит ElevenLabs» и т.п.) — ❌: аккаунт
   Anthropic владельца уже блокировали, голосовые клоны терять нельзя; у нас свои подписки: Google AI Pro (Flow/Veo),
   ElevenLabs Starter, Suno, Claude;
 - партнёрские ссылки автора — помечай «(партнёрская)»; накрутки и спам — ❌.
-Ответ по-русски, для Telegram, без таблиц и markdown-заголовков, до 1600 знаков:
+Ответ по-русски, для Telegram, без таблиц и markdown-заголовков, до 2400 знаков, не больше 8 пунктов, самое полезное первым:
 📡 {name} — неделя
-N) что это → ✅ берём / 🧪 в проверку / ⚠️ на заметку / ❌ мимо — одна строка почему; 🔗 адрес (если есть)
+N) что это (канал) → ✅ берём / 🧪 в проверку / ⚠️ на заметку / ❌ мимо — одна строка почему; 🔗 адрес (если есть)
 Если ничего стоящего — одна строка «Ничего нового для нас».
 
 Посты:
 {posts}"""
 
 
+async def _channel_posts(client, ent, key: str, seen: dict, since: dt.datetime, limit: int) -> list[dict]:
+    posts = []
+    async for msg in client.iter_messages(ent, limit=limit, min_id=int(seen.get(key, 0)), wait_time=1):
+        if not seen.get(key) and msg.date and msg.date < since:
+            break
+        text = (msg.message or "").strip()
+        if text:
+            posts.append({"id": msg.id, "text": text, "date": msg.date.strftime("%d.%m") if msg.date else "",
+                          "views": int(getattr(msg, "views", 0) or 0)})
+    if posts:
+        seen[key] = max(p["id"] for p in posts)
+    return posts
+
+
+def _link(ent, msg_id: int) -> str:
+    u = getattr(ent, "username", None)
+    return f"https://t.me/{u}/{msg_id}" if u else f"https://t.me/c/{getattr(ent, 'id', 0)}/{msg_id}"
+
+
 async def read_tg(client, out_dir: Path, now: dt.datetime | None = None) -> list[tuple[dict, list[dict]]]:
-    """Новые посты каналов практиков (после последнего прочитанного; в первый раз — за 7 дней)."""
+    """Новые посты: отдельные каналы TG_MASTERS + все каналы папок TG_FOLDERS (первый раз — за 7 дней)."""
     now = now or dt.datetime.now(TZ)
     seen_p = out_dir / "tg-masters-seen.json"
     seen = _load(seen_p, {})
     since = now - dt.timedelta(days=TG_FIRST_DAYS)
     out = []
     for m in TG_MASTERS:
-        u = m["username"]
         try:
-            ent = await client.get_entity(u)
-            posts = []
-            async for msg in client.iter_messages(ent, limit=40, min_id=int(seen.get(u, 0)), wait_time=1):
-                if not seen.get(u) and msg.date and msg.date < since:
-                    break
-                text = (msg.message or "").strip()
-                if text:
-                    posts.append({"id": msg.id, "text": text, "date": msg.date.strftime("%d.%m") if msg.date else ""})
-            if posts:
-                seen[u] = max(p["id"] for p in posts)
-            out.append((m, sorted(posts, key=lambda p: p["id"])))
+            ent = await client.get_entity(m["username"])
+            posts = await _channel_posts(client, ent, m["username"], seen, since, 40)
+            for x in posts:
+                x["link"], x["channel"] = f"https://t.me/{m['username']}/{x['id']}", m["name"]
+            out.append((m, sorted(posts, key=lambda x: x["id"])))
         except Exception as e:                                     # канал закрыт/переименован — не валим весь обход
             out.append((dict(m, error=f"{type(e).__name__}: {e}"), []))
+    if TG_FOLDERS:
+        try:
+            from .curate import folder_peers, peers_in
+            folders = await folder_peers(client)
+        except Exception as e:
+            folders = {}
+            out.append(({"name": "папки", "error": f"{type(e).__name__}: {e}"}, []))
+        for f in TG_FOLDERS:
+            peers = peers_in(folders, [f["folder"]]) if folders else []
+            if folders and not peers:
+                out.append((dict(f, error="папка не найдена у аккаунта Разведки; есть: " + ", ".join(list(folders)[:15])), []))
+                continue
+            posts, bad = [], 0
+            for peer in peers:
+                try:
+                    ent = await client.get_entity(peer)
+                    if not getattr(ent, "broadcast", False):        # группы, чаты, боты — мимо (там болтовня)
+                        continue
+                    key = f"id{ent.id}"
+                    for x in await _channel_posts(client, ent, key, seen, since, TG_PER_CHANNEL):
+                        x["link"], x["channel"] = _link(ent, x["id"]), getattr(ent, "title", "") or key
+                        posts.append(x)
+                except Exception:
+                    bad += 1
+            top = sorted(posts, key=lambda x: x["views"], reverse=True)[:TG_TOP_POSTS]   # самое просматриваемое
+            out.append((dict(f, channels=len(peers), skipped=bad), sorted(top, key=lambda x: x["id"])))
     _save(seen_p, seen)
     return out
 
@@ -329,19 +374,20 @@ def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime
         if not posts:
             continue
         joined, size = [], 0
-        for p in reversed(posts):                                   # свежие важнее, если не влезает
-            line = f"[{p['date']} · https://t.me/{m['username']}/{p['id']}]\n{p['text']}"
+        for p in sorted(posts, key=lambda x: (x.get('views', 0), x['id']), reverse=True):   # не влезает — важнее просматриваемое
+            line = f"[{p.get('channel', m['name'])} · {p['date']} · 👁 {p.get('views', 0)} · {p.get('link', '')}]\n{p['text'][:1500]}"
             if size + len(line) > TG_MAX_CHARS:
                 break
             joined.append(line); size += len(line)
         try:
-            text = ask(TG_PROMPT.format(name=m["name"], why=m.get("why", ""), posts="\n\n".join(reversed(joined))))
+            text = ask(TG_PROMPT.format(name=m["name"], why=m.get("why", ""), posts="\n\n".join(joined)))
         except Exception as e:
             notes.append(f"⏸ {m['name']}: разбор не вышел ({type(e).__name__}) — посты перечитаю через неделю")
             continue
         blocks.append(text.strip())
         if "Ничего нового" not in text:
-            queue_add.append({"name": f"{m['name']}: неделя до {today_s}", "url": f"https://t.me/{m['username']}",
+            queue_add.append({"name": f"{m['name']}: неделя до {today_s}",
+                              "url": f"https://t.me/{m['username']}" if m.get("username") else f"папка «{m.get('folder', '')}»",
                               "topic": "Канал практика", "stars": 0, "license": "", "desc": text[:300],
                               "found": today_s, "status": "ждёт проверки"})
     if queue_add:

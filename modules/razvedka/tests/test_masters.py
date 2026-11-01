@@ -137,5 +137,54 @@ class TestTgMasters(unittest.TestCase):
         self.assertIn("не прочитан", text)
 
 
+    def test_folder_channels_only_top_by_views(self):
+        import asyncio
+        from types import SimpleNamespace as NS
+        d0 = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.timezone.utc)
+        ents = {"chA": NS(id=1, broadcast=True, username="ai_a", title="A"),
+                "grp": NS(id=2, broadcast=False, username="chat", title="Чат"),
+                "chB": NS(id=3, broadcast=True, username=None, title="B")}
+        msgs = {1: [FakeMsg(5, "новинка A", d0)], 2: [FakeMsg(9, "болтовня", d0)], 3: [FakeMsg(7, "новинка B", d0)]}
+        for m in msgs[1]: m.views = 900
+        for m in msgs[3]: m.views = 50
+
+        class FC:
+            async def get_entity(self, peer):
+                if peer == "laboratornaya":
+                    raise ValueError("нет")
+                return ents[peer]
+
+            def iter_messages(self, ent, limit=15, min_id=0, wait_time=1):
+                async def gen():
+                    for m in msgs[ent.id]:
+                        if m.id > min_id:
+                            yield m
+                return gen()
+
+        async def fake_folders(client):
+            return {"Нейросеть": ["chA", "grp", "chB"], "Другая": []}
+        with tempfile.TemporaryDirectory() as d, mock.patch("razvedka.curate.folder_peers", fake_folders):
+            found = asyncio.run(masters.read_tg(FC(), Path(d), NOW))
+            folder = [x for x in found if x[0].get("folder")][0]
+            self.assertEqual([p["text"] for p in folder[1]], ["новинка A", "новинка B"])   # группа — мимо
+            self.assertEqual(folder[1][0]["link"], "https://t.me/ai_a/5")
+            self.assertEqual(folder[1][1]["link"], "https://t.me/c/3/7")
+            self.assertTrue(any(x[0].get("error") for x in found))                   # закрытый канал — в заметки
+
+    def test_folder_missing_lists_available(self):
+        import asyncio
+
+        class FC:
+            async def get_entity(self, peer):
+                raise ValueError("нет")
+
+        async def fake_folders(client):
+            return {"XOJAOBOD CITY": []}
+        with tempfile.TemporaryDirectory() as d, mock.patch("razvedka.curate.folder_peers", fake_folders):
+            found = asyncio.run(masters.read_tg(FC(), Path(d), NOW))
+            err = [x[0]["error"] for x in found if x[0].get("folder")][0]
+            self.assertIn("XOJAOBOD CITY", err)
+
+
 if __name__ == "__main__":
     unittest.main()
