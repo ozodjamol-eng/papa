@@ -173,7 +173,7 @@ class T(unittest.TestCase):
         self.assertTrue(self.davra_hours)
         self.cfg["channels"]["davra"]["hour_rubrics"] = self.davra_hours
         t, why = smart.smart_time(self.db, self.cfg, "davra", "Маънавият", at("06:00"))
-        self.assertEqual(f"{t:%H:%M}", "22:00")                      # 30.10: день закрывает Муфтий / маънавият
+        self.assertNotEqual(f"{t:%H:%M}", "22:00")                   # 01.11: час Муфтия — только Муфтию (Маънавият туда ставит лишь запас)
         t, _ = smart.smart_time(self.db, self.cfg, "davra", "Мусиқа", at("06:00"))
         self.assertEqual(f"{t:%H:%M}", "12:00")                      # музыка — с 10:00 (правило канала)
 

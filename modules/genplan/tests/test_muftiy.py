@@ -104,6 +104,16 @@ class T(unittest.TestCase):
         again = self.add("#muftiy_minbari\nОдобимиз – қалқонимиз\n🎙 Шайх Нуриддин Холиқназар ҳазратлари", "davra", fp="m:2")
         self.assertTrue(smart.twin_taken(self.db, "davra", store.get(self.db, again)))
 
+    def test_manavi_card_does_not_take_minbar_hour(self):
+        """01.11: пост Маънавият, поставленный кнопкой рубрики, занял 22:00 в КАТТА ДАВРА — урок Муфтия не вышел."""
+        mid = store.add_material(self.db, -100777, 999, "Маънавий видео", True, fp="v:m")
+        store.update(self.db, mid, channel="davra", rubric="Маънавият", status="draft")
+        for _ in range(3):
+            st = smart.smart_time(self.db, self.cfg, "davra", "Маънавият", at("20:30"), exclude=mid)
+            if st:
+                self.assertNotEqual(st[0].astimezone(plan.TZ).hour, 22)
+        self.assertEqual(smart.smart_time(self.db, self.cfg, "davra", smart.MINBAR, at("20:30"))[0], at("22:00"))
+
 
 if __name__ == "__main__":
     unittest.main()

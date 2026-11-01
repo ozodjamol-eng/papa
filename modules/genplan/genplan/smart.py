@@ -112,6 +112,14 @@ def hour_wants(ch: dict, t: dt.datetime) -> list[str] | None:
     return [w] if isinstance(w, str) else list(w)
 
 
+def minbar_hour(ch: dict, t: dt.datetime, rubric: str | None) -> bool:
+    """01.11 разбор: час, где главная рубрика — «Муфтий минбари» (22:00), — только для Муфтия. Посты Маънавият
+    вставали туда при выборе рубрики в карточке (Маънавият — запасная рубрика часа) раньше, чем запас ставил урок,
+    и в КАТТА ДАВРА урок Муфтия не вышел. Запасная рубрика берётся в этот час только самим запасом (fill_from_stock)."""
+    w = hour_wants(ch, t) or []
+    return bool(w) and w[0] == "Муфтий минбари" and rubric != "Муфтий минбари"
+
+
 def is_ad_rubric(rubric: str | None) -> bool:
     return (rubric or "").lower().startswith("реклама")
 
@@ -266,8 +274,8 @@ def smart_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime
     """Лучшее время: слот своей рубрики → слот, где рубрика запасная → (на следующий день то же) → ближайшее свободное."""
     ch = cfg["channels"][channel]
     if hourly(ch) and not is_ad_rubric(rubric):
-        days = [free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)
-                for d in range(max(ttl(ch, rubric), 1) + 1)]
+        days = [[t for t in free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)
+                 if not minbar_hour(ch, t, rubric)] for d in range(max(ttl(ch, rubric), 1) + 1)]
         if ch.get("hour_rubrics") and rubric:        # 30.10: сначала час своей рубрики (главной, потом запасной)
             for rank in (0, 1):
                 for hrs in days:
@@ -299,7 +307,8 @@ def other_times(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetim
     """Свободные моменты на сегодня и завтра: слоты сетки + каждые 30 минут, с соблюдением правил."""
     ch = cfg["channels"][channel]
     if hourly(ch) and not is_ad_rubric(rubric):
-        hrs = [t for d in (0, 1) for t in free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)]
+        hrs = [t for d in (0, 1) for t in free_hours(db, ch, channel, rubric, now, now.date() + dt.timedelta(days=d), exclude)
+               if not minbar_hour(ch, t, rubric)]
         return hrs[:n]
     busy = occupied(db, channel, now, exclude, ch=ch, grid_posts=False)
     out: list[dt.datetime] = []
@@ -770,7 +779,7 @@ def day_time(db, cfg: dict, channel: str, rubric: str | None, now: dt.datetime, 
     слот, где рубрика запасная → ближайшее свободное. Окно, промежуток, музыка, Жума — соблюдаются."""
     ch = cfg["channels"][channel]
     if hourly(ch) and not is_ad_rubric(rubric):
-        hrs = free_hours(db, ch, channel, rubric, now, day, exclude, until)
+        hrs = [t for t in free_hours(db, ch, channel, rubric, now, day, exclude, until) if not minbar_hour(ch, t, rubric)]
         return hrs[0] if hrs else None
     busy = occupied(db, channel, now, exclude, ch=ch, grid_posts=False)
     ok = lambda t: (t >= now + LEAD and (until is None or t < until) and allowed(ch, t, rubric)  # noqa: E731
