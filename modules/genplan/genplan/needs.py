@@ -37,7 +37,7 @@ def build(db, cfg: dict, now: dt.datetime) -> dict:
             stock[m["rubric"]] = stock.get(m["rubric"], 0) + 1
         left = dict(stock)
         empty = []
-        for t in smart.free_hours(db, ch, channel, None, now, now.date()):
+        for t in smart.free_hours(db, ch, channel, None, now, now.date(), minbar=True):
             want = smart.hour_wants(ch, t) or []
             have = next((r for r in want if left.get(r, 0) > 0), None)
             if have:                                   # запас этой рубрики закроет час — не заказываем

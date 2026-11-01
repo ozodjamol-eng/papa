@@ -113,6 +113,24 @@ class T(unittest.TestCase):
             if st:
                 self.assertNotEqual(st[0].astimezone(plan.TZ).hour, 22)
         self.assertEqual(smart.smart_time(self.db, self.cfg, "davra", smart.MINBAR, at("20:30"))[0], at("22:00"))
+    # ---- 01.11 ТВЁРДЫЙ ЗАКОН: 22:00 — последний пост, Муфтий в обоих каналах ----
+    def test_manaviyat_cannot_take_muftiy_hour(self):
+        for c in ("davra", "xojaobod"):
+            r = smart.smart_time(self.db, self.cfg, c, "Маънавият", at("06:00"))
+            self.assertTrue(r is None or f"{r[0]:%H}" != "22", c)
+            self.assertNotIn("22", [f"{t:%H}" for t in smart.other_times(self.db, self.cfg, c, None, at("06:00"), n=40)])
+
+    def test_other_sheikh_not_muftiy(self):
+        mid = self.add("#muftiy_minbari\nШайх Муҳаммад Содиқ", "xojaobod", fp="m:x")
+        store.update(self.db, mid, source="МАЪНАВИЯТ")
+        self.assertFalse(smart.minbar_ok(store.get(self.db, mid)))
+
+    def test_repeat_lesson_when_no_fresh(self):
+        old = self.add("#muftiy_minbari\nОдобимиз – қалқонимиз", "xojaobod", fp="m:o")
+        store.update(self.db, old, status="published", stock=0, scheduled_at=at("22:00").isoformat())
+        rep = self.add("#muftiy_minbari\nОдобимиз – қалқонимиз", "xojaobod", fp="m:o2")
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("21:00")), [])   # рано — ждём свежий
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("21:45")), [rep])  # за 15 мин — повтор
 
 
 if __name__ == "__main__":

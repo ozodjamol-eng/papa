@@ -147,10 +147,20 @@ def hour_taken(db, channel: str, t: dt.datetime, exclude: int | None = None) -> 
     return False
 
 
+def is_minbar_hour(ch: dict, t: dt.datetime) -> bool:
+    """01.11 владелец, ТВЁРДЫЙ ЗАКОН: 22:00 — последний пост дня, урок Муфтия в обоих каналах. Час, где главная рубрика
+    «Муфтий минбари», закреплён за Муфтием: другие посты (Маънавият и пр.) туда днём не ставятся."""
+    w = hour_wants(ch, t)
+    return bool(w) and w[0] == MINBAR
+
+
 def free_hours(db, ch: dict, channel: str, rubric: str | None, now: dt.datetime, day: dt.date,
-               exclude: int | None = None, until: dt.datetime | None = None) -> list[dt.datetime]:
+               exclude: int | None = None, until: dt.datetime | None = None,
+               minbar: bool = False) -> list[dt.datetime]:
+    """minbar=True — только для запаса/обзоров: они сами решают, кто идёт в час Муфтия."""
     return [t for t in hour_slots(ch, day)
             if t >= now + LEAD and (until is None or t < until) and allowed(ch, t, rubric)
+            and (minbar or rubric == MINBAR or not is_minbar_hour(ch, t))
             and not blocked(db, channel, t) and not hour_taken(db, channel, t, exclude)]
 
 
@@ -536,6 +546,10 @@ def minbar_ok(m) -> bool:
     if m["rubric"] != MINBAR:
         return True
     n = _nrm(m["text"])
+    src = _nrm(m["source"]) if "source" in m.keys() else ""
+    # 01.11 разбор: в Хўжаобод в 22:03 вышел пост другого шайха (склад МАЪНАВИЯТ) с рубрикой Муфтия — Муфтий у нас один
+    if src and "nuriddin" not in src and "нуриддин" not in n and "nuriddin" not in n:
+        return False
     return "minbar" in n or "минбар" in n
 
 
@@ -572,6 +586,28 @@ def twin_today(db, channel: str, m, now: dt.datetime) -> bool:
                       "AND COALESCE(scheduled_at, created_at)>=? LIMIT 1", (m["fp"], channel, since)).fetchone() is not None
 
 
+MINBAR_LAST = dt.timedelta(minutes=20)    # 01.11: за 20 мин до 22:00 свежего урока нет → запасной вариант
+
+
+def minbar_pick(db, ch: dict, channel: str, pool: list, used: list, t: dt.datetime, now: dt.datetime):
+    """Кто идёт в час Муфтия. 1) свежий урок (как раньше). 2) За 20 мин свежего нет — урок Муфтия из запаса,
+    уже выходивший раньше (цикл не рвётся), но не тот, что сегодня стоит/вышел в другом канале.
+    3) Совсем нет уроков Муфтия — Маънавият (лучше, чем пустой финал дня)."""
+    fresh = next((m for m in pool if m["id"] not in used and m["rubric"] == MINBAR), None)
+    if fresh or t - now > MINBAR_LAST:
+        return fresh
+    a = plan.slot_time(t.date(), "00:00").isoformat()
+    other = [_nrm(r[0])[:120] for r in db.execute(
+        "SELECT text FROM materials WHERE channel<>? AND rubric=? AND status IN ('queued','published') "
+        "AND COALESCE(scheduled_at, created_at)>=?", (channel, MINBAR, a)).fetchall()]
+    rep = [m for m in store.stock(db, channel) if m["id"] not in used and m["rubric"] == MINBAR and minbar_ok(m)
+           and not twin_today(db, channel, m, now) and _nrm(m["text"])[:120] not in other]
+    if rep:
+        return rep[-1]
+    return next((m for r in (hour_wants(ch, t) or [])[1:] for m in pool
+                 if m["id"] not in used and m["rubric"] == r and allowed(ch, t, r)), None)
+
+
 URGENT_TTL = dt.timedelta(hours=12)       # 01.11: срочная новость старше 12 ч — уже не срочная, не выходит
 
 
@@ -590,13 +626,20 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
             and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
             and not (urgent_sklad(ch, m["source"]) and dt.datetime.fromisoformat(m["created_at"]) < now - URGENT_TTL)
             and (not full or m["rubric"] == MINBAR or urgent_sklad(ch, m["source"]))]
-    if not pool:
+    if not pool and not (hourly(ch) and store.stock(db, channel)):   # 01.11: час Муфтия может взять повтор урока
         return []
     used: list[int] = []
     counted = 0
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
-        for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1)):
+        for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1),
+                            minbar=True):
             wants = hour_wants(ch, t)
+            if is_minbar_hour(ch, t):                  # 01.11 ТВЁРДЫЙ ЗАКОН: 22:00 — Муфтий в обоих каналах
+                pick = minbar_pick(db, ch, channel, pool, used, t, now)
+                if pick:
+                    store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
+                    used.append(pick["id"])
+                continue
             hot = None if MINBAR in (wants or [])[:1] else next(
                 (m for m in pool if m["id"] not in used and urgent_sklad(ch, m["source"]) and _fits(ch, m, t, now)), None)   # 01.11: «СРОЧНО НОВОСТИ» — в ближайший свободный час, любой
             if hot is not None:
@@ -665,7 +708,7 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         left: dict[str, int] = {}
         for m in store.stock(db, channel):
             left[m["rubric"]] = left.get(m["rubric"], 0) + 1
-        for t in free_hours(db, ch, channel, None, now, day):
+        for t in free_hours(db, ch, channel, None, now, day, minbar=True):
             w = hour_wants(ch, t)
             got = next((r for r in (w or []) if left.get(r, 0) > 0), None)
             if got is None and w is None and left:
