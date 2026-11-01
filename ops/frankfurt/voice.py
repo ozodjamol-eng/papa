@@ -126,7 +126,6 @@ def main(job_dir, out_dir):
             (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
             print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ voice_id={vid}")
         elif do == "design":  # 25.10: дизайн голоса с нуля по описанию (не клон) — сохраняем превью mp3
-            import base64
             body = {"voice_description": st["description"], "text": st["text"],
                     "model_id": st.get("model", "eleven_ttv_v3"), "auto_generate_text": False}
             if st.get("guidance_scale"):
