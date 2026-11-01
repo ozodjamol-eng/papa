@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 📡 Нейроновинки — папка «Нейросеть», каждый день 13:30 Ташкент (сразу после обнуления лимита Gemini)
+
+[Timer]
+OnCalendar=*-*-* 08:30:00 UTC
+RandomizedDelaySec=5min
+Persistent=false
+Unit=papa-razvedka@neyro-auto.service
+
+[Install]
+WantedBy=timers.target

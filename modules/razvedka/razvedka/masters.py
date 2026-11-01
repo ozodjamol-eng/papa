@@ -268,7 +268,9 @@ def messages(text: str, limit: int = 3900) -> list[str]:
 TG_MASTERS = [
     {"name": "Лабораторная YouTube", "username": "laboratornaya", "why": "YouTube на ИИ: инструменты, ниши, озвучка"},
 ]
-# 01.11 владелец: «таких каналов много, они в одной папке» — читаем ВСЮ папку (только каналы, не группы и не боты)
+# 01.11 владелец: «таких каналов много, они в одной папке» — читаем ВСЮ папку (только каналы, не группы и не боты).
+# Папки — КАЖДЫЙ ДЕНЬ (команда neyro, таймер papa-neyro 13:30 Ташкент, сразу после обнуления лимита Gemini):
+# «каждый день идут нейроновинки — это очень актуально для нас». Недельный обход — только отдельные каналы.
 TG_FOLDERS = [
     {"name": "Нейросеть", "folder": "Нейросеть", "why": "каналы про ИИ: инструменты, приёмы, новинки, ниши"},
 ]
@@ -313,14 +315,15 @@ def _link(ent, msg_id: int) -> str:
     return f"https://t.me/{u}/{msg_id}" if u else f"https://t.me/c/{getattr(ent, 'id', 0)}/{msg_id}"
 
 
-async def read_tg(client, out_dir: Path, now: dt.datetime | None = None) -> list[tuple[dict, list[dict]]]:
+async def read_tg(client, out_dir: Path, now: dt.datetime | None = None, singles: bool = True,
+                  folders: bool = True) -> list[tuple[dict, list[dict]]]:
     """Новые посты: отдельные каналы TG_MASTERS + все каналы папок TG_FOLDERS (первый раз — за 7 дней)."""
     now = now or dt.datetime.now(TZ)
     seen_p = out_dir / "tg-masters-seen.json"
     seen = _load(seen_p, {})
     since = now - dt.timedelta(days=TG_FIRST_DAYS)
     out = []
-    for m in TG_MASTERS:
+    for m in (TG_MASTERS if singles else []):
         try:
             ent = await client.get_entity(m["username"])
             posts = await _channel_posts(client, ent, m["username"], seen, since, 40)
@@ -329,7 +332,7 @@ async def read_tg(client, out_dir: Path, now: dt.datetime | None = None) -> list
             out.append((m, sorted(posts, key=lambda x: x["id"])))
         except Exception as e:                                     # канал закрыт/переименован — не валим весь обход
             out.append((dict(m, error=f"{type(e).__name__}: {e}"), []))
-    if TG_FOLDERS:
+    if TG_FOLDERS and folders:
         try:
             from .curate import folder_peers, peers_in
             folders = await folder_peers(client)
@@ -359,7 +362,8 @@ async def read_tg(client, out_dir: Path, now: dt.datetime | None = None) -> list
     return out
 
 
-def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime | None = None, ask=None) -> str:
+def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime | None = None, ask=None,
+           daily: bool = False) -> str:
     """Посты → разбор Gemini → отчёт + очередь навыков."""
     now = now or dt.datetime.now(TZ)
     today_s = now.strftime("%d.%m.%Y")
@@ -380,20 +384,23 @@ def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime
                 break
             joined.append(line); size += len(line)
         try:
-            text = ask(TG_PROMPT.format(name=m["name"], why=m.get("why", ""), posts="\n\n".join(joined)))
+            prompt = TG_PROMPT.format(name=m["name"], why=m.get("why", ""), posts="\n\n".join(joined))
+            if daily:
+                prompt = prompt.replace("за неделю", "за сутки").replace("— неделя", "— день")
+            text = ask(prompt)
         except Exception as e:
             notes.append(f"⏸ {m['name']}: разбор не вышел ({type(e).__name__}) — посты перечитаю через неделю")
             continue
         blocks.append(text.strip())
         if "Ничего нового" not in text:
-            queue_add.append({"name": f"{m['name']}: неделя до {today_s}",
+            queue_add.append({"name": f"{m['name']}: {'день' if daily else 'неделя до'} {today_s}",
                               "url": f"https://t.me/{m['username']}" if m.get("username") else f"папка «{m.get('folder', '')}»",
                               "topic": "Канал практика", "stars": 0, "license": "", "desc": text[:300],
                               "found": today_s, "status": "ждёт проверки"})
     if queue_add:
         qp = out_dir / "navyki-queue.json"
         _save(qp, (_load(qp, []) + queue_add)[-60:])
-    head = f"📡 КАНАЛЫ ПРАКТИКОВ — неделя до {today_s}"
+    head = f"📡 НЕЙРОНОВИНКИ — {today_s}" if daily else f"📡 КАНАЛЫ ПРАКТИКОВ — неделя до {today_s}"
     text = "\n\n".join(x for x in (head, "\n\n".join(blocks) or "Новых постов нет.", "\n".join(notes)) if x)
-    (out_dir / "latest-tg-masters.txt").write_text(text, encoding="utf-8")
+    (out_dir / ("latest-neyro.txt" if daily else "latest-tg-masters.txt")).write_text(text, encoding="utf-8")
     return text

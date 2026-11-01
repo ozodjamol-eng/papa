@@ -11,6 +11,7 @@
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
   python -m razvedka github [--send] (github-auto — для таймера) — 🧭 GitHub-разведка: новые полезные инструменты (раз в неделю)
+  python -m razvedka neyro [--send] (neyro-auto — для таймера) — 📡 нейроновинки дня из папки «Нейросеть» (ежедневно 13:30)
   python -m razvedka sources          — 📡 отбор каналов-источников (белый список, 26.10) → таблица в главный пульт
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
 """
@@ -474,6 +475,29 @@ def main(argv: list[str]) -> None:
                 print("TREND_SENT", m)
         print("TREND_DONE")
         return
+    if cmd in ("neyro", "neyro-auto"):        # 📡 01.11: ежедневные нейроновинки из папки «Нейросеть»
+        from . import masters
+        out = Path(PUB) / "github"
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            async def _neyro_read():
+                from .telegram import client_from_env
+                c = client_from_env()
+                await c.connect()
+                try:
+                    return await masters.read_tg(c, out, singles=False)
+                finally:
+                    await c.disconnect()
+            text = masters.run_tg(out, asyncio.run(_neyro_read()), daily=True)
+        except Exception as e:
+            text = f"📡 Нейроновинки: ошибка — {type(e).__name__}: {e}"
+        print(text, flush=True)
+        if cmd == "neyro-auto" or "--send" in argv:
+            for part in masters.messages(text):
+                asyncio.run(_send(part))
+            print("NEYRO_SENT")
+        print("NEYRO_DONE")
+        return
     if cmd in ("github", "github-auto"):       # 🧭 только GitHub API + Anthropic; Telegram — лишь для отправки отчёта
         from . import github
         out = Path(PUB) / "github"
@@ -514,7 +538,7 @@ def main(argv: list[str]) -> None:
                 c = client_from_env()
                 await c.connect()
                 try:
-                    return await masters.read_tg(c, out)
+                    return await masters.read_tg(c, out, folders=False)   # папки — ежедневно (neyro)
                 finally:
                     await c.disconnect()
             ttext = masters.run_tg(out, asyncio.run(_tg_read()))

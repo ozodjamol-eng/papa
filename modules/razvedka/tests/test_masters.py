@@ -186,5 +186,16 @@ class TestTgMasters(unittest.TestCase):
             self.assertIn("XOJAOBOD CITY", err)
 
 
+    def test_daily_header_and_prompt(self):
+        prompts = []
+        found = [({"name": "Нейросеть", "folder": "Нейросеть", "why": "ИИ"},
+                  [{"id": 1, "text": "Вышла Veo 4", "date": "01.11", "views": 500, "link": "https://t.me/a/1", "channel": "A"}])]
+        with tempfile.TemporaryDirectory() as d:
+            text = masters.run_tg(Path(d), found, NOW, ask=lambda p: prompts.append(p) or "📡 Нейросеть — день\n1) Veo 4 → 🧪", daily=True)
+            self.assertIn("НЕЙРОНОВИНКИ", text)
+            self.assertIn("за сутки", prompts[0])
+            self.assertTrue((Path(d) / "latest-neyro.txt").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
