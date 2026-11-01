@@ -34,6 +34,7 @@ for i, (b, l, r, tg, txt) in enumerate(L):
     log.append((round(t, 1), round(d, 1), round(slot, 1)))
     t += slot + (bt if last_in_stanza else 0)
 end = log[-1][0] + log[-1][1]
+json.dump([[float(a),float(b)] for a,b,_ in log], open("timings.json","w"))
 need = int((end + 6) * SR)
 if need > m.shape[1]:
     ext = need - m.shape[1] + int(2 * SR); a0 = int(m.shape[1] * 0.45); seg = m[:, a0:a0 + ext + int(2 * SR)]
