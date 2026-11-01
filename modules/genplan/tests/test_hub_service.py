@@ -244,6 +244,16 @@ class TestService(Base):
         self.assertEqual(button["text"], "📲 Дўстларга улашиш")
         self.assertEqual(self.tick(at("17:05"))["published"], 0)              # второй раз не публикует
 
+    def test_media_without_caption_waits(self):
+        # 01.11 владелец: видео без подписи не выставлять — ИИ не смог подписать → ждёт, пустым не выходит
+        a = self.queue("davra", "Видео", at("17:00"))
+        store.update(self.db, a, text="👉 @bugungi_gap")
+        self.assertEqual(self.tick(at("17:00"))["published"], 0)
+        self.assertEqual(self.pubs["bot"].sent, [])
+        r = store.get(self.db, a)
+        self.assertEqual(r["status"], "queued")
+        self.assertGreater(dt.datetime.fromisoformat(r["scheduled_at"]), at("19:59"))
+
     def test_urgent_now_shifts_neighbours(self):
         a = self.queue("davra", "Видео", at("17:10"))
         self.queue("davra", "Мусиқа", at("17:00"), urgent=True)

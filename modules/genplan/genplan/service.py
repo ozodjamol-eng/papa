@@ -308,6 +308,16 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
             ERRORS.append(f"⏸ {ch['title']}: пост задержан: текст не на узбекском — поправьте (повтор в {later:%H:%M}, #{m['id']})")
             log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — после ИИ текст не узбекский, повтор в {later:%H:%M}")
             return HELD
+    from . import caption                      # ✍️ 01.11 владелец: «видео без подписи не выставлять — делать с подписью»
+    if caption.needs_caption(m):
+        via = m["via"] if "via" in m.keys() else None
+        cp = (pubs.get(f"bot:{via}") if via and via != "main" else None) or pubs.get("bot")
+        if not caption.ensure(db, cp, ch["title"], m, log):
+            later = (now or dt.datetime.now(plan.TZ)) + dt.timedelta(hours=3)
+            store.update(db, m["id"], status="queued", scheduled_at=later.isoformat())
+            log(f"{channel} {slot or 'срочно'}: ЖДЁТ — нет подписи (ИИ не смог), повтор в {later:%H:%M}, #{m['id']}")
+            return HELD
+        m = store.get(db, m["id"])
     own = tuple(c["username"] for c in cfg["channels"].values())
     if smart.is_sklad(ch, m):
         # 31.10 аудит: в КАТТА ДАВРА вышел пост склада с чужой для неё строкой «👉@XOJAOBODCITY24- Обуна бўлишни унутманг».
