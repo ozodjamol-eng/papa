@@ -152,7 +152,7 @@ def parse_batch(out: str, n: int) -> list[dict]:
 # 31.10 владелец: «в папке Paparazzi UZ уже собраны готовые каналы — я не зря собирал». Куратор берёт оттуда только СВЕЖЕЕ;
 # их архивы (старые клипы, концерты) — теперь работа Архива. Чужое: кадр — на лого, текст — всегда наш (Gemini пишет заново).
 FOLDERS = ("Paparazzi UZ", "KATTA DAVRA", "XOJAOBOD CITY", "XOJAOBODCITY",   # 31.10: + папки Давры и Хўжаобода
-           "DAVRA RAQIB", "XOJAOBOD RAQIB")   # 01.11 владелец: «здесь готовые материалы — отсортируй по нашим папкам»
+           "KATTA BANK")   # 01.11 владелец: «здесь готовые материалы… этот канал в банке уже» — доноры в папке банка
 FOLDER_AGE = dt.timedelta(days=30)              # чужие клипы вечные; свежее берёт куратор, Архиву — старше месяца
 FOLDER_TAKE = 15                                # постов в банк с одного канала за проход
 FOLDER_PER_RUN = 4                              # каналов папки за проход (по кругу) — бережём бесплатный Gemini
@@ -199,6 +199,9 @@ async def folder_targets(client, st: dict, state_dir: Path, log=print) -> list[t
             log(f"  папка {k}: {type(e).__name__}")
             continue
         u = (getattr(ent, "username", "") or "").lower()
+        title = (getattr(ent, "title", "") or "").strip()
+        if title in hubs.HUBS or title.upper().startswith("PAPA"):
+            continue                             # 01.11: свои хабы банка и служебные PAPA-каналы — не разбирать
         if u in curate.OWN or u in blocked or f"@{u}" in blocked:
             continue                             # свои — уже в списке; ставит своё лого — не тратим Gemini
         out.append((k, by[k], FOLDER_AGE, FOLDER_TAKE))
