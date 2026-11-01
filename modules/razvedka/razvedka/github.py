@@ -37,13 +37,14 @@ QUEUE_KEEP = 60
 
 # (тема для отчёта, запрос GitHub). Звёзды/свежесть добавляются в search_queries().
 TOPICS = [
+    # 01.11: навыки — ПЕРВЫМИ: при лимите GitHub (403) до последних тем не доходит
+    ("Скиллы Claude", "claude skills OR claude code skill OR agent skills OR SKILL.md"),
+    ("Моушн кодом", "remotion OR hyperframes OR motion graphics OR kinetic typography"),
     ("Telegram-боты", "telegram bot"),
     ("Автопостинг", "telegram autopost OR telegram scheduler OR channel autoposting"),
     ("Instagram", "instagram automation OR instagram graph api"),
     ("Монтаж видео", "ffmpeg video editing automation OR auto video editor"),
     ("ИИ-видео", "ai video generation OR text-to-video OR image-to-video"),
-    ("Скиллы Claude", "claude skills OR claude code skill OR agent skills OR SKILL.md"),
-    ("Моушн кодом", "remotion OR hyperframes OR motion graphics OR kinetic typography"),
     ("Узбекский язык", "uzbek"),
 ]
 
@@ -123,14 +124,22 @@ def collect(today: dt.date, seen: set[str], get=_get, token: str = "") -> tuple[
     pace = get is _get and not token        # без токена GitHub даёт 10 поисков в минуту — идём шагом
     for i, (label, q) in enumerate(search_queries(today)):
         if pace and i:
-            time.sleep(6.5)
+            time.sleep(7.5)
         try:
             items = search(q, get, token)
         except GithubError as e:
-            errors.append(f"{label}: {e}")
-            if "403" in str(e) or "429" in str(e):      # лимит GitHub — дальше не долбим
-                break
-            continue
+            if pace and ("403" in str(e) or "429" in str(e)):
+                time.sleep(65)                          # лимит GitHub — минута паузы и одна повторная попытка
+                try:
+                    items = search(q, get, token)
+                except GithubError as e2:
+                    errors.append(f"{label}: {e2}")
+                    break
+            else:
+                errors.append(f"{label}: {e}")
+                if "403" in str(e) or "429" in str(e):  # лимит GitHub — дальше не долбим
+                    break
+                continue
         for r in items:
             name = r.get("full_name") or ""
             if not name or name.lower() in seen or name in found:

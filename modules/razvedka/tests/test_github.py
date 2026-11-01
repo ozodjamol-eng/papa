@@ -37,7 +37,7 @@ class TestGithub(unittest.TestCase):
         qs = github.search_queries(NOW.date())
         self.assertEqual(len(qs), 2 * len(github.TOPICS))
         self.assertTrue(all("fork:false" in q and "archived:false" in q for _, q in qs))
-        self.assertIn("created:>=2026-09-04", qs[0][1])
+        self.assertIn("created:>=2026-09-04", qs[0][1]); self.assertEqual(qs[0][0], "Скиллы Claude")
         self.assertIn("pushed:>=2026-09-19", qs[1][1])
 
     def test_collect_filters_junk_and_seen(self):
@@ -98,7 +98,7 @@ class TestGithub(unittest.TestCase):
         labels = [l for l, _ in github.search_queries(NOW.date())]
         big = [repo(f"tg/bot{i}", 50000 + i, created="2020-01-01") for i in range(20)]
         calls = [[] for _ in labels]
-        calls[0] = big
+        calls[labels.index("Telegram-боты")] = big
         calls[labels.index("Моушн кодом")] = [repo("m/remotion-kit", 40, created="2026-10-10")]
         cands, _ = github.collect(NOW.date(), set(), fake_get(calls))
         self.assertEqual(len(cands), github.MAX_CANDIDATES)

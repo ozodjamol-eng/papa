@@ -191,12 +191,20 @@ def run(out_dir: Path, now: dt.datetime | None = None, fetch=_fetch, post=_post)
     for m in MASTERS:
         try:
             cid = ids.get(m["name"]) or resolve(m, fetch)
-            ids[m["name"]] = cid
-            author, vids = parse_feed(fetch(FEED.format(c=cid)))
+            try:
+                author, vids = parse_feed(fetch(FEED.format(c=cid)))
+            except MastersError:
+                if not ids.get(m["name"]):
+                    raise
+                ids.pop(m["name"], None)                 # старый id из кэша не работает — найти канал заново
+                cid = resolve(m, fetch)
+                author, vids = parse_feed(fetch(FEED.format(c=cid)))
+            ids[m["name"]] = cid                         # в кэш — только проверенный канал (RSS открылся)
             per_master.append((m, vids))
             found_names.append(f"{m['name']} → {author or cid}")
         except MastersError as e:
-            notes.append(f"⚠️ {m['name']}: {e}")
+            ids.pop(m["name"], None)
+            notes.append(f"⚠️ {m['name']}: канал не найден ({e}) — нужна ссылка на любой его ролик")
     _save(ids_p, ids)
     key = os.environ.get("GEMINI_API_KEY", "").strip().strip('"').strip("'")
     if not key:
