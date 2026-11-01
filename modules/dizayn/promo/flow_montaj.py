@@ -17,6 +17,7 @@ yy = np.arange(H)[:, None].astype(np.float32)
 def font(n, s, w):
     f = ImageFont.truetype(F + n, s); f.set_variation_by_axes([w]); return f
 fMAIN, fSUB = font('Raleway.ttf', 64, 800), font('Montserrat.ttf', 27, 800)
+fHAND = font('Raleway.ttf', 60, 800)
 FE = ['lnum', 'pnum']
 def spaced(txt, f, fill, em):
     d = ImageDraw.Draw(Image.new('L', (1, 1))); adv = [d.textlength(c, font=f, features=FE) for c in txt]; g = f.size * em
@@ -24,7 +25,7 @@ def spaced(txt, f, fill, em):
     for c, a in zip(txt, adv): dd.text((x, 0), c, font=f, fill=fill + (255,), features=FE); x += a + g
     return im
 def two(lines):
-    ims = [spaced(l, fMAIN, WHITE, 0.14) for l in lines]
+    ims = [spaced(l, fHAND, WHITE, 0.03) if l.startswith('@') else spaced(l, fMAIN, WHITE, 0.14) for l in lines]
     if len(ims) == 1: return ims[0]
     gap = 12; w = max(i.width for i in ims); out = Image.new('RGBA', (w, sum(i.height for i in ims) + gap), (0, 0, 0, 0)); y = 0
     for i in ims: out.alpha_composite(i, ((w - i.width) // 2, y)); y += i.height + gap
@@ -79,11 +80,14 @@ def titles(c, t, pre):
 
 CLIP = float(sp.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', SRC]))
 HOLD = 1.6; TOTAL = CLIP + HOLD
+AD = os.environ.get('MODE') == 'ad'   # рекламная версия: цена и бот в конце
+if AD: HOLD = 2.6; TOTAL = CLIP + HOLD
 TT = make_titles([
     (0.3, 1.7, 'КОРОБКА', '01 · БОШЛАНИШИ', None),
     (1.9, 3.9, 'АВВАЛ — ЛОЙИҲА', '02 · 3D ЧИЗМА', None),
-    (4.1, 6.0, 'ЧИЗМА БЎЙИЧА', '03 · ТАЪМИР', None),
-    (6.3, TOTAL, 'ИЛИҚ|МИНИМАЛИЗМ', 'OZOD JAMOL ОФИС', None)])
+    (4.1, 6.0, 'ЧИЗМА БЎЙИЧА', '03 · ТАЪМИР', None)] + (
+    [(6.3, 8.4, '1 М² — $3', '3D ДИЗАЙН ЛОЙИҲА', None), (8.5, TOTAL, '@ozodjamoldizaynbot', 'ТЕЛЕГРАМ БОТ', None)] if AD else
+    [(6.3, TOTAL, 'ИЛИҚ|МИНИМАЛИЗМ', 'OZOD JAMOL ОФИС', None)]))
 def run(c): sp.run(c, check=True)
 run(['ffmpeg', '-v', 'error', '-y', '-i', SRC, '-vf', f'scale={W}:{H}:flags=lanczos,fps={FPS},tpad=stop_mode=clone:stop_duration={HOLD},format=yuv420p',
      '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14', f'{OUT}/base.mp4'])
