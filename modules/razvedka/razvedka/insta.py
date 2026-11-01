@@ -353,7 +353,11 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
                 cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])
                 dest = target
             try:
-                await client.send_file(dest, video, caption=cap[:1024], supports_streaming=True)
+                import io                              # 01.11: с именем файла — иначе Telegram показывает «unnamed»
+                f = io.BytesIO(video) if isinstance(video, (bytes, bytearray)) else video
+                if isinstance(f, io.BytesIO):
+                    f.name = "video.mp4"
+                await client.send_file(dest, f, caption=cap[:1024], supports_streaming=True)
             except Exception as e:  # noqa: BLE001
                 log(f"  отправка: {type(e).__name__}")
                 continue

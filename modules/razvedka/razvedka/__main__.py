@@ -274,6 +274,17 @@ async def _evening() -> dict:
         await c.disconnect()
 
 
+async def _purge() -> dict:
+    from . import hubs
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return await hubs.purge_raw(c, log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _bank() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "evening", "archive") if subprocess.run(
@@ -565,6 +576,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "evening":                        # 🌆 30.10: вечерний пул — фоны «Кечки дайжест»
         print("EVENING_DONE", asyncio.run(_evening()))
+        return
+    if cmd == "purge-raw":                      # 🧹 01.11: убрать из хабов сырой чужой материал агентов
+        print("PURGE_DONE", asyncio.run(_purge()))
         return
     if cmd == "bank":                           # 🏦 30.10: папка KATTA BANK + новые хабы
         print("BANK_DONE", asyncio.run(_bank()))

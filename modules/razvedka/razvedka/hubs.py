@@ -176,3 +176,33 @@ async def make_bank(client, log=print) -> dict:
             uniq.append(c)
     done = await create_folders(client, {BANK_FOLDER: uniq}, log=log)
     return {"папка": done, "нет хаба": missing}
+
+
+async def purge_raw(client, hours: int = 24, log=print) -> dict:
+    """🧹 01.11 владелец: «немедленно просканируй всё, выяви и устрани». Удаляет из хабов банка материал агентов
+    (не пересланный, за последние часы) с НЕ нашим текстом — сырой чужой (англ./турец./латиница) или без текста."""
+    import datetime as dt
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+    cache: dict = {}
+    out: dict = {}
+    for name in HUBS:
+        ent = await entity(client, name, cache)
+        if not ent:
+            continue
+        bad, kept = [], 0
+        async for m in client.iter_messages(ent, limit=300):
+            if m.date < since:
+                break
+            if getattr(m, "fwd_from", None) or not getattr(m, "media", None):
+                kept += 1
+                continue                         # пересланное владельцем / текст — не трогаем
+            if is_ours(m.message or ""):
+                kept += 1
+                continue
+            bad.append(m)
+        for m in bad:
+            log(f"  🗑 {name} #{m.id} {m.date:%d.%m %H:%M} · {(m.message or '(без текста)').replace(chr(10), ' ')[:70]!r}")
+        if bad:
+            await client.delete_messages(ent, [m.id for m in bad])
+        out[name] = {"удалено": len(bad), "оставлено": kept}
+    return out
