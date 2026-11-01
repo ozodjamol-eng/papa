@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fontsource-raleway/800.css">
+<link rel="stylesheet" href="fonts/fontsource-montserrat/800.css">
+<link rel="stylesheet" href="fonts/fontsource-montserrat/900.css">
+<link rel="stylesheet" href="fonts/fontsource-montserrat/700.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#000}
+body{font-family:Montserrat,'Noto Color Emoji',sans-serif;-webkit-font-smoothing:antialiased}
+#stage{position:absolute;inset:0;overflow:hidden;perspective:2600px;perspective-origin:50% 45%}
+.bg{position:absolute;inset:-60px;opacity:0}
+#bgNight{background:radial-gradient(ellipse at 50% 40%,#16203a 0%,#0a0e1a 45%,#04060b 100%);opacity:1}
+#bgWhite{background:radial-gradient(ellipse at 50% 38%,#ffffff 0%,#f4f4f6 55%,#e6e6ea 100%)}
+#bgCream{background:radial-gradient(ellipse at 50% 38%,#fffdf8 0%,#FBF8F1 45%,#EFE4D2 100%)}
+#bgNavy{background:radial-gradient(ellipse at 50% 30%,#0b3b86 0%,#01245e 40%,#001A43 75%,#000c22 100%)}
+#bgDz{background:radial-gradient(ellipse at 50% 38%,#ffffff 0%,#F1ECE5 50%,#E2D9CC 100%)}
+#bgS6{background:radial-gradient(ellipse at 50% 42%,#ffffff 0%,#f3f3f5 60%,#e3e3e8 100%)}
+#bgBlack{background:radial-gradient(ellipse at 50% 45%,#1d1d1f 0%,#0b0b0c 55%,#000 100%)}
+.layer{position:absolute;inset:0;transform-style:preserve-3d}
+.bk{position:absolute;border-radius:50%}
+.caustic{position:absolute;inset:0;opacity:.0;mix-blend-mode:screen;
+ background:repeating-radial-gradient(circle at 30% 20%,rgba(4,148,249,.0) 0 38px,rgba(120,200,255,.10) 40px,rgba(4,148,249,0) 46px)}
+/* phone */
+.phone{position:absolute;width:560px;height:1150px;left:260px;top:330px;border-radius:78px;background:linear-gradient(145deg,#2b2b30,#0c0c0e);
+ box-shadow:0 60px 120px -30px rgba(0,0,0,.55),0 0 0 3px #3a3a40 inset,0 0 0 1px #555 ;transform-style:preserve-3d}
+.phone .scr{position:absolute;left:16px;top:16px;right:16px;bottom:16px;border-radius:64px;overflow:hidden;background:#fff}
+.phone .island{position:absolute;left:50%;top:30px;width:150px;height:42px;margin-left:-75px;border-radius:24px;background:#000;z-index:30}
+.phone .glare{position:absolute;inset:16px;border-radius:64px;pointer-events:none;z-index:40;
+ background:linear-gradient(115deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 35%,rgba(255,255,255,0) 70%,rgba(255,255,255,.06) 100%)}
+.app{position:absolute;inset:0;background:#fff}
+.status{position:absolute;top:0;left:0;right:0;height:86px;display:flex;justify-content:space-between;align-items:center;padding:14px 46px 0;font:800 24px Montserrat;color:#111;z-index:5}
+.hdr{position:absolute;top:86px;left:0;right:0;height:104px;display:flex;align-items:center;gap:16px;padding:0 24px;background:rgba(255,255,255,.96);border-bottom:1px solid rgba(0,0,0,.08);z-index:5}
+.hdr .back{font:700 34px Montserrat;color:#2a8de0;margin-right:2px}
+.hdr .av{width:70px;height:70px;border-radius:50%;background-size:cover;background-position:center;flex:0 0 70px;box-shadow:0 0 0 2px rgba(0,0,0,.06)}
+.hdr b{display:block;font:800 25px/1.15 Montserrat;color:#111;white-space:nowrap}
+.hdr small{display:block;font:700 19px Montserrat;color:#8a8f98;margin-top:3px}
+.chat{position:absolute;left:0;right:0;top:190px;bottom:0;overflow:hidden}
+.msg{position:absolute;left:16px;right:16px;bottom:0}
+.bub{width:fit-content;max-width:430px;padding:16px 20px 14px;border-radius:26px;font:700 25px/1.3 Montserrat;color:#111;box-shadow:0 2px 2px rgba(0,0,0,.06);position:relative}
+.in .bub{background:#fff;border-bottom-left-radius:8px}
+.out .bub{background:#E3F8D0;border-bottom-right-radius:8px;margin-left:auto}
+.bub .tm{display:block;text-align:right;font:700 15px Montserrat;color:#8a9a88;margin-top:4px}
+.bub img{display:block;width:100%;border-radius:18px;margin:-6px 0 10px}
+.bub.ph{padding:8px 8px 12px}.bub.ph .tx{padding:0 12px}
+.ibtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;max-width:440px}
+.ibtns div{background:rgba(255,255,255,.92);border-radius:14px;padding:12px 6px;text-align:center;font:800 19px Montserrat;color:#1f6fb8;box-shadow:0 1px 2px rgba(0,0,0,.08);position:relative;overflow:hidden}
+.kb{position:absolute;left:0;right:0;bottom:0;padding:12px 12px 34px;background:#e9ebef;display:grid;grid-template-columns:1fr 1fr;gap:9px;z-index:6}
+.kb div{background:#fff;border-radius:16px;padding:15px 6px;text-align:center;font:800 19px Montserrat;color:#222;box-shadow:0 1px 1px rgba(0,0,0,.12);white-space:nowrap;overflow:hidden;position:relative}
+.kb div.w{grid-column:1/3;background:#1F3A28;color:#FBF8F1}
+.rip{position:absolute;border-radius:50%;background:rgba(0,0,0,.18);pointer-events:none}
+.typing{display:inline-flex;gap:8px;padding:6px 4px}.typing i{width:12px;height:12px;border-radius:50%;background:#9aa3ad;display:block}
+/* lock screen */
+#lock{background:linear-gradient(170deg,#1b2440 0%,#0b1020 60%,#05070d 100%)}
+#lock .clock{position:absolute;top:150px;width:100%;text-align:center;color:#fff;font:800 150px/1 Montserrat;letter-spacing:-2px}
+#lock .date{position:absolute;top:120px;width:100%;text-align:center;color:rgba(255,255,255,.75);font:700 26px Montserrat}
+.ntf{position:absolute;left:22px;right:22px;border-radius:30px;background:rgba(245,245,250,.86);padding:18px 20px;display:flex;gap:16px;align-items:center;backdrop-filter:blur(10px)}
+.ntf .ic{width:62px;height:62px;border-radius:16px;background:linear-gradient(160deg,#37aee2,#1e96c8);display:grid;place-items:center;flex:0 0 62px}
+.ntf b{display:block;font:800 23px Montserrat;color:#111}.ntf span{display:block;font:700 22px/1.3 Montserrat;color:#333;margin-top:3px}
+.ntf small{position:absolute;right:22px;top:16px;font:700 17px Montserrat;color:#777}
+/* floating cards */
+.card{position:absolute;border-radius:30px;background:#fff;box-shadow:0 40px 80px -30px rgba(40,30,20,.45);padding:24px 30px;font:900 40px/1.05 Montserrat;color:#1F3A28;letter-spacing:.5px}
+.cut{position:absolute;filter:drop-shadow(0 40px 30px rgba(60,40,20,.28))}
+.cap{position:absolute;left:0;right:0;top:1560px;text-align:center;opacity:0}
+.cap b{display:block;font:800 52px Raleway;letter-spacing:.2em;text-transform:uppercase;padding-left:.2em}
+.cap small{display:block;font:800 23px Montserrat;letter-spacing:.32em;margin-top:16px;padding-left:.32em;opacity:.75}
+.big{position:absolute;left:0;right:0;text-align:center;font:900 300px/1 Montserrat;letter-spacing:-6px}
+.kin{position:absolute;left:0;right:0;text-align:center;font:900 92px/1.02 Montserrat;color:#111;letter-spacing:-1px}
+.kin span{display:inline-block}
+.mini{position:absolute;width:560px;height:1150px;left:260px;top:330px}
+</style></head>
+<body>
+<div id="stage">
+ <div class="bg" id="bgNight"></div><div class="bg" id="bgWhite"></div><div class="bg" id="bgCream"></div>
+ <div class="bg" id="bgNavy"><div class="caustic" id="caus"></div></div><div class="bg" id="bgDz"></div><div class="bg" id="bgS6"></div><div class="bg" id="bgBlack"></div>
+ <div class="layer" id="Lbk"></div>
+ <div class="layer" id="Lback"></div>
+ <div class="layer" id="Lmid"></div>
+ <div class="layer" id="Lfront"></div>
+ <div class="layer" id="Lui"></div>
+</div>
+<script src="engine.js"></script>
+</body></html>
