@@ -30,11 +30,37 @@ def node_mat(name, color, rough=0.6, metal=0.0, emit=None, strength=0.0, noise=N
 
 def wood(name, color):  # дуб: полосы волокон
     m = node_mat(name, color, 0.42); nt = m.node_tree; b = nt.nodes["Principled BSDF"]
-    w = nt.nodes.new("ShaderNodeTexWave"); w.inputs["Scale"].default_value = 3.0; w.inputs["Distortion"].default_value = 6
+    w = nt.nodes.new("ShaderNodeTexWave"); w.inputs["Scale"].default_value = 9.0; w.inputs["Distortion"].default_value = 2.5
     w.inputs["Detail"].default_value = 4
     r = nt.nodes.new("ShaderNodeValToRGB"); r.color_ramp.elements[0].color = (*[c * 0.78 for c in color], 1)
     r.color_ramp.elements[1].color = (*[min(1, c * 1.12) for c in color], 1)
     nt.links.new(w.outputs["Fac"], r.inputs["Fac"]); nt.links.new(r.outputs["Color"], b.inputs["Base Color"])
+    return m
+
+def planks(name, color):  # ламинат: доски 1.2 × 0.19 м, у каждой свой тон + волокна
+    m = node_mat(name, color, 0.38); nt = m.node_tree; b = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord"); mp = nt.nodes.new("ShaderNodeMapping")
+    mp.inputs["Scale"].default_value = (1.0, 6.3, 1.0); nt.links.new(tc.outputs["Object"], mp.inputs["Vector"])
+    br = nt.nodes.new("ShaderNodeTexBrick"); br.inputs["Scale"].default_value = 1.0; br.inputs["Mortar Size"].default_value = 0.004
+    br.inputs["Brick Width"].default_value = 1.2; br.inputs["Row Height"].default_value = 1.0; br.offset = 0.37
+    br.inputs["Color1"].default_value = (*[c * 0.88 for c in color], 1); br.inputs["Color2"].default_value = (*[min(1, c * 1.10) for c in color], 1)
+    br.inputs["Mortar"].default_value = (*[c * 0.45 for c in color], 1)
+    nt.links.new(mp.outputs["Vector"], br.inputs["Vector"])
+    gm = nt.nodes.new("ShaderNodeMapping"); gm.inputs["Scale"].default_value = (0.6, 22.0, 1.0); nt.links.new(tc.outputs["Object"], gm.inputs["Vector"])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 4.0; nz.inputs["Detail"].default_value = 10
+    nt.links.new(gm.outputs["Vector"], nz.inputs["Vector"])
+    mx = nt.nodes.new("ShaderNodeMix"); mx.data_type = "RGBA"; mx.blend_type = "MULTIPLY"; mx.inputs["Factor"].default_value = 0.35
+    nt.links.new(br.outputs["Color"], mx.inputs[6]); nt.links.new(nz.outputs["Color"], mx.inputs[7])
+    nt.links.new(mx.outputs[2], b.inputs["Base Color"])
+    bm = nt.nodes.new("ShaderNodeBump"); bm.inputs["Strength"].default_value = 0.25; bm.invert = True
+    nt.links.new(br.outputs["Fac"], bm.inputs["Height"]); nt.links.new(bm.outputs["Normal"], b.inputs["Normal"])
+    return m
+
+def fine_bump(m, scale, strength):  # мелкая фактура краски / ткани
+    nt = m.node_tree; b = nt.nodes["Principled BSDF"]
+    n = nt.nodes.new("ShaderNodeTexNoise"); n.inputs["Scale"].default_value = scale; n.inputs["Detail"].default_value = 12
+    bm = nt.nodes.new("ShaderNodeBump"); bm.inputs["Strength"].default_value = strength
+    nt.links.new(n.outputs["Fac"], bm.inputs["Height"]); nt.links.new(bm.outputs["Normal"], b.inputs["Normal"])
     return m
 
 COL = {}
@@ -60,24 +86,24 @@ def put(o, grp):
 PLASTER = node_mat("plaster", (0.55, 0.53, 0.50), 0.95, noise=(6, 0.82, 1.12))
 CONCRETE = node_mat("concrete", (0.42, 0.41, 0.39), 0.9, noise=(9, 0.75, 1.18))
 CEILRAW = node_mat("ceilraw", (0.62, 0.61, 0.59), 0.95, noise=(5, 0.85, 1.1))
-WALLW = node_mat("wallwarm", (0.83, 0.79, 0.72), 0.85)
+WALLW = fine_bump(node_mat("wallwarm", (0.83, 0.79, 0.72), 0.85), 180, 0.04)
 CEIL = node_mat("ceil", (0.93, 0.92, 0.90), 0.9)
-LAM = wood("laminate", (0.62, 0.47, 0.32))
+LAM = planks("laminate", (0.60, 0.45, 0.30))
 OAKL = wood("oaklight", (0.70, 0.54, 0.37))
 DARKBACK = node_mat("darkback", (0.015, 0.015, 0.015), 0.9)
 SLATD = node_mat("slatdark", (0.022, 0.02, 0.018), 0.5)
 LED = node_mat("led", (1, 0.75, 0.45), 0.5, emit=(1, 0.66, 0.36), strength=22)
 SPOT = node_mat("spot", (1, 1, 1), 0.3, emit=(1, 0.85, 0.7), strength=35)
 SPOTOFF = node_mat("spotoff", (0.85, 0.85, 0.85), 0.3)
-GREYF = node_mat("greyfabric", (0.62, 0.61, 0.59), 0.95)
-CUSH = node_mat("cushion", (0.80, 0.77, 0.71), 0.95)
+GREYF = fine_bump(node_mat("greyfabric", (0.62, 0.61, 0.59), 0.95), 420, 0.12)
+CUSH = fine_bump(node_mat("cushion", (0.80, 0.77, 0.71), 0.95), 380, 0.12)
 BROWN = node_mat("brownpvc", (0.18, 0.09, 0.05), 0.5)
 WPVC = node_mat("whitepvc", (0.9, 0.9, 0.88), 0.35)
 FROST = node_mat("frost", (0.95, 0.93, 0.85), 0.3, emit=(1, 0.95, 0.85), strength=2.4)
 DGL = node_mat("darkglass", (0.03, 0.03, 0.035), 0.08)
 TVS = node_mat("tv", (0.01, 0.01, 0.012), 0.12)
 ACW = node_mat("ac", (0.93, 0.93, 0.93), 0.4)
-RUG = node_mat("rug", (0.86, 0.83, 0.77), 1.0)
+RUG = fine_bump(node_mat("rug", (0.86, 0.83, 0.77), 1.0), 260, 0.35)
 LINEN = node_mat("linen", (0.88, 0.84, 0.76), 0.9)
 LINENB = node_mat("linenblind", (0.92, 0.88, 0.80), 0.9, emit=(1, 0.93, 0.82), strength=0.6)
 GREEN = node_mat("leaf", (0.10, 0.27, 0.09), 0.7)
@@ -135,9 +161,9 @@ box("tv", 0.32, L - 0.08, 0.98, 1.34, L - 0.045, 1.56, TVS, "tv", bevel=0.005)
 # --- мебель: светло-серый угловой диван, подушки, ковёр, стол
 def sofa_run(n, x0, y0_, x1, y1_, side):
     box(n + "_base", x0, y0_, 0.06, x1, y1_, 0.30, GREYF, "sofa", bevel=0.02)
-    box(n + "_seat", x0, y0_, 0.30, x1, y1_, 0.44, GREYF, "sofa", bevel=0.045)
-    if side == "w": box(n + "_back", x0, y0_, 0.30, x0 + 0.22, y1_, 0.80, GREYF, "sofa", bevel=0.06)
-    else: box(n + "_back", x0, y0_, 0.30, x1, y0_ + 0.22, 0.80, GREYF, "sofa", bevel=0.06)
+    box(n + "_seat", x0, y0_, 0.30, x1, y1_, 0.44, GREYF, "sofa", bevel=0.07)
+    if side == "w": box(n + "_back", x0, y0_, 0.30, x0 + 0.22, y1_, 0.80, GREYF, "sofa", bevel=0.08)
+    else: box(n + "_back", x0, y0_, 0.30, x1, y0_ + 0.22, 0.80, GREYF, "sofa", bevel=0.08)
 sofa_run("sofa_w", 0.06, 0.06, 0.96, 3.05, "w"); sofa_run("sofa_s", 0.96, 0.06, 2.20, 0.96, "s")
 box("arm_n", 0.055, 2.85, 0.06, 0.965, 3.055, 0.60, GREYF, "sofa", bevel=0.05)
 box("arm_e", 2.00, 0.055, 0.06, 2.205, 0.965, 0.60, GREYF, "sofa", bevel=0.05)
@@ -152,8 +178,16 @@ box("arm_back", 3.18, 1.55, 0.10, 3.40, 2.35, 0.80, GREYF, "full", bevel=0.06)
 box("arm_l", 2.615, 1.545, 0.10, 3.40, 1.70, 0.60, GREYF, "full", bevel=0.05)
 box("arm_r", 2.615, 2.20, 0.10, 3.405, 2.355, 0.60, GREYF, "full", bevel=0.05)
 bpy.ops.mesh.primitive_cylinder_add(radius=0.16, depth=0.36, location=(3.18, 3.40, 0.18)); put(bpy.context.object, "full").data.materials.append(POT)
-for (dx, dy, dz, r) in ((0, 0, 0.72, 0.27), (0.07, -0.05, 1.0, 0.21), (-0.05, 0.04, 1.22, 0.15)):
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=r, location=(3.18 + dx, 3.40 + dy, dz)); put(bpy.context.object, "full").data.materials.append(GREEN)
+import random; random.seed(7)
+GREEN2 = node_mat("leaf2", (0.16, 0.33, 0.12), 0.6)
+bpy.ops.mesh.primitive_cylinder_add(radius=0.012, depth=1.05, location=(3.18, 3.40, 0.85)); put(bpy.context.object, "full").data.materials.append(BROWN)
+for i in range(170):  # крона из мелких листьев, а не «шарики»
+    a_ = random.uniform(0, 2 * math.pi); r_ = random.uniform(0.02, 0.26) * (1 - abs(random.gauss(0, 0.3)))
+    z_ = random.uniform(0.75, 1.45); rr = 0.26 * math.sin(math.pi * (z_ - 0.7) / 0.8) + 0.04
+    x_, y_ = 3.18 + math.cos(a_) * min(r_, rr), 3.40 + math.sin(a_) * min(r_, rr)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=5, radius=0.045, location=(x_, y_, z_))
+    o = bpy.context.object; o.scale = (1.0, 0.45, 0.12); o.rotation_euler = (random.uniform(0, 3), random.uniform(0, 3), random.uniform(0, 3))
+    put(o, "full").data.materials.append(GREEN if i % 2 else GREEN2)
 box("blind", 1.60, L - 0.07, 0.95, 2.74, L - 0.05, 1.98, LINENB, "full")
 
 # --- свет: потолок с точками (выкл/вкл) и LED-контур
