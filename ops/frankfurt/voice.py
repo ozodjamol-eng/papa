@@ -13,7 +13,7 @@ job.json:
    "text": "...", "model": "eleven_v3", "settings": {"stability": 0.4, "similarity_boost": 0.8, "style": 0.3},
    "format": "mp3_44100_64"}
 ]}"""
-import json, os, sys, urllib.error, urllib.parse, urllib.request, uuid
+import base64, json, os, sys, urllib.error, urllib.parse, urllib.request, uuid
 from pathlib import Path
 
 API = "https://api.elevenlabs.io"
@@ -112,9 +112,17 @@ def main(job_dir, out_dir):
                 body["voice_settings"] = st["settings"]
             if st.get("language_code"):
                 body["language_code"] = st["language_code"]
-            audio, err = call("POST", f"/v1/text-to-speech/{vid}?output_format={fmt}", k, body, raw=True, timeout=300)
-            if err:
-                print(err); continue
+            if st.get("timestamps"):  # 01.11: время каждой буквы — резать стих точно по концам строк
+                d, err = call("POST", f"/v1/text-to-speech/{vid}/with-timestamps?output_format={fmt}", k, body, timeout=300)
+                if err:
+                    print(err); continue
+                audio = base64.b64decode(d["audio_base64"])
+                (Path(out_dir) / f"{st['name']}.align.json").write_text(
+                    json.dumps(d.get("alignment") or {}, ensure_ascii=False), encoding="utf-8")
+            else:
+                audio, err = call("POST", f"/v1/text-to-speech/{vid}?output_format={fmt}", k, body, raw=True, timeout=300)
+                if err:
+                    print(err); continue
             (Path(out_dir) / f"{st['name']}.mp3").write_bytes(audio)
             print(f"OK {st['name']}.mp3 {len(audio)//1024} КБ voice_id={vid}")
         elif do == "design":  # 25.10: дизайн голоса с нуля по описанию (не клон) — сохраняем превью mp3
