@@ -63,7 +63,8 @@
     "content-audit",
     "hubs-purge",
     "marker-probe",
-    "rezhim-audit"
+    "rezhim-audit",
+    "marker-status"
   ],
   "approve": [
     "morning-pool-clear",
