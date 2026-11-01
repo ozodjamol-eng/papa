@@ -112,6 +112,9 @@ def main(job_dir, out_dir):
                 body["voice_settings"] = st["settings"]
             if st.get("language_code"):
                 body["language_code"] = st["language_code"]
+            for kk in ("previous_text", "next_text"):  # 01.11: связность интонации, когда стих озвучиваем по строке
+                if st.get(kk):
+                    body[kk] = st[kk]
             if st.get("timestamps"):  # 01.11: время каждой буквы — резать стих точно по концам строк
                 d, err = call("POST", f"/v1/text-to-speech/{vid}/with-timestamps?output_format={fmt}", k, body, timeout=300)
                 if err:
