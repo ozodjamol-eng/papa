@@ -507,6 +507,24 @@ def main(argv: list[str]) -> None:
             for part in masters.messages(mtext):
                 asyncio.run(_send(part))
             print("MASTERS_SENT")
+        # 01.11 владелец (t.me/laboratornaya): 📡 Telegram-каналы практиков — новые посты → разбор → отчёт
+        try:
+            async def _tg_read():
+                from .telegram import client_from_env
+                c = client_from_env()
+                await c.connect()
+                try:
+                    return await masters.read_tg(c, out)
+                finally:
+                    await c.disconnect()
+            ttext = masters.run_tg(out, asyncio.run(_tg_read()))
+        except Exception as e:
+            ttext = f"📡 Каналы практиков: ошибка — {type(e).__name__}: {e}"
+        print(ttext, flush=True)
+        if cmd == "github-auto" or "--send" in argv:
+            for part in masters.messages(ttext):
+                asyncio.run(_send(part))
+            print("TG_MASTERS_SENT")
         print("GITHUB_DONE")
         return
     if cmd == "pain":

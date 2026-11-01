@@ -251,7 +251,7 @@ def messages(text: str, limit: int = 3900) -> list[str]:
     """Отчёт → сообщения Telegram (лимит 4096): каждый урок отдельно, длинное — режем по строкам."""
     parts, cur = [], ""
     for block in text.split("\n\n"):
-        if cur and (block.startswith("🎓 ") or len(cur) + len(block) + 2 > limit):
+        if cur and (block.startswith(("🎓 ", "📡 ")) or len(cur) + len(block) + 2 > limit):
             parts.append(cur); cur = ""
         while len(block) > limit:
             cut = block.rfind("\n", 0, limit) if block.rfind("\n", 0, limit) > 0 else limit
@@ -260,3 +260,94 @@ def messages(text: str, limit: int = 3900) -> list[str]:
     if cur:
         parts.append(cur)
     return parts
+
+
+# ───────── 📡 Каналы практиков в Telegram (владелец 01.11: прислал t.me/laboratornaya — «смотреть каждую неделю») ─────────
+# Читает аккаунт Разведки (только чтение публичных каналов, без вступления). Текст постов → Gemini (без видео, можно через
+# прокси) → только новые инструменты / приёмы / ниши с нашим вердиктом. Добавить канал — строка в TG_MASTERS.
+TG_MASTERS = [
+    {"name": "Лабораторная YouTube", "username": "laboratornaya", "why": "YouTube на ИИ: инструменты, ниши, озвучка"},
+]
+TG_FIRST_DAYS = 7
+TG_MAX_CHARS = 12000
+
+TG_PROMPT = """Ниже новые посты Telegram-канала практика «{name}» ({why}) за неделю.
+Достань только то, что можно ВЗЯТЬ В РАБОТУ студии PAPA: новые инструменты, приёмы, ниши, цифры с источником.
+Наши правила (обязательно учитывай в вердикте):
+- серые перепродажи аккаунтов и «безлимитные» боты (FunPay, ClaudeHub, «безлимит ElevenLabs» и т.п.) — ❌: аккаунт
+  Anthropic владельца уже блокировали, голосовые клоны терять нельзя; у нас свои подписки: Google AI Pro (Flow/Veo),
+  ElevenLabs Starter, Suno, Claude;
+- партнёрские ссылки автора — помечай «(партнёрская)»; накрутки и спам — ❌.
+Ответ по-русски, для Telegram, без таблиц и markdown-заголовков, до 1600 знаков:
+📡 {name} — неделя
+N) что это → ✅ берём / 🧪 в проверку / ⚠️ на заметку / ❌ мимо — одна строка почему; 🔗 адрес (если есть)
+Если ничего стоящего — одна строка «Ничего нового для нас».
+
+Посты:
+{posts}"""
+
+
+async def read_tg(client, out_dir: Path, now: dt.datetime | None = None) -> list[tuple[dict, list[dict]]]:
+    """Новые посты каналов практиков (после последнего прочитанного; в первый раз — за 7 дней)."""
+    now = now or dt.datetime.now(TZ)
+    seen_p = out_dir / "tg-masters-seen.json"
+    seen = _load(seen_p, {})
+    since = now - dt.timedelta(days=TG_FIRST_DAYS)
+    out = []
+    for m in TG_MASTERS:
+        u = m["username"]
+        try:
+            ent = await client.get_entity(u)
+            posts = []
+            async for msg in client.iter_messages(ent, limit=40, min_id=int(seen.get(u, 0)), wait_time=1):
+                if not seen.get(u) and msg.date and msg.date < since:
+                    break
+                text = (msg.message or "").strip()
+                if text:
+                    posts.append({"id": msg.id, "text": text, "date": msg.date.strftime("%d.%m") if msg.date else ""})
+            if posts:
+                seen[u] = max(p["id"] for p in posts)
+            out.append((m, sorted(posts, key=lambda p: p["id"])))
+        except Exception as e:                                     # канал закрыт/переименован — не валим весь обход
+            out.append((dict(m, error=f"{type(e).__name__}: {e}"), []))
+    _save(seen_p, seen)
+    return out
+
+
+def run_tg(out_dir: Path, found: list[tuple[dict, list[dict]]], now: dt.datetime | None = None, ask=None) -> str:
+    """Посты → разбор Gemini → отчёт + очередь навыков."""
+    now = now or dt.datetime.now(TZ)
+    today_s = now.strftime("%d.%m.%Y")
+    if ask is None:
+        from .trend import gemini_ask
+        ask = lambda p: gemini_ask(p, search=False)[0]
+    blocks, notes, queue_add = [], [], []
+    for m, posts in found:
+        if m.get("error"):
+            notes.append(f"⚠️ {m['name']}: не прочитан ({m['error'][:80]})")
+            continue
+        if not posts:
+            continue
+        joined, size = [], 0
+        for p in reversed(posts):                                   # свежие важнее, если не влезает
+            line = f"[{p['date']} · https://t.me/{m['username']}/{p['id']}]\n{p['text']}"
+            if size + len(line) > TG_MAX_CHARS:
+                break
+            joined.append(line); size += len(line)
+        try:
+            text = ask(TG_PROMPT.format(name=m["name"], why=m.get("why", ""), posts="\n\n".join(reversed(joined))))
+        except Exception as e:
+            notes.append(f"⏸ {m['name']}: разбор не вышел ({type(e).__name__}) — посты перечитаю через неделю")
+            continue
+        blocks.append(text.strip())
+        if "Ничего нового" not in text:
+            queue_add.append({"name": f"{m['name']}: неделя до {today_s}", "url": f"https://t.me/{m['username']}",
+                              "topic": "Канал практика", "stars": 0, "license": "", "desc": text[:300],
+                              "found": today_s, "status": "ждёт проверки"})
+    if queue_add:
+        qp = out_dir / "navyki-queue.json"
+        _save(qp, (_load(qp, []) + queue_add)[-60:])
+    head = f"📡 КАНАЛЫ ПРАКТИКОВ — неделя до {today_s}"
+    text = "\n\n".join(x for x in (head, "\n\n".join(blocks) or "Новых постов нет.", "\n".join(notes)) if x)
+    (out_dir / "latest-tg-masters.txt").write_text(text, encoding="utf-8")
+    return text

@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 D=/var/lib/papa-razvedka-pub/github
 [[ -d "$D" ]] || { echo "❌ нет $D — разведка ещё не запускалась (задача github-now)"; exit 1; }
-for f in latest-github.txt latest-novinki.txt latest-masters.txt navyki-queue.json; do
+for f in latest-github.txt latest-novinki.txt latest-masters.txt latest-tg-masters.txt navyki-queue.json; do
   if [[ -f "$D/$f" ]]; then echo "===== $f ($(date -r "$D/$f" '+%d.%m %H:%M'))"; cat "$D/$f"; echo; else echo "===== $f — нет"; fi
 done
 echo "== GITHUB_SHOW_DONE"

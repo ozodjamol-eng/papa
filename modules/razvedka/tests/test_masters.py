@@ -90,5 +90,52 @@ class TestMasters(unittest.TestCase):
         self.assertGreaterEqual(len(parts), 3)
 
 
+class FakeMsg:
+    def __init__(self, i, text, date):
+        self.id, self.message, self.date = i, text, date
+
+
+class FakeClient:
+    def __init__(self, msgs):
+        self.msgs, self.min_ids = msgs, []
+
+    async def get_entity(self, u):
+        return u
+
+    def iter_messages(self, ent, limit=40, min_id=0, wait_time=1):
+        self.min_ids.append(min_id)
+        msgs = [m for m in self.msgs if m.id > min_id]
+
+        async def gen():
+            for m in sorted(msgs, key=lambda m: -m.id):
+                yield m
+        return gen()
+
+
+class TestTgMasters(unittest.TestCase):
+    def test_read_first_week_then_only_new_and_report(self):
+        import asyncio
+        d0 = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.timezone.utc)
+        old = dt.datetime(2026, 10, 1, 9, 0, tzinfo=dt.timezone.utc)
+        c = FakeClient([FakeMsg(60, "Инструменты: TubeTranscript", d0), FakeMsg(59, "", d0), FakeMsg(10, "старое", old)])
+        with tempfile.TemporaryDirectory() as d:
+            found = asyncio.run(masters.read_tg(c, Path(d), NOW))
+            self.assertEqual([p["id"] for p in found[0][1]], [60])          # пустой и старше недели — мимо
+            prompts = []
+            text = masters.run_tg(Path(d), found, NOW, ask=lambda p: prompts.append(p) or "📡 Лаб — неделя\n1) TubeTranscript → ✅")
+            self.assertIn("КАНАЛЫ ПРАКТИКОВ", text)
+            self.assertIn("t.me/laboratornaya/60", prompts[0])
+            self.assertEqual(json.loads((Path(d) / "navyki-queue.json").read_text())[0]["topic"], "Канал практика")
+            found2 = asyncio.run(masters.read_tg(c, Path(d), NOW))
+            self.assertEqual(c.min_ids[-1], 60)
+            self.assertEqual(found2[0][1], [])
+            self.assertIn("Новых постов нет", masters.run_tg(Path(d), found2, NOW, ask=lambda p: "x"))
+
+    def test_unreadable_channel_noted(self):
+        text = masters.run_tg(Path(tempfile.mkdtemp()), [({"name": "X", "username": "x", "error": "ValueError"}, [])], NOW,
+                              ask=lambda p: "x")
+        self.assertIn("не прочитан", text)
+
+
 if __name__ == "__main__":
     unittest.main()
