@@ -57,12 +57,20 @@ def cb(data, uid=CLIENT, message=None):
 
 
 PHOTO = [{"file_id": "small"}, {"file_id": "PHOTO1"}]
+SC = {"cats": [{"id": "stellaj", "t": {"cy": "Стеллажлар"}, "i": "🗄"}, {"id": "stul", "t": {"cy": "Стуллар"}, "i": "🪑"},
+               {"id": "ofis", "t": {"cy": "Офис"}, "i": "💼"}],
+      "items": [{"id": 29, "cat": "stellaj", "img": "n13", "t": {"cy": "Куб стеллаж — оқ"}, "d": {"cy": "10 та ячейка"},
+                 "m": "metal_wood", "sz": "200 × 90 × 35"},
+                {"id": 30, "cat": "stellaj", "img": "n14", "t": {"cy": "Куб стеллаж — ёғоч ранг"}, "d": {"cy": "10 та ячейка"},
+                 "m": "metal_wood"},
+                {"id": 17, "cat": "stul", "img": "n01", "t": {"cy": "Хром стул"}, "d": {"cy": ""}, "m": "metal_soft"}]}
 
 
 class Base(unittest.TestCase):
     def setUp(self):
         self.api, self.clock = FakeApi(), Clock()
         self.bot = B.Bot(self.api, B.connect(":memory:"), {ADMIN}, CFG, clock=self.clock)
+        self.bot.fetch_showcase = lambda: SC  # тесты не ходят в интернет
 
     def tearDown(self):
         self.bot.db.close()
@@ -81,7 +89,7 @@ class TestStart(Base):
         kb = self.api.sent(CLIENT, "sendPhoto")[-1]["reply_markup"]["keyboard"]
         flat = [b["text"] for row in kb for b in row]
         self.assertEqual(flat, [T.MENU_CATALOG, T.MENU_ORDER, T.MENU_CHEAPER, T.MENU_ROOM, T.MENU_MEASURE,
-                                T.MENU_TRACK, T.MENU_PLACES, T.MENU_CONTACT])
+                                T.MENU_TRACK, T.MENU_PLACES, T.MENU_CONTACT, T.MENU_SHOWCASE])
         self.assertEqual(self.bot.user(CLIENT)["src"], "Instagram")
         self.assertIn("Алишер", self.api.sent(CLIENT, "sendPhoto")[-1]["caption"])
 
@@ -307,11 +315,15 @@ class TestWebApp(Base):
     def wa(self, data):
         return msg(web_app_data={"data": data, "button_text": T.MENU_CATALOG})
 
-    def test_catalog_button_opens_webapp(self):
+    def test_long_bottom_button_opens_webapp(self):
+        """01.11: «🛋 Каталог» — обычная кнопка, мини-приложение — отдельная длинная кнопка последним рядом."""
         self.u(msg("/start"))
         kb = self.api.sent(CLIENT, "sendPhoto")[-1]["reply_markup"]["keyboard"]
-        btn = [b for row in kb for b in row if b["text"] == T.MENU_CATALOG][0]
-        self.assertTrue(btn["web_app"]["url"].startswith("https://"))
+        self.assertEqual(len(kb[-1]), 1)
+        self.assertEqual(kb[-1][0]["text"], T.MENU_SHOWCASE)
+        self.assertTrue(kb[-1][0]["web_app"]["url"].startswith("https://"))
+        cat = [b for row in kb for b in row if b["text"] == T.MENU_CATALOG][0]
+        self.assertNotIn("web_app", cat)
 
     def test_order_from_webapp_becomes_lead(self):
         self.u(self.wa('{"a":"order","id":7,"t":"Стол ва 6 та кресло","img":"u01"}'))
@@ -326,9 +338,10 @@ class TestWebApp(Base):
         self.u(self.wa('{"a":"photo"}'), msg(photo=PHOTO), msg("+998901234567"))
         self.assertEqual(self.lead()["kind"], "cheaper")
 
-    def test_old_text_button_refreshes_keyboard(self):
-        self.u(msg(T.MENU_CATALOG))
-        self.assertIn("янгиланди", self.api.last_text(CLIENT))
+    def test_order_from_webapp_sends_photo_to_manager(self):
+        self.u(self.wa('{"a":"order","id":29,"t":"Куб стеллаж — оқ","img":"n13"}'), msg("+998901234567"))
+        self.assertTrue(any(p["photo"].endswith("/img/b/n13.jpg") for p in self.api.sent(ADMIN, "sendPhoto")))
+
 
     def test_bad_data_is_safe(self):
         self.u(self.wa("not json"))
@@ -379,6 +392,50 @@ class TestPlaces(Base):
         self.assertEqual(len(self.api.sent(CLIENT, "sendVenue")), 2)
         self.u(msg(T.MENU_CONTACT))
         self.assertIn("+998 77 923 01 91", self.api.last_text(CLIENT))
+
+
+class TestShowcaseInChat(Base):
+    """01.11: «🛋 Каталог» в чате — модели из catalog.json мини-приложения."""
+    def test_categories_with_counts(self):
+        self.u(msg(T.MENU_CATALOG))
+        kb = self.api.sent(CLIENT)[-1]["reply_markup"]["inline_keyboard"]
+        flat = [(b["text"], b["callback_data"]) for row in kb for b in row]
+        self.assertEqual(flat, [("🗄 Стеллажлар (2)", "j:stellaj"), ("🪑 Стуллар (1)", "j:stul")])  # пустой «Офис» скрыт
+
+    def test_carousel_and_order(self):
+        self.u(cb("j:stellaj"))
+        p = self.api.sent(CLIENT, "sendPhoto")[-1]
+        self.assertTrue(p["photo"].endswith("/img/b/n13.jpg"))
+        self.assertIn("Куб стеллаж — оқ", p["caption"])
+        self.assertIn("200 × 90 × 35 см", p["caption"])
+        rows = p["reply_markup"]["inline_keyboard"]
+        self.assertEqual(rows[0][1]["text"], "1/2")
+        self.u(cb("j:stellaj:1", message={"chat": {"id": CLIENT}, "message_id": 9}))
+        m = [x for x in self.api.calls if x[0] == "editMessageMedia"][-1][1]
+        self.assertIn("ёғоч ранг", m["media"]["caption"])
+        self.u(cb("jb:29"), msg("+998901234567"))
+        lead = self.lead()
+        self.assertEqual(lead["kind"], "product")
+        self.assertIn("Каталог №29: Куб стеллаж — оқ", lead["details"])
+        self.assertTrue(any(x["photo"].endswith("n13.jpg") for x in self.api.sent(ADMIN, "sendPhoto")))
+
+    def test_room_from_showcase(self):
+        self.u(cb("jr:17"))
+        self.assertEqual(self.bot.user(CLIENT)["step"], "room_photo")
+        self.assertIn("Хром стул", self.bot.user(CLIENT)["data"]["details"])
+
+    def test_site_down_uses_last_copy_then_empty(self):
+        def down():
+            raise OSError("down")
+        self.bot.fetch_showcase = down
+        self.u(msg(T.MENU_CATALOG))
+        self.assertIn("тез кунда", self.api.last_text(CLIENT))
+
+    def test_cache(self):
+        n = []
+        self.bot.fetch_showcase = lambda: n.append(1) or SC
+        self.u(msg(T.MENU_CATALOG), msg(T.MENU_CATALOG))
+        self.assertEqual(len(n), 1)
 
 
 if __name__ == "__main__":

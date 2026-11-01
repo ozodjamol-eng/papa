@@ -195,10 +195,12 @@ class Bot:
                  (T.MENU_CHEAPER, f("cheaper")), (T.MENU_ROOM, f("room")),
                  (T.MENU_MEASURE, f("measure")), (T.MENU_TRACK, f("tracking")),
                  (T.MENU_PLACES, True), (T.MENU_CONTACT, True)]
+        btn = [{"text": t} for t, on in items if on]
+        rows = [btn[i:i + 2] for i in range(0, len(btn), 2)]
         app = self.conf("webapp")
-        btn = [({"text": t, "web_app": {"url": app}} if t == T.MENU_CATALOG and app else {"text": t}) for t, on in items if on]
-        return {"keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)], "resize_keyboard": True,
-                "is_persistent": True}
+        if app:  # 01.11 владелец: «🛋 Каталог» — каталог в чате, мини-приложение — длинная кнопка в самом низу
+            rows.append([{"text": T.MENU_SHOWCASE, "web_app": {"url": app}}])
+        return {"keyboard": rows, "resize_keyboard": True, "is_persistent": True}
 
     def cancel_kb(self, extra: list | None = None) -> dict:
         rows = [extra] if extra else []
@@ -295,9 +297,12 @@ class Bot:
         pid = str(d.get("id") or "")[:8]
         img = "".join(ch for ch in str(d.get("img") or "") if ch.isalnum())[:20]
         details = f"🛍 Витрина: {title}" + (f" (№{pid})" if pid else "")
+        photos = []
         if img and self.conf("webapp"):
-            details += f"\n🖼 {self.conf('webapp').rstrip('/')}/img/{img}.webp"
-        self.step(uid, "phone", fresh=True, kind="product", details=details)
+            base = self.conf("webapp").rstrip("/")
+            details += f"\n🖼 {base}/img/{img}.webp"
+            photos = [f"{base}/img/b/{img}.jpg"]  # менеджер сразу видит модель картинкой
+        self.step(uid, "phone", fresh=True, kind="product", details=details, photos=photos)
         self.send(uid, T.WEBAPP_ORDER.format(title=esc(title)))
         self.ask_phone(uid)
 
@@ -605,15 +610,93 @@ class Bot:
             row.append({"text": T.MENU_CHEAPER, "callback_data": "g:cheaper"})
         return {"inline_keyboard": [row]} if row else None
 
+    # 01.11: каталог в чате берёт модели из того же catalog.json, что и мини-приложение (один источник правды:
+    # правим catalog.json в репозитории shodiyona — меняется и витрина, и чат). Товары из /admin — дополнительно.
+    SC_TTL = 600
+
+    def fetch_showcase(self) -> dict:
+        url = self.conf("webapp").rstrip("/") + "/catalog.json"
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return json.loads(r.read())
+
+    def showcase(self) -> dict:
+        if not self.conf("webapp"):
+            return {}
+        sc = getattr(self, "_sc", None)
+        if sc and time.time() - sc[0] < self.SC_TTL:
+            return sc[1]
+        try:
+            data = self.fetch_showcase()
+            self._sc = (time.time(), data)
+            return data
+        except Exception as e:  # noqa: BLE001 — сайт недоступен: отдаём прошлую копию
+            print(f"catalog.json: {e}", flush=True)
+            return sc[1] if sc else {}
+
+    def sc_items(self, cat: str | None = None) -> list:
+        items = self.showcase().get("items") or []
+        return [i for i in items if cat is None or i.get("cat") == cat]
+
+    def sc_item(self, pid: int) -> dict | None:
+        return next((i for i in self.sc_items() if i.get("id") == pid), None)
+
     def catalog(self, uid: int) -> None:
-        if self.conf("webapp"):  # старая текстовая кнопка у тех, кто давно не нажимал /start — обновляем клавиатуру
-            self.send(uid, T.WEBAPP_REFRESH, self.menu_kb())
-            return
-        c = self.counts()
-        if not c:
+        sc, c = self.showcase(), self.counts()
+        btn = []
+        for cat in sc.get("cats") or []:
+            n = len(self.sc_items(cat["id"]))
+            if n:
+                btn.append({"text": f"{cat.get('i', '')} {cat['t']['cy']} ({n})".strip(), "callback_data": f"j:{cat['id']}"})
+        btn += [b for row in self.cats_kb("c", c)["inline_keyboard"] for b in row]  # товары, добавленные через /admin
+        if not btn:
             self.send(uid, T.CATALOG_EMPTY, self.go_kb())
             return
-        self.send(uid, T.CATALOG, self.cats_kb("c", c))
+        text = T.CATALOG
+        if self.conf("webapp"):
+            text += "\n\n" + T.SC_MORE.format(btn=T.MENU_SHOWCASE)
+        self.send(uid, text, {"inline_keyboard": [btn[i:i + 2] for i in range(0, len(btn), 2)]})
+
+    def sc_view(self, uid: int, it: dict, i: int, total: int) -> tuple[str, dict]:
+        lines = [T.SC_MATERIAL.get(it.get("m"), "")] + ([T.SC_SIZE.format(sz=it["sz"])] if it.get("sz") else [])
+        cap = T.SC_CAPTION.format(title=esc(it["t"]["cy"]), desc=esc(it.get("d", {}).get("cy", "")),
+                                  lines="\n".join("◆ " + esc(x) if not x.startswith("📏") else esc(x) for x in lines if x),
+                                  phone=esc(self.conf("phone")))
+        cat = it["cat"]
+        rows = []
+        if total > 1:
+            rows.append([{"text": "◀️", "callback_data": f"j:{cat}:{(i - 1) % total}"},
+                         {"text": f"{i + 1}/{total}", "callback_data": "noop"},
+                         {"text": "▶️", "callback_data": f"j:{cat}:{(i + 1) % total}"}])
+        rows.append([{"text": T.PRODUCT_ORDER, "callback_data": f"jb:{it['id']}"}])
+        if self.feat("room"):
+            rows.append([{"text": T.PRODUCT_ROOM, "callback_data": f"jr:{it['id']}"}])
+        rows.append([{"text": T.BACK_CATS, "callback_data": "cats"}])
+        return cap, {"inline_keyboard": rows}
+
+    def sc_photo(self, it: dict) -> str:
+        return f"{self.conf('webapp').rstrip('/')}/img/b/{it['img']}.jpg"
+
+    def show_sc(self, uid: int, cat: str, i: int, edit: dict | None = None) -> None:
+        items = self.sc_items(cat)
+        if not items:
+            self.send(uid, T.CATEGORY_EMPTY, self.go_kb())
+            return
+        i %= len(items)
+        it = items[i]
+        cap, kb = self.sc_view(uid, it, i, len(items))
+        if edit:
+            try:
+                self.api("editMessageMedia", chat_id=edit["chat"]["id"], message_id=edit["message_id"],
+                         media={"type": "photo", "media": self.sc_photo(it), "caption": cap, "parse_mode": "HTML"},
+                         reply_markup=kb)
+                return
+            except Exception as e:  # noqa: BLE001 — старое сообщение: шлём новое
+                print(f"editMedia: {e}", flush=True)
+        try:
+            self.api("sendPhoto", chat_id=uid, photo=self.sc_photo(it), caption=cap, parse_mode="HTML", reply_markup=kb)
+        except Exception as e:  # noqa: BLE001 — картинка не загрузилась: хотя бы текст с кнопками
+            print(f"sc photo: {e}", flush=True)
+            self.send(uid, cap, kb)
 
     def products(self, cat: str) -> list:
         return self.db.execute("SELECT * FROM products WHERE cat=? AND active=1 ORDER BY id", (cat,)).fetchall()
@@ -934,6 +1017,18 @@ class Bot:
             self.show_product(uid, part[1], 0)
         elif part[0] == "c" and len(part) == 3:
             self.show_product(uid, part[1], int(part[2]), edit=cq.get("message"))
+        elif part[0] == "j" and len(part) == 2:
+            self.show_sc(uid, part[1], 0)
+        elif part[0] == "j" and len(part) == 3:
+            self.show_sc(uid, part[1], int(part[2]), edit=cq.get("message"))
+        elif part[0] in ("jb", "jr"):
+            it = self.sc_item(int(part[1]))
+            if it and part[0] == "jb":
+                self.step(uid, "phone", fresh=True, kind="product",
+                          details=f"Каталог №{it['id']}: {it['t']['cy']}", photos=[self.sc_photo(it)])
+                self.ask_phone(uid)
+            elif it:
+                self.room_start(uid, {"id": it["id"], "title": it["t"]["cy"]})
         elif part[0] == "b":
             p = self.db.execute("SELECT * FROM products WHERE id=?", (int(part[1]),)).fetchone()
             if p:
