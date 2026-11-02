@@ -65,6 +65,7 @@
     "marker-probe",
     "rezhim-audit",
     "marker-status",
+    "marker-shelf-check",
     "volidam-bot-status",
     "volidam-bot-restart"
   ],
