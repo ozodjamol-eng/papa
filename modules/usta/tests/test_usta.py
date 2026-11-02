@@ -78,6 +78,17 @@ class T1(unittest.TestCase):
         h(msg("/start")); h(msg(T.KINDS["santex"][0])); h(msg("кран")); h(msg(T.WHEN["today"])); h(msg("М"))
         h(msg(T.SKIP)); h(msg("+998911112233"))
 
+    def prorab(self, uid=79):
+        """02.11: прораб фақат владелец таклифи (бир марталик QR) орқали."""
+        self.assertEqual(self.cb("pi:0"), "pi")
+        link = [p for c, p in self.api.calls if c == "sendPhoto"][-1]["caption"]
+        code = link.split("start=p_")[1].split()[0]
+        h = self.b.handle
+        self.assertEqual(h(msg(f"/start p_{code}", uid)), "p_join")
+        self.assertEqual(h(msg(uid=uid, contact={"phone_number": "998911112233"})), "m_submit")
+        self.assertEqual(h(msg(f"/start p_{code}", 4444)), "p_bad")              # иккинчи одам кира олмайди
+        return self.b.db.execute("SELECT * FROM masters WHERE uid=?", (uid,)).fetchone()
+
     def cb(self, data, uid=OWNER):
         return self.b.handle({"callback_query": {"id": "q", "from": {"id": uid}, "data": data,
                                                  "message": {"chat": {"id": uid}, "message_id": 5}}})
@@ -187,6 +198,17 @@ class Masters(unittest.TestCase):
         self.assertEqual(h(msg(uid=uid, contact={"phone_number": "998911112233"})), "m_submit")   # 02.11: 2 қадам
         return self.b.db.execute("SELECT * FROM masters WHERE uid=?", (uid,)).fetchone()
 
+    def prorab(self, uid=79):
+        """02.11: прораб фақат владелец таклифи (бир марталик QR) орқали."""
+        self.assertEqual(self.cb("pi:0"), "pi")
+        link = [p for c, p in self.api.calls if c == "sendPhoto"][-1]["caption"]
+        code = link.split("start=p_")[1].split()[0]
+        h = self.b.handle
+        self.assertEqual(h(msg(f"/start p_{code}", uid)), "p_join")
+        self.assertEqual(h(msg(uid=uid, contact={"phone_number": "998911112233"})), "m_submit")
+        self.assertEqual(h(msg(f"/start p_{code}", 4444)), "p_bad")              # иккинчи одам кира олмайди
+        return self.b.db.execute("SELECT * FROM masters WHERE uid=?", (uid,)).fetchone()
+
     def cb(self, data, uid=OWNER):
         return self.b.handle({"callback_query": {"id": "q", "data": data, "from": {"id": uid},
                                                  "message": {"chat": {"id": uid}, "message_id": 1}}})
@@ -212,19 +234,50 @@ class Masters(unittest.TestCase):
         self.assertIn("/start usta", self.b.m_list() if False else "/start usta")
 
     def test_prorab_simple(self):
-        """02.11: Бош прораб — таъмир аризасига мос, исм Telegram'дан, расмсиз."""
-        m = self.register(uid=79, trade="prorab")
-        self.assertEqual((m["name"], m["phone"], m["status"]), ("Али", "+998911112233", "pending"))
-        self.assertIn("prorab", T.FOR_KIND["tamir"])
-        self.assertIn("Бош прораб", self.b.m_card(m))
-        self.assertTrue(any(T.KINDS["prorab"][0] == b["text"] for row in B.main_kb()["keyboard"] for b in row))  # мижоз менюсида
-        self.cb(f"ma:{m['id']}")
+        """02.11: «Бош прораб» очиқ рўйхатда йўқ; таклиф билан — текширувсиз ✅; мижоз менюсидан заявка прорабга."""
         h = self.b.handle
+        h(msg("/start usta", 80))
+        self.assertEqual(h(msg(T.TRADES["prorab"], 80)), "m_badtrade")          # оддий уста прораб бўла олмайди
+        self.assertFalse(any(b["text"] == T.TRADES["prorab"] for row in self.b.trades_kb()["keyboard"] for b in row))
+        self.assertEqual(h(msg("/start prorab", 81)), "start")                   # эски очиқ ҳавола ишламайди
+        m = self.prorab(uid=79)
+        self.assertEqual((m["name"], m["status"], m["trade"]), ("Али", "ok", "prorab"))
+        self.assertTrue(any(b["text"] == T.PK_TEAM for row in self.api.to(79)[-1]["reply_markup"]["keyboard"] for b in row))
         h(msg("/start", 60)); h(msg(T.KINDS["prorab"][0], 60)); h(msg(T.OBJ["kv"], 60)); h(msg("80 м² коробка", 60))
         h(msg(T.WHEN["week"], 60)); h(msg("Марказ", 60)); h(msg(T.SKIP, 60))
         self.assertEqual(h(msg(uid=60, contact={"phone_number": "998901110000"})), "lead")
         card = [p for m_, p in self.api.calls if m_ == "sendMessage" and "Ариза №1" in (p.get("text") or "")][0]
         self.assertIn(f"go:1:{m['id']}", [b["callback_data"] for row in card["reply_markup"]["inline_keyboard"] for b in row])
+
+    def test_team(self):
+        """02.11: прораб жамоаси — QR → касб → рақам → прораб ✅ → заявка жамоага → пул 7% + 3%."""
+        pr = self.prorab(uid=79)
+        h = self.b.handle
+        self.assertEqual(h(msg(T.PK_ADD, 79)), "p_add")
+        self.assertEqual(h(msg(f"/start t{pr['id']}", 95)), "t_begin")
+        self.assertEqual(h(msg(T.TRADES["plitka"], 95)), "m_trade")
+        self.assertEqual(h(msg(uid=95, contact={"phone_number": "998905550095"})), "m_submit")
+        mm = self.b.db.execute("SELECT * FROM masters WHERE uid=95").fetchone()
+        self.assertEqual((mm["team"], mm["status"]), (pr["id"], "pending"))
+        self.assertIsNone(self.cb(f"ta:{mm['id']}", uid=96))                     # бошқа одам тасдиқлай олмайди
+        self.assertEqual(self.cb(f"ta:{mm['id']}", uid=79), "ta")
+        self.assertEqual(h(msg(T.PK_TEAM, 79)), "p_team")
+        self.assertIn("✅", self.api.to(79)[-1]["text"])
+        # заявка: владелец → прораб → прораб олади → жамоадан бирига
+        h(msg("/start", 61)); h(msg(T.KINDS["prorab"][0], 61)); h(msg(T.OBJ["kv"], 61)); h(msg("кафел", 61))
+        h(msg(T.WHEN["week"], 61)); h(msg("Марказ", 61)); h(msg(T.SKIP, 61)); h(msg(uid=61, contact={"phone_number": "998901110061"}))
+        self.assertEqual(self.cb(f"go:1:{pr['id']}"), "go")
+        self.assertEqual(self.cb("mt:1", uid=79), "mt")
+        self.assertEqual(self.cb(f"tg:1:{mm['id']}", uid=79), "tg")
+        self.assertEqual(self.b.db.execute("SELECT master FROM leads WHERE n=1").fetchone()[0], mm["id"])
+        self.assertTrue(any("+998901110061" in (p.get("text") or "") for p in self.api.to(95)))
+        # пул: аъзонинг ҳаволаси орқали мижоз → 7% аъзога, 3% прорабга
+        h(msg(f"/start r{mm['id']}", 62)); h(msg(T.KINDS["santex"][0], 62)); h(msg("кран", 62)); h(msg(T.WHEN["week"], 62))
+        h(msg("Марказ", 62)); h(msg(T.SKIP, 62)); h(msg(uid=62, contact={"phone_number": "998901110062"}))
+        n = self.b.db.execute("SELECT n FROM leads WHERE uid=62").fetchone()[0]
+        self.assertIn("прораб", self.b.pay_lead(n, 1000000))
+        self.assertEqual(self.b.m_stats(mm["id"])["share"], 70000)
+        self.assertEqual(self.b.m_stats(pr["id"])["share"], 30000)
 
     def test_reject_and_skip(self):
         m = self.register(uid=78, trade="elektr")
@@ -306,16 +359,15 @@ class TOwnerPanel(unittest.TestCase):
         self.assertEqual(self.b.db.execute("SELECT paid FROM leads WHERE n=1").fetchone()[0], 1500000)
 
     def test_prorab_button(self):
-        """02.11: пультда «👷‍♂️ Прораблар» — бўш бўлса ҳавола, ҳавола орқали 1 тугмада рўйхатдан ўтади."""
+        """02.11: пультда «👷‍♂️ Прораблар» — очиқ ҳавола йўқ, фақат «➕ Прораб таклиф қилиш»."""
         h = self.b.handle
         self.assertTrue(any(b["text"] == T.O_PRORAB for row in B.owner_kb()["keyboard"] for b in row))
         self.assertEqual(h(msg(T.O_PRORAB, uid=OWNER)), "o_prorab")
-        self.assertIn("start=prorab", self.api.to(OWNER)[-1]["text"])
-        self.assertEqual(h(msg("/start prorab", uid=88)), "m_prorab")
-        self.assertEqual(h(msg(contact={"phone_number": "998905550000"}, uid=88)), "m_submit")
-        self.assertEqual(h(msg(T.O_PRORAB, uid=OWNER)), "o_prorab")
-        self.assertIn("Бош прораб", self.api.to(OWNER)[-1]["text"])
-        self.assertEqual(self.api.to(OWNER)[-1]["reply_markup"]["inline_keyboard"][0][0]["text"], "✅ Тасдиқлаш")
+        last = self.api.to(OWNER)[-1]
+        self.assertNotIn("start=prorab", last["text"])
+        self.assertEqual(last["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "pi:0")
+        self.assertIsNone(self.b.handle({"callback_query": {"id": "q", "data": "pi:0", "from": {"id": 42},
+                                                            "message": {"chat": {"id": 42}, "message_id": 1}}}))  # бегона таклиф қила олмайди
 
     def test_client_preview_and_back(self):
         h = self.b.handle
@@ -332,8 +384,7 @@ class MasterMenu(Masters):
     """02.11: уста менюси — мижоз юбориш (контакт + овоз), ҳисоб, QR, буюртмалар; реферал хабари."""
 
     def test_master_menu(self):
-        m = self.register(uid=91, trade="prorab")
-        self.cb(f"ma:{m['id']}")
+        m = self.prorab(uid=91)
         kb = self.api.to(91)[-1]["reply_markup"]["keyboard"]
         self.assertTrue(any(b["text"] == T.MK_SEND for row in kb for b in row))          # уста менюси
         h = self.b.handle

@@ -9,6 +9,7 @@ import html
 import json
 import os
 import re
+import secrets
 import sqlite3
 import time
 import urllib.error
@@ -51,6 +52,8 @@ def connect(path: str) -> sqlite3.Connection:
     mh = {r[1] for r in db.execute("PRAGMA table_info(masters)")}
     if "paid_out" not in mh:
         db.execute("ALTER TABLE masters ADD COLUMN paid_out INTEGER NOT NULL DEFAULT 0")
+    if "team" not in mh:   # 02.11: прораб жамоаси (masters.id прораба)
+        db.execute("ALTER TABLE masters ADD COLUMN team INTEGER")
     db.commit()
     return db
 
@@ -71,8 +74,9 @@ def main_kb() -> dict:
     return {"keyboard": rows, "resize_keyboard": True}
 
 
-def master_kb() -> dict:
-    return {"keyboard": [[{"text": T.MK_SEND}], [{"text": T.MK_MINE}, {"text": T.MK_LINK}], [{"text": T.MK_JOBS}],
+def master_kb(prorab: bool = False) -> dict:
+    top = [[{"text": T.PK_TEAM}, {"text": T.PK_ADD}]] if prorab else []
+    return {"keyboard": top + [[{"text": T.MK_SEND}], [{"text": T.MK_MINE}, {"text": T.MK_LINK}], [{"text": T.MK_JOBS}],
                          [{"text": T.CONTACT}]], "resize_keyboard": True}
 
 
@@ -109,7 +113,11 @@ class Bot:
 
     def say(self, chat: int, text: str, kb: dict | None = None):
         if kb is None:
-            kb = owner_kb() if chat in self.owners else (master_kb() if self.master(chat) else main_kb())
+            if chat in self.owners:
+                kb = owner_kb()
+            else:
+                ms = self.master(chat)
+                kb = master_kb(ms["trade"] == "prorab") if ms else main_kb()
         return self.api("sendMessage", chat_id=chat, text=text, reply_markup=kb, parse_mode="HTML",
                         disable_web_page_preview=True)
 
@@ -126,11 +134,10 @@ class Bot:
             r = self.owner(frm, chat, text)
             if r:
                 return r
-        if text == "/start prorab":                  # 02.11: прорабга алоҳида ҳавола — касб танлаш шарт эмас
-            self.user(frm, "prorab")
-            self.set_step(frm["id"], "m_phone", {"trade": "prorab"})
-            self.say(chat, T.M_HELLO.split("\n\n")[0] + " — " + T.TRADES["prorab"] + "\n\n" + T.M_ASK_PHONE, self.phone_kb())
-            return "m_prorab"
+        if text.startswith("/start p_"):             # 02.11: прораб — фақат владелец таклифи (бир марталик QR)
+            return self.p_join(frm, chat, text.split("_", 1)[1][:40])
+        if text.startswith("/start t") and text[8:].isdigit():   # прораб жамоасига қўшилиш
+            return self.t_begin(frm, chat, int(text[8:]))
         if text in ("/usta", "/start usta", T.M_BTN):
             self.user(frm, "usta")
             return self.m_begin(frm, chat)
@@ -165,6 +172,10 @@ class Bot:
         u = self.user(frm)
         if text in T.MK_BUTTONS and self.master(frm["id"]):
             return self.mk(frm, chat, text)
+        if text in (T.PK_TEAM, T.PK_ADD):
+            pr = self.master(frm["id"])
+            if pr and pr["trade"] == "prorab":
+                return self.p_team(pr, chat) if text == T.PK_TEAM else self.p_add(pr, chat)
         if text == T.BACK:
             self.set_step(frm["id"], "")
             self.say(chat, T.UNKNOWN)
@@ -334,6 +345,11 @@ class Bot:
             return "rate"
         if act in ("mt", "ms"):                      # уста: mt:<n> оламан / ms:<n> ололмайман
             return self.m_answer(q, act, rest)
+        if act in ("ta", "tr", "tg"):                # 02.11 прораб: жамоа аъзосини тасдиқлаш / заявкани жамоага бериш
+            return self.t_callback(q, act, rest)
+        if act == "pi" and q["from"]["id"] in self.owners:   # владелец: янги прораб таклифи
+            self.api("answerCallbackQuery", callback_query_id=q["id"])
+            return self.p_invite(q["from"]["id"])
         if q["from"]["id"] not in self.owners:
             return None
         if act in ("lv", "mv", "pd", "po"):          # 31.10 пульт: просмотр заявки/мастера, оплата
@@ -363,7 +379,8 @@ class Bot:
 
     # ---------- 🛠 усталар (31.10) ----------
     def trades_kb(self) -> dict:
-        return {"keyboard": [[{"text": v}] for v in T.TRADES.values()] + [[{"text": T.BACK}]], "resize_keyboard": True}
+        return {"keyboard": [[{"text": v}] for k, v in T.TRADES.items() if k != "prorab"] + [[{"text": T.BACK}]],
+                "resize_keyboard": True}
 
     def m_begin(self, frm: dict, chat: int) -> str:
         self.set_step(frm["id"], "m_trade", {})
@@ -373,7 +390,7 @@ class Bot:
     def m_step(self, frm, chat, m, text, step, data) -> str:
         """02.11 (владелец: «мастера жалуются»): касб → телефон бир тугмада → тайёр. Исм — Telegram'дан, расм шарт эмас."""
         if step == "m_trade":
-            t = next((k for k, v in T.TRADES.items() if v == text), None)
+            t = next((k for k, v in T.TRADES.items() if v == text and k != "prorab"), None)
             if not t:
                 self.say(chat, T.UNKNOWN, self.trades_kb()); return "m_badtrade"
             data["trade"] = t; self.set_step(frm["id"], "m_phone", data); self.say(chat, T.M_ASK_PHONE, self.phone_kb())
@@ -391,14 +408,34 @@ class Bot:
     def m_submit(self, frm, chat, data) -> str:
         t = now().isoformat()
         name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or (frm.get("username") or "Уста")
-        self.db.execute("INSERT INTO masters(uid, username, trade, name, phone, status, created)"
-                        " VALUES (?,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET username=excluded.username,"
-                        " trade=excluded.trade, name=excluded.name, phone=excluded.phone, status='pending', created=excluded.created",
-                        (frm["id"], frm.get("username"), data["trade"], name[:80], data.get("phone"), "pending", t))
+        team = data.get("team")
+        self.db.execute("INSERT INTO masters(uid, username, trade, name, phone, status, created, team)"
+                        " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET username=excluded.username,"
+                        " trade=excluded.trade, name=excluded.name, phone=excluded.phone, status='pending',"
+                        " created=excluded.created, team=excluded.team",
+                        (frm["id"], frm.get("username"), data["trade"], name[:80], data.get("phone"), "pending", t, team))
         self.db.commit()
         self.set_step(frm["id"], "")
-        self.say(chat, T.M_SENT)
         r = self.db.execute("SELECT * FROM masters WHERE uid=?", (frm["id"],)).fetchone()
+        if team:                                     # 02.11: жамоа аъзосини прорабнинг ўзи тасдиқлайди
+            pr = self.db.execute("SELECT * FROM masters WHERE id=?", (team,)).fetchone()
+            self.say(chat, T.T_SENT.format(name=esc(pr["name"])), main_kb())
+            tk = {"inline_keyboard": [[{"text": "✅ Тасдиқлаш", "callback_data": f"ta:{r['id']}"},
+                                       {"text": "❌ Рад этиш", "callback_data": f"tr:{r['id']}"}]]}
+            self.api("sendMessage", chat_id=pr["uid"], text=T.T_NEW + "\n\n" + self.m_card(r), reply_markup=tk, parse_mode="HTML")
+            for o in self.owners:
+                self.api("sendMessage", chat_id=o, parse_mode="HTML",
+                         text=f"ℹ️ {esc(pr['name'])} жамоасига янги уста (прораб тасдиқлайди)\n\n" + self.m_card(r))
+            return "m_submit"
+        if data.get("invited"):                     # владелец ўзи таклиф қилган прораб — текширувсиз
+            self.db.execute("UPDATE masters SET status='ok' WHERE id=?", (r["id"],)); self.db.commit()
+            self.say(chat, T.P_OK.format(mp=T.TEAM_MEMBER_PCT, lp=T.TEAM_LEAD_PCT, rp=T.REF_PCT))
+            self.say(chat, T.M_LINK.format(link=self.ref_link(r["id"]), pct=T.REF_PCT))
+            for o in self.owners:
+                self.api("sendMessage", chat_id=o, text="👷‍♂️ Таклиф орқали янги прораб қўшилди\n\n" + self.m_card(
+                    self.db.execute("SELECT * FROM masters WHERE id=?", (r["id"],)).fetchone()), parse_mode="HTML")
+            return "m_submit"
+        self.say(chat, T.M_SENT)
         kb = {"inline_keyboard": [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"},
                                    {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]}
         for o in self.owners:
@@ -477,7 +514,11 @@ class Bot:
     def m_card(self, r) -> str:
         st = {"pending": "⏳ текширувда", "ok": "✅ рўйхатда", "no": "❌ рад этилди"}.get(r["status"], r["status"])
         un = f" @{r['username']}" if r["username"] else ""
-        return (f"🛠 <b>Уста аризаси</b> · {T.TRADES.get(r['trade'], r['trade'])}\n👤 {esc(r['name'])}{un}\n"
+        tm = ""
+        if r["team"]:
+            pr = self.db.execute("SELECT name FROM masters WHERE id=?", (r["team"],)).fetchone()
+            tm = f"👥 жамоа: {esc(pr['name'] if pr else r['team'])}\n"
+        return (f"🛠 <b>Уста аризаси</b> · {T.TRADES.get(r['trade'], r['trade'])}\n👤 {esc(r['name'])}{un}\n{tm}"
                 f"🆔 {r['uid']}\n📞 {esc(r['phone'])}\n"
                 + (f"📍 {esc(r['area'])}\n" if r["area"] else "") + (f"🧰 тажриба: {esc(r['exp'])}\n" if r["exp"] else "") + st)
 
@@ -495,7 +536,7 @@ class Bot:
             pass
         self.say(r["uid"], T.M_OK.format(trade=T.TRADES.get(r["trade"], r["trade"])) if st == "ok" else T.M_NO)
         if st == "ok":
-            self.say(r["uid"], T.M_LINK.format(link=self.ref_link(r["id"]), pct=T.REF_PCT))
+            self.say(r["uid"], T.M_LINK.format(link=self.ref_link(r["id"]), pct=self.m_pct(r["id"])))
         self.api("answerCallbackQuery", callback_query_id=q["id"])
         return act
 
@@ -542,6 +583,8 @@ class Bot:
             self.db.execute("UPDATE masters SET jobs=jobs+1 WHERE id=?", (ms["id"],))
             self.db.commit()
             self.say(ms["uid"], T.M_TAKEN.format(phone=esc(r["phone"])))
+            if ms["trade"] == "prorab":              # прораб ўз жамоасига бериши мумкин
+                self.t_offer(ms, r)
             if not r["via"]:
                 self.say(r["uid"], T.M_CLIENT.format(n=r["n"], name=esc(ms["name"])))
             note = f"✅ Ариза №{r['n']}: уста {esc(ms['name'])} олди"
@@ -569,12 +612,19 @@ class Bot:
     def ref_link(self, mid: int) -> str:
         return f"https://t.me/{self.username}?start=r{mid}"
 
+    def m_pct(self, mid: int) -> int:
+        """Мижоз келтирган устанинг улуши: жамоа аъзоси — 7%, қолганлар (прораб ҳам) — 10%."""
+        r = self.db.execute("SELECT team FROM masters WHERE id=?", (mid,)).fetchone()
+        return T.TEAM_MEMBER_PCT if r and r["team"] else T.REF_PCT
+
     def m_stats(self, mid: int) -> dict:
         users = self.db.execute("SELECT count(*) FROM users WHERE src=?", (f"r{mid}",)).fetchone()[0]
         leads = self.db.execute("SELECT count(*) FROM leads WHERE ref=?", (mid,)).fetchone()[0]
         paid, total = self.db.execute("SELECT count(paid), coalesce(sum(paid),0) FROM leads WHERE ref=? AND paid>0", (mid,)).fetchone()
         out = self.db.execute("SELECT paid_out FROM masters WHERE id=?", (mid,)).fetchone()[0]
-        share = total * T.REF_PCT // 100
+        team_sum = self.db.execute("SELECT coalesce(sum(l.paid),0) FROM leads l JOIN masters m ON m.id=l.ref "
+                                   "WHERE m.team=? AND l.paid>0", (mid,)).fetchone()[0]
+        share = total * self.m_pct(mid) // 100 + team_sum * T.TEAM_LEAD_PCT // 100
         return {"users": users, "leads": leads, "paid": paid, "sum": total, "share": share, "out": out, "owed": share - out}
 
     def m_mine(self, frm, chat) -> str:
@@ -602,10 +652,17 @@ class Bot:
             return f"Ариза №{a} йўқ"
         self.db.execute("UPDATE leads SET paid=? WHERE n=?", (b, a)); self.db.commit()
         if r["ref"]:
-            share = b * T.REF_PCT // 100
+            pct = self.m_pct(r["ref"])
+            share = b * pct // 100
             ms = self.db.execute("SELECT * FROM masters WHERE id=?", (r["ref"],)).fetchone()
-            self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({T.REF_PCT}%). Ҳисоб — «📊 Ҳисобим».".replace(",", " "))
-            return f"✅ Ариза №{a}: {b:,} сўм. Реферал {esc(ms['name'])}: {share:,} сўм".replace(",", " ")
+            self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({pct}%). Ҳисоб — «📊 Ҳисобим».".replace(",", " "))
+            res = f"✅ Ариза №{a}: {b:,} сўм. Реферал {esc(ms['name'])}: {share:,} сўм".replace(",", " ")
+            if ms["team"]:
+                pr = self.db.execute("SELECT * FROM masters WHERE id=?", (ms["team"],)).fetchone()
+                ps = b * T.TEAM_LEAD_PCT // 100
+                self.say(pr["uid"], f"💰 Жамоангиздан {esc(ms['name'])} мижози тўлади (№{a}). Сизга: {ps:,} сўм ({T.TEAM_LEAD_PCT}%).".replace(",", " "))
+                res += f" · прораб {esc(pr['name'])}: {ps:,} сўм".replace(",", " ")
+            return res
         return f"✅ Ариза №{a}: {b:,} сўм (рефералсиз)".replace(",", " ")
 
     def pay_out(self, a: int, b: int) -> str:
@@ -701,13 +758,17 @@ class Bot:
         return "o_masters"
 
     def o_prorab(self, chat: int) -> str:
-        """02.11: пультда прораблар алоҳида — рўйхат, текширувдагилар ✅/❌, таклиф ҳаволаси."""
-        link = f"https://t.me/{self.username}?start=prorab"
+        """02.11: пультда прораблар — рўйхат, жамоаси, янги прорабни фақат бир марталик QR билан таклиф қилиш."""
+        inv = {"inline_keyboard": [[{"text": T.O_INVITE, "callback_data": "pi:0"}]]}
         rows = self.db.execute("SELECT * FROM masters WHERE trade='prorab' AND status!='no' ORDER BY status DESC, id").fetchall()
         if not rows:
-            self.say(chat, f"👷‍♂️ <b>ПРОРАБЛАР</b>\n\nҲали йўқ. Прорабга шу ҳаволани юборинг — 2 та тугма, бўлди:\n{link}", owner_kb())
+            self.say(chat, "👷‍♂️ <b>ПРОРАБЛАР</b>\n\nҲали йўқ. Прораб фақат сизнинг таклифингиз (бир марталик QR) билан киради.", inv)
             return "o_prorab"
-        self.say(chat, f"👷‍♂️ <b>ПРОРАБЛАР</b>: {len(rows)} та\nТаклиф ҳаволаси:\n{link}", owner_kb())
+        lines = [f"👷‍♂️ <b>ПРОРАБЛАР</b>: {len(rows)} та"]
+        for r in rows:
+            n = self.db.execute("SELECT count(*) FROM masters WHERE team=? AND status='ok'", (r["id"],)).fetchone()[0]
+            lines.append(f"{'✅' if r['status'] == 'ok' else '⏳'} {esc(r['name'])} · 📞 {esc(r['phone'])} · 👥 жамоа: {n}")
+        self.say(chat, "\n".join(lines), inv)
         for r in rows:
             if r["status"] == "pending":
                 kb = [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"}, {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]
@@ -715,6 +776,116 @@ class Bot:
                 kb = [[{"text": "📋 Батафсил", "callback_data": f"mv:{r['id']}"}]]
             self.api("sendMessage", chat_id=chat, text=self.m_card(r), reply_markup={"inline_keyboard": kb}, parse_mode="HTML")
         return "o_prorab"
+
+    # ---------- 👷‍♂️ прораб: таклиф ва жамоа (02.11) ----------
+    def qr(self, chat: int, link: str, cap: str, kb: dict | None = None):
+        try:
+            self.api("sendPhoto", chat_id=chat, caption=cap, parse_mode="HTML", reply_markup=kb,
+                     photo="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=20&data=" + urllib.parse.quote(link, safe=""))
+        except Exception as e:  # noqa: BLE001 — QR бўлмаса ҳам ҳавола етади
+            print(f"qr: {e}", flush=True)
+            self.say(chat, cap, kb)
+
+    def p_invite(self, chat: int) -> str:
+        code = secrets.token_urlsafe(9).replace("-", "x").replace("_", "y")
+        self.db.execute("INSERT INTO kv(k, v) VALUES (?, 'new')", (f"inv:{code}",)); self.db.commit()
+        link = f"https://t.me/{self.username}?start=p_{code}"
+        self.qr(chat, link, f"👷‍♂️ <b>Прораб таклифи</b> — бир марталик\n{link}\n\nФақат битта одам кира олади. Прорабга юборинг.")
+        return "pi"
+
+    def p_join(self, frm, chat, code) -> str:
+        k = f"inv:{code}"
+        row = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
+        old = self.db.execute("SELECT * FROM masters WHERE uid=?", (frm["id"],)).fetchone()
+        if not row or (row["v"] != "new" and not (old and row["v"] == str(frm["id"]))):
+            self.say(chat, T.INV_USED, main_kb()); return "p_bad"
+        self.db.execute("UPDATE kv SET v=? WHERE k=?", (str(frm["id"]), k)); self.db.commit()
+        self.user(frm, "prorab")
+        self.set_step(frm["id"], "m_phone", {"trade": "prorab", "invited": 1})
+        self.say(chat, T.P_HELLO + T.M_ASK_PHONE, self.phone_kb())
+        return "p_join"
+
+    def t_begin(self, frm, chat, pid: int) -> str:
+        pr = self.db.execute("SELECT * FROM masters WHERE id=? AND trade='prorab' AND status='ok'", (pid,)).fetchone()
+        if not pr:
+            self.say(chat, T.UNKNOWN); return "t_bad"
+        self.user(frm, f"t{pid}")
+        self.set_step(frm["id"], "m_trade", {"team": pid})
+        self.say(chat, T.T_HELLO.format(name=esc(pr["name"]).upper()), self.trades_kb())
+        return "t_begin"
+
+    def p_add(self, pr, chat) -> str:
+        link = f"https://t.me/{self.username}?start=t{pr['id']}"
+        self.qr(chat, link, f"👥 <b>Жамоангиз QR-коди</b>\n{link}\n\nУсталарингизга кўрсатинг: сканер → касб → рақам. "
+                f"Кейин сиз ✅ босасиз.", master_kb(True))
+        return "p_add"
+
+    def p_team(self, pr, chat) -> str:
+        rows = self.db.execute("SELECT * FROM masters WHERE team=? AND status!='no' ORDER BY status DESC, id", (pr["id"],)).fetchall()
+        if not rows:
+            self.say(chat, "👥 Жамоангиз ҳали бўш. «➕ Жамоага қўшиш» — QR-кодни усталарга кўрсатинг."); return "p_team"
+        lines = [f"👥 <b>ЖАМОАМ</b>: {len(rows)} та"]
+        btn = []
+        for r in rows:
+            lines.append(f"{'✅' if r['status'] == 'ok' else '⏳'} {T.TRADES.get(r['trade'], r['trade'])} — {esc(r['name'])} · 📞 {esc(r['phone'])} · иш: {r['jobs']}")
+            if r["status"] == "pending":
+                btn.append([{"text": f"✅ {r['name'][:20]}", "callback_data": f"ta:{r['id']}"},
+                            {"text": "❌", "callback_data": f"tr:{r['id']}"}])
+        self.say(chat, "\n".join(lines), {"inline_keyboard": btn} if btn else None)
+        return "p_team"
+
+    def t_offer(self, pr, r):
+        ms = self.db.execute("SELECT * FROM masters WHERE team=? AND status='ok' ORDER BY jobs, id LIMIT 8", (pr["id"],)).fetchall()
+        if ms:
+            kb = {"inline_keyboard": [[{"text": f"→ {m['name'][:22]} ({T.TRADES[m['trade']].split(' ', 1)[1].split(' (')[0]})",
+                                        "callback_data": f"tg:{r['n']}:{m['id']}"}] for m in ms]}
+            self.api("sendMessage", chat_id=pr["uid"], text=f"👥 Ариза №{r['n']} — жамоангиздан кимга берасиз? (ёки ўзингиз қилинг)",
+                     reply_markup=kb)
+
+    def t_callback(self, q, act, rest) -> str | None:
+        pr = self.db.execute("SELECT * FROM masters WHERE uid=? AND trade='prorab' AND status='ok'", (q["from"]["id"],)).fetchone()
+        if not pr:
+            return None
+        self.api("answerCallbackQuery", callback_query_id=q["id"])
+        if act in ("ta", "tr"):
+            m = self.db.execute("SELECT * FROM masters WHERE id=? AND team=?", (int(rest) if rest.isdigit() else -1, pr["id"])).fetchone()
+            if not m:
+                return None
+            st = "ok" if act == "ta" else "no"
+            self.db.execute("UPDATE masters SET status=? WHERE id=?", (st, m["id"])); self.db.commit()
+            m = self.db.execute("SELECT * FROM masters WHERE id=?", (m["id"],)).fetchone()
+            try:
+                self.api("editMessageText", chat_id=q["message"]["chat"]["id"], message_id=q["message"]["message_id"],
+                         text=self.m_card(m), parse_mode="HTML")
+            except Exception:  # noqa: BLE001
+                pass
+            if st == "ok":
+                self.say(m["uid"], T.T_OK.format(name=esc(pr["name"])))
+                self.say(m["uid"], T.M_LINK.format(link=self.ref_link(m["id"]), pct=T.TEAM_MEMBER_PCT))
+            else:
+                self.say(m["uid"], T.M_NO, main_kb())
+            for o in self.owners:
+                self.api("sendMessage", chat_id=o, text=f"👥 {esc(pr['name'])}: {esc(m['name'])} — {'✅ жамоага қўшилди' if st == 'ok' else '❌ рад'}")
+            return act
+        n, _, mid = rest.partition(":")
+        r = self.db.execute("SELECT * FROM leads WHERE n=? AND master=?", (int(n) if n.isdigit() else -1, pr["id"])).fetchone()
+        m = self.db.execute("SELECT * FROM masters WHERE id=? AND team=? AND status='ok'", (int(mid) if mid.isdigit() else -1, pr["id"])).fetchone()
+        if not r or not m:
+            return None
+        card = (f"📥 Ариза №{r['n']} · {T.KINDS.get(r['kind'], (r['kind'],))[0]}\n📍 {esc(r['place'])}\n📞 {esc(r['phone'])}\n"
+                f"📝 {esc(r['details'])}\n👷‍♂️ прораб: {esc(pr['name'])}")
+        self.db.execute("UPDATE leads SET master=?, status='taken' WHERE n=?", (m["id"], r["n"]))
+        self.db.execute("UPDATE masters SET jobs=jobs+1 WHERE id=?", (m["id"],)); self.db.commit()
+        self.api("sendMessage", chat_id=m["uid"], text=T.M_JOB.split("\n\n")[0] + "\n\n" + card, parse_mode="HTML")
+        for p in json.loads(r["photos"] or "[]")[:5]:
+            try:
+                self.api("copyMessage", chat_id=m["uid"], from_chat_id=p["chat"], message_id=p["id"])
+            except Exception:  # noqa: BLE001
+                pass
+        self.say(pr["uid"], T.T_JOB_SENT.format(n=r["n"], name=esc(m["name"])))
+        for o in self.owners:
+            self.api("sendMessage", chat_id=o, text=f"👥 Ариза №{r['n']}: прораб {esc(pr['name'])} → {esc(m['name'])}")
+        return "tg"
 
     def o_pending(self, chat: int) -> str:
         rows = self.db.execute("SELECT * FROM masters WHERE status='pending' ORDER BY id").fetchall()
