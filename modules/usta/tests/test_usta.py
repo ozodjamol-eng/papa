@@ -217,6 +217,14 @@ class Masters(unittest.TestCase):
         self.assertEqual((m["name"], m["phone"], m["status"]), ("Али", "+998911112233", "pending"))
         self.assertIn("prorab", T.FOR_KIND["tamir"])
         self.assertIn("Бош прораб", self.b.m_card(m))
+        self.assertTrue(any(T.KINDS["prorab"][0] == b["text"] for row in B.main_kb()["keyboard"] for b in row))  # мижоз менюсида
+        self.cb(f"ma:{m['id']}")
+        h = self.b.handle
+        h(msg("/start", 60)); h(msg(T.KINDS["prorab"][0], 60)); h(msg(T.OBJ["kv"], 60)); h(msg("80 м² коробка", 60))
+        h(msg(T.WHEN["week"], 60)); h(msg("Марказ", 60)); h(msg(T.SKIP, 60))
+        self.assertEqual(h(msg(uid=60, contact={"phone_number": "998901110000"})), "lead")
+        card = [p for m_, p in self.api.calls if m_ == "sendMessage" and "Ариза №1" in (p.get("text") or "")][0]
+        self.assertIn(f"go:1:{m['id']}", [b["callback_data"] for row in card["reply_markup"]["inline_keyboard"] for b in row])
 
     def test_reject_and_skip(self):
         m = self.register(uid=78, trade="elektr")
