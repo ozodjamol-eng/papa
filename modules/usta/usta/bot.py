@@ -806,9 +806,10 @@ class Bot:
         return "p_join"
 
     def t_begin(self, frm, chat, pid: int) -> str:
-        pr = self.db.execute("SELECT * FROM masters WHERE id=? AND trade='prorab' AND status='ok'", (pid,)).fetchone()
-        if not pr:
+        pr = self.db.execute("SELECT * FROM masters WHERE (id=? OR uid=?) AND trade='prorab' AND status='ok'", (pid, pid)).fetchone()
+        if not pr:                                   # 02.11: t<id> ёки t<telegram uid> — иккаласи ҳам ишлайди
             self.say(chat, T.UNKNOWN); return "t_bad"
+        pid = pr["id"]
         self.user(frm, f"t{pid}")
         self.set_step(frm["id"], "m_trade", {"team": pid})
         self.say(chat, T.T_HELLO.format(name=esc(pr["name"]).upper()), self.trades_kb())

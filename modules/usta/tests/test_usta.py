@@ -254,6 +254,10 @@ class Masters(unittest.TestCase):
         pr = self.prorab(uid=79)
         h = self.b.handle
         self.assertEqual(h(msg(T.PK_ADD, 79)), "p_add")
+        self.assertEqual(h(msg("/start t79", 94)), "t_begin")                      # telegram uid орқали ҳам
+        self.assertEqual(h(msg(T.TRADES["elektr"], 94)), "m_trade")
+        h(msg(uid=94, contact={"phone_number": "998905550094"}))
+        self.assertEqual(self.b.db.execute("SELECT team FROM masters WHERE uid=94").fetchone()[0], pr["id"])
         self.assertEqual(h(msg(f"/start t{pr['id']}", 95)), "t_begin")
         self.assertEqual(h(msg(T.TRADES["plitka"], 95)), "m_trade")
         self.assertEqual(h(msg(uid=95, contact={"phone_number": "998905550095"})), "m_submit")
