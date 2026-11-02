@@ -437,6 +437,7 @@ class Bot:
             for o in self.owners:
                 self.api("sendMessage", chat_id=o, text="👷‍♂️ Таклиф орқали янги прораб қўшилди\n\n" + self.m_card(
                     self.db.execute("SELECT * FROM masters WHERE id=?", (r["id"],)).fetchone()), parse_mode="HTML")
+            self.auto_kits()
             return "m_submit"
         self.say(chat, T.M_SENT)
         kb = {"inline_keyboard": [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"},
@@ -540,6 +541,8 @@ class Bot:
         self.say(r["uid"], T.M_OK.format(trade=T.TRADES.get(r["trade"], r["trade"])) if st == "ok" else T.M_NO)
         if st == "ok":
             self.say(r["uid"], T.M_LINK.format(link=self.ref_link(r["id"]), pct=self.m_pct(r["id"])))
+            if r["trade"] == "prorab":
+                self.auto_kits()
         self.api("answerCallbackQuery", callback_query_id=q["id"])
         return act
 
@@ -776,7 +779,8 @@ class Bot:
             if r["status"] == "pending":
                 kb = [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"}, {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]
             else:
-                kb = [[{"text": "📋 Батафсил", "callback_data": f"mv:{r['id']}"}]]
+                kb = [[{"text": T.O_SEND_KIT, "callback_data": f"pk:{r['id']}"}],
+                      [{"text": "📋 Батафсил", "callback_data": f"mv:{r['id']}"}]]
             self.api("sendMessage", chat_id=chat, text=self.m_card(r), reply_markup={"inline_keyboard": kb}, parse_mode="HTML")
         return "o_prorab"
 
@@ -818,6 +822,24 @@ class Bot:
         self.say(chat, T.T_HELLO.format(name=esc(pr["name"]).upper()), self.trades_kb())
         return "t_begin"
 
+    def auto_kits(self) -> int:
+        """02.11 (владелец: «механизм не должен зависеть от тебя»): ҳар бир тасдиқланган прорабга QR ва матнлар
+        бир марта ўзи юборилади — тасдиқда, таклифда ва бот ишга тушганда (эски прораблар учун)."""
+        n = 0
+        for r in self.db.execute("SELECT id FROM masters WHERE trade='prorab' AND status='ok'").fetchall():
+            if self.db.execute("SELECT 1 FROM kv WHERE k=?", (f"kit:{r['id']}",)).fetchone():
+                continue
+            try:
+                for o in self.owners or [0]:
+                    self.p_kit(r["id"], o)
+                    break
+                self.db.execute("INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)", (f"kit:{r['id']}", now().isoformat()))
+                self.db.commit()
+                n += 1
+            except Exception as e:  # noqa: BLE001
+                print(f"auto_kits: {e}", flush=True)
+        return n
+
     def p_kit(self, pid: int, owner: int) -> str | None:
         pr = self.db.execute("SELECT * FROM masters WHERE id=? AND trade='prorab' AND status='ok'", (pid,)).fetchone()
         if not pr:
@@ -826,8 +848,9 @@ class Bot:
         name = esc(first[1] if len(first) > 1 else (first[0] if first else "Прораб"))   # «Фамилия Исм» → исм
         link = f"https://t.me/{self.username}?start=t{pr['id']}"
         self.qr(pr["uid"], link, T.P_KIT.format(name=name, mp=T.TEAM_MEMBER_PCT, lp=T.TEAM_LEAD_PCT, rp=T.REF_PCT), master_kb(True))
-        self.qr(pr["uid"], link, T.TEAM_KIT.format(name=name.upper(), mp=T.TEAM_MEMBER_PCT, link=link))
-        self.api("sendMessage", chat_id=owner, text=f"✅ {name}га QR ва 2 та матн юборилди.")
+        self.qr(pr["uid"], link, T.TEAM_KIT.format(name=name.upper(), mp=T.TEAM_MEMBER_PCT, link=link), master_kb(True))
+        if owner:
+            self.api("sendMessage", chat_id=owner, text=f"✅ {name}га QR ва 2 та матн юборилди.")
         return "pk"
 
     def p_add(self, pr, chat) -> str:
@@ -1043,6 +1066,10 @@ def main():
         api("setChatMenuButton", menu_button={"type": "web_app", "text": T.MENU_BTN, "web_app": {"url": T.MINIAPP_URL}})
     except Exception as e:  # noqa: BLE001
         print(f"menu: {e}", flush=True)
+    try:
+        print(f"usta: прорабларга QR юборилди: {bot.auto_kits()}", flush=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"auto_kits: {e}", flush=True)
     off = 0
     print("usta: запущен", flush=True)
     while True:

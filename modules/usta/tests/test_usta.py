@@ -242,6 +242,10 @@ class Masters(unittest.TestCase):
         self.assertEqual(h(msg("/start prorab", 81)), "start")                   # эски очиқ ҳавола ишламайди
         m = self.prorab(uid=79)
         self.assertEqual((m["name"], m["status"], m["trade"]), ("Али", "ok", "prorab"))
+        self.assertTrue(any(c == "sendPhoto" and p["chat_id"] == 79 and "ЖАМОАСИГА" in p["caption"] for c, p in self.api.calls))  # ўзи юборилди
+        before = len(self.api.calls)
+        self.assertEqual(self.b.auto_kits(), 0)                                   # такрорланмайди
+        self.assertEqual(len(self.api.calls), before)
         self.assertTrue(any(b["text"] == T.PK_TEAM for row in self.api.to(79)[-1]["reply_markup"]["keyboard"] for b in row))
         h(msg("/start", 60)); h(msg(T.KINDS["prorab"][0], 60)); h(msg(T.OBJ["kv"], 60)); h(msg("80 м² коробка", 60))
         h(msg(T.WHEN["week"], 60)); h(msg("Марказ", 60)); h(msg(T.SKIP, 60))
