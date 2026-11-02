@@ -1,0 +1,642 @@
+diff -ruN pristine/bot/handlers/brigada.py newv/bot/handlers/brigada.py
+--- pristine/bot/handlers/brigada.py	1970-01-01 06:00:00.000000000 +0600
++++ newv/bot/handlers/brigada.py	2026-11-02 23:37:15.781398514 +0500
+@@ -0,0 +1,434 @@
++"""🚖 Бригадир + жамоа (02.11.2026, владелец: «схема прораба — и для такси»).
++
++Бригадир — фақат владелец таклифи (бир марталик ҳавола). Бригадирнинг ўз QR'и: ҳайдовчи → машина тури →
++«📱 Рақамни юбориш» → бригадир ✅. Жамоа аъзоси ойлик обунани (50 000) тўласа ва админ тасдиқласа —
++бригадирга улуш (BRIGADA_SHARE, 10 000 сўм) ҳисобланади, владелец «💸 Тўладим» билан ёпади.
++Владелец бригадирга юборилган ҳамма нарсанинг нусхасини кўради. Мавжуд такси оқими ўзгармайди.
++"""
++import html
++import re
++import logging
++import secrets
++import urllib.parse
++from contextlib import closing
++
++from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update)
++from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
++
++from bot.database import _connect, register_driver
++from bot.keyboards.reply import BTN_BRIGADA, main_menu_keyboard
++from config import config
++
++logger = logging.getLogger(__name__)
++BRIGADA_SHARE = 10_000          # жамоа аъзоси ойлик тўласа — бригадирга (сўм)
++CARS = {"car": "🚕 Енгил авто", "damas": "🚐 Дамас", "cargo": "🚚 Юк авто", "other": "⚙️ Бошқа"}
++
++SCHEMA = """
++CREATE TABLE IF NOT EXISTS brigada (uid INTEGER PRIMARY KEY, name TEXT, username TEXT,
++    status TEXT NOT NULL DEFAULT 'ok', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
++CREATE TABLE IF NOT EXISTS brigada_members (uid INTEGER PRIMARY KEY, brigadier INTEGER NOT NULL, name TEXT,
++    username TEXT, phone TEXT, car TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
++CREATE TABLE IF NOT EXISTS brigada_invites (code TEXT PRIMARY KEY, used_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
++CREATE TABLE IF NOT EXISTS brigada_earnings (id INTEGER PRIMARY KEY AUTOINCREMENT, brigadier INTEGER NOT NULL,
++    driver INTEGER NOT NULL, amount INTEGER NOT NULL, share INTEGER NOT NULL, paid INTEGER NOT NULL DEFAULT 0,
++    created_at TEXT DEFAULT CURRENT_TIMESTAMP);
++"""
++
++
++# ---------- база ----------
++def db():
++    con = _connect()
++    con.executescript(SCHEMA)
++    return con
++
++
++def money(v: int) -> str:
++    return f"{int(v):,}".replace(",", " ") + " сўм"
++
++
++def esc(s) -> str:
++    return html.escape(str(s or ""), quote=False)
++
++
++def first_name(full: str | None) -> str:
++    return (full or "Бригадир").split()[0]
++
++
++def new_invite() -> str:
++    code = secrets.token_urlsafe(9).replace("-", "x").replace("_", "y")
++    with closing(db()) as con, con:
++        con.execute("INSERT INTO brigada_invites(code) VALUES (?)", (code,))
++    return code
++
++
++def use_invite(code: str, uid: int) -> bool:
++    """Бир марталик: биринчи кирган одамники; ўша одам қайта босса ҳам ишлайди."""
++    with closing(db()) as con, con:
++        row = con.execute("SELECT used_by FROM brigada_invites WHERE code=?", (code,)).fetchone()
++        if not row or (row[0] is not None and row[0] != uid):
++            return False
++        con.execute("UPDATE brigada_invites SET used_by=? WHERE code=?", (uid, code))
++        return True
++
++
++def add_brigadier(uid: int, name: str | None, username: str | None) -> None:
++    with closing(db()) as con, con:
++        con.execute("""INSERT INTO brigada(uid, name, username, status) VALUES (?,?,?,'ok')
++            ON CONFLICT(uid) DO UPDATE SET name=excluded.name, username=excluded.username, status='ok'""",
++                    (uid, name, username))
++
++
++def brigadier(uid: int):
++    with closing(db()) as con:
++        return con.execute("SELECT * FROM brigada WHERE uid=? AND status='ok'", (uid,)).fetchone()
++
++
++def add_member(uid: int, bid: int, name, username, phone: str, car: str):
++    with closing(db()) as con, con:
++        con.execute("""INSERT INTO brigada_members(uid, brigadier, name, username, phone, car, status)
++            VALUES (?,?,?,?,?,?,'pending') ON CONFLICT(uid) DO UPDATE SET brigadier=excluded.brigadier,
++            name=excluded.name, username=excluded.username, phone=excluded.phone, car=excluded.car, status='pending'""",
++                    (uid, bid, name, username, phone, car))
++        return con.execute("SELECT * FROM brigada_members WHERE uid=?", (uid,)).fetchone()
++
++
++def set_member(uid: int, bid: int, status: str):
++    with closing(db()) as con, con:
++        con.execute("UPDATE brigada_members SET status=? WHERE uid=? AND brigadier=?", (status, uid, bid))
++        return con.execute("SELECT * FROM brigada_members WHERE uid=? AND brigadier=?", (uid, bid)).fetchone()
++
++
++def team(bid: int) -> list:
++    with closing(db()) as con:
++        return list(con.execute("SELECT * FROM brigada_members WHERE brigadier=? AND status!='no' "
++                                "ORDER BY status DESC, created_at", (bid,)))
++
++
++def record_share(driver_id: int, amount: int):
++    """Ойлик тўлов тасдиқланди: ҳайдовчи жамоада бўлса — бригадирга улуш. (brigadier_uid, share) ёки None."""
++    with closing(db()) as con, con:
++        m = con.execute("SELECT brigadier FROM brigada_members WHERE uid=? AND status='ok'", (driver_id,)).fetchone()
++        if not m:
++            return None
++        con.execute("INSERT INTO brigada_earnings(brigadier, driver, amount, share) VALUES (?,?,?,?)",
++                    (m[0], driver_id, amount, BRIGADA_SHARE))
++        return int(m[0]), BRIGADA_SHARE
++
++
++def owed(bid: int) -> int:
++    with closing(db()) as con:
++        return int(con.execute("SELECT COALESCE(SUM(share),0) FROM brigada_earnings WHERE brigadier=? AND paid=0",
++                               (bid,)).fetchone()[0])
++
++
++def mark_paid(bid: int) -> int:
++    with closing(db()) as con, con:
++        total = int(con.execute("SELECT COALESCE(SUM(share),0) FROM brigada_earnings WHERE brigadier=? AND paid=0",
++                                (bid,)).fetchone()[0])
++        con.execute("UPDATE brigada_earnings SET paid=1 WHERE brigadier=? AND paid=0", (bid,))
++        return total
++
++
++def all_brigadiers() -> list:
++    with closing(db()) as con:
++        return list(con.execute("""SELECT b.*, (SELECT COUNT(*) FROM brigada_members m
++            WHERE m.brigadier=b.uid AND m.status='ok') AS n FROM brigada b WHERE b.status='ok' ORDER BY b.created_at"""))
++
++
++# ---------- матнлар (ўзбек кирилл) ----------
++def invite_text(link: str) -> str:
++    return ("🚖 <b>XOJAOBOD CITY 24 — БРИГАДИР ТАКЛИФИ</b>\n\n"
++            "Сиз <b>Бригадир</b> бўласиз:\n"
++            "👥 ўз ҳайдовчилар жамоангизни йиғасиз\n"
++            "✅ жамоангизга кимни олишни ўзингиз ҳал қиласиз\n"
++            f"💰 жамоангиздаги ҳар бир ҳайдовчи ойлик тўласа — сизга <b>{money(BRIGADA_SHARE)}</b>\n\n"
++            "<b>Қандай кираман?</b>\nҲаволани босинг — бўлди. Кейин бот сизга жамоангиз QR-кодини юборади.\n\n"
++            f"⚠️ Ҳавола фақат сиз учун — бир марта ишлайди.\n\n🔗 {link}")
++
++
++INVITE_SHORT = ("🚖 XOJAOBOD CITY 24 — бригадир таклифи. Ўз ҳайдовчилар жамоангизни йиғасиз, "
++                "ҳар бир ҳайдовчидан улуш оласиз. Ҳаволани босинг — бўлди. Ҳавола фақат сиз учун.")
++
++
++def kit_for_brigadier(name: str) -> str:
++    return (f"<b>Ассалому алайкум, {esc(name)}! 🚖</b>\n\n"
++            "Сиз — <b>XOJAOBOD CITY 24</b> такси хизматининг Бригадирисиз. Мана <b>жамоангиз QR-коди</b>.\n\n"
++            "<b>Ҳайдовчиларингиз қандай қўшилади:</b>\n1️⃣ QR-кодни сканер қилади\n2️⃣ Машина турини танлайди\n"
++            "3️⃣ «📱 Рақамни юбориш» — бўлди!\nКейин сизга хабар келади — <b>✅ Тасдиқлаш</b> ни босасиз.\n\n"
++            f"<b>Пул:</b> жамоангиздаги ҳайдовчи ойлик обуна тўласа — сизга <b>{money(BRIGADA_SHARE)}</b>.\n\n"
++            "Пастда — жамоангиз учун тайёр хабар. Уни ҳайдовчиларингизга <b>юборинг (переслать)</b> 👇")
++
++
++def kit_for_team(name: str, link: str) -> str:
++    return (f"<b>🚖 {esc(name).upper()} ЖАМОАСИГА ҚЎШИЛИНГ</b>\n\n"
++            "Бу — <b>XOJAOBOD CITY 24</b> боти. Хўжаобод бўйлаб такси буюртмалари шу ерга келади.\n\n"
++            "<b>Қандай қўшиламан?</b>\n1️⃣ QR-кодни сканер қилинг (ёки пастдаги ҳаволани босинг)\n"
++            "2️⃣ Машина турини танланг\n3️⃣ «📱 Рақамни юбориш» тугмасини босинг — бўлди!\n\n"
++            f"<b>Кейин нима бўлади?</b>\n✅ {esc(name)} тасдиқлайди — сиз жамоадасиз\n"
++            "💳 Ойлик обуна (50 000 сўм) тўлайсиз — буюртмалар келишни бошлайди\n"
++            "🔔 Буюртма келса — «Қабул қилиш» ни босасиз, биринчи олган ҳайдовчиники\n\n"
++            f"🔗 {link}")
++
++
++def qr_url(link: str) -> str:
++    return "https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=20&data=" + urllib.parse.quote(link, safe="")
++
++
++def team_link(bot_username: str, bid: int) -> str:
++    return f"https://t.me/{bot_username}?start=bt{bid}"
++
++
++def is_admin(uid: int | None) -> bool:
++    return bool(uid) and uid in config.ADMIN_IDS
++
++
++async def send_qr(bot, chat: int, link: str, caption: str, markup=None) -> None:
++    try:
++        await bot.send_photo(chat, qr_url(link), caption=caption, parse_mode="HTML", reply_markup=markup)
++    except Exception as exc:  # QR бўлмаса ҳам ҳавола етади
++        logger.warning("brigada qr: %s", exc)
++        await bot.send_message(chat, caption, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
++
++
++async def notify_admins(bot, text: str, markup=None) -> None:
++    for admin_id in config.ADMIN_IDS:
++        try:
++            await bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=markup)
++        except Exception:
++            pass
++
++
++def brig_menu() -> InlineKeyboardMarkup:
++    return InlineKeyboardMarkup([[InlineKeyboardButton("👥 Жамоам", callback_data="brg:team"),
++                                  InlineKeyboardButton("➕ Жамоага қўшиш", callback_data="brg:add")]])
++
++
++async def send_kit(bot, bid: int, to_brigadier: bool = True) -> None:
++    """Бригадирга QR + 2 матн; владелец — айнан нусхаси."""
++    b = brigadier(bid)
++    if not b:
++        return
++    name = first_name(b["name"])
++    link = team_link(bot.username, bid)
++    msgs = [kit_for_brigadier(name), kit_for_team(name, link)]
++    if to_brigadier:
++        for i, cap in enumerate(msgs):
++            await send_qr(bot, bid, link, cap, brig_menu() if i == 0 else None)
++    await notify_admins(bot, f"👀 <b>{esc(name)}га юборилди</b> — у кўрган 2 та хабарнинг нусхаси 👇")
++    for admin_id in config.ADMIN_IDS:
++        for cap in msgs:
++            await send_qr(bot, admin_id, link, cap)
++
++
++# ---------- /start ҳаволалари ----------
++async def brigada_start(update: Update, context: ContextTypes.DEFAULT_TYPE, arg: str) -> bool:
++    """main.start'дан чақирилади. True — ҳавола бизники ва ишланди."""
++    user, msg = update.effective_user, update.effective_message
++    if not user or not msg:
++        return False
++    if arg.startswith("bi_"):                                  # бригадир таклифи
++        if not use_invite(arg[3:40], user.id):
++            await msg.reply_text("Бу таклиф ҳаволаси ишлатилган ёки нотўғри. Админдан янгисини сўранг.")
++            return True
++        register_driver(user.id, user.username, user.full_name)
++        add_brigadier(user.id, user.full_name, user.username)
++        await msg.reply_text("🎉 Сиз <b>Бригадир</b> сифатида рўйхатдасиз!", parse_mode="HTML")
++        await notify_admins(context.bot, f"🚖 Таклиф орқали янги бригадир: <b>{esc(user.full_name)}</b>"
++                                         f"{' @' + user.username if user.username else ''} · ID {user.id}")
++        await send_kit(context.bot, user.id)
++        return True
++    if arg.startswith("bt") and arg[2:].isdigit():             # бригадир жамоасига қўшилиш
++        b = brigadier(int(arg[2:]))
++        if not b:
++            await msg.reply_text("Ҳавола нотўғри. Бригадирингиздан янгисини сўранг.")
++            return True
++        context.user_data["brigada_join"] = {"bid": b["uid"]}
++        kb = InlineKeyboardMarkup([[InlineKeyboardButton(v, callback_data=f"brj:{b['uid']}:{k}")] for k, v in CARS.items()])
++        await msg.reply_text(f"🚖 <b>{esc(first_name(b['name'])).upper()} ЖАМОАСИГА ҚЎШИЛИШ</b>\n\nМашинангиз тури 👇",
++                             parse_mode="HTML", reply_markup=kb)
++        return True
++    return False
++
++
++async def join_car(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    q = update.callback_query
++    _, bid, car = q.data.split(":")
++    await q.answer()
++    if not brigadier(int(bid)) or car not in CARS:
++        return
++    context.user_data["brigada_join"] = {"bid": int(bid), "car": car}
++    kb = ReplyKeyboardMarkup([[KeyboardButton("📱 Рақамни юбориш", request_contact=True)]],
++                             resize_keyboard=True, one_time_keyboard=True)
++    await q.message.reply_text(f"{CARS[car]} ✅\n\n📱 Пастдаги «Рақамни юбориш» тугмасини босинг — бўлди.", reply_markup=kb)
++
++
++async def join_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    """Алоҳида гуруҳда ишлайди: фақат жамоага қўшилаётган одамнинг контактини олади."""
++    data = context.user_data.get("brigada_join")
++    msg, user = update.effective_message, update.effective_user
++    if not data or "car" not in data or not msg or not msg.contact or not user:
++        return
++    if msg.contact.user_id and msg.contact.user_id != user.id:
++        await msg.reply_text("Ўзингизнинг рақамингизни «📱 Рақамни юбориш» тугмаси билан юборинг.")
++        return
++    context.user_data.pop("brigada_join", None)
++    phone = "+" + msg.contact.phone_number.lstrip("+")
++    m = add_member(user.id, data["bid"], user.full_name, user.username, phone, data["car"])
++    register_driver(user.id, user.username, user.full_name)
++    b = brigadier(data["bid"])
++    await msg.reply_text(f"✅ Тайёр! {esc(first_name(b['name']))} тасдиқлагач хабар берамиз.",
++                         reply_markup=main_menu_keyboard(is_admin(user.id)))
++    card = member_card(m, b)
++    kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Тасдиқлаш", callback_data=f"brm:ok:{user.id}"),
++                                InlineKeyboardButton("❌ Рад этиш", callback_data=f"brm:no:{user.id}")]])
++    try:
++        await context.bot.send_message(b["uid"], "👥 Жамоангизга янги ҳайдовчи: тасдиқлайсизми?\n\n" + card,
++                                       parse_mode="HTML", reply_markup=kb)
++    except Exception as exc:
++        logger.warning("brigada notify: %s", exc)
++    await notify_admins(context.bot, f"ℹ️ {esc(first_name(b['name']))} жамоасига янги ҳайдовчи (бригадир тасдиқлайди)\n\n" + card)
++
++
++def member_card(m, b=None) -> str:
++    st = {"pending": "⏳ кутмоқда", "ok": "✅ жамоада", "no": "❌ рад"}.get(m["status"], m["status"])
++    un = f" @{m['username']}" if m["username"] else ""
++    tm = f"\n🚖 бригадир: {esc(first_name(b['name']))}" if b else ""
++    return (f"🚗 <b>{esc(m['name'])}</b>{un}\n🆔 {m['uid']}\n📞 {esc(m['phone'])}\n{CARS.get(m['car'], m['car'])}{tm}\n{st}")
++
++
++async def member_decide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    q = update.callback_query
++    _, act, raw = q.data.split(":")
++    b = brigadier(q.from_user.id)
++    if not b:
++        await q.answer("Бу тугма фақат бригадир учун.", show_alert=True)
++        return
++    m = set_member(int(raw), b["uid"], "ok" if act == "ok" else "no")
++    if not m:
++        await q.answer("Бу ҳайдовчи сизнинг жамоангизда эмас.", show_alert=True)
++        return
++    await q.answer("✅" if act == "ok" else "❌")
++    try:
++        await q.edit_message_text(member_card(m, b), parse_mode="HTML")
++    except Exception:
++        pass
++    if act == "ok":
++        pay = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Ойлик тўлов (50 000)", callback_data="auto:driver:pay")]])
++        await context.bot.send_message(m["uid"], f"🎉 Сиз {esc(first_name(b['name']))} жамоасидасиз!\n\n"
++                                                 "Буюртмалар келиши учун ойлик обунани тўланг 👇",
++                                       parse_mode="HTML", reply_markup=pay)
++    else:
++        await context.bot.send_message(m["uid"], "Афсуски, бригадир ҳозирча тасдиқламади.")
++    await notify_admins(context.bot, f"🚖 {esc(first_name(b['name']))}: {esc(m['name'])} — "
++                                     f"{'✅ жамоага қўшилди' if act == 'ok' else '❌ рад'}")
++
++
++# ---------- бригадир тугмалари ----------
++async def brig_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    q = update.callback_query
++    b = brigadier(q.from_user.id)
++    if not b:
++        await q.answer("Бу тугма фақат бригадир учун.", show_alert=True)
++        return
++    await q.answer()
++    name = first_name(b["name"])
++    if q.data == "brg:add":
++        await send_qr(context.bot, b["uid"], team_link(context.bot.username, b["uid"]),
++                      kit_for_team(name, team_link(context.bot.username, b["uid"])), brig_menu())
++        return
++    rows = team(b["uid"])
++    if not rows:
++        await context.bot.send_message(b["uid"], "👥 Жамоангиз ҳали бўш. «➕ Жамоага қўшиш» — QR-кодни ҳайдовчиларга кўрсатинг.",
++                                       reply_markup=brig_menu())
++        return
++    lines = [f"👥 <b>ЖАМОАМ</b>: {len(rows)} та · улушингиз: {money(owed(b['uid']))}"]
++    btn = []
++    for m in rows:
++        lines.append(f"{'✅' if m['status'] == 'ok' else '⏳'} {CARS.get(m['car'], '')} — {esc(m['name'])} · {esc(m['phone'])}")
++        if m["status"] == "pending":
++            btn.append([InlineKeyboardButton(f"✅ {(m['name'] or '')[:20]}", callback_data=f"brm:ok:{m['uid']}"),
++                        InlineKeyboardButton("❌", callback_data=f"brm:no:{m['uid']}")])
++    await context.bot.send_message(b["uid"], "\n".join(lines), parse_mode="HTML",
++                                   reply_markup=InlineKeyboardMarkup(btn + list(brig_menu().inline_keyboard)))
++
++
++# ---------- владелец ----------
++async def owner_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    user, msg = update.effective_user, update.effective_message
++    if not is_admin(user.id if user else None):
++        return
++    rows = all_brigadiers()
++    lines = [f"🚖 <b>БРИГАДИРЛАР</b>: {len(rows)} та"]
++    btn = [[InlineKeyboardButton("➕ Янги бригадир", callback_data="bro:new")]]
++    for b in rows:
++        debt = owed(b["uid"])
++        lines.append(f"✅ {esc(b['name'])} · 👥 {b['n']} · қарз: {money(debt)}")
++        row = [InlineKeyboardButton(f"📤 {first_name(b['name'])[:14]} — QR", callback_data=f"bro:kit:{b['uid']}")]
++        if debt:
++            row.append(InlineKeyboardButton(f"💸 Тўладим {money(debt)}", callback_data=f"bro:paid:{b['uid']}"))
++        btn.append(row)
++    if not rows:
++        lines.append("Ҳали йўқ. «➕ Янги бригадир» — бир марталик таклиф.")
++    await msg.reply_text("\n".join(lines), parse_mode="HTML", reply_markup=InlineKeyboardMarkup(btn))
++
++
++async def owner_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    q = update.callback_query
++    if not is_admin(q.from_user.id):
++        await q.answer("Бу амал фақат админ учун.", show_alert=True)
++        return
++    await q.answer()
++    parts = q.data.split(":")
++    if parts[1] == "new":
++        link = f"https://t.me/{context.bot.username}?start=bi_{new_invite()}"
++        share = ("https://t.me/share/url?url=" + urllib.parse.quote(link, safe="")
++                 + "&text=" + urllib.parse.quote(INVITE_SHORT, safe=""))
++        await send_qr(context.bot, q.from_user.id, link, invite_text(link),
++                      InlineKeyboardMarkup([[InlineKeyboardButton("📤 Юбориш", url=share)]]))
++    elif parts[1] == "kit" and parts[2].isdigit():
++        await send_kit(context.bot, int(parts[2]))
++    elif parts[1] == "paid" and parts[2].isdigit():
++        total = mark_paid(int(parts[2]))
++        b = brigadier(int(parts[2]))
++        if total and b:
++            try:
++                await context.bot.send_message(b["uid"], f"💰 Сизга {money(total)} тўланди. Раҳмат!")
++            except Exception:
++                pass
++        await context.bot.send_message(q.from_user.id, f"✅ Ёпилди: {money(total)}")
++
++
++async def on_topup_approved(bot, driver_id: int, amount: int) -> None:
++    """drivers.review_topup'дан: жамоа аъзоси ойлик тўлади → бригадирга улуш."""
++    try:
++        res = record_share(int(driver_id), int(amount))
++    except Exception as exc:
++        logger.warning("brigada share: %s", exc)
++        return
++    if not res:
++        return
++    bid, share = res
++    b = brigadier(bid)
++    try:
++        await bot.send_message(bid, f"💰 Жамоангиздан ҳайдовчи ойлик тўлади — сизга <b>{money(share)}</b>.\n"
++                                    f"Жами қарз: {money(owed(bid))}", parse_mode="HTML")
++    except Exception:
++        pass
++    await notify_admins(bot, f"🚖 Бригадир {esc(first_name(b['name'] if b else ''))}: +{money(share)} улуш "
++                             f"(жами {money(owed(bid))}). Тўлаганда — «{BTN_BRIGADA}» → «💸 Тўладим».")
++
++
++def brigada_handlers() -> tuple:
++    """group=0 (main.build_application бошида)."""
++    return (
++        MessageHandler(filters.Regex("^" + re.escape(BTN_BRIGADA) + "$"), owner_panel),
++        CallbackQueryHandler(join_car, pattern=r"^brj:\d+:\w+$"),
++        CallbackQueryHandler(member_decide, pattern=r"^brm:(ok|no):\d+$"),
++        CallbackQueryHandler(brig_buttons, pattern=r"^brg:(team|add)$"),
++        CallbackQueryHandler(owner_buttons, pattern=r"^bro:(new|kit:\d+|paid:\d+)$"),
++    )
++
++
++def brigada_contact_handler() -> MessageHandler:
++    """Алоҳида гуруҳ (5): бошқа суҳбатлардаги контактларга халақит бермайди."""
++    return MessageHandler(filters.CONTACT, join_contact)
+diff -ruN pristine/bot/handlers/drivers.py newv/bot/handlers/drivers.py
+--- pristine/bot/handlers/drivers.py	2026-11-02 23:37:15.712819681 +0500
++++ newv/bot/handlers/drivers.py	2026-11-02 23:37:15.781362685 +0500
+@@ -169,6 +169,9 @@
+         await context.bot.send_message(int(topup["driver_id"]), text)
+     except Exception:
+         pass
++    if approved:  # 02.11: жамоа аъзоси бўлса — бригадирга улуш
++        from bot.handlers.brigada import on_topup_approved
++        await on_topup_approved(context.bot, int(topup["driver_id"]), int(topup["amount"]))
+ 
+ 
+ async def credit_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+diff -ruN pristine/bot/keyboards/reply.py newv/bot/keyboards/reply.py
+--- pristine/bot/keyboards/reply.py	2026-11-02 23:37:15.733512972 +0500
++++ newv/bot/keyboards/reply.py	2026-11-02 23:37:15.779204778 +0500
+@@ -2,6 +2,8 @@
+ 
+ from config import config
+ 
++BTN_BRIGADA = "🚖 Бригадирлар"   # 02.11: такси бригадирлари (фақат админ)
++
+ 
+ def main_menu_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
+     rows = [
+@@ -13,7 +15,7 @@
+         [config.MENU_CONTACT, config.MENU_ABOUT],
+     ]
+     if is_admin:
+-        rows.append([config.BTN_CONTROL])
++        rows.append([config.BTN_CONTROL, BTN_BRIGADA])
+     return ReplyKeyboardMarkup(
+         rows,
+         resize_keyboard=True,
+diff -ruN pristine/main.py newv/main.py
+--- pristine/main.py	2026-11-02 23:37:15.733314374 +0500
++++ newv/main.py	2026-11-02 23:37:15.776760668 +0500
+@@ -10,6 +10,7 @@
+ 
+ from bot.database import init_db, set_bot_user_active
+ from bot.handlers.about import about_handler
++from bot.handlers.brigada import brigada_contact_handler, brigada_handlers, brigada_start
+ from bot.handlers.auto_services import auto_services_handlers
+ from bot.handlers.admin import admin_handler, daily_dua_admin_handlers
+ from bot.handlers.ads import ads_handlers
+@@ -56,6 +57,8 @@
+ 
+ 
+ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
++    if context.args and await brigada_start(update, context, context.args[0].strip()):
++        return
+     await main_menu_command(update, context)
+ 
+ 
+@@ -115,6 +118,9 @@
+     )
+     app.add_handler(user_tracker_handler(), group=-1)
+     app.add_handler(CommandHandler("start", start), group=0)
++    for handler in brigada_handlers():
++        app.add_handler(handler, group=0)
++    app.add_handler(brigada_contact_handler(), group=5)
+     app.add_handler(admin_handler(), group=0)
+     for handler in daily_dua_admin_handlers():
+         app.add_handler(handler, group=0)
+diff -ruN pristine/tests/test_brigada.py newv/tests/test_brigada.py
+--- pristine/tests/test_brigada.py	1970-01-01 06:00:00.000000000 +0600
++++ newv/tests/test_brigada.py	2026-11-02 23:37:15.783442979 +0500
+@@ -0,0 +1,136 @@
++"""02.11: бригадир + жамоа — таклиф бир марталик, жамоа QR, бригадир тасдиқлайди, ойликдан улуш, владелец нусха кўради."""
++import os
++import tempfile
++import unittest
++from types import SimpleNamespace
++from unittest.mock import patch
++
++from bot import database
++from bot.handlers import brigada as B
++from config import config
++
++OWNER = 5000
++
++
++class FakeBot:
++    username = "xojaobodcity24bot"
++
++    def __init__(self):
++        self.sent = []
++
++    async def send_message(self, chat, text, **kw):
++        self.sent.append(("msg", chat, text, kw))
++
++    async def send_photo(self, chat, photo, caption=None, **kw):
++        self.sent.append(("photo", chat, caption, kw))
++
++    def to(self, chat):
++        return [s for s in self.sent if s[1] == chat]
++
++
++class Msg:
++    def __init__(self, bot, chat, contact=None):
++        self.bot, self.chat, self.contact = bot, chat, contact
++        self.replies = []
++
++    async def reply_text(self, text, **kw):
++        self.replies.append(text)
++        self.bot.sent.append(("msg", self.chat, text, kw))
++
++
++def user(uid, name="Али Валиев", username="ali"):
++    return SimpleNamespace(id=uid, full_name=name, username=username)
++
++
++def upd(bot, uid, name="Али Валиев", contact=None, data=None):
++    u = user(uid, name)
++    m = Msg(bot, uid, contact)
++    q = None
++    if data:
++        async def answer(*a, **k):
++            return None
++
++        async def edit(*a, **k):
++            return None
++        q = SimpleNamespace(data=data, from_user=u, answer=answer, edit_message_text=edit, message=m)
++    return SimpleNamespace(effective_user=u, effective_message=m, callback_query=q)
++
++
++class BrigadaTests(unittest.IsolatedAsyncioTestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.p = [patch.object(config, "DATABASE_PATH", os.path.join(self.temp.name, "b.sqlite3")),
++                  patch.object(config, "ADMIN_IDS", [OWNER])]
++        for p in self.p:
++            p.start()
++        database.init_db()
++        self.bot = FakeBot()
++
++    def tearDown(self):
++        for p in self.p:
++            p.stop()
++        self.temp.cleanup()
++
++    def ctx(self, ud=None):
++        return SimpleNamespace(bot=self.bot, user_data=ud if ud is not None else {})
++
++    async def invite_brigadier(self, uid=77):
++        await B.owner_buttons(upd(self.bot, OWNER, data="bro:new"), self.ctx())
++        cap = [s for s in self.bot.sent if s[0] == "photo" and s[1] == OWNER][-1][2]
++        self.assertIn("БРИГАДИР ТАКЛИФИ", cap)
++        code = cap.split("start=bi_")[1].split()[0]
++        self.assertTrue(await B.brigada_start(upd(self.bot, uid, "Бекзод Алиев"), self.ctx(), f"bi_{code}"))
++        return code
++
++    async def test_invite_once_and_kit_with_owner_copy(self):
++        code = await self.invite_brigadier(77)
++        self.assertIsNotNone(B.brigadier(77))
++        self.assertIsNotNone(database.driver_info(77))                       # бригадир ҳам ҳайдовчи
++        caps = [s[2] for s in self.bot.to(77) if s[0] == "photo"]
++        self.assertTrue(any("Бригадирисиз" in c for c in caps) and any("ЖАМОАСИГА ҚЎШИЛИНГ" in c for c in caps))
++        self.assertTrue(any(s[0] == "photo" and "ЖАМОАСИГА" in (s[2] or "") for s in self.bot.to(OWNER)))  # нусха
++        await B.brigada_start(upd(self.bot, 88), self.ctx(), f"bi_{code}")     # бошқа одам — йўқ
++        self.assertIsNone(B.brigadier(88))
++
++    async def test_team_join_approve_and_share(self):
++        await self.invite_brigadier(77)
++        ud = {}
++        self.assertTrue(await B.brigada_start(upd(self.bot, 90, "Карим Ҳайдовчи"), self.ctx(ud), "bt77"))
++        await B.join_car(upd(self.bot, 90, data="brj:77:damas"), self.ctx(ud))
++        contact = SimpleNamespace(user_id=90, phone_number="998901112233")
++        await B.join_contact(upd(self.bot, 90, "Карим Ҳайдовчи", contact=contact), self.ctx(ud))
++        m = B.team(77)[0]
++        self.assertEqual((m["uid"], m["status"], m["car"], m["phone"]), (90, "pending", "damas", "+998901112233"))
++        self.assertTrue(any("тасдиқлайсизми" in s[2] for s in self.bot.to(77) if s[0] == "msg"))
++        await B.member_decide(upd(self.bot, 99, data="brm:ok:90"), self.ctx())  # бегона тасдиқлай олмайди
++        self.assertEqual(B.team(77)[0]["status"], "pending")
++        await B.member_decide(upd(self.bot, 77, data="brm:ok:90"), self.ctx())
++        self.assertEqual(B.team(77)[0]["status"], "ok")
++        self.assertTrue(any("auto:driver:pay" in str(s[3]) for s in self.bot.to(90)))   # тўлов тугмаси
++        await B.on_topup_approved(self.bot, 90, 50000)
++        self.assertEqual(B.owed(77), B.BRIGADA_SHARE)
++        await B.on_topup_approved(self.bot, 12345, 50000)                     # жамоасиз ҳайдовчи — улуш йўқ
++        self.assertEqual(B.owed(77), B.BRIGADA_SHARE)
++        await B.owner_buttons(upd(self.bot, OWNER, data="bro:paid:77"), self.ctx())
++        self.assertEqual(B.owed(77), 0)
++
++    async def test_contact_ignored_without_join(self):
++        contact = SimpleNamespace(user_id=91, phone_number="998901112299")
++        await B.join_contact(upd(self.bot, 91, contact=contact), self.ctx({}))
++        self.assertEqual(self.bot.sent, [])                                   # бошқа суҳбатларга халақит йўқ
++
++    async def test_not_admin_cannot_invite(self):
++        await B.owner_buttons(upd(self.bot, 42, data="bro:new"), self.ctx())
++        self.assertFalse(any(s[0] == "photo" for s in self.bot.sent))
++        await B.owner_panel(upd(self.bot, 42), self.ctx())
++        self.assertEqual(self.bot.sent, [])
++
++    async def test_owner_panel_and_bad_links(self):
++        await B.owner_panel(upd(self.bot, OWNER), self.ctx())
++        self.assertIn("БРИГАДИРЛАР", self.bot.to(OWNER)[-1][2])
++        self.assertTrue(await B.brigada_start(upd(self.bot, 50), self.ctx(), "bt999"))
++        self.assertFalse(await B.brigada_start(upd(self.bot, 50), self.ctx(), "reklama"))
++
++
++if __name__ == "__main__":
++    unittest.main()
