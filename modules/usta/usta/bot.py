@@ -72,7 +72,7 @@ def main_kb() -> dict:
 
 def owner_kb() -> dict:
     return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_LEADS}], [{"text": T.O_MASTERS}, {"text": T.O_PENDING}],
-                         [{"text": T.O_MONEY}, {"text": T.O_CLIENT}]], "resize_keyboard": True}
+                         [{"text": T.O_PRORAB}, {"text": T.O_MONEY}], [{"text": T.O_CLIENT}]], "resize_keyboard": True}
 
 
 class Bot:
@@ -117,6 +117,11 @@ class Bot:
             r = self.owner(frm, chat, text)
             if r:
                 return r
+        if text == "/start prorab":                  # 02.11: прорабга алоҳида ҳавола — касб танлаш шарт эмас
+            self.user(frm, "prorab")
+            self.set_step(frm["id"], "m_phone", {"trade": "prorab"})
+            self.say(chat, T.M_HELLO.split("\n\n")[0] + " — " + T.TRADES["prorab"] + "\n\n" + T.M_ASK_PHONE, self.phone_kb())
+            return "m_prorab"
         if text in ("/usta", "/start usta", T.M_BTN):
             self.user(frm, "usta")
             return self.m_begin(frm, chat)
@@ -557,6 +562,8 @@ class Bot:
             return self.o_pending(chat)
         if text == T.O_MONEY:
             return self.o_money(chat)
+        if text == T.O_PRORAB:
+            return self.o_prorab(chat)
         return None
 
     def o_summary(self) -> str:
@@ -604,6 +611,22 @@ class Bot:
             btns.append([{"text": f"{esc(r['name'])[:28]}", "callback_data": f"mv:{r['id']}"}])
         self.say(chat, "\n".join(lines), {"inline_keyboard": btns})
         return "o_masters"
+
+    def o_prorab(self, chat: int) -> str:
+        """02.11: пультда прораблар алоҳида — рўйхат, текширувдагилар ✅/❌, таклиф ҳаволаси."""
+        link = f"https://t.me/{self.username}?start=prorab"
+        rows = self.db.execute("SELECT * FROM masters WHERE trade='prorab' AND status!='no' ORDER BY status DESC, id").fetchall()
+        if not rows:
+            self.say(chat, f"👷‍♂️ <b>ПРОРАБЛАР</b>\n\nҲали йўқ. Прорабга шу ҳаволани юборинг — 2 та тугма, бўлди:\n{link}", owner_kb())
+            return "o_prorab"
+        self.say(chat, f"👷‍♂️ <b>ПРОРАБЛАР</b>: {len(rows)} та\nТаклиф ҳаволаси:\n{link}", owner_kb())
+        for r in rows:
+            if r["status"] == "pending":
+                kb = [[{"text": "✅ Тасдиқлаш", "callback_data": f"ma:{r['id']}"}, {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]
+            else:
+                kb = [[{"text": "📋 Батафсил", "callback_data": f"mv:{r['id']}"}]]
+            self.api("sendMessage", chat_id=chat, text=self.m_card(r), reply_markup={"inline_keyboard": kb}, parse_mode="HTML")
+        return "o_prorab"
 
     def o_pending(self, chat: int) -> str:
         rows = self.db.execute("SELECT * FROM masters WHERE status='pending' ORDER BY id").fetchall()

@@ -305,6 +305,18 @@ class TOwnerPanel(unittest.TestCase):
         self.assertEqual(h(msg("1 500 000", uid=OWNER)), "o_money")
         self.assertEqual(self.b.db.execute("SELECT paid FROM leads WHERE n=1").fetchone()[0], 1500000)
 
+    def test_prorab_button(self):
+        """02.11: пультда «👷‍♂️ Прораблар» — бўш бўлса ҳавола, ҳавола орқали 1 тугмада рўйхатдан ўтади."""
+        h = self.b.handle
+        self.assertTrue(any(b["text"] == T.O_PRORAB for row in B.owner_kb()["keyboard"] for b in row))
+        self.assertEqual(h(msg(T.O_PRORAB, uid=OWNER)), "o_prorab")
+        self.assertIn("start=prorab", self.api.to(OWNER)[-1]["text"])
+        self.assertEqual(h(msg("/start prorab", uid=88)), "m_prorab")
+        self.assertEqual(h(msg(contact={"phone_number": "998905550000"}, uid=88)), "m_submit")
+        self.assertEqual(h(msg(T.O_PRORAB, uid=OWNER)), "o_prorab")
+        self.assertIn("Бош прораб", self.api.to(OWNER)[-1]["text"])
+        self.assertEqual(self.api.to(OWNER)[-1]["reply_markup"]["inline_keyboard"][0][0]["text"], "✅ Тасдиқлаш")
+
     def test_client_preview_and_back(self):
         h = self.b.handle
         self.assertEqual(h(msg(T.O_CLIENT, uid=OWNER)), "o_client")
