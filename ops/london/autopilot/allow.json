@@ -25,7 +25,8 @@
     "genplan5-parity",
     "genplan5-parity2",
     "taxi-drift",
-    "taxi-live-dump"
+    "taxi-live-dump",
+    "taxi-live-diff"
   ],
   "approve": [
     "genplan5-overdue-skip",
