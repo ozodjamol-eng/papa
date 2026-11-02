@@ -1,0 +1,58 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:PF;src:url(../assets/Playfair.ttf);font-weight:400 900}
+@font-face{font-family:MR;src:url(../assets/Manrope.ttf);font-weight:200 800}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#222;font-family:MR;font-weight:800}
+.card{position:relative;overflow:hidden;margin:0 0 20px 0}
+.gold{background:linear-gradient(180deg,#F6DC86 0%,#E0A92A 45%,#B07A0C 75%,#E9C25A 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.wm{font-family:PF;font-weight:900;letter-spacing:10px;line-height:1}
+.wine{background:radial-gradient(ellipse at 40% 40%,#7A0B0B 0%,#5A0606 55%,#3A0303 100%)}
+.ivory{background:radial-gradient(ellipse at 50% 35%,#FFFBEF 0%,#F6F0DE 60%,#E9DDBD 100%)}
+.rule{height:3px;background:linear-gradient(90deg,transparent,#E0A92A,transparent)}
+.partner{display:flex;align-items:center;gap:14px}
+.partner img{height:58px}
+.ptxt{font-family:MR;font-weight:800;letter-spacing:4px}
+</style></head><body>
+
+<!-- 1. Horizontal on wine 1600x700 -->
+<div class="card wine" id="h" style="width:1600px;height:700px;display:flex;align-items:center;justify-content:center;gap:60px">
+  <img src="volidam_emblem.png" style="height:420px;filter:drop-shadow(0 18px 40px rgba(0,0,0,.45))">
+  <div>
+    <div class="wm gold" style="font-size:190px">VOLIDAM</div>
+    <div style="font-family:MR;font-weight:800;font-size:30px;letter-spacing:9px;color:#F6F0DE;margin:22px 0 26px 6px">ОНАГА МЕҲР · ҲУРМАТ · ҒАМХЎРЛИК</div>
+    <div class="rule" style="width:720px;margin-bottom:26px"></div>
+    <div class="partner"><img src="../assets/emblem.png"><div class="ptxt" style="font-size:30px;color:#E4C766">SAFO MARVA TOUR<div style="font-size:24px;letter-spacing:5px;color:#F6F0DE;margin-top:6px">РАСМИЙ ҲАМКОРИ</div></div></div>
+  </div>
+</div>
+
+<!-- 2. Vertical on ivory 1000x1250 -->
+<div class="card ivory" id="v" style="width:1000px;height:1250px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+  <img src="volidam_emblem.png" style="height:470px;filter:drop-shadow(0 16px 30px rgba(110,30,43,.25))">
+  <div class="wm" style="font-size:150px;color:#6E1E2B;margin-top:50px">VOLIDAM</div>
+  <div style="font-size:26px;letter-spacing:8px;color:#8A6A12;margin-top:20px">ОНАГА МЕҲР · ҲУРМАТ · ҒАМХЎРЛИК</div>
+  <div class="rule" style="width:600px;margin:40px 0 34px"></div>
+  <div class="partner" style="background:#6E1E2B;padding:16px 34px;border-radius:60px"><img src="../assets/emblem.png" style="height:52px"><div class="ptxt" style="font-size:26px;color:#E4C766">SAFO MARVA TOUR · <span style="color:#F6F0DE">РАСМИЙ ҲАМКОРИ</span></div></div>
+</div>
+
+<!-- 3. Avatar 900x900 -->
+<div class="card" id="a" style="width:900px;height:900px;background:#000;display:flex;align-items:center;justify-content:center">
+  <div class="wine" style="width:900px;height:900px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 14px #C9A227,inset 0 0 0 22px #5A0606,inset 0 0 0 26px #E4C766">
+    <img src="volidam_emblem.png" style="height:500px;margin-top:-40px">
+    <div class="wm gold" style="font-size:96px;margin-top:26px;letter-spacing:8px">VOLIDAM</div>
+  </div>
+</div>
+
+<!-- 4. YouTube thumbnail template 1280x720 -->
+<div class="card" id="t" style="width:1280px;height:720px;background:#000">
+  <img src="th_bq5Oo0kU5fw_hd.jpg" style="position:absolute;right:0;top:0;width:820px;height:720px;object-fit:cover">
+  <div style="position:absolute;left:0;top:0;width:820px;height:720px;background:linear-gradient(90deg,#3A0303 0%,#3A0303 52%,rgba(58,3,3,.85) 70%,rgba(58,3,3,0) 100%)"></div>
+  <div style="position:absolute;left:56px;top:70px;width:700px">
+    <div style="display:inline-block;background:#C9A227;color:#3A0303;font-size:30px;letter-spacing:4px;padding:10px 24px;border-radius:40px">ВОЛИДАМ КЎРСАТУВИ</div>
+    <div style="font-family:PF;font-weight:900;font-size:104px;line-height:1.02;color:#F6F0DE;margin-top:30px">ОНАМНИ<br><span class="gold">УМРАГА</span><br>ЮБОРДИМ</div>
+  </div>
+  <div style="position:absolute;left:56px;bottom:46px;display:flex;align-items:center;gap:22px">
+    <div style="background:#F6F0DE;color:#6E1E2B;font-size:40px;padding:12px 28px;border-radius:40px">📞 +998 90 766 82 84</div>
+  </div>
+  <img src="volidam_emblem.png" style="position:absolute;right:30px;top:26px;height:120px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))">
+</div>
+</body></html>
