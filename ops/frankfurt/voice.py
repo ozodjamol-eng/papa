@@ -6,7 +6,7 @@ job.json:
 {"steps": [
   {"do": "credits"},
   {"do": "search", "params": {"language": "uz", "gender": "male", "page_size": 40}},
-  {"do": "clone", "name": "PAPA-ref", "files": ["ref.mp3"], "description": "..."},
+  {"do": "clone", "name": "PAPA-ref", "files": ["ref.mp3"], "description": "...", "denoise": false},
   {"do": "design", "name": "D", "description": "...", "text": "(100–1000 знаков)", "model": "eleven_ttv_v3"},
   {"do": "sts", "name": "S", "voice_id": "...", "file": "rec.mp3", "settings": {"stability": 0.5, "similarity_boost": 0.85}},
   {"do": "tts", "name": "A", "voice_id": "...|$clone:PAPA-ref", "public_owner_id": "(для голоса из библиотеки)",
@@ -85,7 +85,7 @@ def main(job_dir, out_dir):
                                  ensure_ascii=False), "|", (v.get("description") or "")[:140].replace("\n", " "))
         elif do == "clone":
             body, h = multipart([("name", st["name"]), ("description", st.get("description", "")),
-                                 ("remove_background_noise", "false")],
+                                 ("remove_background_noise", "true" if st.get("denoise") else "false")],  # 02.11: denoise=true — образец с музыкой под голосом
                                 [("files", str(Path(job_dir) / f)) for f in st["files"]])
             d, err = call("POST", "/v1/voices/add", k, body, h)
             if err:
