@@ -410,6 +410,10 @@ class Bot:
         self.send(uid, f"✅ <b>Ариза №{n} қабул қилинди!</b>\n\n{details}\n📞 {esc(u['phone'])}\n\n"
                        f"Мутахассисимиз тез орада сизга қўнғироқ қилади. Шошилинч бўлса: {esc(ph)}\n\n"
                        "Аллоҳ зиёратингизни қабул қилсин 🤲", self.menu_kb())
+        if self.cfg.get("manager"):
+            self.send(uid, "Саволингиз бўлса — Умра бўйича мутахассисимизга тўғридан-тўғри ёзинг 👇",
+                      {"inline_keyboard": [[{"text": "✍️ Нодирбекка ёзиш",
+                                             "url": f"https://t.me/{self.cfg['manager'].lstrip('@')}"}]]})
         self.notify(n)
         self.offer_channel(uid)
 
@@ -506,6 +510,8 @@ class Bot:
         lines = ["📞 <b>Алоқа</b>", ""] + [f"<b>{esc(p['label'])}:</b> {esc(p['show'])}" for p in d.get("phones", [])]
         lines += ["", "🕋 Safo Marva Tour расмий ҳамкори"]
         rows = []
+        if self.cfg.get("manager"):
+            rows.append([{"text": "✍️ Нодирбекка ёзиш", "url": f"https://t.me/{self.cfg['manager'].lstrip('@')}"}])
         if self.cfg.get("youtube"):
             rows.append([{"text": "▶️ YouTube — VOLIDAM", "url": self.cfg["youtube"]}])
         if self.cfg.get("instagram"):

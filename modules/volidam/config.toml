@@ -5,6 +5,7 @@ site = "https://ozodjamol-eng.github.io/papa-site/volidam/"
 youtube = "https://www.youtube.com/@volidamuz"
 instagram = ""
 channel = "https://t.me/safo_marva_nodirbek"
+manager = "Nodirbek_umra"   # 02.11: шеф Умры — кнопка «✍️ Нодирбекка ёзиш»
 welcome_photo = "https://ozodjamol-eng.github.io/papa-site/volidam/img/og.jpg"
 
 [remind]
