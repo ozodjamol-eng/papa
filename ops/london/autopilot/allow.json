@@ -23,7 +23,8 @@
     "genplan5-ad-window-find",
     "genplan5-handover",
     "genplan5-parity",
-    "genplan5-parity2"
+    "genplan5-parity2",
+    "taxi-drift"
   ],
   "approve": [
     "genplan5-overdue-skip",
