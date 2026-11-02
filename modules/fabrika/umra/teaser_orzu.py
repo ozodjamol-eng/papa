@@ -82,10 +82,25 @@ def pill(lines, size=54, fg=MAROON, bg=CREAM, fnt=SERIF):
     ImageDraw.Draw(p).rounded_rectangle([0, 0, w - 1, h - 1], radius=26, fill=bg + (255,))
     for i, im in enumerate(ims): p.alpha_composite(im, ((w - im.width) // 2, 17 + i * lh))
     return p
-CAP1 = pill(["Ота-онангиз бир умр", "кутган орзу…"])
-CAP2 = pill(["…энди сизга", "яқинроқ"])
-CAP3 = pill(["ХЎЖАОБОДДА —", "ТЕЗ ОРАДА"], size=60, fg=CREAM, bg=MAROON)
-PH = pill([PHONE], size=56, fg=RED, bg=WHITE, fnt=MB)
+# 02.11: премиум-типографика на латинице (владелец: «шрифты не премиальные, текст в оболочке — неправильно»)
+PF, PFI = F + "Playfair800.ttf", F + "Playfair800I.ttf"
+def rich(lines, size, gap=14):
+    rows = []
+    for runs in lines:
+        parts = [text_img(t, size, col, fnt, track=1) for t, fnt, col in runs]
+        w = sum(p.width - 20 for p in parts) + 20; h = max(p.height for p in parts)
+        r = Image.new("RGBA", (w, h), (0, 0, 0, 0)); x = 0
+        for p in parts: r.alpha_composite(p, (x, h - p.height)); x += p.width - 20
+        rows.append(r)
+    W2 = max(r.width for r in rows); H2 = sum(r.height for r in rows) + gap * (len(rows) - 1)
+    im = Image.new("RGBA", (W2 + 80, H2 + 80), (0, 0, 0, 0)); y = 40
+    for r in rows: im.alpha_composite(r, ((im.width - r.width) // 2, y)); y += r.height + gap
+    sh = Image.new("RGBA", im.size, (20, 2, 6, 0)); sh.putalpha(im.split()[3].filter(ImageFilter.GaussianBlur(16)).point(lambda v: int(v * 0.8)))
+    out = Image.new("RGBA", im.size, (0, 0, 0, 0)); out.alpha_composite(sh); out.alpha_composite(im); return out
+CAP1 = rich([[("Ota-onangiz bir umr", PF, CREAM)], [("kutgan ", PF, CREAM), ("orzu…", PFI, GOLD2)]], 68)
+CAP2 = rich([[("…endi sizga", PF, CREAM)], [("yaqinroq", PFI, GOLD2)]], 72)
+CAP3 = rich([[("XOʻJAOBODDA", PF, GOLD2)], [("tez orada", PFI, CREAM)]], 70, gap=4)
+PH = rich([[(PHONE, PF, CREAM)]], 62)
 WORD0 = text_img("SAFO MARVA", 104, GOLD2, CZ, track=8)
 WORD = Image.new("RGBA", (1000, WORD0.height), (0, 0, 0, 0)); WORD.alpha_composite(WORD0, ((1000 - WORD0.width) // 2, 0))
 _d = ImageDraw.Draw(WORD); _y = WORD0.height // 2 + 4
@@ -121,7 +136,7 @@ def frame(t):
         if s != 1: lay = lay.resize((int(W * s), int(Hc * s)), Image.LANCZOS)
         lay.putalpha(lay.split()[3].point(lambda v: int(v * vis)))
         fr.alpha_composite(lay, (int((W - lay.width) / 2), int(OFFY - (lay.height - Hc) * 0.6 - 18 * (t - 1.4) / 6.5)))
-        paste(fr, CAP1, W / 2, 470, win(t, 4.0, 7.6) * vis)
+        paste(fr, CAP1, W / 2, 520, win(t, 4.0, 7.6) * vis)
     # B — дорога к арке
     if 8.5 <= t <= 13.9:
         fr_ = es((t - 8.8) / 3.4); c = (255, 250, 238, int(255 * vis))
@@ -131,7 +146,7 @@ def frame(t):
         if fr_ > 0.6: d.line([(W / 2 - 300, VP[1] + 175), (W / 2 + 300, VP[1] + 175)], fill=(255, 250, 238, int(255 * vis * es((fr_ - 0.6) / 0.4))), width=3)
         ap = partial(arch_pts(VP[0], VP[1], 220, 170), es((t - 11.0) / 1.6))
         if len(ap) > 1: d.line(ap, fill=c, width=5, joint="curve")
-        paste(fr, CAP2, W / 2, 380, win(t, 10.6, 13.6) * vis)
+        paste(fr, CAP2, W / 2, 360, win(t, 10.6, 13.6) * vis)
     # C — эмблема и открытие
     if t >= 14.5:
         ax, ay, aw, ah = W / 2, 760, 400, 250
@@ -141,8 +156,8 @@ def frame(t):
         ea = es((t - 15.7) / 0.9) * vis
         paste(fr, EMB, ax, ay + 20, ea, 0.96 + 0.04 * ea, glow=1.3 * ea)
         paste(fr, WORD, W / 2, 1120, win(t, 16.6, DUR, 0.8, 0.6))
-        paste(fr, CAP3, W / 2, 1330, win(t, 17.6, DUR, 0.8, 0.6))
-        paste(fr, PH, W / 2, 1530, win(t, 18.6, DUR, 0.7, 0.6))
+        paste(fr, CAP3, W / 2, 1340, win(t, 17.6, DUR, 0.8, 0.6))
+        paste(fr, PH, W / 2, 1560, win(t, 18.6, DUR, 0.7, 0.6))
     out = np.asarray(fr.convert("RGB")).astype(np.float32)
     dd = Image.new("L", (W, H), 0); dr = ImageDraw.Draw(dd)
     for (x0, y0, r, sp, ph) in P:
