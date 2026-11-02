@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
 
 M_PACKS, M_ORDER, M_SITE, M_CONTACT = "🕋 Пакетлар ва нархлар", "✍️ Жой банд қилиш", "🌐 Сайтни очиш", "📞 Алоқа"
+M_FAQ = "❓ Савол-жавоб"
+# Ответы — только из официального сайта Safo Marva (safomarvaumra.uz), ничего не выдумываем.
+FAQ = [
+    ("Пакет нархига нималар киради?", "✈️ Авиабилет ва виза\n🏨 Макка ва Мадинада меҳмонхона\n🍽 Овқатланиш (2–3 маҳал)\n🚄 Трансфер (тезюрар поезд ёки автобус)\n🕌 Равзага кириш ва экскурсиялар\n👨‍⚕️ Малакали элликбоши ва ҳамшира\n🌊 Қизил денгизга саёҳат\n🎁 Бонус: Зам-зам 5 л, нимча, сумка, бейжик, абая"),
+    ("Қайси авиакомпаниялар?", "Flynas, Fly One, Centrum Air. Йўналиш пакетга қараб: Тошкент → Мадина ёки Тошкент → Жидда."),
+    ("Сафар неча кун?", "10 кунлик (9 кеча) — Tawaf пакетлари.\n14 кунлик — Comfort Plus ва Standart."),
+    ("Нарх нимага боғлиқ?", "Пакетга ва хонадаги кишилар сонига: 4, 3 ёки 2 кишилик. Кўп кишилик хона — арзонроқ. Нарх бир кишига, АҚШ долларида."),
+    ("Меҳмонхоналар Ҳарамга яқинми?", "Ҳа, барча меҳмонхоналар 4–5 юлдузли, Маккада Ҳарамга, Мадинада Масжид Набавийга яқин. Масалан, Anjum Makkah — Ҳарамгача 250 м."),
+    ("Жой қандай банд қилинади?", "«✍️ Жой банд қилиш» тугмасини босинг: пакет, сана ва хонани танланг, рақамингизни қолдиринг — мутахассисимиз ўзи қўнғироқ қилади."),
+]
 CANCEL = "⬅️ Бекор қилиш"
 STATUS = {"taken": "✅ Олди", "called": "📞 Боғланилди", "won": "🤝 Шартнома", "lost": "✖️ Рад"}
 
@@ -195,7 +205,7 @@ class Bot:
 
     # ---------- клавиатуры ----------
     def menu_kb(self) -> dict:
-        rows = [[{"text": M_PACKS}], [{"text": M_ORDER}], [{"text": M_CONTACT}]]
+        rows = [[{"text": M_PACKS}], [{"text": M_ORDER}], [{"text": M_FAQ}, {"text": M_CONTACT}]]
         if self.cfg.get("site"):
             rows.insert(2, [{"text": M_SITE, "web_app": {"url": self.cfg["site"]}}])
         return {"keyboard": rows, "resize_keyboard": True}
@@ -229,6 +239,10 @@ class Bot:
             return
         if text in ("/ariza", M_ORDER):
             self.order_start(uid)
+            return
+        if text in ("/savol", M_FAQ):
+            self.step(uid, None)
+            self.faq(uid)
             return
         if text in ("/aloqa", M_CONTACT):
             self.step(uid, None)
@@ -397,6 +411,7 @@ class Bot:
                        f"Мутахассисимиз тез орада сизга қўнғироқ қилади. Шошилинч бўлса: {esc(ph)}\n\n"
                        "Аллоҳ зиёратингизни қабул қилсин 🤲", self.menu_kb())
         self.notify(n)
+        self.offer_channel(uid)
 
     # ---------- менеджеры ----------
     def who(self, uid: int) -> str:
@@ -476,6 +491,16 @@ class Bot:
         for r in reversed(rows):
             self.send(uid, self.lead_text(r["n"]), self.lead_kb(r["n"], r["status"]))
 
+    def faq(self, uid: int) -> None:
+        rows = [[{"text": q, "callback_data": f"q:{i}"}] for i, (q, _) in enumerate(FAQ)]
+        self.send(uid, "❓ <b>Савол-жавоб</b>\nСаволни танланг 👇", {"inline_keyboard": rows})
+
+    def offer_channel(self, uid: int) -> None:
+        ch = self.cfg.get("channel")
+        if ch:
+            self.send(uid, "📢 Янги саналар, нархлар ва зиёратчилар фикрларини биринчи бўлиб кўриш учун "
+                           "каналимизга қўшилинг 👇", {"inline_keyboard": [[{"text": "✈️ VOLIDAM канали", "url": ch}]]})
+
     def contact(self, uid: int) -> None:
         d = self.data()
         lines = ["📞 <b>Алоқа</b>", ""] + [f"<b>{esc(p['label'])}:</b> {esc(p['show'])}" for p in d.get("phones", [])]
@@ -504,6 +529,15 @@ class Bot:
                 self.send(uid, self.pkg_text(p), {"inline_keyboard": [
                     [{"text": "✍️ Шу пакетга жой банд қилиш", "callback_data": f"o:{p['id']}"}],
                     [{"text": "⬅️ Барча пакетлар", "callback_data": "back:packs"}]]})
+        elif kind == "q" and val.isdigit() and int(val) < len(FAQ):
+            q, a = FAQ[int(val)]
+            self.send(uid, f"❓ <b>{esc(q)}</b>\n\n{esc(a)}", {"inline_keyboard": [
+                [{"text": "✍️ Жой банд қилиш", "callback_data": "o:start"}],
+                [{"text": "⬅️ Бошқа саволлар", "callback_data": "back:faq"}]]})
+        elif kind == "back" and val == "faq":
+            self.faq(uid)
+        elif kind == "o" and val == "start":
+            self.order_start(uid)
         elif kind == "back":
             self.packages(uid)
         elif kind == "o":
@@ -550,7 +584,8 @@ def run() -> None:
               fetch=fetch_site(cfg["site"]) if cfg.get("site") else None)
     me = api("getMe")
     cmds = [{"command": "start", "description": "Бошлаш"}, {"command": "paketlar", "description": "Умра пакетлари ва нархлар"},
-            {"command": "ariza", "description": "Жой банд қилиш"}, {"command": "aloqa", "description": "Алоқа рақамлари"}]
+            {"command": "ariza", "description": "Жой банд қилиш"}, {"command": "savol", "description": "Савол-жавоб"},
+            {"command": "aloqa", "description": "Алоқа рақамлари"}]
     try:
         api("setMyCommands", commands=cmds)
     except Exception as e:  # noqa: BLE001

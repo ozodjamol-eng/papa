@@ -105,5 +105,24 @@ class T(unittest.TestCase):
         self.assertEqual(b.remind(), 0)
 
 
+class T2(unittest.TestCase):
+    def test_faq(self):
+        b, api = make()
+        b.handle(msg(5, "❓ Савол-жавоб"))
+        b.handle(cb(5, "q:0"))
+        self.assertTrue(any("Авиабилет ва виза" in t for t in api.texts(5)))
+        b.handle(cb(5, "o:start"))
+        self.assertTrue(any("1/4" in t for t in api.texts(5)))
+
+    def test_channel_offer_after_lead(self):
+        b, api = make()
+        b.cfg["channel"] = "https://t.me/volidam_test"
+        b.handle(msg(5, "/start"))
+        b.handle(cb(5, "o:-"))
+        b.handle(msg(5, "Али"))
+        b.handle(msg(5, "+998901234567"))
+        self.assertTrue(any("каналимизга" in t for t in api.texts(5)))
+
+
 if __name__ == "__main__":
     unittest.main()
