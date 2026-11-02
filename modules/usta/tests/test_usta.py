@@ -80,8 +80,11 @@ class T1(unittest.TestCase):
 
     def prorab(self, uid=79):
         """02.11: прораб фақат владелец таклифи (бир марталик QR) орқали."""
-        self.assertEqual(self.cb("pi:0"), "pi")
-        link = [p for c, p in self.api.calls if c == "sendPhoto"][-1]["caption"]
+        self.assertEqual(self.b.handle(msg(T.O_NEWPRORAB, OWNER)), "pi")
+        ph = [p for c, p in self.api.calls if c == "sendPhoto"][-1]
+        self.assertIn("БОШ ПРОРАБ", ph["caption"])
+        self.assertTrue(ph["reply_markup"]["inline_keyboard"][0][0]["url"].startswith("https://t.me/share/url?url="))
+        link = ph["caption"]
         code = link.split("start=p_")[1].split()[0]
         h = self.b.handle
         self.assertEqual(h(msg(f"/start p_{code}", uid)), "p_join")
@@ -200,8 +203,11 @@ class Masters(unittest.TestCase):
 
     def prorab(self, uid=79):
         """02.11: прораб фақат владелец таклифи (бир марталик QR) орқали."""
-        self.assertEqual(self.cb("pi:0"), "pi")
-        link = [p for c, p in self.api.calls if c == "sendPhoto"][-1]["caption"]
+        self.assertEqual(self.b.handle(msg(T.O_NEWPRORAB, OWNER)), "pi")
+        ph = [p for c, p in self.api.calls if c == "sendPhoto"][-1]
+        self.assertIn("БОШ ПРОРАБ", ph["caption"])
+        self.assertTrue(ph["reply_markup"]["inline_keyboard"][0][0]["url"].startswith("https://t.me/share/url?url="))
+        link = ph["caption"]
         code = link.split("start=p_")[1].split()[0]
         h = self.b.handle
         self.assertEqual(h(msg(f"/start p_{code}", uid)), "p_join")
@@ -378,9 +384,8 @@ class TOwnerPanel(unittest.TestCase):
         self.assertEqual(h(msg(T.O_PRORAB, uid=OWNER)), "o_prorab")
         last = self.api.to(OWNER)[-1]
         self.assertNotIn("start=prorab", last["text"])
-        self.assertEqual(last["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "pi:0")
-        self.assertIsNone(self.b.handle({"callback_query": {"id": "q", "data": "pi:0", "from": {"id": 42},
-                                                            "message": {"chat": {"id": 42}, "message_id": 1}}}))  # бегона таклиф қила олмайди
+        self.assertTrue(any(b["text"] == T.O_NEWPRORAB for row in B.owner_kb()["keyboard"] for b in row))
+        self.assertNotEqual(h(msg(T.O_NEWPRORAB, uid=42)), "pi")                     # бегона таклиф қила олмайди
 
     def test_client_preview_and_back(self):
         h = self.b.handle

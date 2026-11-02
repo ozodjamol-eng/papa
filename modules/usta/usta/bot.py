@@ -82,7 +82,8 @@ def master_kb(prorab: bool = False) -> dict:
 
 def owner_kb() -> dict:
     return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_LEADS}], [{"text": T.O_MASTERS}, {"text": T.O_PENDING}],
-                         [{"text": T.O_PRORAB}, {"text": T.O_MONEY}], [{"text": T.O_CLIENT}]], "resize_keyboard": True}
+                         [{"text": T.O_PRORAB}, {"text": T.O_NEWPRORAB}], [{"text": T.O_MONEY}, {"text": T.O_CLIENT}]],
+            "resize_keyboard": True}
 
 
 class Bot:
@@ -715,6 +716,8 @@ class Bot:
             return self.o_money(chat)
         if text == T.O_PRORAB:
             return self.o_prorab(chat)
+        if text == T.O_NEWPRORAB:
+            return self.p_invite(chat)
         return None
 
     def o_summary(self) -> str:
@@ -765,10 +768,10 @@ class Bot:
 
     def o_prorab(self, chat: int) -> str:
         """02.11: пультда прораблар — рўйхат, жамоаси, янги прорабни фақат бир марталик QR билан таклиф қилиш."""
-        inv = {"inline_keyboard": [[{"text": T.O_INVITE, "callback_data": "pi:0"}]]}
+        inv = owner_kb()                             # 02.11: таклиф — пультдаги «➕ Янги прораб» тугмаси
         rows = self.db.execute("SELECT * FROM masters WHERE trade='prorab' AND status!='no' ORDER BY status DESC, id").fetchall()
         if not rows:
-            self.say(chat, "👷‍♂️ <b>ПРОРАБЛАР</b>\n\nҲали йўқ. Прораб фақат сизнинг таклифингиз (бир марталик QR) билан киради.", inv)
+            self.say(chat, "👷‍♂️ <b>ПРОРАБЛАР</b>\n\nҲали йўқ. Янги прораб — «➕ Янги прораб» тугмаси.", inv)
             return "o_prorab"
         lines = [f"👷‍♂️ <b>ПРОРАБЛАР</b>: {len(rows)} та"]
         for r in rows:
@@ -797,7 +800,10 @@ class Bot:
         code = secrets.token_urlsafe(9).replace("-", "x").replace("_", "y")
         self.db.execute("INSERT INTO kv(k, v) VALUES (?, 'new')", (f"inv:{code}",)); self.db.commit()
         link = f"https://t.me/{self.username}?start=p_{code}"
-        self.qr(chat, link, f"👷‍♂️ <b>Прораб таклифи</b> — бир марталик\n{link}\n\nФақат битта одам кира олади. Прорабга юборинг.")
+        cap = T.INV_TEXT.format(lp=T.TEAM_LEAD_PCT, rp=T.REF_PCT, link=link)
+        share = ("https://t.me/share/url?url=" + urllib.parse.quote(link, safe="")   # «📤 Юбориш» — контакт танлаб, бир тугмада
+                 + "&text=" + urllib.parse.quote(T.INV_SHORT, safe=""))
+        self.qr(chat, link, cap, {"inline_keyboard": [[{"text": T.INV_SHARE, "url": share}]]})
         return "pi"
 
     def p_join(self, frm, chat, code) -> str:
