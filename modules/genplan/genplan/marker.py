@@ -191,6 +191,9 @@ async def grant(acc, cfg: dict, pubs: dict, code: str, shelf: int, log=print) ->
         try:
             ent = await acc.get_entity(shelf)
             await acc(EditAdminRequest(ent, me.get("username"), rights, "PAPA"))
+            r = await asyncio.to_thread(p.http, "getChatMember", {"chat_id": shelf, "user_id": me.get("id")})
+            if not (r.get("ok") and (r.get("result") or {}).get("status") in ("administrator", "creator")):
+                raise RuntimeError(r.get("description") or "после назначения бот всё равно не админ")   # 02.11: проверяем, а не верим
             log(f"🏷 {code}: @{me.get('username')} — админ полки (права доставлены)")
         except Exception as e:  # noqa: BLE001
             ok = False
@@ -198,6 +201,29 @@ async def grant(acc, cfg: dict, pubs: dict, code: str, shelf: int, log=print) ->
     if ok:
         _GRANTED.add((code, shelf))
     return ok
+
+
+async def rehome(acc, db, env: dict, code: str, shelf: int, log=print) -> int:
+    """02.11: полка есть, а публикующий бот её не видит (@PapaGenplanBot у КАТТА ДАВРА) — помеченные посты с полки
+    переносим копией в PAPA HUB (главный бот там админ). Копия служебная (hubcopy_) — после выхода удаляется."""
+    from . import store
+    hub = str(env.get("HUB_CHAT_ID", ""))
+    if not hub:
+        return 0
+    n = 0
+    for m in db.execute("SELECT * FROM materials WHERE channel=? AND hub_chat=? AND status IN ('queued','draft')",
+                        (code, shelf)).fetchall():
+        try:
+            sent = await acc.forward_messages(int(hub), int(m["hub_msg"]), from_peer=shelf, drop_author=True)
+            sent = sent[0] if isinstance(sent, list) else sent
+            store.kv_set(db, f"hubcopy_{int(sent.id)}", "1")
+            store.update(db, m["id"], hub_chat=int(hub), hub_msg=int(sent.id), hub_msgs=_json.dumps([int(sent.id)]), via="main")
+            n += 1
+        except Exception as e:  # noqa: BLE001
+            log(f"🏷 {code}: пост #{m['id']} с полки не перенести — {type(e).__name__}: {str(e)[:120]}")
+    if n:
+        log(f"🏷 {code}: бот не видит полку — {n} помеченных постов перенесены в PAPA HUB, выйдут с меткой")
+    return n
 
 
 async def step(acc, db, cfg: dict, env: dict, pubs: dict, db_path: str, log=print) -> bool:
@@ -272,8 +298,8 @@ async def loop(acc, db_path: str, cfg_fn, env: dict, pubs: dict, log=print) -> N
         if not acc.is_connected():
             await acc.connect()
         for k, v in db.execute("SELECT k, v FROM kv WHERE k LIKE 'marker_shelf_%'").fetchall():
-            if k[13:] in cfg_fn()["channels"]:
-                await grant(acc, cfg_fn(), pubs, k[13:], int(v), log)
+            if k[13:] in cfg_fn()["channels"] and not await grant(acc, cfg_fn(), pubs, k[13:], int(v), log):
+                await rehome(acc, db, env, k[13:], int(v), log)
     except Exception as e:  # noqa: BLE001
         log(f"🏷 marker: права полок — {type(e).__name__}: {e}")
     while True:

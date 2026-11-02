@@ -87,17 +87,29 @@ class GrantTest(unittest.TestCase):
                     return {"ok": True, "result": {"status": self.status}}
                 return {"ok": False, "description": "Bad Request: chat not found"}
 
+        bots = {}
+
         class Acc:
             async def get_entity(self, x):
                 return x
 
             async def __call__(self, req):
                 calls.append(req)
+                bots["bot"].status = "administrator"           # Telegram принял назначение
 
         cfg = {"channels": {"davra": {"publisher": "bot"}}}
         marker._GRANTED.clear()
-        self.assertTrue(asyncio.run(marker.grant(Acc(), cfg, {"bot": P(None)}, "davra", -1001, log=lambda *_: None)))
-        self.assertEqual(len(calls), 1)                       # права доставлены
+        bots["bot"] = P(None)
+        self.assertTrue(asyncio.run(marker.grant(Acc(), cfg, bots, "davra", -1001, log=lambda *_: None)))
+        self.assertEqual(len(calls), 1)                       # права доставлены и проверены
+
+        class Deaf(Acc):
+            async def __call__(self, req):
+                calls.append(req)                             # назначение «прошло», но бот так и не админ (Давра 02.11)
+        marker._GRANTED.clear()
+        bots["bot"] = P(None)
+        self.assertFalse(asyncio.run(marker.grant(Deaf(), cfg, bots, "davra", -1001, log=lambda *_: None)))
+        calls.clear(); calls.append(None)
         marker._GRANTED.clear()
         self.assertTrue(asyncio.run(marker.grant(Acc(), cfg, {"bot": P("administrator")}, "davra", -1001, log=lambda *_: None)))
         self.assertEqual(len(calls), 1)                       # уже админ — ничего не трогаем
