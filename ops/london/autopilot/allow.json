@@ -24,7 +24,8 @@
     "genplan5-handover",
     "genplan5-parity",
     "genplan5-parity2",
-    "taxi-drift"
+    "taxi-drift",
+    "taxi-live-dump"
   ],
   "approve": [
     "genplan5-overdue-skip",
