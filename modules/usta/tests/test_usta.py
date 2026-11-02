@@ -183,15 +183,8 @@ class Masters(unittest.TestCase):
         h = self.b.handle
         self.assertEqual(h(msg("/start usta", uid)), "m_begin")
         self.assertEqual(h(msg(T.TRADES[trade], uid)), "m_trade")
-        self.assertEqual(h(msg("Бобур Алиев", uid)), "m_name")
-        self.assertEqual(h(msg("Хўжаобод", uid)), "m_area")
-        self.assertEqual(h(msg("10 йил", uid)), "m_exp")
-        self.assertEqual(h(msg(uid=uid, contact={"phone_number": "998911112233"})), "m_phone")
-        self.assertEqual(h(msg("салом", uid)), "m_noface")                     # расмсиз — йўқ
-        self.assertEqual(h(msg(uid=uid, photo=[{"file_id": "f"}])), "m_face")
-        self.assertEqual(h(msg(T.M_READY, uid)), "m_nowork")                   # иш расми шарт
-        self.assertEqual(h(msg(uid=uid, photo=[{"file_id": "w"}])), "m_workphoto")
-        self.assertEqual(h(msg(T.M_READY, uid)), "m_submit")
+        self.assertEqual(h(msg("салом", uid)), "m_badphone")                    # рақамсиз — йўқ
+        self.assertEqual(h(msg(uid=uid, contact={"phone_number": "998911112233"})), "m_submit")   # 02.11: 2 қадам
         return self.b.db.execute("SELECT * FROM masters WHERE uid=?", (uid,)).fetchone()
 
     def cb(self, data, uid=OWNER):
@@ -217,6 +210,13 @@ class Masters(unittest.TestCase):
         self.assertEqual(r["status"], "taken")
         self.assertTrue(any("+998901234567" in (p.get("text") or "") for p in self.api.to(77)))   # телефон устага
         self.assertIn("/start usta", self.b.m_list() if False else "/start usta")
+
+    def test_prorab_simple(self):
+        """02.11: Бош прораб — таъмир аризасига мос, исм Telegram'дан, расмсиз."""
+        m = self.register(uid=79, trade="prorab")
+        self.assertEqual((m["name"], m["phone"], m["status"]), ("Али", "+998911112233", "pending"))
+        self.assertIn("prorab", T.FOR_KIND["tamir"])
+        self.assertIn("Бош прораб", self.b.m_card(m))
 
     def test_reject_and_skip(self):
         m = self.register(uid=78, trade="elektr")
@@ -260,9 +260,9 @@ class TOwnerPanel(unittest.TestCase):
         h(msg("/start x", uid=42)); h(msg(T.KINDS["santex"][0], uid=42)); h(msg("кран", uid=42))
         h(msg(T.WHEN["today"], uid=42)); h(msg("Марказ", uid=42)); h(msg(T.SKIP, uid=42))
         h(msg(contact={"phone_number": "998901234567"}, uid=42))
-        h(msg(T.M_BTN, uid=77)); h(msg(T.TRADES["santex"], uid=77)); h(msg("Бегзод", uid=77)); h(msg("Хўжаобод", uid=77))
-        h(msg("10", uid=77)); h(msg(contact={"phone_number": "998907777777"}, uid=77))
-        h(msg(photo=[{"file_id": "f"}], uid=77)); h(msg(photo=[{"file_id": "w"}], uid=77)); h(msg(T.M_READY, uid=77))
+        h(msg(T.M_BTN, uid=77)); h(msg(T.TRADES["santex"], uid=77))
+        h({"message": {"message_id": 8, "chat": {"id": 77, "type": "private"},
+                       "from": {"id": 77, "first_name": "Бегзод"}, "contact": {"phone_number": "998907777777"}}})
 
     def cb(self, data):
         return self.b.handle({"callback_query": {"id": "q", "data": data, "from": {"id": OWNER},

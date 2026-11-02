@@ -345,50 +345,30 @@ class Bot:
         return "m_begin"
 
     def m_step(self, frm, chat, m, text, step, data) -> str:
-        back = {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True}
+        """02.11 (владелец: «мастера жалуются»): касб → телефон бир тугмада → тайёр. Исм — Telegram'дан, расм шарт эмас."""
         if step == "m_trade":
             t = next((k for k, v in T.TRADES.items() if v == text), None)
             if not t:
                 self.say(chat, T.UNKNOWN, self.trades_kb()); return "m_badtrade"
-            data["trade"] = t; self.set_step(frm["id"], "m_name", data); self.say(chat, T.M_ASK_NAME, back); return "m_trade"
-        if step == "m_name" and text:
-            data["name"] = text[:80]; self.set_step(frm["id"], "m_area", data); self.say(chat, T.M_ASK_AREA, back); return "m_name"
-        if step == "m_area" and text:
-            data["area"] = text[:200]; self.set_step(frm["id"], "m_exp", data); self.say(chat, T.M_ASK_EXP, back); return "m_area"
-        if step == "m_exp" and text:
-            data["exp"] = text[:60]; self.set_step(frm["id"], "m_phone", data); self.say(chat, T.M_ASK_PHONE, self.phone_kb()); return "m_exp"
+            data["trade"] = t; self.set_step(frm["id"], "m_phone", data); self.say(chat, T.M_ASK_PHONE, self.phone_kb())
+            return "m_trade"
         if step == "m_phone":
             c = m.get("contact")
             phone = norm_phone(c["phone_number"]) if c else norm_phone(text)
             if not phone:
                 self.say(chat, T.BAD_PHONE, self.phone_kb()); return "m_badphone"
-            data["phone"] = phone; self.set_step(frm["id"], "m_face", data); self.say(chat, T.M_ASK_FACE, back); return "m_phone"
-        if step == "m_face":
-            if not m.get("photo"):
-                self.say(chat, T.M_NEED_PHOTO, back); return "m_noface"
-            data["face"] = {"chat": chat, "id": m["message_id"]}
-            self.set_step(frm["id"], "m_work", data)
-            self.say(chat, T.M_ASK_WORK, {"keyboard": [[{"text": T.M_READY}], [{"text": T.BACK}]], "resize_keyboard": True})
-            return "m_face"
-        if step == "m_work":
-            if m.get("photo"):
-                data.setdefault("works", []).append({"chat": chat, "id": m["message_id"]})
-                self.set_step(frm["id"], "m_work", data); return "m_workphoto"
-            if text == T.M_READY:
-                if not data.get("works"):
-                    self.say(chat, T.M_NEED_PHOTO); return "m_nowork"
-                return self.m_submit(frm, chat, data)
-        self.say(chat, T.UNKNOWN)
+            data["phone"] = phone
+            return self.m_submit(frm, chat, data)
+        self.say(chat, T.UNKNOWN, self.trades_kb())
         return "m_unknown"
 
     def m_submit(self, frm, chat, data) -> str:
         t = now().isoformat()
-        self.db.execute("INSERT INTO masters(uid, username, trade, name, area, exp, phone, face, works, status, created)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET username=excluded.username,"
-                        " trade=excluded.trade, name=excluded.name, area=excluded.area, exp=excluded.exp, phone=excluded.phone,"
-                        " face=excluded.face, works=excluded.works, status='pending', created=excluded.created",
-                        (frm["id"], frm.get("username"), data["trade"], data.get("name"), data.get("area"), data.get("exp"),
-                         data.get("phone"), json.dumps(data.get("face")), json.dumps(data.get("works", [])[:3]), "pending", t))
+        name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or (frm.get("username") or "Уста")
+        self.db.execute("INSERT INTO masters(uid, username, trade, name, phone, status, created)"
+                        " VALUES (?,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET username=excluded.username,"
+                        " trade=excluded.trade, name=excluded.name, phone=excluded.phone, status='pending', created=excluded.created",
+                        (frm["id"], frm.get("username"), data["trade"], name[:80], data.get("phone"), "pending", t))
         self.db.commit()
         self.set_step(frm["id"], "")
         self.say(chat, T.M_SENT)
@@ -397,8 +377,6 @@ class Bot:
                                    {"text": "❌ Рад этиш", "callback_data": f"mr:{r['id']}"}]]}
         for o in self.owners:
             try:
-                for p in [json.loads(r["face"])] + json.loads(r["works"] or "[]"):
-                    self.api("copyMessage", chat_id=o, from_chat_id=p["chat"], message_id=p["id"])
                 self.api("sendMessage", chat_id=o, text=self.m_card(r), reply_markup=kb, parse_mode="HTML")
             except Exception as e:  # noqa: BLE001
                 print(f"m_submit: {type(e).__name__}: {e}", flush=True)
@@ -408,7 +386,8 @@ class Bot:
         st = {"pending": "⏳ текширувда", "ok": "✅ рўйхатда", "no": "❌ рад этилди"}.get(r["status"], r["status"])
         un = f" @{r['username']}" if r["username"] else ""
         return (f"🛠 <b>Уста аризаси</b> · {T.TRADES.get(r['trade'], r['trade'])}\n👤 {esc(r['name'])}{un}\n"
-                f"🆔 {r['uid']}\n📞 {esc(r['phone'])}\n📍 {esc(r['area'])}\n🧰 тажриба: {esc(r['exp'])}\n{st}")
+                f"🆔 {r['uid']}\n📞 {esc(r['phone'])}\n"
+                + (f"📍 {esc(r['area'])}\n" if r["area"] else "") + (f"🧰 тажриба: {esc(r['exp'])}\n" if r["exp"] else "") + st)
 
     def m_decide(self, q, act, rest) -> str | None:
         if not rest.isdigit():
