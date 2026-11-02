@@ -1,0 +1,36 @@
+[Unit]
+Description=PAPA VOLIDAM — бот заявок на Умру VOLIDAM × Safo Marva (клиент Нодирбек)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-volidam
+Group=papa-volidam
+EnvironmentFile=/etc/papa-volidam/bot.env
+Environment=VOLIDAM_DB=/var/lib/papa-volidam/volidam.sqlite3 PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/papa/modules/volidam
+ExecStart=/usr/bin/python3 -m volidam
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-volidam
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0077
+MemoryMax=80M
+CPUQuota=20%
+TasksMax=8
+
+[Install]
+WantedBy=multi-user.target

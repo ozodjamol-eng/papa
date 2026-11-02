@@ -64,7 +64,9 @@
     "hubs-purge",
     "marker-probe",
     "rezhim-audit",
-    "marker-status"
+    "marker-status",
+    "volidam-bot-status",
+    "volidam-bot-restart"
   ],
   "approve": [
     "morning-pool-clear",
@@ -104,6 +106,7 @@
   ],
   "deny": [
     "xojaobod-bot-token",
-    "audit-reports"
+    "audit-reports",
+    "volidam-bot-token"
   ]
 }

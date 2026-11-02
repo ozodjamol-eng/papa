@@ -1,0 +1,92 @@
+{
+  "updated": "2026-11-02",
+  "phones": [
+    {"label": "Андижон", "tel": "+998907668284", "show": "+998 90 766 82 84"},
+    {"label": "Хўжаобод", "tel": "+998975432111", "show": "+998 97 543 21 11"}
+  ],
+  "bot": "",
+  "youtube": "https://www.youtube.com/@volidamuz",
+  "instagram": "",
+  "telegram": "",
+  "common": [
+    ["✈️", "Авиакомпания", "Flynas / Fly One / Centrum Air"],
+    ["🎫", "Билет ва виза", "Нархга киритилган"],
+    ["🕌", "Экскурсия", "Равзага кириш ва экскурсиялар киритилган"],
+    ["👨‍⚕️", "Раҳбарлар", "Малакали элликбоши ва ҳамшира хизмати"],
+    ["🌊", "Қизил денгиз", "Саёҳат киритилган"],
+    ["🎁", "Бонус", "Зам-зам 5 л, нимча, сумка, бейжик, абая"]
+  ],
+  "packages": [
+    {
+      "id": "jumeirah", "num": "I", "kicker": "ТАВОФ · 10 КУН", "title": "Tawaf Jumeirah", "badge": "5 юлдузли премиум",
+      "nights": 9, "label": "10 кун / 9 кеча",
+      "route": "Тошкент → Мадина, Жидда → Тошкент",
+      "madina": "4 кеча — Waqf As Safi ★5, Масжид Набавийга яқин",
+      "makka": "5 кеча — Jumeirah Jabal Omar ★5, Ҳарамга яқин",
+      "meals": "Мадина — 2 маҳал, Макка — 2 маҳал",
+      "transfer": "Тезюрар поезд (Haramain Speed Rail)",
+      "hotels": [
+        {"city": "Макка", "name": "Jumeirah Jabal Omar", "rating": "★5", "dist": "Ҳарамга яқин", "img": "img/jumeirah-jabal-omar.jpg"},
+        {"city": "Мадина", "name": "Waqf As Safi", "rating": "★5", "dist": "Масжид Набавийга яқин", "img": "img/waqf-as-safi.jpg"}
+      ],
+      "dates": ["15.10", "29.10", "12.11", "26.11", "10.12"], "prices": [1900, 2000, 2200]
+    },
+    {
+      "id": "anjum", "num": "II", "kicker": "ТАВОФ · 10 КУН", "title": "Tawaf Anjum", "badge": "Ота-оналар учун",
+      "nights": 9, "label": "10 кун / 9 кеча",
+      "route": "Тошкент → Мадина, Жидда → Тошкент",
+      "madina": "4 кеча — Waqf As Safi ★5, Масжид Набавийга яқин",
+      "makka": "5 кеча — Anjum Makkah ★5, Ҳарамгача 250 м",
+      "meals": "Мадина — 2 маҳал, Макка — 2 маҳал",
+      "transfer": "Тезюрар поезд (Haramain Speed Rail)",
+      "hotels": [
+        {"city": "Макка", "name": "Anjum Makkah", "rating": "★5", "dist": "Ҳарамгача 250 м", "img": "img/anjum-makkah.jpg"},
+        {"city": "Мадина", "name": "Waqf As Safi", "rating": "★5", "dist": "Масжид Набавийга яқин", "img": "img/waqf-as-safi.jpg"}
+      ],
+      "dates": ["22.10", "05.11", "19.11", "03.12"], "prices": [1800, 1900, 2100]
+    },
+    {
+      "id": "alebaa", "num": "III", "kicker": "ТАВОФ · 10 КУН", "title": "Tawaf Al Ebaa", "badge": "",
+      "nights": 9, "label": "10 кун / 9 кеча",
+      "route": "Тошкент → Мадина, Жидда → Тошкент",
+      "madina": "3 кеча — Nusk Al Hijra / Mehrob Toiba ★4, Масжид Набавийга яқин",
+      "makka": "6 кеча — Al Ebaa Hotel ★4, Ҳарамга яқин",
+      "meals": "Мадина — 2 маҳал, Макка — 2 маҳал",
+      "transfer": "Тезюрар поезд (Haramain Speed Rail)",
+      "note": "17.12.2026 — 08.01.2027 саналарида нарх +$60",
+      "hotels": [
+        {"city": "Макка", "name": "Al Ebaa Hotel", "rating": "★4", "dist": "Ҳарамга яқин", "img": "img/al-ebaa.jpg"},
+        {"city": "Мадина", "name": "Nusk Al Hijra / Mehrob Toiba", "rating": "★4", "dist": "Масжид Набавийга яқин", "img": "img/mehrob-toiba.jpg"}
+      ],
+      "dates": ["15.10", "22.10", "29.10", "05.11", "12.11", "19.11", "26.11", "03.12", "10.12"], "prices": [1475, 1575, 1675]
+    },
+    {
+      "id": "comfort", "num": "IV", "kicker": "COMFORT PLUS · 14 КУН", "title": "Comfort Plus", "badge": "Haramain поезди",
+      "nights": 14, "label": "14 кун / 14 кеча",
+      "route": "Тошкент → Жидда, Жидда → Тошкент",
+      "madina": "7 кеча — Mehrob Toiba ★4, Масжид Набавийга яқин",
+      "makka": "7 кеча — Ramada Zad al Tayser / Taj Park ★4, Ҳарамга яқин",
+      "meals": "Мадина — 2 маҳал, Макка — 2 маҳал",
+      "transfer": "Тезюрар поезд (Haramain Speed Rail)",
+      "hotels": [
+        {"city": "Макка", "name": "Ramada Zad al Tayser / Taj Park", "rating": "★4", "dist": "Ҳарамга яқин", "img": "img/ramada-zad-tayser.jpg"},
+        {"city": "Мадина", "name": "Mehrob Toiba", "rating": "★4", "dist": "Масжид Набавийга яқин", "img": "img/mehrob-toiba.jpg"}
+      ],
+      "dates": ["21.10", "28.10", "04.11", "11.11", "18.11", "25.11", "02.12"], "prices": [1450, 1550, 1690]
+    },
+    {
+      "id": "standart", "num": "V", "kicker": "СТАНДАРТ · 14 КУН", "title": "Standart", "badge": "Энг қулай нарх",
+      "nights": 14, "label": "14 кун / 14 кеча",
+      "route": "Тошкент → Жидда, Жидда → Тошкент",
+      "madina": "2 кеча — Mehrob Toiba ★4, Масжид Набавийга яқин",
+      "makka": "12 кеча — Elaf Sagriya Makkah ★4, Ҳарамга яқин",
+      "meals": "Мадина — 2 маҳал, Макка — 3 маҳал",
+      "transfer": "Автобус трансфер",
+      "hotels": [
+        {"city": "Макка", "name": "Elaf Sagriya Makkah", "rating": "★4", "dist": "Ҳарамга яқин", "img": "img/elaf-al-sagryah.jpg"},
+        {"city": "Мадина", "name": "Mehrob Toiba", "rating": "★4", "dist": "Масжид Набавийга яқин", "img": "img/standart-madina-2.jpg"}
+      ],
+      "dates": ["17.10", "21.10"], "prices": [1170, 1270, 1370]
+    }
+  ]
+}

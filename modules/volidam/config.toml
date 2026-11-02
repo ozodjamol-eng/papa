@@ -1,0 +1,13 @@
+# Бот VOLIDAM × Safo Marva (клиент Нодирбек Ҳайитов). Утверждено владельцем 02.11.2026.
+# Секретов нет: токен — /etc/papa-volidam/bot.env (вводит владелец в консоли Франкфурта).
+# Пакеты, даты и цены — ОДИН источник: data.json страницы (site), запасная копия — data.json рядом.
+site = "https://ozodjamol-eng.github.io/papa-site/volidam/"
+youtube = "https://www.youtube.com/@volidamuz"
+instagram = ""
+channel = ""
+welcome_photo = "https://ozodjamol-eng.github.io/papa-site/volidam/img/og.jpg"
+
+[remind]
+minutes = 15
+day_start = 8
+day_end = 21
