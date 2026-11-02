@@ -352,6 +352,9 @@ class Bot:
             return self.p_invite(q["from"]["id"])
         if q["from"]["id"] not in self.owners:
             return None
+        if act == "pk" and rest.isdigit():           # 02.11: прорабга QR ва матнларни шу бот орқали юбориш
+            self.api("answerCallbackQuery", callback_query_id=q["id"])
+            return self.p_kit(int(rest), q["from"]["id"])
         if act in ("lv", "mv", "pd", "po"):          # 31.10 пульт: просмотр заявки/мастера, оплата
             return self.o_callback(q, act, rest)
         if act in ("ma", "mr"):                      # владелец: ma:<id> тасдиқ / mr:<id> рад
@@ -815,10 +818,23 @@ class Bot:
         self.say(chat, T.T_HELLO.format(name=esc(pr["name"]).upper()), self.trades_kb())
         return "t_begin"
 
+    def p_kit(self, pid: int, owner: int) -> str | None:
+        pr = self.db.execute("SELECT * FROM masters WHERE id=? AND trade='prorab' AND status='ok'", (pid,)).fetchone()
+        if not pr:
+            return None
+        first = (pr["name"] or "").split()
+        name = esc(first[1] if len(first) > 1 else (first[0] if first else "Прораб"))   # «Фамилия Исм» → исм
+        link = f"https://t.me/{self.username}?start=t{pr['id']}"
+        self.qr(pr["uid"], link, T.P_KIT.format(name=name, mp=T.TEAM_MEMBER_PCT, lp=T.TEAM_LEAD_PCT, rp=T.REF_PCT), master_kb(True))
+        self.qr(pr["uid"], link, T.TEAM_KIT.format(name=name.upper(), mp=T.TEAM_MEMBER_PCT, link=link))
+        self.api("sendMessage", chat_id=owner, text=f"✅ {name}га QR ва 2 та матн юборилди.")
+        return "pk"
+
     def p_add(self, pr, chat) -> str:
         link = f"https://t.me/{self.username}?start=t{pr['id']}"
-        self.qr(chat, link, f"👥 <b>Жамоангиз QR-коди</b>\n{link}\n\nУсталарингизга кўрсатинг: сканер → касб → рақам. "
-                f"Кейин сиз ✅ босасиз.", master_kb(True))
+        first = (pr["name"] or "").split()
+        name = esc(first[1] if len(first) > 1 else (first[0] if first else "Прораб"))
+        self.qr(chat, link, T.TEAM_KIT.format(name=name.upper(), mp=T.TEAM_MEMBER_PCT, link=link), master_kb(True))
         return "p_add"
 
     def p_team(self, pr, chat) -> str:
@@ -949,6 +965,8 @@ class Bot:
             x = self.m_stats(r["id"])
             kb = {"inline_keyboard": [[{"text": "💸 Улуш бердим", "callback_data": f"po:{r['id']}"},
                                        {"text": "🚫 Рўйхатдан чиқариш", "callback_data": f"mr:{r['id']}"}]]}
+            if r["trade"] == "prorab":
+                kb["inline_keyboard"].insert(0, [{"text": T.O_SEND_KIT, "callback_data": f"pk:{r['id']}"}])
             self.m_show(chat, r, kb)
             self.api("sendMessage", chat_id=chat, parse_mode="HTML",
                      text=(f"🤝 Ҳавола: {self.ref_link(r['id'])}\nКелганлар: {x['users']} · аризалар: {x['leads']} · "

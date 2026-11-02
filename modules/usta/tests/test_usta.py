@@ -254,6 +254,10 @@ class Masters(unittest.TestCase):
         pr = self.prorab(uid=79)
         h = self.b.handle
         self.assertEqual(h(msg(T.PK_ADD, 79)), "p_add")
+        self.assertEqual(self.cb(f"pk:{pr['id']}"), "pk")                        # владелец: бот прорабга ўзи юборади
+        kits = [p for c, p in self.api.calls if c == "sendPhoto" and p["chat_id"] == 79]
+        self.assertTrue(any("ЖАМОАСИГА ҚЎШИЛИНГ" in p["caption"] for p in kits) and any("Бош прорабисиз" in p["caption"] for p in kits))
+        self.assertIsNone(self.cb(f"pk:{pr['id']}", uid=79))                     # прораб ўзи бу тугмани боса олмайди
         self.assertEqual(h(msg("/start t79", 94)), "t_begin")                      # telegram uid орқали ҳам
         self.assertEqual(h(msg(T.TRADES["elektr"], 94)), "m_trade")
         h(msg(uid=94, contact={"phone_number": "998905550094"}))
