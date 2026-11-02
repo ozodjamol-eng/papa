@@ -162,6 +162,44 @@ async def ensure_shelf(acc, db, cfg: dict, pubs: dict, code: str) -> int:
     return sid
 
 
+_GRANTED: set = set()
+
+
+async def grant(acc, cfg: dict, pubs: dict, code: str, shelf: int, log=print) -> bool:
+    """02.11 разбор: посты КАТТА ДАВРА и PaparazziUZ с полки падали «chat not found» — бот, который публикует канал,
+    не был админом своей полки (при создании полки права ставились не всем). Проверяем и доучиваем права; не вышло —
+    False, и пост на полку не переезжает (выйдет как раньше, без метки)."""
+    if (code, shelf) in _GRANTED:
+        return True
+    from telethon.tl.functions.channels import EditAdminRequest
+    from telethon.tl.types import ChatAdminRights
+    rights = ChatAdminRights(post_messages=True, edit_messages=True, delete_messages=True)
+    if cfg["channels"][code]["publisher"] != "bot":
+        keys = [k for k in (f"bot:{code}",) if k in pubs]        # группа: публикует аккаунт (он владелец полки)
+    else:
+        keys = [f"bot:{code}" if f"bot:{code}" in pubs else "bot"]
+    ok = True
+    for k in keys:
+        p = pubs[k]
+        try:
+            me = (await asyncio.to_thread(p.http, "getMe", {})).get("result") or {}
+            r = await asyncio.to_thread(p.http, "getChatMember", {"chat_id": shelf, "user_id": me.get("id")})
+            if r.get("ok") and (r.get("result") or {}).get("status") in ("administrator", "creator"):
+                continue
+        except Exception:  # noqa: BLE001 — «chat not found» приходит ошибкой — значит, прав нет
+            pass
+        try:
+            ent = await acc.get_entity(shelf)
+            await acc(EditAdminRequest(ent, me.get("username"), rights, "PAPA"))
+            log(f"🏷 {code}: @{me.get('username')} — админ полки (права доставлены)")
+        except Exception as e:  # noqa: BLE001
+            ok = False
+            log(f"🏷 {code}: @{me.get('username')} не стал админом полки — {type(e).__name__}: {str(e)[:150]}")
+    if ok:
+        _GRANTED.add((code, shelf))
+    return ok
+
+
 async def step(acc, db, cfg: dict, env: dict, pubs: dict, db_path: str, log=print) -> bool:
     """Пометить один пост. True — что-то сделано (следующий сразу), False — работы нет."""
     from . import store
@@ -179,6 +217,8 @@ async def step(acc, db, cfg: dict, env: dict, pubs: dict, db_path: str, log=prin
         kind = decide(ch, m)[0]
         md = _json.loads(m["media"])[0]
         shelf = await ensure_shelf(acc, db, cfg, pubs, code)
+        if not await grant(acc, cfg, pubs, code, shelf, log):
+            raise RuntimeError("бот канала не админ полки — пост остаётся без метки")
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / ("src.jpg" if kind == "photo" else "src.mp4")
             ok = False
@@ -228,6 +268,14 @@ async def loop(acc, db_path: str, cfg_fn, env: dict, pubs: dict, log=print) -> N
     from . import store
     db = store.connect(db_path)
     await asyncio.sleep(30)
+    try:                                       # 02.11: посты уже на полках — права ботам до их выхода
+        if not acc.is_connected():
+            await acc.connect()
+        for k, v in db.execute("SELECT k, v FROM kv WHERE k LIKE 'marker_shelf_%'").fetchall():
+            if k[13:] in cfg_fn()["channels"]:
+                await grant(acc, cfg_fn(), pubs, k[13:], int(v), log)
+    except Exception as e:  # noqa: BLE001
+        log(f"🏷 marker: права полок — {type(e).__name__}: {e}")
     while True:
         did = False
         try:

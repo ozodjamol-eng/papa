@@ -66,3 +66,38 @@ class CandidatesTest(unittest.TestCase):
         ids = [r["id"] for r in marker.candidates(db, cfg, now)]
         self.assertEqual(ids, [b, a])
         self.assertEqual(marker.candidates(db, {**cfg, "marker": {"on": False}}, now), [])
+
+
+class GrantTest(unittest.TestCase):
+    """02.11: бот канала не был админом полки «· ГОТОВО» — посты падали «chat not found». Права доставляются."""
+
+    def test_grant_fixes_missing_admin(self):
+        import asyncio
+        from genplan import marker
+        calls = []
+
+        class P:
+            def __init__(self, status):
+                self.status = status
+
+            def http(self, method, payload):
+                if method == "getMe":
+                    return {"ok": True, "result": {"id": 7, "username": "PapaGenplanBot"}}
+                if self.status:
+                    return {"ok": True, "result": {"status": self.status}}
+                return {"ok": False, "description": "Bad Request: chat not found"}
+
+        class Acc:
+            async def get_entity(self, x):
+                return x
+
+            async def __call__(self, req):
+                calls.append(req)
+
+        cfg = {"channels": {"davra": {"publisher": "bot"}}}
+        marker._GRANTED.clear()
+        self.assertTrue(asyncio.run(marker.grant(Acc(), cfg, {"bot": P(None)}, "davra", -1001, log=lambda *_: None)))
+        self.assertEqual(len(calls), 1)                       # права доставлены
+        marker._GRANTED.clear()
+        self.assertTrue(asyncio.run(marker.grant(Acc(), cfg, {"bot": P("administrator")}, "davra", -1001, log=lambda *_: None)))
+        self.assertEqual(len(calls), 1)                       # уже админ — ничего не трогаем
