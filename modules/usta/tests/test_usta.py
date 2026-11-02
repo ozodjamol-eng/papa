@@ -385,7 +385,12 @@ class TOwnerPanel(unittest.TestCase):
         last = self.api.to(OWNER)[-1]
         self.assertNotIn("start=prorab", last["text"])
         self.assertTrue(any(b["text"] == T.O_NEWPRORAB for row in B.owner_kb()["keyboard"] for b in row))
-        self.assertNotEqual(h(msg(T.O_NEWPRORAB, uid=42)), "pi")                     # бегона таклиф қила олмайди
+        self.assertNotEqual(h(msg(T.O_NEWPRORAB, uid=42)), "pi")
+        self.assertEqual(h(msg(T.O_NEWUSTA, uid=OWNER)), "ui")                       # 02.11: янги уста — QR + 📤
+        ph = [p for c, p in self.api.calls if c == "sendPhoto"][-1]
+        self.assertIn("start=usta", ph["caption"])
+        self.assertIn("share/url", ph["reply_markup"]["inline_keyboard"][0][0]["url"])
+        self.assertNotEqual(h(msg(T.O_NEWUSTA, uid=42)), "ui")                     # бегона таклиф қила олмайди
 
     def test_client_preview_and_back(self):
         h = self.b.handle

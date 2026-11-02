@@ -82,7 +82,8 @@ def master_kb(prorab: bool = False) -> dict:
 
 def owner_kb() -> dict:
     return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_LEADS}], [{"text": T.O_MASTERS}, {"text": T.O_PENDING}],
-                         [{"text": T.O_PRORAB}, {"text": T.O_NEWPRORAB}], [{"text": T.O_MONEY}, {"text": T.O_CLIENT}]],
+                         [{"text": T.O_PRORAB}, {"text": T.O_MONEY}], [{"text": T.O_NEWUSTA}, {"text": T.O_NEWPRORAB}],
+                         [{"text": T.O_CLIENT}]],
             "resize_keyboard": True}
 
 
@@ -718,6 +719,8 @@ class Bot:
             return self.o_prorab(chat)
         if text == T.O_NEWPRORAB:
             return self.p_invite(chat)
+        if text == T.O_NEWUSTA:
+            return self.u_invite(chat)
         return None
 
     def o_summary(self) -> str:
@@ -805,6 +808,14 @@ class Bot:
                  + "&text=" + urllib.parse.quote(T.INV_SHORT, safe=""))
         self.qr(chat, link, cap, {"inline_keyboard": [[{"text": T.INV_SHARE, "url": share}]]})
         return "pi"
+
+    def u_invite(self, chat: int) -> str:
+        """02.11: «➕ Янги уста» — умумий (кўп марталик) ҳавола, уста владелец ✅ сиз рўйхатга кирмайди."""
+        link = f"https://t.me/{self.username}?start=usta"
+        share = ("https://t.me/share/url?url=" + urllib.parse.quote(link, safe="")
+                 + "&text=" + urllib.parse.quote(T.U_INV_SHORT, safe=""))
+        self.qr(chat, link, T.U_INV_TEXT.format(rp=T.REF_PCT, link=link), {"inline_keyboard": [[{"text": T.INV_SHARE, "url": share}]]})
+        return "ui"
 
     def p_join(self, frm, chat, code) -> str:
         k = f"inv:{code}"
