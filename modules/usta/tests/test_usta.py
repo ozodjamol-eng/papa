@@ -326,3 +326,41 @@ class TOwnerPanel(unittest.TestCase):
         self.assertNotIn(self.b.handle(msg(T.O_MASTERS, uid=42)), ("o_masters",))
         self.assertIsNone(self.b.handle({"callback_query": {"id": "q", "data": "lv:1", "from": {"id": 42},
                                                             "message": {"chat": {"id": 42}, "message_id": 1}}}))
+
+
+class MasterMenu(Masters):
+    """02.11: уста менюси — мижоз юбориш (контакт + овоз), ҳисоб, QR, буюртмалар; реферал хабари."""
+
+    def test_master_menu(self):
+        m = self.register(uid=91, trade="prorab")
+        self.cb(f"ma:{m['id']}")
+        kb = self.api.to(91)[-1]["reply_markup"]["keyboard"]
+        self.assertTrue(any(b["text"] == T.MK_SEND for row in kb for b in row))          # уста менюси
+        h = self.b.handle
+        self.assertEqual(h(msg(T.MK_SEND, 91)), "mk_send")
+        self.assertEqual(h(msg("салом", 91)), "ms_badphone")
+        self.assertEqual(h(msg(uid=91, contact={"phone_number": "998901112233", "first_name": "Карим"})), "ms_phone")
+        self.assertEqual(h(msg(uid=91, voice={"file_id": "v"})), "ms_lead")
+        r = self.b.db.execute("SELECT * FROM leads").fetchone()
+        self.assertEqual((r["ref"], r["via"], r["kind"], r["phone"]), (m["id"], m["id"], "prorab", "+998901112233"))
+        self.assertTrue(any(c == "copyMessage" and p["chat_id"] == OWNER for c, p in self.api.calls))   # овоз владельцга
+        self.assertEqual(h(msg(T.MK_LINK, 91)), "mk_link")
+        self.assertTrue(any(c == "sendPhoto" for c, _ in self.api.calls))
+        self.assertEqual(h(msg(T.MK_JOBS, 91)), "mk_jobs")
+        self.assertIn("№1", self.api.to(91)[-1]["text"])
+        self.assertEqual(h(msg(T.MK_MINE, 91)), "mine")
+        self.assertEqual(self.cb("fin:1"), "fin")                                         # устага баҳо сўралмайди
+        self.assertFalse(any("баҳо" in (p.get("text") or "") for p in self.api.to(91)))
+
+    def test_ref_notify_and_client_voice(self):
+        m = self.register(uid=92, trade="santex")
+        self.cb(f"ma:{m['id']}")
+        h = self.b.handle
+        h(msg(f"/start r{m['id']}", 56)); h(msg(T.KINDS["santex"][0], 56))
+        self.assertEqual(h(msg(uid=56, voice={"file_id": "v"})), "details")              # мижоз ҳам овоз билан
+        h(msg(T.WHEN["today"], 56)); h(msg("Марказ", 56)); h(msg(T.SKIP, 56))
+        self.assertEqual(h(msg(uid=56, contact={"phone_number": "998901110001"})), "lead")
+        self.assertIn("ҳаволангиз орқали", self.api.to(92)[-1]["text"])
+
+    def test_not_master_has_no_menu(self):
+        self.assertNotEqual(self.b.handle(msg(T.MK_SEND, 93)), "mk_send")

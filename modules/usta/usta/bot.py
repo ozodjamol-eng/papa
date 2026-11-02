@@ -12,6 +12,7 @@ import re
 import sqlite3
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import texts as T
@@ -44,7 +45,7 @@ def connect(path: str) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
     have = {r[1] for r in db.execute("PRAGMA table_info(leads)")}
-    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT"), ("master", "INTEGER"), ("ref", "INTEGER"), ("paid", "INTEGER")):
+    for col, typ in (("urgency", "TEXT"), ("rating", "INTEGER"), ("reminded", "INTEGER NOT NULL DEFAULT 0"), ("obj", "TEXT"), ("master", "INTEGER"), ("ref", "INTEGER"), ("paid", "INTEGER"), ("via", "INTEGER")):
         if col not in have:
             db.execute(f"ALTER TABLE leads ADD COLUMN {col} {typ}")
     mh = {r[1] for r in db.execute("PRAGMA table_info(masters)")}
@@ -68,6 +69,11 @@ def main_kb() -> dict:
     rows = [[{"text": T.KINDS[k][0], "web_app": {"url": T.MINIAPP_URL}} if k == "dizayn" else {"text": T.KINDS[k][0]}]
             for k in T.KINDS] + [[{"text": T.M_BTN}], [{"text": T.CONTACT}]]
     return {"keyboard": rows, "resize_keyboard": True}
+
+
+def master_kb() -> dict:
+    return {"keyboard": [[{"text": T.MK_SEND}], [{"text": T.MK_MINE}, {"text": T.MK_LINK}], [{"text": T.MK_JOBS}],
+                         [{"text": T.CONTACT}]], "resize_keyboard": True}
 
 
 def owner_kb() -> dict:
@@ -98,9 +104,12 @@ class Bot:
                         (step, json.dumps(data or {}, ensure_ascii=False), now().isoformat(), uid))
         self.db.commit()
 
+    def master(self, uid: int):
+        return self.db.execute("SELECT * FROM masters WHERE uid=? AND status='ok'", (uid,)).fetchone()
+
     def say(self, chat: int, text: str, kb: dict | None = None):
         if kb is None:
-            kb = owner_kb() if chat in self.owners else main_kb()
+            kb = owner_kb() if chat in self.owners else (master_kb() if self.master(chat) else main_kb())
         return self.api("sendMessage", chat_id=chat, text=text, reply_markup=kb, parse_mode="HTML",
                         disable_web_page_preview=True)
 
@@ -154,6 +163,8 @@ class Bot:
             self.say(chat, self.stats())
             return "stats"
         u = self.user(frm)
+        if text in T.MK_BUTTONS and self.master(frm["id"]):
+            return self.mk(frm, chat, text)
         if text == T.BACK:
             self.set_step(frm["id"], "")
             self.say(chat, T.UNKNOWN)
@@ -162,6 +173,8 @@ class Bot:
             self.say(chat, T.CONTACT_TEXT)
             return "contact"
         step, data = u["step"] or "", json.loads(u["data"] or "{}")
+        if step.startswith("ms_"):                   # уста мижоз юбормоқда
+            return self.ms_step(frm, chat, m, text, step, data)
         if step.startswith("m_"):                    # уста рўйхатдан ўтмоқда — касб тугмалари мижоз тугмаларига ўхшайди
             return self.m_step(frm, chat, m, text, step, data)
         kind = next((k for k, (btn, _) in T.KINDS.items() if text == btn), None)
@@ -185,8 +198,10 @@ class Bot:
             q = T.KINDS[data["kind"]][1] + ("\n\n" + T.FASAD_NOTE if data["kind"] == "fasad" else "")
             self.say(chat, q, {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True})
             return "obj"
-        if step == "details" and text:
-            data["details"] = text[:500]
+        if step == "details" and (text or m.get("voice")):
+            if m.get("voice"):                       # 02.11: овоз билан ҳам бўлади
+                data.setdefault("photos", []).append({"chat": chat, "id": m["message_id"]})
+            data["details"] = text[:500] or T.VOICE_NOTE
             self.set_step(frm["id"], "when", data)
             self.say(chat, T.ASK_WHEN, {"keyboard": [[{"text": v} for v in T.WHEN.values()], [{"text": T.BACK}]],
                                         "resize_keyboard": True})
@@ -266,6 +281,12 @@ class Bot:
         self.set_step(frm["id"], "")
         self.say(chat, T.DONE.format(n=n))
         self.notify(n, frm)
+        if ref:
+            ms = self.db.execute("SELECT uid FROM masters WHERE id=?", (ref,)).fetchone()
+            try:
+                self.say(ms["uid"], T.REF_LEAD.format(n=n, pct=T.REF_PCT))
+            except Exception as e:  # noqa: BLE001
+                print(f"ref_lead: {e}", flush=True)
         return "lead"
 
     def card(self, r, frm: dict | None = None) -> str:
@@ -332,7 +353,7 @@ class Bot:
                          text=self.card(r), parse_mode="HTML", reply_markup=kb)
             except Exception:  # noqa: BLE001
                 pass
-            if act == "fin":
+            if act == "fin" and not r["via"]:
                 stars = {"inline_keyboard": [[{"text": "⭐" * i, "callback_data": f"rate:{n}:{i}"} for i in (1, 2, 3)],
                                              [{"text": "⭐" * i, "callback_data": f"rate:{n}:{i}"} for i in (4, 5)]]}
                 self.api("sendMessage", chat_id=r["uid"], text=T.ASK_RATE.format(n=n), reply_markup=stars)
@@ -386,6 +407,72 @@ class Bot:
             except Exception as e:  # noqa: BLE001
                 print(f"m_submit: {type(e).__name__}: {e}", flush=True)
         return "m_submit"
+
+    # ---------- 🛠 уста менюси (02.11) ----------
+    def mk(self, frm, chat, text) -> str:
+        ms = self.master(frm["id"])
+        if text == T.MK_SEND:
+            self.set_step(frm["id"], "ms_phone", {})
+            self.say(chat, T.MS_ASK_PHONE, {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True})
+            return "mk_send"
+        if text == T.MK_MINE:
+            return self.m_mine(frm, chat)
+        if text == T.MK_LINK:
+            link = self.ref_link(ms["id"])
+            cap = (f"🔗 <b>Шахсий ҳаволангиз</b>\n{link}\n\nМижозга QR-кодни кўрсатинг ёки ҳаволани юборинг. "
+                   f"Ҳавола орқали келган мижоз тўласа — {T.REF_PCT}% сизники.")
+            try:
+                self.api("sendPhoto", chat_id=chat, caption=cap, parse_mode="HTML", reply_markup=master_kb(),
+                         photo="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=20&data="
+                               + urllib.parse.quote(link, safe=""))
+            except Exception as e:  # noqa: BLE001 — QR бўлмаса ҳам ҳавола етади
+                print(f"qr: {e}", flush=True)
+                self.say(chat, cap)
+            return "mk_link"
+        rows = self.db.execute("SELECT * FROM leads WHERE master=? OR ref=? ORDER BY n DESC LIMIT 10",
+                               (ms["id"], ms["id"])).fetchall()
+        if not rows:
+            self.say(chat, "📥 Ҳали буюртма йўқ. Мижоз юбориш — «➕ Мижоз юбориш».")
+            return "mk_jobs"
+        out = ["📥 <b>БУЮРТМАЛАРИМ</b>"]
+        for r in rows:
+            who = "сиз олдингиз" if r["master"] == ms["id"] else "сизнинг мижозингиз"
+            out.append(f"{self.ST_ICON.get(r['status'], '•')} №{r['n']} · {T.KINDS.get(r['kind'], (r['kind'],))[0]} · "
+                       f"{esc((r['place'] or '')[:25])} · {who}")
+        self.say(chat, "\n".join(out))
+        return "mk_jobs"
+
+    def ms_step(self, frm, chat, m, text, step, data) -> str:
+        ms = self.master(frm["id"])
+        if not ms:
+            self.set_step(frm["id"], ""); self.say(chat, T.UNKNOWN); return "ms_no"
+        back = {"keyboard": [[{"text": T.BACK}]], "resize_keyboard": True}
+        if step == "ms_phone":
+            c = m.get("contact")
+            phone = norm_phone(c["phone_number"]) if c else norm_phone(text)
+            if not phone:
+                self.say(chat, T.BAD_PHONE, back); return "ms_badphone"
+            data.update(phone=phone, cname=(c or {}).get("first_name") or "")
+            self.set_step(frm["id"], "ms_note", data)
+            self.say(chat, T.MS_ASK_NOTE, back)
+            return "ms_phone"
+        if step == "ms_note" and (text or m.get("voice")):
+            photos = [{"chat": chat, "id": m["message_id"]}] if m.get("voice") else []
+            kind = {"santex": "santex", "elektr": "elektr", "mebel": "mebel", "dizayner": "dizayn",
+                    "prorab": "prorab"}.get(ms["trade"], "tamir")
+            details = (text[:500] or T.VOICE_NOTE) + f"\n👷 уста юборди: {ms['name']}" + (f" · мижоз: {data['cname']}" if data.get("cname") else "")
+            cur = self.db.execute("INSERT INTO leads(uid, kind, details, place, phone, photos, src, created, ref, via)"
+                                  " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                                  (frm["id"], kind, details, "—", data["phone"], json.dumps(photos), f"r{ms['id']}",
+                                   now().isoformat(), ms["id"], ms["id"]))
+            self.db.commit()
+            n = cur.lastrowid
+            self.set_step(frm["id"], "")
+            self.say(chat, T.MS_DONE.format(n=n, pct=T.REF_PCT))
+            self.notify(n, frm)
+            return "ms_lead"
+        self.say(chat, T.MS_ASK_NOTE, back)
+        return "ms_unknown"
 
     def m_card(self, r) -> str:
         st = {"pending": "⏳ текширувда", "ok": "✅ рўйхатда", "no": "❌ рад этилди"}.get(r["status"], r["status"])
@@ -455,7 +542,8 @@ class Bot:
             self.db.execute("UPDATE masters SET jobs=jobs+1 WHERE id=?", (ms["id"],))
             self.db.commit()
             self.say(ms["uid"], T.M_TAKEN.format(phone=esc(r["phone"])))
-            self.say(r["uid"], T.M_CLIENT.format(n=r["n"], name=esc(ms["name"])))
+            if not r["via"]:
+                self.say(r["uid"], T.M_CLIENT.format(n=r["n"], name=esc(ms["name"])))
             note = f"✅ Ариза №{r['n']}: уста {esc(ms['name'])} олди"
         else:
             self.db.execute("UPDATE leads SET status='new', master=NULL WHERE n=?", (r["n"],))
@@ -516,7 +604,7 @@ class Bot:
         if r["ref"]:
             share = b * T.REF_PCT // 100
             ms = self.db.execute("SELECT * FROM masters WHERE id=?", (r["ref"],)).fetchone()
-            self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({T.REF_PCT}%). Ҳисоб: /menim".replace(",", " "))
+            self.say(ms["uid"], f"💰 Ариза №{a} тўланди. Сизнинг улушингиз: {share:,} сўм ({T.REF_PCT}%). Ҳисоб — «📊 Ҳисобим».".replace(",", " "))
             return f"✅ Ариза №{a}: {b:,} сўм. Реферал {esc(ms['name'])}: {share:,} сўм".replace(",", " ")
         return f"✅ Ариза №{a}: {b:,} сўм (рефералсиз)".replace(",", " ")
 
