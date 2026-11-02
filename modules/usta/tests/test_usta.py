@@ -243,6 +243,7 @@ class Masters(unittest.TestCase):
         m = self.prorab(uid=79)
         self.assertEqual((m["name"], m["status"], m["trade"]), ("Али", "ok", "prorab"))
         self.assertTrue(any(c == "sendPhoto" and p["chat_id"] == 79 and "ЖАМОАСИГА" in p["caption"] for c, p in self.api.calls))  # ўзи юборилди
+        self.assertTrue(any(c == "sendPhoto" and p["chat_id"] == OWNER and "ЖАМОАСИГА" in p["caption"] for c, p in self.api.calls))  # владелец нусхаси
         before = len(self.api.calls)
         self.assertEqual(self.b.auto_kits(), 0)                                   # такрорланмайди
         self.assertEqual(len(self.api.calls), before)

@@ -828,11 +828,11 @@ class Bot:
         n = 0
         for r in self.db.execute("SELECT id FROM masters WHERE trade='prorab' AND status='ok'").fetchall():
             if self.db.execute("SELECT 1 FROM kv WHERE k=?", (f"kit:{r['id']}",)).fetchone():
+                if not self.db.execute("SELECT 1 FROM kv WHERE k=?", (f"kitcopy:{r['id']}",)).fetchone():
+                    self.p_kit(r["id"], 0, to_prorab=False)   # аввал юборилган — владелец нусхасини кўрсин
                 continue
             try:
-                for o in self.owners or [0]:
-                    self.p_kit(r["id"], o)
-                    break
+                self.p_kit(r["id"], 0)
                 self.db.execute("INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)", (f"kit:{r['id']}", now().isoformat()))
                 self.db.commit()
                 n += 1
@@ -840,17 +840,26 @@ class Bot:
                 print(f"auto_kits: {e}", flush=True)
         return n
 
-    def p_kit(self, pid: int, owner: int) -> str | None:
+    def p_kit(self, pid: int, owner: int, to_prorab: bool = True) -> str | None:
+        """Прорабга QR + 2 матн; 02.11 владелец: «я должен видеть, что ему отправлено» — айнан нусхаси владельцга."""
         pr = self.db.execute("SELECT * FROM masters WHERE id=? AND trade='prorab' AND status='ok'", (pid,)).fetchone()
         if not pr:
             return None
         first = (pr["name"] or "").split()
         name = esc(first[1] if len(first) > 1 else (first[0] if first else "Прораб"))   # «Фамилия Исм» → исм
         link = f"https://t.me/{self.username}?start=t{pr['id']}"
-        self.qr(pr["uid"], link, T.P_KIT.format(name=name, mp=T.TEAM_MEMBER_PCT, lp=T.TEAM_LEAD_PCT, rp=T.REF_PCT), master_kb(True))
-        self.qr(pr["uid"], link, T.TEAM_KIT.format(name=name.upper(), mp=T.TEAM_MEMBER_PCT, link=link), master_kb(True))
-        if owner:
-            self.api("sendMessage", chat_id=owner, text=f"✅ {name}га QR ва 2 та матн юборилди.")
+        msgs = [T.P_KIT.format(name=name, mp=T.TEAM_MEMBER_PCT, lp=T.TEAM_LEAD_PCT, rp=T.REF_PCT),
+                T.TEAM_KIT.format(name=name.upper(), mp=T.TEAM_MEMBER_PCT, link=link)]
+        if to_prorab:
+            for cap in msgs:
+                self.qr(pr["uid"], link, cap, master_kb(True))
+        for o in self.owners:
+            self.api("sendMessage", chat_id=o, parse_mode="HTML",
+                     text=f"👀 <b>{name}га юборилди</b> — у кўрган 2 та хабарнинг нусхаси 👇")
+            for cap in msgs:
+                self.qr(o, link, cap, owner_kb())
+        self.db.execute("INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)", (f"kitcopy:{pr['id']}", now().isoformat()))
+        self.db.commit()
         return "pk"
 
     def p_add(self, pr, chat) -> str:
