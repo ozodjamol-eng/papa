@@ -30,3 +30,4 @@
 
 - 02.11: аватар исправлен (владелец: «тут только Volidam, Safo Marva отсутствует») → VOLIDAM_SAFO_avatar.png — знак Volidam + VOLIDAM + знак Safo Marva «SAFO MARVA TOUR · ҲАМКОРИ»; один файл для YouTube/Instagram/Telegram (старые VOLIDAM_a / instagram_avatar не использовать).
 - 02.11: логотип/аватар VOLIDAM_SAFO_avatar принят владельцем как основной; шапка YouTube переделана в том же стиле → VOLIDAM_youtube_shapka_v2.png (Safo Marva крупно), старую шапку не использовать.
+- 02.11: Telegram-канал клиента: https://t.me/safo_marva_nodirbek (подключён к боту и странице). Отдельные аватары с подписью: VOLIDAM_avatar_kanal.png («КАНАЛ»), VOLIDAM_avatar_bot.png («БОТ») — идея владельца, чтобы было понятнее.
