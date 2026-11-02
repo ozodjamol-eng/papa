@@ -27,3 +27,5 @@
 ## Страница VOLIDAM (02.11)
 - https://ozodjamol-eng.github.io/papa-site/volidam/ (репо papa-site, папка volidam/): по образцу safomarvaumra.uz — 5 пакетов (Jumeirah, Anjum, Al Ebaa, Comfort Plus, Standart), даты×цены 4/3/2 кишилик (цены одинаковы по республике — владелец), прошедшие даты скрываются сами, «Яқин сана», окно брони → звонок Андижон/Хўжаобод. Данные — volidam/data.json (поле bot пустое → кнопка бота появится, когда впишем username).
 - Дальше: бот-приёмщик (deep link start=site_<пакет>_<дата>_<кишилик>), потом Воронка Instagram.
+
+- 02.11: аватар исправлен (владелец: «тут только Volidam, Safo Marva отсутствует») → VOLIDAM_SAFO_avatar.png — знак Volidam + VOLIDAM + знак Safo Marva «SAFO MARVA TOUR · ҲАМКОРИ»; один файл для YouTube/Instagram/Telegram (старые VOLIDAM_a / instagram_avatar не использовать).
