@@ -36,6 +36,7 @@ PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
 
 M_PACKS, M_ORDER, M_SITE, M_CONTACT = "🕋 Пакетлар ва нархлар", "✍️ Жой банд қилиш", "🌐 Сайтни очиш", "📞 Алоқа"
 M_FAQ = "❓ Савол-жавоб"
+M_POST = "📣 Каналга пост"
 # Ответы — только из официального сайта Safo Marva (safomarvaumra.uz), ничего не выдумываем.
 FAQ = [
     ("Пакет нархига нималар киради?", "✈️ Авиабилет ва виза\n🏨 Макка ва Мадинада меҳмонхона\n🍽 Овқатланиш (2–3 маҳал)\n🚄 Трансфер (тезюрар поезд ёки автобус)\n🕌 Равзага кириш ва экскурсиялар\n👨‍⚕️ Малакали элликбоши ва ҳамшира\n🌊 Қизил денгизга саёҳат\n🎁 Бонус: Зам-зам 5 л, нимча, сумка, бейжик, абая"),
@@ -204,10 +205,12 @@ class Bot:
             return None
 
     # ---------- клавиатуры ----------
-    def menu_kb(self) -> dict:
+    def menu_kb(self, uid: int | None = None) -> dict:
         rows = [[{"text": M_PACKS}], [{"text": M_ORDER}], [{"text": M_FAQ}, {"text": M_CONTACT}]]
         if self.cfg.get("site"):
             rows.insert(2, [{"text": M_SITE, "web_app": {"url": self.cfg["site"]}}])
+        if uid in self.owners and self.cfg.get("channel_id"):
+            rows.append([{"text": M_POST}])
         return {"keyboard": rows, "resize_keyboard": True}
 
     def cancel_kb(self, extra: list | None = None) -> dict:
@@ -250,12 +253,21 @@ class Bot:
             return
         if text in (CANCEL, "/cancel"):
             self.step(uid, None)
-            self.send(uid, "Бекор қилинди. Асосий меню 👇", self.menu_kb())
+            self.send(uid, "Бекор қилинди. Асосий меню 👇", self.menu_kb(uid))
+            return
+        if text in ("/post", M_POST) and uid in self.owners and self.cfg.get("channel_id"):
+            self.step(uid, "post", fresh=True)
+            self.send(uid, f"📣 Пост юборинг (расм/видео + матн ёки фақат матн) — <b>{esc(self.cfg['channel_id'])}</b> "
+                           "каналига. Тайёр постни шу ерга узатсангиз ҳам бўлади.\nКўриниши олдин шу ерда кўрсатилади, "
+                           "«✅ Каналга жойлаш»сиз ҳеч нарса чиқмайди.", self.cancel_kb())
             return
         if text == "/leads" and uid in self.managers:
             self.open_leads(uid)
             return
         u = self.user(uid)
+        if u.get("step") == "post" and uid in self.owners:
+            self.post_preview(uid, msg)
+            return
         if u.get("step") == "phone":
             ph = norm_phone((msg.get("contact") or {}).get("phone_number") or text)
             if not ph:
@@ -310,11 +322,11 @@ class Bot:
         if ph:
             try:
                 self.api("sendPhoto", chat_id=uid, photo=ph, caption=cap, parse_mode="HTML",
-                         reply_markup=self.menu_kb())
+                         reply_markup=self.menu_kb(uid))
                 return
             except Exception as e:  # noqa: BLE001
                 print(f"welcome photo: {e}", flush=True)
-        self.send(uid, cap, self.menu_kb())
+        self.send(uid, cap, self.menu_kb(uid))
 
     # ---------- пакеты ----------
     def packages(self, uid: int) -> None:
@@ -495,6 +507,35 @@ class Bot:
         for r in reversed(rows):
             self.send(uid, self.lead_text(r["n"]), self.lead_kb(r["n"], r["status"]))
 
+    # ---------- пост в канал (только владелец, по кнопке) ----------
+    def post_preview(self, uid: int, msg: dict) -> None:
+        mid = msg["message_id"]
+        try:
+            self.api("copyMessage", chat_id=uid, from_chat_id=uid, message_id=mid, reply_markup={"inline_keyboard": [
+                [{"text": "✅ Каналга жойлаш", "callback_data": f"pub:{mid}"}],
+                [{"text": "✖️ Бекор қилиш", "callback_data": "pub:x"}]]})
+        except Exception as e:  # noqa: BLE001
+            self.send(uid, f"Кўриниш хатоси: {esc(e)}")
+            return
+        self.step(uid, None)
+        self.send(uid, "👆 Каналда шундай кўринади. Жойлаймизми?", self.menu_kb(uid))
+
+    def publish(self, uid: int, mid: int) -> None:
+        ch = self.cfg.get("channel_id")
+        key = f"pub:{uid}:{mid}"
+        if self.db.execute("SELECT 1 FROM kv WHERE k=?", (key,)).fetchone():
+            self.send(uid, "Бу пост аллақачон жойланган ✅")
+            return
+        try:
+            r = self.api("copyMessage", chat_id=ch, from_chat_id=uid, message_id=mid)
+        except Exception as e:  # noqa: BLE001
+            self.send(uid, f"❌ Жойлаб бўлмади: {esc(e)}\nБот каналда админ ва «Публикация сообщений» ҳуқуқи борми?")
+            return
+        self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (key, str(r.get("message_id"))))
+        self.db.commit()
+        link = f"https://t.me/{ch.lstrip('@')}/{r.get('message_id')}" if str(ch).startswith("@") else ""
+        self.send(uid, f"✅ Каналга жойланди. {link}".strip(), self.menu_kb(uid))
+
     def faq(self, uid: int) -> None:
         rows = [[{"text": q, "callback_data": f"q:{i}"}] for i, (q, _) in enumerate(FAQ)]
         self.send(uid, "❓ <b>Савол-жавоб</b>\nСаволни танланг 👇", {"inline_keyboard": rows})
@@ -529,6 +570,12 @@ class Bot:
         except Exception:  # noqa: BLE001
             pass
         kind, _, val = data.partition(":")
+        if kind == "pub" and uid in self.owners:
+            if val.isdigit():
+                self.publish(uid, int(val))
+            else:
+                self.send(uid, "Бекор қилинди.", self.menu_kb(uid))
+            return
         if kind == "p":
             p = self.pkg(val)
             if p:

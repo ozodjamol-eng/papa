@@ -124,5 +124,28 @@ class T2(unittest.TestCase):
         self.assertTrue(any("каналимизга" in t for t in api.texts(5)))
 
 
+class T3(unittest.TestCase):
+    def test_owner_post_flow(self):
+        b, api = make()
+        b.cfg["channel_id"] = "@test_ch"
+        b.handle(msg(1, "📣 Каналга пост"))
+        m = msg(1, "Янги сана: 19-ноябрь")
+        m["message"]["message_id"] = 77
+        b.handle(m)
+        self.assertTrue(any(c[0] == "copyMessage" and c[1]["chat_id"] == 1 for c in api.calls))
+        b.handle(cb(1, "pub:77"))
+        self.assertTrue(any(c[0] == "copyMessage" and c[1]["chat_id"] == "@test_ch" for c in api.calls))
+        n = len(api.calls)
+        b.handle(cb(1, "pub:77"))
+        self.assertFalse(any(c[0] == "copyMessage" and c[1]["chat_id"] == "@test_ch" for c in api.calls[n:]))
+
+    def test_stranger_cannot_post(self):
+        b, api = make()
+        b.cfg["channel_id"] = "@test_ch"
+        b.handle(msg(5, "📣 Каналга пост"))
+        b.handle(cb(5, "pub:1"))
+        self.assertFalse(any(c[0] == "copyMessage" for c in api.calls))
+
+
 if __name__ == "__main__":
     unittest.main()
