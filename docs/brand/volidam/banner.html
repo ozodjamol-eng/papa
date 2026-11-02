@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:PF;src:url(../assets/Playfair.ttf);font-weight:400 900}
+@font-face{font-family:MR;src:url(../assets/Manrope.ttf);font-weight:200 800}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:2560px;height:1440px;overflow:hidden}
+#b{position:relative;width:2560px;height:1440px;background:radial-gradient(ellipse at 50% 50%,#7A0B0B 0%,#5A0606 45%,#330202 100%);overflow:hidden}
+#pat{position:absolute;inset:0;opacity:.08}
+.gold{background:linear-gradient(180deg,#F6DC86 0%,#E0A92A 45%,#B07A0C 75%,#E9C25A 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* safe area 1546x423 centered: x 507..2053, y 508..931 */
+#safe{position:absolute;left:507px;top:508px;width:1546px;height:423px;display:flex;align-items:center;justify-content:center;gap:56px;transform:scale(.86)}
+.rule{height:3px;background:linear-gradient(90deg,transparent,#E0A92A,transparent)}
+#guide{position:absolute;left:507px;top:508px;width:1546px;height:423px;outline:3px dashed rgba(255,255,255,.5);display:none}
+</style></head><body>
+<div id="b">
+  <svg id="pat" viewBox="0 0 2560 1440"><defs>
+    <pattern id="p" width="220" height="260" patternUnits="userSpaceOnUse">
+      <path d="M40 240 V110 A70 70 0 0 1 180 110 V240" fill="none" stroke="#E4C766" stroke-width="3"/>
+      <path d="M70 240 V120 A40 40 0 0 1 150 120 V240" fill="none" stroke="#E4C766" stroke-width="1.5"/>
+    </pattern></defs><rect width="2560" height="1440" fill="url(#p)"/></svg>
+  <div class="rule" style="position:absolute;left:0;right:0;top:470px;opacity:.6"></div>
+  <div class="rule" style="position:absolute;left:0;right:0;top:968px;opacity:.6"></div>
+  <div id="safe">
+    <img src="volidam_emblem.png" style="height:360px;filter:drop-shadow(0 14px 30px rgba(0,0,0,.45))">
+    <div>
+      <div class="gold" style="font-family:PF;font-weight:900;font-size:168px;letter-spacing:10px;line-height:1">VOLIDAM</div>
+      <div style="font-family:MR;font-weight:800;font-size:34px;letter-spacing:9px;color:#F6F0DE;margin:18px 0 22px 4px">ОНАГА МЕҲР · ҲУРМАТ · ҒАМХЎРЛИК</div>
+      <div style="display:flex;align-items:center;gap:22px">
+        <div style="display:flex;align-items:center;gap:12px"><img src="../assets/emblem.png" style="height:56px"><span style="font-family:MR;font-weight:800;font-size:30px;letter-spacing:4px;color:#E4C766">SAFO MARVA TOUR · <span style="color:#F6F0DE">РАСМИЙ ҲАМКОРИ</span></span></div>
+      </div>
+      <div style="margin-top:22px;display:inline-block;background:#C9A227;color:#3A0303;font-family:MR;font-weight:800;font-size:36px;padding:10px 30px;border-radius:50px">🕋 Умра зиёрати · 📞 +998 90 766 82 84</div>
+    </div>
+  </div>
+  <div id="guide"></div>
+</div>
+</body></html>
