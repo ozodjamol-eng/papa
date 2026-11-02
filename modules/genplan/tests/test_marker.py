@@ -90,6 +90,8 @@ class GrantTest(unittest.TestCase):
         bots = {}
 
         class Acc:
+            _fake = True
+
             async def get_entity(self, x):
                 return x
 

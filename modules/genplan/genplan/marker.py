@@ -191,6 +191,7 @@ async def grant(acc, cfg: dict, pubs: dict, code: str, shelf: int, log=print) ->
         try:
             ent = await acc.get_entity(shelf)
             await acc(EditAdminRequest(ent, me.get("username"), rights, "PAPA"))
+            await asyncio.sleep(0 if getattr(acc, "_fake", False) else 5)   # 02.11: Telegram применяет права с задержкой
             r = await asyncio.to_thread(p.http, "getChatMember", {"chat_id": shelf, "user_id": me.get("id")})
             if not (r.get("ok") and (r.get("result") or {}).get("status") in ("administrator", "creator")):
                 raise RuntimeError(r.get("description") or "после назначения бот всё равно не админ")   # 02.11: проверяем, а не верим
