@@ -42,12 +42,16 @@ def paste(fr, im, cx, cy, al=1.0, sc=1.0, gl=0):
     fr.alpha_composite(im, (x, y))
 
 # --- ресурсы ---
-ESZ = 520; EMB = emblem(ESZ); EW, EH = EMB.size
-# контур арки (для «рисования»): от низа-центра влево, вверх по дуге, вниз вправо, обратно к центру
-lw = int(ESZ * 0.035); R = ESZ / 2 - lw * 1.5; cxE, cyE = EW / 2, ESZ / 2
-path = [(EW / 2, EH - lw * 1.5), (lw * 1.5, EH - lw * 1.5), (lw * 1.5, cyE)]
+# 02.11: официальная эмблема клиента (золото, вырезана из их логотипа, фон убран)
+EMB = Image.open("/home/claude/papa/docs/fabrika/orders/umra-assets/safomarva_emblema_zoloto.png").convert("RGBA")
+EMB = EMB.resize((480, int(480 * EMB.height / EMB.width)), Image.LANCZOS); EW, EH = EMB.size
+k = EW / 540; lw = max(6, int(14 * k)); R = 233 * k; cxE, cyE = 271 * k, 271 * k; xl, xr, yb = 38 * k, 505 * k, 760 * k
+_bgA = Image.new("RGBA", (EW, EH), (0, 0, 0, 0)); _bd = ImageDraw.Draw(_bgA); _fill = (150, 10, 18, 255)   # фирменный красный, как фон их логотипа
+_bd.pieslice([xl, cyE - R, xr, cyE + R], 180, 360, fill=_fill); _bd.rectangle([xl, cyE, xr, yb], fill=_fill)
+_bgA.alpha_composite(EMB); EMB = _bgA
+path = [(cxE, yb), (xl, yb), (xl, cyE)]
 path += [(cxE - R * math.cos(math.radians(a)), cyE - R * math.sin(math.radians(a))) for a in range(0, 181, 3)]
-path += [(EW - lw * 1.5, EH - lw * 1.5), (EW / 2, EH - lw * 1.5)]
+path += [(xr, yb), (cxE, yb)]
 seg = [math.dist(path[i], path[i + 1]) for i in range(len(path) - 1)]; TOT = sum(seg)
 def outline(frac):
     im = Image.new("RGBA", (EW, EH), (0, 0, 0, 0)); d = ImageDraw.Draw(im); left = TOT * frac; pts = [path[0]]
@@ -61,7 +65,11 @@ T_SOON = fit("ТЕЗ ОРАДА…", 64, GOLD2, track=18)
 T_XOJ = fit("ХЎЖАОБОДДА", 96, WHITE, track=10)
 T_S1 = fit("МУҚАДДАС САФАР САРИ", 62, WHITE, track=6)
 T_S2 = fit("ЙЎЛ ЯҚИНЛАШМОҚДА", 62, GOLD2, track=6)
-WORD = fit("SAFO MARVA", 150, WHITE, track=8, fnt=CZ, maxw=1000)
+WORD0 = fit("SAFO MARVA", 120, GOLD2, track=10, fnt=CZ, maxw=760)
+WORD = Image.new("RGBA", (1040, WORD0.height), (0, 0, 0, 0)); WORD.alpha_composite(WORD0, ((1040 - WORD0.width) // 2, 0))
+_d = ImageDraw.Draw(WORD); _yl = WORD0.height // 2 + 6
+_d.line([(10, _yl), ((1040 - WORD0.width) // 2 - 10, _yl)], fill=GOLD2 + (255,), width=4)
+_d.line([((1040 + WORD0.width) // 2 + 10, _yl), (1030, _yl)], fill=GOLD2 + (255,), width=4)
 T_UM = fit("УМРА ЗИЁРАТИ", 52, GOLD2, track=16)
 T_LIC = fit("РАСМИЙ ЛИЦЕНЗИЯ № UT 0005", 44, GOLD2, track=6)
 T_OP = fit("ОЧИЛИШ — ЯҚИН КУНЛАРДА", 70, WHITE)
