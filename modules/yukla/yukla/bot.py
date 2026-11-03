@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, url TEXT, kind TEXT, vid
     created TEXT);
 CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, platform TEXT, result TEXT, ts TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS saved (uid INTEGER, rid INTEGER, ts TEXT, PRIMARY KEY (uid, rid));
 CREATE TABLE IF NOT EXISTS subs (chat TEXT PRIMARY KEY, until TEXT, joins INTEGER NOT NULL DEFAULT 0, added TEXT,
     pos INTEGER NOT NULL DEFAULT 0);
 """
@@ -271,17 +272,22 @@ class Bot:
         return self.q("SELECT rowid FROM cache WHERE key=?", (key,), one=True)[0]
 
     def media_kb(self, rid: int) -> dict:
-        """04.11 владелец: «панель как в Chaqqon бот» — под видео: Гуруҳда ишлатиш · Тавсиф · MP3 · Сақлаш (+ канал)."""
-        rows = [[{"text": T.GROUP_BTN, "url": f"https://t.me/{self.username}?startgroup=true"}],
-                [{"text": T.DESC_BTN, "callback_data": f"d:{rid}"}, {"text": T.MP3_BTN, "callback_data": f"a:{rid}"}],
-                [{"text": T.SAVE_BTN, "callback_data": f"s:{rid}"}]]   # callback_data ≤ 64 байт — калит эмас, рақам
-        if self.sub_link():
-            rows[2].append({"text": T.CHANNEL_BTN, "url": self.sub_link()})
-        return {"inline_keyboard": rows}
+        """04.11 владелец: «панель как в Chaqqon бот» (скриншот): ➕ Гуруҳда ишлатиш / 📝 Тавсиф · 🎵 MP3 / 📁 Сақлаш · ❌ Ўчириш."""
+        return {"inline_keyboard": [[{"text": T.GROUP_BTN, "url": f"https://t.me/{self.username}?startgroup=true"}],
+                                    [{"text": T.DESC_BTN, "callback_data": f"d:{rid}"}, {"text": T.MP3_BTN, "callback_data": f"a:{rid}"}],
+                                    [{"text": T.SAVE_BTN, "callback_data": f"s:{rid}"}, {"text": T.DEL_BTN, "callback_data": "x"}]]}
 
     def caption(self) -> str:
+        return T.CAPTION.format(bot=self.username)
+
+    def send_ad(self, chat: int):
+        """04.11 (как в Chaqqon): реклама — отдельным сообщением сразу после видео."""
         ad = self.kv("ad") or ""
-        return T.CAPTION.format(bot=self.username) + (f"\n\n{ad}" if ad else "")
+        if ad:
+            try:
+                self.api("sendMessage", chat_id=chat, text=ad, parse_mode="HTML", disable_web_page_preview=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"ad: {type(e).__name__}: {e}", flush=True)
 
     def namaz(self) -> str | None:
         return namaz_text()
@@ -336,6 +342,8 @@ class Bot:
         if text.startswith("/start"):
             self.say(chat, T.START)
             return "start"
+        if text in ("/saqlangan", "/saved", T.SAVED_BTN):
+            return self.saved_list(chat, frm["id"])
         if text == T.NAMAZ_BTN or text in ("/namoz", "/namaz"):
             if self.send_oboi(chat):
                 return "namaz_oboi"
@@ -363,6 +371,15 @@ class Bot:
         url = link.group().rstrip(").,")
         return self.start_job(m["from"]["id"], m["chat"]["id"], url, reply_to=m["message_id"])
 
+    def saved_list(self, chat: int, uid: int) -> str:
+        rows = self.q("SELECT c.rowid AS rid, c.kind, c.url FROM saved s JOIN cache c ON c.rowid=s.rid "
+                      "WHERE s.uid=? AND c.video IS NOT NULL ORDER BY s.ts DESC LIMIT 20", (uid,))
+        if not rows:
+            self.say(chat, T.SAVED_NONE); return "saved_empty"
+        kb = [[{"text": f"▶️ {i}. {(r['kind'] or '').capitalize()}", "callback_data": f"v:{r['rid']}"}] for i, r in enumerate(rows, 1)]
+        self.say(chat, T.SAVED_HEAD.format(n=len(rows)), {"inline_keyboard": kb})
+        return "saved"
+
     def gate(self, chat: int, miss: list[str]) -> str:
         rows = [[{"text": f"📢 {c}", "url": self.link(c)}] for c in miss if self.link(c)]
         self.say(chat, T.NEED_SUB, {"inline_keyboard": rows + [[{"text": T.CHECK_BTN, "callback_data": "chk"}]]})
@@ -374,7 +391,8 @@ class Bot:
         if hit:                                   # хотирадан — дарҳол
             self.q("UPDATE cache SET hits=hits+1 WHERE key=?", (key,))
             self.api("sendVideo", chat_id=chat, video=hit["video"], caption=self.caption(), parse_mode="HTML",
-                     reply_markup=self.media_kb(self.row_id(key, url)))
+                     reply_markup=self.media_kb(self.row_id(key, url)), reply_to_message_id=reply_to)
+            self.send_ad(chat)
             self.q("INSERT INTO log(uid, platform, result, ts) VALUES (?,?,?,?)", (uid, platform_of(url), "cache", now()))
             return "cache"
         with self.lock:
@@ -403,6 +421,7 @@ class Bot:
                 fid = (msg.get("video") or msg.get("document") or {}).get("file_id")
                 if fid:
                     self.q("UPDATE cache SET video=? WHERE key=?", (fid, key))
+                self.send_ad(chat)
                 res = "ok"
             else:
                 self.say(chat, T.FAIL)
@@ -475,10 +494,27 @@ class Bot:
             t = (row["descr"] if row else None) or ""
             self.say(chat, f"📝 <b>{T.DESC_HEAD}</b>\n\n{esc(t)}" if t else T.DESC_NONE, {"inline_keyboard": []} if chat > 0 else None)
             return "desc"
-        if data.startswith("s:"):                                  # 💾 Сақлаш — асл сифатда файл
-            self.api("answerCallbackQuery", callback_query_id=cq["id"], text="💾")
-            self.submit(self.doc_job, chat, data[2:])
+        if data.startswith("s:"):                                  # 📁 Сақлаш — «📁 Сақланганлар» рўйхатига (/saqlangan)
+            rid = int(data[2:]) if data[2:].isdigit() else -1
+            self.q("INSERT OR IGNORE INTO saved(uid, rid, ts) VALUES (?,?,?)", (uid, rid, now()))
+            self.api("answerCallbackQuery", callback_query_id=cq["id"], text=T.SAVED_OK, show_alert=True)
             return "save"
+        if data == "x":                                            # ❌ Ўчириш — видеони чатдан олиб ташлаш
+            self.api("answerCallbackQuery", callback_query_id=cq["id"])
+            try:
+                self.api("deleteMessage", chat_id=chat, message_id=cq["message"]["message_id"])
+            except Exception:  # noqa: BLE001
+                pass
+            return "del"
+        if data.startswith("v:"):                                  # сақланган видеони қайта юбориш
+            self.api("answerCallbackQuery", callback_query_id=cq["id"])
+            row = self.q("SELECT rowid, * FROM cache WHERE rowid=?", (int(data[2:]) if data[2:].isdigit() else -1,), one=True)
+            if row and row["video"]:
+                self.api("sendVideo", chat_id=chat, video=row["video"], caption=self.caption(), parse_mode="HTML",
+                         reply_markup=self.media_kb(row["rowid"]))
+            else:
+                self.say(chat, T.FAIL)
+            return "resend"
         if uid in self.owners and data.startswith("sd:"):          # каналнии олиб ташлаш
             self.api("answerCallbackQuery", callback_query_id=cq["id"])
             self.q("DELETE FROM subs WHERE chat=?", (data[3:],))
@@ -695,6 +731,12 @@ def main():
               os.environ.get("YUKLA_SUB_CHAT", "@kattadavrauz,@xojaobodcity24") or None, dl, make_upload(tok))
     bot.bot_id = bid
     bot.upload_group = make_upload_group(tok)
+    try:                                          # 04.11: «Меню» как в Chaqqon — команды бота
+        api("setMyCommands", commands=[{"command": "start", "description": "Бошлаш"},
+                                       {"command": "saqlangan", "description": "📁 Сақланганлар"},
+                                       {"command": "namoz", "description": "🕌 Намоз вақтлари"}])
+    except Exception as e:  # noqa: BLE001
+        print(f"commands: {e}", flush=True)
     off = 0
     print(f"yukla: запущен @{uname}", flush=True)
     while True:

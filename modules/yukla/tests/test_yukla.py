@@ -139,7 +139,7 @@ class T1(unittest.TestCase):
         self.assertEqual(b.handle(msg(T.O_AD, uid=OWNER)), "o_ad")
         self.assertEqual(b.handle(msg("Реклама: Шодиёна мебель @x", uid=OWNER)), "o_ad_set")
         b.handle(msg("https://www.instagram.com/reel/CCC/", uid=50))
-        self.assertIn("Шодиёна", self.ups[-1][3])                                  # реклама видео остида
+        self.assertTrue(any("Шодиёна" in (p.get("text") or "") for m, p in self.api.calls if m == "sendMessage"))   # 04.11: реклама — отдельным сообщением после видео (как Chaqqon)
         self.assertEqual(b.handle(msg(T.O_SEND, uid=OWNER)), "o_send")
         self.assertEqual(b.handle(msg("Янгилик!", uid=OWNER)), "o_bc_preview")
         sent_before = [p for m, p in self.api.calls if m == "copyMessage" and p["chat_id"] in (50, 51)]
@@ -253,7 +253,9 @@ class T1(unittest.TestCase):
         self.assertEqual(b.handle(cb(d)), "desc")
         self.assertTrue(any("Асл матн &lt;b&gt;" in (p.get("text") or "") for m, p in self.api.calls))
         self.assertEqual(b.handle(cb(s_)), "save")
-        self.assertEqual(self.ups[-1][0], "sendDocument")
+        self.assertEqual(b.handle(msg("/saqlangan")), "saved")
+        self.assertEqual(b.handle(cb("x")), "del")
+        self.assertIn("deleteMessage", [m for m, p in self.api.calls])
 
 
 if __name__ == "__main__":
