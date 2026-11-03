@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Собрать timeline.js + дорожку голоса из озвучки (voice-out: W01..W11.mp3 + .align.json).
-usage: build_tl.py <папка_озвучки> <comp_dir>   →  comp/timeline.js, comp/voice.wav
+usage: build_tl.py <папка_озвучки> <comp_dir> [префикс файлов, по умолчанию W]   →  comp/timeline.js, comp/voice.wav
 Паузы — медленный темп (владелец 04.11: «чуть медленнее и понятнее»); глава ≥ 3,4 с."""
 import json, subprocess, sys, os
-src, comp = sys.argv[1], sys.argv[2]
+src, comp = sys.argv[1], sys.argv[2]; PFX = sys.argv[3] if len(sys.argv) > 3 else "W"
 SCREEN = ["БУ — SHODIYONA ЖАВОНИ.",
           "ТАШҚАРИДАН ЧИРОЙЛИ. ИЧИГА НИМА СИҒАДИ?",
           "КИТОБЛАР, ГУЛЛАР, ҚУТИЛАР, ЎЙИНЧОҚЛАР — ҲАММАСИ ЖОЙИДА!",
@@ -20,7 +20,7 @@ MIN_CH = 3.4
 LEAD = 1.15
 t = LEAD; lines = []; parts = []
 for i in range(11):
-    n = f"W{i+1:02d}"; al = json.load(open(f"{src}/{n}.align.json"))
+    n = f"{PFX}{i+1:02d}"; al = json.load(open(f"{src}/{n}.align.json"))
     ch, cs, ce = al["characters"], al["character_start_times_seconds"], al["character_end_times_seconds"]
     nz = [k for k, c in enumerate(ch) if c.strip()]; a0, a1 = cs[nz[0]], ce[nz[-1]]
     # слова латиницы по пробелам
@@ -32,7 +32,7 @@ for i in range(11):
             if not cur: w0 = cs[k]
             cur += c
     if cur: words.append((cur, w0, ce[len(ch) - 1]))
-    words = [w for w in words if w[0] not in ("—", "-")]
+    words = [w for w in words if w[0].strip(".…") not in ("—", "-", "")]
     scr = [s for s in SCREEN[i].split() if s not in ("—", "-")]
     if len(scr) != len(words): sys.exit(f"{n}: слов {len(words)} ≠ экран {len(scr)}: {[w[0] for w in words]}")
     off = t - a0

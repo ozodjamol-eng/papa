@@ -8,7 +8,7 @@
   const G = '#1F3A28', OAK = '#B8814A', NUT = '#74421E', CR = '#FBF8F1';
   const TL = window.TL, LN = TL.lines; window.__comp = { width: W, height: H, fps: 30, duration: TL.dur };
   const st = (i) => LN[i].t0, en = (i) => LN[i].t1;
-  const INTRO = 0.95, T_ASK = st(1) + 0.2, T_FILL = st(2) - 0.1, EVERY = (en(2) - st(2) + 1.0) / 12;
+  const INTRO = 0.95, T_ASK = st(1) + 0.2, T_FILL = st(2) - 0.1, EVERY = (en(2) - st(2) - 0.5) / 12; // все вещи на полках к концу фразы «…ҳаммаси жойида»
   const A_END = st(3) - 0.35, B_END = st(4) - 0.3, CH0 = (c) => st(4 + c) - 0.3, CH1 = (c) => (c < 5 ? st(5 + c) - 0.3 : CTA), CTA = st(10) - 0.5;
   const img = {}; for (const n of ['k31', 'logo', 'icon', 'u07']) { img[n] = new Image(); img[n].src = n + '.png'; }
   const ready = () => Promise.all(Object.values(img).map((im) => (im.complete ? 0 : new Promise((r) => { im.onload = r; im.onerror = r; }))));

@@ -5,7 +5,7 @@ import json, re, subprocess, sys, wave, numpy as np
 comp, mus, out = sys.argv[1:4]
 tl = json.loads(re.sub(r'^window.TL = |;\s*$', '', open(f'{comp}/timeline.js').read())); L = tl['lines']; D = tl['dur']
 st = lambda i: L[i]['t0']; en = lambda i: L[i]['t1']
-T_FILL = st(2) - 0.1; EVERY = (en(2) - st(2) + 1.0) / 12
+T_FILL = st(2) - 0.1; EVERY = (en(2) - st(2) - 0.5) / 12
 wipes = [st(3) - 0.65, st(4) - 0.6] + [st(5 + c) - 0.6 for c in range(5)] + [st(10) - 0.8]
 sr = 48000; a = np.zeros(int(sr * D))
 def pop(t0, f=700, d=0.1, g=0.25):
