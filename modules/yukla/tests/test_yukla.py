@@ -168,6 +168,18 @@ class T1(unittest.TestCase):
         self.assertEqual([x["chat"] for x in b.active_subs()], ["@kattadavrauz"])
         self.assertIsNone(b.handle(cb("sd:@kattadavrauz", uid=42)))                   # бегона ўчира олмайди
 
+    def test_owner_preview_as_user_and_sponsor_report(self):
+        b = self.mk(member="left")
+        self.assertEqual(b.handle(msg(T.O_PREVIEW, uid=OWNER)), "o_preview")
+        self.assertEqual(b.handle(msg("https://youtu.be/abcdefgh123", uid=OWNER)), "need_sub")   # владелец — как все
+        self.assertEqual(b.handle(msg(T.O_STATS, uid=OWNER)), "bad")                               # пульт ўчиқ
+        self.assertEqual(b.handle(msg(T.O_BACK, uid=OWNER)), "o_panel")
+        self.assertEqual(b.handle(msg(T.O_STATS, uid=OWNER)), "o_stats")
+        b.q("UPDATE subs SET joins=1240 WHERE chat='@kattadavrauz'")
+        self.assertEqual(b.handle(cb("sr:@kattadavrauz", uid=OWNER)), "o_sponsor_report")
+        self.assertIn("1 240", self.api.to(OWNER)[-1][1]["text"])
+        self.assertIsNone(b.handle(cb("sr:@kattadavrauz", uid=42)))
+
     def test_groups_ignored(self):
         b = self.mk()
         self.assertIsNone(b.handle({"message": {"message_id": 1, "chat": {"id": -5, "type": "group"},

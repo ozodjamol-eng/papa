@@ -81,8 +81,8 @@ def connect(path: str) -> sqlite3.Connection:
 
 
 def owner_kb() -> dict:
-    return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_SUBS}], [{"text": T.O_AD}, {"text": T.O_SEND}]],
-            "resize_keyboard": True}
+    return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_SUBS}], [{"text": T.O_AD}, {"text": T.O_SEND}],
+                         [{"text": T.O_PREVIEW}]], "resize_keyboard": True}
 
 
 class Downloader:
@@ -146,9 +146,12 @@ class Bot:
         self.q("INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)", (k, v))
         return v
 
+    def preview(self, uid: int) -> bool:
+        return uid in self.owners and self.kv(f"preview:{uid}") == "1"
+
     def say(self, chat: int, text: str, kb: dict | None = None):
         if kb is None and chat in self.owners:
-            kb = owner_kb()
+            kb = {"keyboard": [[{"text": T.O_BACK}]], "resize_keyboard": True} if self.preview(chat) else owner_kb()
         return self.api("sendMessage", chat_id=chat, text=text, parse_mode="HTML", reply_markup=kb,
                         disable_web_page_preview=True)
 
@@ -170,15 +173,16 @@ class Bot:
 
     def active_subs(self) -> list:
         """Муддати тугаганларни олиб ташлаб (владелецга хабар), фаол каналлар рўйхати."""
-        for r in self.q("SELECT chat FROM subs WHERE until IS NOT NULL AND until<?", (now(),)):
+        for r in self.q("SELECT * FROM subs WHERE until IS NOT NULL AND until<?", (now(),)):
             self.q("DELETE FROM subs WHERE chat=?", (r["chat"],))
             for o in self.owners:
                 self.say(o, T.O_SUB_EXPIRED.format(chat=esc(r["chat"])))
+                self.say(o, self.sponsor_report(r))           # тайёр ҳисобот — ҳомийга юбориш учун
         return self.q("SELECT * FROM subs ORDER BY pos, added")
 
     def missing(self, uid: int) -> list[str]:
         """Обуна бўлинмаган каналлар. Текшириб бўлмаса — ўтказамиз, владелецга бир марта айтамиз."""
-        if uid in self.owners:
+        if uid in self.owners and not self.preview(uid):
             return []
         out = []
         for r in self.active_subs():
@@ -228,7 +232,10 @@ class Bot:
         frm, chat = m["from"], m["chat"]["id"]
         text = (m.get("text") or m.get("caption") or "").strip()
         self.seen(frm)
-        if frm["id"] in self.owners:
+        if frm["id"] in self.owners and text in (T.O_BACK, "/panel"):
+            self.kv(f"preview:{chat}", "0")
+            self.say(chat, T.O_HELLO); return "o_panel"
+        if frm["id"] in self.owners and not self.preview(frm["id"]):
             r = self.owner(frm, chat, m, text)
             if r:
                 return r
@@ -331,6 +338,12 @@ class Bot:
             self.q("DELETE FROM subs WHERE chat=?", (data[3:],))
             self.say(chat, T.O_SUB_REMOVED.format(chat=esc(data[3:])))
             return self.o_subs(chat)
+        if uid in self.owners and data.startswith("sr:"):          # ҳомийга юбориладиган ҳисобот
+            self.api("answerCallbackQuery", callback_query_id=cq["id"])
+            r = self.q("SELECT * FROM subs WHERE chat=?", (data[3:],), one=True)
+            if r:
+                self.say(chat, self.sponsor_report(r), {"inline_keyboard": []})
+            return "o_sponsor_report"
         if uid in self.owners and data == "sa":
             self.api("answerCallbackQuery", callback_query_id=cq["id"])
             self.kv(f"ostep:{chat}", "sub")
@@ -360,6 +373,9 @@ class Bot:
             self.say(chat, T.O_ASK_AD.format(cur=esc(self.kv("ad") or "—"))); return "o_ad"
         if text == T.O_SUBS:
             return self.o_subs(chat)
+        if text == T.O_PREVIEW:
+            self.kv(f"preview:{chat}", "1")
+            self.say(chat, T.O_PREVIEW_ON); return "o_preview"
         if step == "sub" and text:
             self.kv(f"ostep:{chat}", "")
             return self.o_sub_add(chat, text)
@@ -380,6 +396,16 @@ class Bot:
             return "o_bc_preview"
         return None
 
+    def sponsor_report(self, r) -> str:
+        start = (r["added"] or now())[:10]
+        end = (r["until"] or now())[:10]
+        left = ""
+        if r["until"] and r["until"] > now():
+            left = f" (яна {(dt.datetime.fromisoformat(r['until']) - dt.datetime.now(TZ)).days + 1} кун)"
+        fmt = lambda d: f"{d[8:10]}.{d[5:7]}"
+        return T.SPONSOR_REPORT.format(chat=esc(r["chat"]), start=fmt(start), end=fmt(end), left=left,
+                                       joins=f"{r['joins']:,}".replace(",", " "), bot=self.username)
+
     def o_subs(self, chat: int) -> str:
         rows = self.active_subs()
         lines = [T.O_SUBS_HEAD] if rows else [T.O_SUBS_EMPTY]
@@ -387,7 +413,8 @@ class Bot:
         for r in rows:
             until = f"до {r['until'][:10]}" if r["until"] else "муддатсиз"
             lines.append(f"• {esc(r['chat'])} · {until} · бот келтирди: {r['joins']}")
-            btn.append([{"text": f"🗑 {r['chat']}", "callback_data": f"sd:{r['chat']}"[:64]}])
+            btn.append([{"text": f"📄 {r['chat']}", "callback_data": f"sr:{r['chat']}"[:64]},
+                        {"text": "🗑", "callback_data": f"sd:{r['chat']}"[:64]}])
         btn.append([{"text": "➕ Канал қўшиш", "callback_data": "sa"}])
         self.say(chat, "\n".join(lines), {"inline_keyboard": btn})
         return "o_subs"
