@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, url TEXT, kind TEXT, vid
     created TEXT);
 CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, platform TEXT, result TEXT, ts TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS subs (chat TEXT PRIMARY KEY, until TEXT, joins INTEGER NOT NULL DEFAULT 0, added TEXT,
+    pos INTEGER NOT NULL DEFAULT 0);
 """
 LINK_RE = re.compile(r"https?://[^\s]+", re.I)
 PLATFORMS = (("instagram", re.compile(r"(?:^|\.)instagram\.com$")), ("tiktok", re.compile(r"(?:^|\.)tiktok\.com$")),
@@ -79,7 +81,8 @@ def connect(path: str) -> sqlite3.Connection:
 
 
 def owner_kb() -> dict:
-    return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_AD}], [{"text": T.O_SEND}]], "resize_keyboard": True}
+    return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_SUBS}], [{"text": T.O_AD}, {"text": T.O_SEND}]],
+            "resize_keyboard": True}
 
 
 class Downloader:
@@ -109,7 +112,8 @@ class Downloader:
 
 
 class Bot:
-    def __init__(self, db, api, owners: list[int], username: str = "XojaobodYuklaBot", sub_chat: str | None = "@xojaobodcity24",
+    def __init__(self, db, api, owners: list[int], username: str = "XojaobodYuklaBot",
+                 sub_chat: str | None = "@kattadavrauz,@xojaobodcity24",
                  downloader: Downloader | None = None, upload=None, workers: int = 2, sync: bool = False):
         self.db, self.api, self.owners, self.username, self.sub_chat = db, api, owners, username, sub_chat
         self.dl = downloader or Downloader()
@@ -118,7 +122,11 @@ class Bot:
         self.busy: set[int] = set()
         self.sync = sync                      # тестда — навбатсиз, дарҳол
         self.pool = None if sync else ThreadPoolExecutor(max_workers=workers)
-        self.sub_title = None
+        self.bot_id = None
+        if sub_chat and not self.q("SELECT 1 FROM subs LIMIT 1", one=True) and not self.kv("subs_seeded"):
+            for i, c in enumerate(x.strip() for x in sub_chat.split(",") if x.strip()):   # бошланғич: муддатсиз
+                self.q("INSERT OR IGNORE INTO subs(chat, until, added, pos) VALUES (?,?,?,?)", (c, None, now(), i))
+            self.kv("subs_seeded", now())
 
     # ---------- ёрдамчилар ----------
     def q(self, sql: str, args=(), one=False):
@@ -156,21 +164,41 @@ class Bot:
                   ON CONFLICT(uid) DO UPDATE SET first=excluded.first, username=excluded.username, last=excluded.last, blocked=0""",
                (frm["id"], frm.get("first_name"), frm.get("username"), now(), now()))
 
+    def active_subs(self) -> list:
+        """Муддати тугаганларни олиб ташлаб (владелецга хабар), фаол каналлар рўйхати."""
+        for r in self.q("SELECT chat FROM subs WHERE until IS NOT NULL AND until<?", (now(),)):
+            self.q("DELETE FROM subs WHERE chat=?", (r["chat"],))
+            for o in self.owners:
+                self.say(o, T.O_SUB_EXPIRED.format(chat=esc(r["chat"])))
+        return self.q("SELECT * FROM subs ORDER BY pos, added")
+
+    def missing(self, uid: int) -> list[str]:
+        """Обуна бўлинмаган каналлар. Текшириб бўлмаса — ўтказамиз, владелецга бир марта айтамиз."""
+        if uid in self.owners:
+            return []
+        out = []
+        for r in self.active_subs():
+            try:
+                m = self.api("getChatMember", chat_id=r["chat"], user_id=uid)
+                if m.get("status") not in ("member", "administrator", "creator", "restricted"):
+                    out.append(r["chat"])
+            except Exception as e:  # noqa: BLE001
+                if not self.kv(f"sub_warned:{r['chat']}"):
+                    self.kv(f"sub_warned:{r['chat']}", now())
+                    for o in self.owners:
+                        self.say(o, T.O_SUB_WARN.format(err=esc(f"{r['chat']}: {str(e)[:60]}")))
+        return out
+
     def subscribed(self, uid: int) -> bool:
-        if not self.sub_chat or uid in self.owners:
-            return True
-        try:
-            m = self.api("getChatMember", chat_id=self.sub_chat, user_id=uid)
-            return m.get("status") in ("member", "administrator", "creator", "restricted")
-        except Exception as e:  # noqa: BLE001 — бот админ бўлмаса: текширмасдан ўтказамиз, владелецга бир марта айтамиз
-            if not self.kv("sub_warned"):
-                self.kv("sub_warned", now())
-                for o in self.owners:
-                    self.say(o, T.O_SUB_WARN.format(err=esc(str(e)[:80])))
-            return True
+        return not self.missing(uid)
+
+    @staticmethod
+    def link(chat: str) -> str:
+        return f"https://t.me/{chat.lstrip('@')}" if chat.startswith("@") else ""
 
     def sub_link(self) -> str:
-        return f"https://t.me/{self.sub_chat.lstrip('@')}" if self.sub_chat and self.sub_chat.startswith("@") else ""
+        r = self.q("SELECT chat FROM subs ORDER BY pos, added LIMIT 1", one=True)
+        return self.link(r["chat"]) if r else ""
 
     def row_id(self, key: str, url: str) -> int:
         self.q("INSERT OR IGNORE INTO cache(key, url, kind, created) VALUES (?,?,?,?)", (key, url, platform_of(url), now()))
@@ -208,13 +236,17 @@ class Bot:
             self.say(chat, T.BAD_LINK)
             return "bad"
         url = link.group().rstrip(").,")
-        if not self.subscribed(frm["id"]):
+        miss = self.missing(frm["id"])
+        if miss:
             self.kv(f"pending:{frm['id']}", url)
-            kb = {"inline_keyboard": [[{"text": T.SUB_BTN, "url": self.sub_link()}],
-                                      [{"text": T.CHECK_BTN, "callback_data": "chk"}]]}
-            self.say(chat, T.NEED_SUB.format(title=esc(self.sub_chat)), kb)
-            return "need_sub"
+            self.kv(f"miss:{frm['id']}", ",".join(miss))          # кейин «қайси канал обуначи келтирди» ҳисоби
+            return self.gate(chat, miss)
         return self.start_job(frm["id"], chat, url)
+
+    def gate(self, chat: int, miss: list[str]) -> str:
+        rows = [[{"text": f"📢 {c}", "url": self.link(c)}] for c in miss if self.link(c)]
+        self.say(chat, T.NEED_SUB, {"inline_keyboard": rows + [[{"text": T.CHECK_BTN, "callback_data": "chk"}]]})
+        return "need_sub"
 
     def start_job(self, uid: int, chat: int, url: str) -> str:
         key = norm_key(url)
@@ -276,16 +308,30 @@ class Bot:
         data, uid = cq.get("data") or "", cq["from"]["id"]
         chat = cq["message"]["chat"]["id"] if cq.get("message") else uid
         if data == "chk":
-            if not self.subscribed(uid):
+            if self.missing(uid):
                 self.api("answerCallbackQuery", callback_query_id=cq["id"], text=T.NOT_YET, show_alert=True)
                 return "not_yet"
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="✅")
+            for c in (self.kv(f"miss:{uid}") or "").split(","):    # шу каналга бот олиб келган обуначи
+                if c:
+                    self.q("UPDATE subs SET joins=joins+1 WHERE chat=?", (c,))
+            self.kv(f"miss:{uid}", "")
             url = self.kv(f"pending:{uid}")
             return self.start_job(uid, chat, url) if url else "ok"
         if data.startswith("a:"):
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="🎵")
             self.submit(self.audio_job, chat, data[2:])
             return "mp3"
+        if uid in self.owners and data.startswith("sd:"):          # каналнии олиб ташлаш
+            self.api("answerCallbackQuery", callback_query_id=cq["id"])
+            self.q("DELETE FROM subs WHERE chat=?", (data[3:],))
+            self.say(chat, T.O_SUB_REMOVED.format(chat=esc(data[3:])))
+            return self.o_subs(chat)
+        if uid in self.owners and data == "sa":
+            self.api("answerCallbackQuery", callback_query_id=cq["id"])
+            self.kv(f"ostep:{chat}", "sub")
+            self.say(chat, T.O_SUB_ASK)
+            return "o_sub_ask"
         if uid in self.owners and data in ("bc_yes", "bc_no"):
             self.api("answerCallbackQuery", callback_query_id=cq["id"])
             src = self.kv("bc_src")
@@ -308,6 +354,11 @@ class Bot:
         if text == T.O_AD:
             self.kv(f"ostep:{chat}", "ad")
             self.say(chat, T.O_ASK_AD.format(cur=esc(self.kv("ad") or "—"))); return "o_ad"
+        if text == T.O_SUBS:
+            return self.o_subs(chat)
+        if step == "sub" and text:
+            self.kv(f"ostep:{chat}", "")
+            return self.o_sub_add(chat, text)
         if text == T.O_SEND:
             self.kv(f"ostep:{chat}", "bc")
             self.say(chat, T.O_ASK_SEND); return "o_send"
@@ -324,6 +375,40 @@ class Bot:
                                                                           {"text": "❌ Йўқ", "callback_data": "bc_no"}]]})
             return "o_bc_preview"
         return None
+
+    def o_subs(self, chat: int) -> str:
+        rows = self.active_subs()
+        lines = [T.O_SUBS_HEAD] if rows else [T.O_SUBS_EMPTY]
+        btn = []
+        for r in rows:
+            until = f"до {r['until'][:10]}" if r["until"] else "муддатсиз"
+            lines.append(f"• {esc(r['chat'])} · {until} · бот келтирди: {r['joins']}")
+            btn.append([{"text": f"🗑 {r['chat']}", "callback_data": f"sd:{r['chat']}"[:64]}])
+        btn.append([{"text": "➕ Канал қўшиш", "callback_data": "sa"}])
+        self.say(chat, "\n".join(lines), {"inline_keyboard": btn})
+        return "o_subs"
+
+    def o_sub_add(self, chat: int, text: str) -> str:
+        m = re.match(r"^\s*(?:https?://t\.me/)?@?([A-Za-z0-9_]{4,32})\s*(\d{1,3})?\s*$", text)
+        if not m:
+            self.say(chat, T.O_SUB_ASK); return "o_sub_bad"
+        c, days = "@" + m.group(1), int(m.group(2) or 0)
+        try:
+            me = self.bot_id or self.api("getMe")["id"]
+            st = self.api("getChatMember", chat_id=c, user_id=me).get("status")
+        except Exception:  # noqa: BLE001
+            st = None
+        if st not in ("administrator", "creator"):
+            self.say(chat, T.O_SUB_NOT_ADMIN.format(chat=esc(c))); return "o_sub_not_admin"
+        until = (dt.datetime.now(TZ) + dt.timedelta(days=days)).isoformat(timespec="seconds") if days else None
+        pos = (self.q("SELECT max(pos) m FROM subs", one=True)["m"] or 0) + 1
+        self.q("INSERT OR REPLACE INTO subs(chat, until, joins, added, pos) VALUES (?,?,COALESCE((SELECT joins FROM subs WHERE chat=?),0),?,?)",
+               (c, until, c, now(), pos))
+        self.say(chat, T.O_SUB_ADDED.format(chat=esc(c), until=f" — {days} кун" if days else " — муддатсиз"))
+        n = len(self.active_subs())
+        if n > 2:
+            self.say(chat, T.O_SUB_MANY.format(n=n))
+        return self.o_subs(chat)
 
     def broadcast(self, owner_chat: int, from_chat: int, mid: int, pause: float = 0.05):
         ok = fail = 0
@@ -406,12 +491,14 @@ def main():
     api = make_api(tok)
     owners = [int(x) for x in os.environ.get("OWNER_IDS", "").split(",") if x.strip()]
     try:
-        uname = api("getMe")["username"]
+        me = api("getMe")
+        uname, bid = me["username"], me["id"]
     except Exception:  # noqa: BLE001
-        uname = "XojaobodYuklaBot"
+        uname, bid = "XojaobodYuklaBot", None
     dl = Downloader(os.environ.get("YUKLA_YTDLP", "yt-dlp"), os.environ.get("YUKLA_PROXY") or None)
     bot = Bot(connect(os.environ.get("YUKLA_DB", "yukla.sqlite3")), api, owners, uname,
-              os.environ.get("YUKLA_SUB_CHAT", "@xojaobodcity24") or None, dl, make_upload(tok))
+              os.environ.get("YUKLA_SUB_CHAT", "@kattadavrauz,@xojaobodcity24") or None, dl, make_upload(tok))
+    bot.bot_id = bid
     off = 0
     print(f"yukla: запущен @{uname}", flush=True)
     while True:
@@ -422,6 +509,7 @@ def main():
                     bot.handle(u)
                 except Exception as e:  # noqa: BLE001
                     print(f"handle: {type(e).__name__}: {e}", flush=True)
+            bot.active_subs()                     # муддати тугаган ҳомийни ўзи олиб ташлайди
         except Exception as e:  # noqa: BLE001
             print(f"poll: {type(e).__name__}: {e}", flush=True)
             time.sleep(5)

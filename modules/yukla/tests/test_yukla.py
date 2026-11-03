@@ -110,7 +110,7 @@ class T1(unittest.TestCase):
         self.assertEqual(b.handle(msg("https://youtu.be/abcdefgh123")), "job")
         b.handle(msg("https://youtu.be/zzzzzzzz999"))
         warns = [p for m, p in self.api.to(OWNER) if "админ" in (p.get("text") or "")]
-        self.assertEqual(len(warns), 1)
+        self.assertEqual(len(warns), 2)                                   # 2 канал — ҳар бирига бир марта
 
     def test_fail_and_bad_link(self):
         b = self.mk(dl=DL(ok=False))
@@ -136,6 +136,37 @@ class T1(unittest.TestCase):
         sent = [p["chat_id"] for m, p in self.api.calls if m == "copyMessage" and p["chat_id"] != OWNER]
         self.assertEqual(sorted(set(sent)), [42, 50, 51] if 42 in sent else [50, 51])
         self.assertIn("📊", b.stats())
+
+    def test_subs_default_two_channels_and_join_count(self):
+        b = self.mk(member="left")
+        b.handle(msg("https://youtu.be/abcdefgh123"))
+        gate = [p for m, p in self.api.to(42) if "обуна" in (p.get("text") or "")][-1]
+        links = [r[0].get("url") for r in gate["reply_markup"]["inline_keyboard"] if r[0].get("url")]
+        self.assertEqual(links, ["https://t.me/kattadavrauz", "https://t.me/xojaobodcity24"])
+        self.api.member = "member"
+        b.handle(cb("chk"))
+        joins = {r["chat"]: r["joins"] for r in b.q("SELECT * FROM subs")}
+        self.assertEqual(joins, {"@kattadavrauz": 1, "@xojaobodcity24": 1})          # бот келтирган обуначи
+
+    def test_owner_adds_sponsor_for_days_and_it_expires(self):
+        b = self.mk()
+        b.bot_id = 999
+        self.assertEqual(b.handle(msg(T.O_SUBS, uid=OWNER)), "o_subs")
+        self.assertEqual(b.handle(cb("sa", uid=OWNER)), "o_sub_ask")
+        self.api.member = "left"                                          # бот админ эмас — қўшилмайди
+        self.assertEqual(b.handle(msg("@homiy_kanal 3", uid=OWNER)), "o_sub_not_admin")
+        self.api.member = "administrator"
+        b.handle(cb("sa", uid=OWNER))
+        self.assertEqual(b.handle(msg("@homiy_kanal 3", uid=OWNER)), "o_subs")
+        r = b.q("SELECT * FROM subs WHERE chat='@homiy_kanal'", one=True)
+        self.assertIsNotNone(r["until"])
+        self.assertTrue(any("кўп" in (p.get("text") or "") for m, p in self.api.to(OWNER)))   # 3 канал — огоҳлантириш
+        b.q("UPDATE subs SET until='2000-01-01' WHERE chat='@homiy_kanal'")
+        self.assertEqual([x["chat"] for x in b.active_subs()], ["@kattadavrauz", "@xojaobodcity24"])
+        self.assertTrue(any("муддати тугади" in (p.get("text") or "") for m, p in self.api.to(OWNER)))
+        self.assertEqual(b.handle(cb("sd:@xojaobodcity24", uid=OWNER)), "o_subs")
+        self.assertEqual([x["chat"] for x in b.active_subs()], ["@kattadavrauz"])
+        self.assertIsNone(b.handle(cb("sd:@kattadavrauz", uid=42)))                   # бегона ўчира олмайди
 
     def test_groups_ignored(self):
         b = self.mk()
