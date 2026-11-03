@@ -7,7 +7,7 @@ if [[ ! -s /etc/papa-yukla/bot.env || "${1:-}" != "--keep" ]]; then
   read -rsp "Вставьте токен бота XojaobodYuklaBot (из @BotFather) и нажмите Enter: " TOK; echo
   [[ "$TOK" =~ ^[0-9]{6,}:[A-Za-z0-9_-]{30,}$ ]] || { echo "Это не похоже на токен — скопируйте целиком из @BotFather"; exit 1; }
   OWN=$(grep -E '^OWNER_IDS=' /etc/papa-genplan/genplan.env | cut -d= -f2-)
-  umask 077; printf 'YUKLA_BOT_TOKEN=%s\nOWNER_IDS=%s\nYUKLA_SUB_CHAT=@xojaobodcity24\n' "$TOK" "$OWN" > /etc/papa-yukla/bot.env; unset TOK
+  ( umask 077; printf 'YUKLA_BOT_TOKEN=%s\nOWNER_IDS=%s\nYUKLA_SUB_CHAT=@xojaobodcity24\n' "$TOK" "$OWN" > /etc/papa-yukla/bot.env ); unset TOK   # 04.11: umask только для файла токена (иначе venv выходил 700 и служба не могла запустить yt-dlp)
 fi
 set -a; . /etc/papa-yukla/bot.env; set +a
 python3 - <<'PY'
@@ -28,6 +28,7 @@ PY
 command -v ffmpeg >/dev/null || { apt-get update -qq && apt-get install -y -qq ffmpeg >/dev/null; }
 [[ -x /opt/papa-venv/yukla/bin/pip ]] || python3 -m venv /opt/papa-venv/yukla
 /opt/papa-venv/yukla/bin/pip install -q --upgrade yt-dlp
+chmod o+x /opt/papa-venv; chmod -R u=rwX,go=rX /opt/papa-venv/yukla   # служба papa-yukla запускает yt-dlp
 echo "yt-dlp: $(/opt/papa-venv/yukla/bin/yt-dlp --version) | ffmpeg: $(ffmpeg -version | head -1 | cut -d' ' -f3)"
 id papa-yukla >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin papa-yukla
 chown -R root:papa-yukla /etc/papa-yukla; chmod 750 /etc/papa-yukla; chmod 640 /etc/papa-yukla/bot.env

@@ -119,6 +119,19 @@ class T1(unittest.TestCase):
         self.assertTrue(any(T.FAIL in (p.get("text") or "") for m, p in self.api.calls))
         self.assertIn("❌ 1", b.stats())
 
+    def test_downloader_crash_still_answers(self):
+        """04.11: yt-dlp не запустился (PermissionError) — человек получает «не удалось», а не тишину."""
+        class Boom(DL):
+            def fetch(self, url, audio=False):
+                raise PermissionError("yt-dlp")
+        b = self.mk(dl=Boom())
+        b.handle(msg("https://www.instagram.com/reel/CCC/"))
+        self.assertTrue(any(T.FAIL in (p.get("text") or "") for m, p in self.api.calls))
+
+    def test_real_downloader_missing_binary_returns_none(self):
+        from yukla.bot import Downloader
+        self.assertIsNone(Downloader("/nonexistent/yt-dlp").fetch("https://www.instagram.com/reel/X/"))
+
     def test_owner_ad_and_broadcast_needs_confirm(self):
         b = self.mk()
         b.handle(msg("/start", uid=50)); b.handle(msg("/start", uid=51))

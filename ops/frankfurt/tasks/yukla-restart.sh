@@ -8,6 +8,9 @@ DB=$(systemctl show -p Environment --value papa-yukla | tr ' ' '\n' | sed -n 's/
 [[ -f $DB ]] && python3 -c "import sqlite3,sys;d=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True);print('== последние загрузки:');[print('  ',r) for r in d.execute('SELECT platform,result,ts FROM log ORDER BY rowid DESC LIMIT 8')]" "$DB" 2>&1 | head -10
 ( cd /opt/papa/modules/yukla && python3 -m unittest discover -q -s tests 2>&1 | tail -1 )
 /opt/papa-venv/yukla/bin/pip install -q --upgrade yt-dlp && echo "yt-dlp: $(/opt/papa-venv/yukla/bin/yt-dlp --version)"
+# 04.11: venv был создан под umask 077 → служба (пользователь papa-yukla) не могла запустить yt-dlp — права на чтение/запуск
+chmod o+x /opt/papa-venv; chmod -R u=rwX,go=rX /opt/papa-venv/yukla
+echo "yt-dlp от имени службы: $(runuser -u papa-yukla -- /opt/papa-venv/yukla/bin/yt-dlp --version 2>&1 | tail -1)"
 systemctl restart papa-yukla; sleep 3
 echo "papa-yukla: $(systemctl is-active papa-yukla)"
 journalctl -u papa-yukla -n 5 -o cat --no-pager | sed -E 's/bot[0-9]+:[A-Za-z0-9_-]+/bot***/g'

@@ -148,6 +148,9 @@ class Downloader:
                            stderr=subprocess.PIPE, check=False)
         except subprocess.TimeoutExpired:
             return None
+        except OSError as e:                      # 04.11: yt-dlp не запускается (права) — не молчим, а «не удалось»
+            print(f"fetch: {type(e).__name__}: {e}", flush=True)
+            return None
         files = [f for f in out.iterdir() if f.is_file() and not f.name.endswith(".part")]
         return max(files, key=lambda f: f.stat().st_size) if files else None
 
@@ -374,6 +377,12 @@ class Bot:
                 res = "ok"
             else:
                 self.say(chat, T.FAIL)
+        except Exception as e:  # noqa: BLE001 — 04.11: человек всегда получает ответ, а не тишину
+            print(f"job: {type(e).__name__}: {e}", flush=True)
+            try:
+                self.say(chat, T.FAIL)
+            except Exception:  # noqa: BLE001
+                pass
         finally:
             with self.lock:
                 self.busy.discard(uid)
