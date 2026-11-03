@@ -16,7 +16,7 @@
  *  cta(ctx,{phone,lines,t,t0,logo:(ctx,x,y,s)=>{}})     финал: лого, телефон печатается цифрами, адрес/призыв
  *  wipe(ctx,{t,t0,dur,dir,color})                       шторка-переход фирменным цветом (две полосы)
  *  grain(ctx,{t,amt})                                   плёночное зерно, меняется на двойках
- *  fill(ctx,{box:{x,y,w,h},items:[{name,color}],t,t0,every,cols,counter:{x,y,size,label},out})  «Ичига қаранг»: вещи по дуге влетают в шкаф, счётчик «+N» прыгает на каждой
+ *  fill(ctx,{box:{x,y,w,h},items:[{name,color}],t,t0,every,cols,rest,slots:[[x,y,w,h]],drawItem,counter:{x,y,size,label},out}) → число приземлившихся  «Ичига қаранг»: вещи по дуге влетают в шкаф, счётчик «+N» прыгает на каждой
  *  proof(ctx,{i,n,title,sub,t,t0,out,x,y})              «6 исбот»: полоса глав сверху + «2/6 МАТОСИ»
  */
 (function () {
@@ -169,12 +169,13 @@
     const cur = o.words.findIndex((w) => o.t >= w[1] && o.t < w[2]), ci = cur >= 0 ? cur : o.words.indexOf(act[act.length - 1]), per = o.maxWords || 4, s0 = Math.floor(ci / per) * per, line = o.words.slice(s0, s0 + per);
     const fz = o.size || 64, y = o.y ?? H() - 140; ctx.save(); ctx.font = `400 ${fz}px ${F.head}`; ctx.textBaseline = 'middle';
     const ws = line.map((w) => ctx.measureText(w[0]).width), sp = fz * 0.32, tot = ws.reduce((a, b) => a + b, 0) + sp * (line.length - 1); let x = W() / 2 - tot / 2;
+    if (o.band) { ctx.save(); shadow(ctx, 0.3, 20, 6); ctx.fillStyle = o.band === true ? 'rgba(22,19,15,0.6)' : o.band; rr(ctx, x - fz * 0.5, y - fz * 0.85, tot + fz, fz * 1.7, fz * 0.4); ctx.fill(); ctx.restore(); } // 04.11: подложка — читается на любом фоне
     line.forEach((w, i) => {
       const on = o.t >= w[1], now = o.t >= w[1] && o.t < w[2], pk = E.outBack(prog(o.t, w[1], w[1] + 0.18));
       ctx.save(); ctx.translate(x + ws[i] / 2, y); const s = now ? lerp(0.9, 1.06, pk) : 1; ctx.scale(s, s);
-      if (now) { ctx.fillStyle = P.accent; rr(ctx, -ws[i] / 2 - 12, -fz * 0.62, ws[i] + 24, fz * 1.24, 12); ctx.fill(); }
+      if (now) { ctx.fillStyle = o.hiBg || P.accent; rr(ctx, -ws[i] / 2 - 12, -fz * 0.62, ws[i] + 24, fz * 1.24, 12); ctx.fill(); }
       ctx.lineWidth = fz * 0.14; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineJoin = 'round'; ctx.textAlign = 'center';
-      if (!now) ctx.strokeText(w[0], 0, fz * 0.04); ctx.fillStyle = now ? P.green : on ? P.white : 'rgba(255,255,255,0.55)'; ctx.fillText(w[0], 0, fz * 0.04); ctx.restore();
+      if (!now) ctx.strokeText(w[0], 0, fz * 0.04); ctx.fillStyle = now ? (o.hiFg || P.green) : on ? P.white : 'rgba(255,255,255,0.55)'; ctx.fillText(w[0], 0, fz * 0.04); ctx.restore();
       x += ws[i] + sp;
     });
     ctx.restore();
@@ -205,24 +206,27 @@
     o.items.forEach((it, i) => {
       const ts = o.t0 + i * ev, k = prog(o.t, ts, ts + fly); if (k <= 0) return;
       const r = rows - 1 - Math.floor(i / cols), c = i % cols; // заполняем снизу вверх
-      const tx = b.x + c * cw + cw / 2, ty = b.y + r * ch + ch * 0.58;
+      let tx = b.x + c * cw + cw / 2, ty = b.y + r * ch + ch * (o.rest ?? 0.58); // rest: где центр вещи по высоте ячейки (0.66 — лежит на полке)
+      if (o.slots && o.slots[i]) { tx = o.slots[i][0]; ty = o.slots[i][1]; } // 04.11: точные места — полки на настоящем фото товара
       const fx = o.from ? o.from[0] : tx + (c - (cols - 1) / 2) * 260, fy = o.from ? o.from[1] : H() + 160;
       const e = E.inOut3(k), x = lerp(fx, tx, e), y = lerp(fy, ty, e) - Math.sin(Math.PI * e) * (o.arc ?? 380), rot = (1 - E.outBack(k)) * (i % 2 ? 0.9 : -0.9);
       const sq = k >= 1 ? 1 + 0.12 * Math.exp(-(o.t - ts - fly) * 9) * Math.cos((o.t - ts - fly) * 30) : 1;
       if (k >= 1) { landed++; lastLand = ts + fly; }
-      const w = cw * 0.82, h = ch * 0.62;
+      const w = (o.slots && o.slots[i] && o.slots[i][2]) || cw * 0.82, h = (o.slots && o.slots[i] && o.slots[i][3]) || ch * 0.62;
       ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sq, 2 - sq); shadow(ctx, 0.35, 14, 6);
+      if (o.drawItem) { noShadow(ctx); o.drawItem(ctx, it, w, h, i); ctx.restore(); return; } // своя отрисовка вещи (одеяло, подушка, коробка…)
       ctx.fillStyle = it.color || P.oak; rr(ctx, -w / 2, -h / 2, w, h, h * 0.28); ctx.fill(); noShadow(ctx);
       ctx.fillStyle = 'rgba(255,255,255,0.22)'; for (let j = 1; j < 3; j++) ctx.fillRect(-w / 2 + 8, -h / 2 + j * h / 3 - 2, w - 16, 4); // складки
       if (it.name) { ctx.fillStyle = P.white; ctx.font = `800 ${Math.min(h * 0.3, 30)}px ${F.body}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, 0, 2); }
       ctx.restore();
     });
-    const C = o.counter; if (!C) return;
-    const ck = life(o.t, o.t0 + fly, o.out, 0.3); if (ck <= 0 || landed === 0) return; // «+0» не показываем
+    const C = o.counter; if (!C) return landed;
+    const ck = life(o.t, o.t0 + fly, o.out, 0.3); if (ck <= 0 || landed === 0) return landed; // «+0» не показываем
     const pop = 1 + 0.18 * Math.exp(-(o.t - lastLand) * 8), fz = C.size || 200;
     ctx.save(); ctx.globalAlpha *= ck; ctx.translate(C.x, C.y); ctx.scale(pop, pop); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; shadow(ctx, 0.45, 24, 8);
     ctx.font = `400 ${fz}px ${F.head}`; ctx.fillStyle = C.color || P.cream; ctx.fillText('+' + landed, 0, 0); ctx.restore();
     if (C.label) { ctx.save(); ctx.globalAlpha *= ck; pill(ctx, C.x, C.y + fz * 0.42, C.label, { size: fz * (C.labelSize || 0.2), bg: P.accent, fg: P.green, font: F.head, weight: 400 }); ctx.restore(); }
+    return landed;
   }
 
   /* ---------- «6 исбот»: глава-доказательство сверху (разведка «Мебель» 03.11, DesignerBox «6 форматов») ---------- */
