@@ -42,7 +42,9 @@
     "genplan5-utin-1730",
     "genplan5-stop",
     "genplan5-start",
-    "old-digest-reset"
+    "old-digest-reset",
+    "taxi-brigada-deploy",
+    "taxi-brigada-rollback"
   ],
   "deny_patterns": [
     "-key$",
