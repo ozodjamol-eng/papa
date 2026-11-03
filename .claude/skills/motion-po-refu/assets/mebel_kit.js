@@ -16,6 +16,8 @@
  *  cta(ctx,{phone,lines,t,t0,logo:(ctx,x,y,s)=>{}})     финал: лого, телефон печатается цифрами, адрес/призыв
  *  wipe(ctx,{t,t0,dur,dir,color})                       шторка-переход фирменным цветом (две полосы)
  *  grain(ctx,{t,amt})                                   плёночное зерно, меняется на двойках
+ *  fill(ctx,{box:{x,y,w,h},items:[{name,color}],t,t0,every,cols,counter:{x,y,size,label},out})  «Ичига қаранг»: вещи по дуге влетают в шкаф, счётчик «+N» прыгает на каждой
+ *  proof(ctx,{i,n,title,sub,t,t0,out,x,y})              «6 исбот»: полоса глав сверху + «2/6 МАТОСИ»
  */
 (function () {
   'use strict';
@@ -193,6 +195,56 @@
     ctx.restore();
   }
 
+
+  /* ---------- «Ичига қаранг»: вещи влетают в шкаф + счётчик (разведка «Мебель» 03.11, по мотиву IKEA Tidy Billboards) ---------- */
+  // box: проём шкафа {x,y,w,h}; items: [{name,color}] — в настоящем ролике вместо цветных «свёртков» реальные вещи на видео, а fill даёт счётчик/подписи.
+  // every — интервал между вещами; cols — сколько в ряд; counter: {x,y,size,label}; from: точка вылета (по умолчанию снизу из-за кадра)
+  function fill(ctx, o) {
+    const b = o.box, n = o.items.length, cols = o.cols || 3, rows = Math.ceil(n / cols), cw = b.w / cols, ch = b.h / rows, ev = o.every || 0.25, fly = o.fly || 0.55;
+    let landed = 0, lastLand = -9;
+    o.items.forEach((it, i) => {
+      const ts = o.t0 + i * ev, k = prog(o.t, ts, ts + fly); if (k <= 0) return;
+      const r = rows - 1 - Math.floor(i / cols), c = i % cols; // заполняем снизу вверх
+      const tx = b.x + c * cw + cw / 2, ty = b.y + r * ch + ch * 0.58;
+      const fx = o.from ? o.from[0] : tx + (c - (cols - 1) / 2) * 260, fy = o.from ? o.from[1] : H() + 160;
+      const e = E.inOut3(k), x = lerp(fx, tx, e), y = lerp(fy, ty, e) - Math.sin(Math.PI * e) * (o.arc ?? 380), rot = (1 - E.outBack(k)) * (i % 2 ? 0.9 : -0.9);
+      const sq = k >= 1 ? 1 + 0.12 * Math.exp(-(o.t - ts - fly) * 9) * Math.cos((o.t - ts - fly) * 30) : 1;
+      if (k >= 1) { landed++; lastLand = ts + fly; }
+      const w = cw * 0.82, h = ch * 0.62;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sq, 2 - sq); shadow(ctx, 0.35, 14, 6);
+      ctx.fillStyle = it.color || P.oak; rr(ctx, -w / 2, -h / 2, w, h, h * 0.28); ctx.fill(); noShadow(ctx);
+      ctx.fillStyle = 'rgba(255,255,255,0.22)'; for (let j = 1; j < 3; j++) ctx.fillRect(-w / 2 + 8, -h / 2 + j * h / 3 - 2, w - 16, 4); // складки
+      if (it.name) { ctx.fillStyle = P.white; ctx.font = `800 ${Math.min(h * 0.3, 30)}px ${F.body}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, 0, 2); }
+      ctx.restore();
+    });
+    const C = o.counter; if (!C) return;
+    const ck = life(o.t, o.t0 + fly, o.out, 0.3); if (ck <= 0 || landed === 0) return; // «+0» не показываем
+    const pop = 1 + 0.18 * Math.exp(-(o.t - lastLand) * 8), fz = C.size || 200;
+    ctx.save(); ctx.globalAlpha *= ck; ctx.translate(C.x, C.y); ctx.scale(pop, pop); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; shadow(ctx, 0.45, 24, 8);
+    ctx.font = `400 ${fz}px ${F.head}`; ctx.fillStyle = C.color || P.cream; ctx.fillText('+' + landed, 0, 0); ctx.restore();
+    if (C.label) { ctx.save(); ctx.globalAlpha *= ck; pill(ctx, C.x, C.y + fz * 0.42, C.label, { size: fz * (C.labelSize || 0.2), bg: P.accent, fg: P.green, font: F.head, weight: 400 }); ctx.restore(); }
+  }
+
+  /* ---------- «6 исбот»: глава-доказательство сверху (разведка «Мебель» 03.11, DesignerBox «6 форматов») ---------- */
+  // Сегменты 1..n, текущий i заполняется за 0.5 с; номер «2/6» и название главы («МАТОСИ»). Вызывать в каждой главе со своим i и t0.
+  function proof(ctx, o) {
+    const k = life(o.t, o.t0, o.out, 0.35), n = o.n || 6, i = o.i; if (k <= 0) return;
+    const x = o.x ?? 90, y = o.y ?? 290, w = o.w ?? (W() - 2 * x - 60), g = 12, sw = (w - g * (n - 1)) / n, fk = E.out3(prog(o.t, o.t0, o.t0 + 0.5));
+    const fz0 = o.size || 96; ctx.save(); ctx.globalAlpha *= k;
+    if (o.panel !== false) { shadow(ctx, 0.35, 24, 8); ctx.fillStyle = o.panelColor || 'rgba(31,58,40,0.9)'; rr(ctx, x - 34, y - 34, w + 68, 40 + fz0 * (o.sub ? 1.75 : 1.3) + 34, 26); ctx.fill(); noShadow(ctx); }
+    shadow(ctx, 0.35, 10, 3);
+    for (let j = 1; j <= n; j++) { const sx = x + (j - 1) * (sw + g); ctx.fillStyle = 'rgba(251,248,241,0.35)'; rr(ctx, sx, y, sw, 14, 7); ctx.fill();
+      const f = j < i ? 1 : j === i ? fk : 0; if (f > 0) { ctx.fillStyle = P.accent; rr(ctx, sx, y, Math.max(14, sw * f), 14, 7); ctx.fill(); } }
+    noShadow(ctx);
+    const tk = E.outBack(prog(o.t, o.t0 + 0.08, o.t0 + 0.5)), fz = o.size || 96;
+    ctx.translate(x, y + 40 + fz * 0.85); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `400 ${fz}px ${F.head}`; const num = `${i}/${n}`, nw = ctx.measureText(num).width;
+    ctx.save(); ctx.translate(0, (1 - tk) * 40); ctx.globalAlpha *= clamp(tk); shadow(ctx, 0.5, 20, 6); ctx.fillStyle = P.accent; ctx.fillText(num, 0, 0);
+    ctx.fillStyle = P.cream; ctx.font = `400 ${fz * 0.62}px ${F.head}`; ctx.fillText(o.title, nw + fz * 0.3, 0);
+    if (o.sub) { ctx.font = `800 ${fz * 0.36}px ${F.body}`; ctx.fillStyle = "rgba(251,248,241,0.95)"; ctx.fillText(o.sub, nw + fz * 0.32, fz * 0.46); }
+    ctx.restore(); ctx.restore();
+  }
+
   /* ---------- шторка ---------- */
   function wipe(ctx, o) {
     const d = o.dur || 0.6, k = prog(o.t, o.t0, o.t0 + d); if (k <= 0 || k >= 1) return;
@@ -218,6 +270,6 @@
     for (let i = 0; i < 4; i++) grain(x, { t: i / 12 + 1e-4, amt: 0.01 });
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); })());
 
-  window.MK = { warm, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
+  window.MK = { warm, fill, proof, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
     get P() { return P; }, setPalette: (p) => { P = Object.assign({}, P, p); }, setFonts: (f) => { F = Object.assign({}, F, f); } };
 })();
