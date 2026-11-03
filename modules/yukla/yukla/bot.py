@@ -105,8 +105,11 @@ def oboi_current(base: Path = OBOI) -> tuple[str, list[Path], str] | None:
     return (key, files, cap) if len(files) == 5 else None
 
 
+TOP_ROWS = [[{"text": T.GROUP_BTN}, {"text": T.DESC_BTN}], [{"text": T.MP3_BTN}, {"text": T.SAVE_BTN}]]   # 04.11 владелец: 4 кнопки Chaqqon сверху
+
+
 def user_kb() -> dict:
-    return {"keyboard": [[{"text": T.NAMAZ_BTN}]], "resize_keyboard": True, "is_persistent": True}
+    return {"keyboard": TOP_ROWS + [[{"text": T.NAMAZ_BTN}]], "resize_keyboard": True, "is_persistent": True}
 
 
 def namaz_text(path: Path = NAMAZ_JSON, today: dt.datetime | None = None) -> str | None:
@@ -208,7 +211,7 @@ class Bot:
             if chat in self.owners and not self.preview(chat):
                 kb = owner_kb()
             elif chat in self.owners:
-                kb = {"keyboard": [[{"text": T.NAMAZ_BTN}], [{"text": T.O_BACK}]], "resize_keyboard": True}
+                kb = {"keyboard": TOP_ROWS + [[{"text": T.NAMAZ_BTN}], [{"text": T.O_BACK}]], "resize_keyboard": True}
             else:
                 kb = user_kb()
         return self.api("sendMessage", chat_id=chat, text=text, parse_mode="HTML", reply_markup=kb,
@@ -270,6 +273,24 @@ class Bot:
     def row_id(self, key: str, url: str) -> int:
         self.q("INSERT OR IGNORE INTO cache(key, url, kind, created) VALUES (?,?,?,?)", (key, url, platform_of(url), now()))
         return self.q("SELECT rowid FROM cache WHERE key=?", (key,), one=True)[0]
+
+    def last(self, uid: int) -> int | None:
+        v = self.kv(f"last:{uid}")
+        return int(v) if v and v.isdigit() else None
+
+    def bottom(self, uid: int, chat: int, text: str) -> str | None:
+        """Пастки 4 тугма — охирги юкланган видео учун (видео остидаги тугмалар билан бир хил)."""
+        if text == T.GROUP_BTN:
+            self.say(chat, T.GROUP_HOW, {"inline_keyboard": [[{"text": T.GROUP_ADD, "url": f"https://t.me/{self.username}?startgroup=true"}]]})
+            return "group_how"
+        if text not in (T.DESC_BTN, T.MP3_BTN, T.SAVE_BTN):
+            return None
+        rid = self.last(uid)
+        if rid is None:
+            self.say(chat, T.NEED_LAST); return "need_last"
+        fake = {"id": "0", "from": {"id": uid}, "data": {T.DESC_BTN: "d:", T.MP3_BTN: "a:", T.SAVE_BTN: "s:"}[text] + str(rid),
+                "message": {"chat": {"id": chat}, "message_id": 0}}
+        return self.callback(fake)
 
     def media_kb(self, rid: int) -> dict:
         """04.11 владелец: «панель как в Chaqqon бот» (скриншот): ➕ Гуруҳда ишлатиш / 📝 Тавсиф · 🎵 MP3 / 📁 Сақлаш · ❌ Ўчириш."""
@@ -342,6 +363,9 @@ class Bot:
         if text.startswith("/start"):
             self.say(chat, T.START)
             return "start"
+        r = self.bottom(frm["id"], chat, text)
+        if r:
+            return r
         if text in ("/saqlangan", "/saved", T.SAVED_BTN):
             return self.saved_list(chat, frm["id"])
         if text == T.NAMAZ_BTN or text in ("/namoz", "/namaz"):
@@ -390,6 +414,7 @@ class Bot:
         hit = self.q("SELECT * FROM cache WHERE key=? AND video IS NOT NULL", (key,), one=True)
         if hit:                                   # хотирадан — дарҳол
             self.q("UPDATE cache SET hits=hits+1 WHERE key=?", (key,))
+            self.kv(f"last:{uid}", str(self.row_id(key, url)))
             self.api("sendVideo", chat_id=chat, video=hit["video"], caption=self.caption(), parse_mode="HTML",
                      reply_markup=self.media_kb(self.row_id(key, url)), reply_to_message_id=reply_to)
             self.send_ad(chat)
@@ -421,6 +446,7 @@ class Bot:
                 fid = (msg.get("video") or msg.get("document") or {}).get("file_id")
                 if fid:
                     self.q("UPDATE cache SET video=? WHERE key=?", (fid, key))
+                self.kv(f"last:{uid}", str(self.row_id(key, url)))
                 self.send_ad(chat)
                 res = "ok"
             else:
@@ -471,6 +497,22 @@ class Bot:
             self.q("UPDATE cache SET audio=? WHERE rowid=?", (fid, row["rowid"]))
 
     def callback(self, cq: dict) -> str | None:
+        if cq.get("id") == "0":                   # пастки тугмадан (ҳақиқий callback эмас) — answerCallbackQuery ўрнига хабар
+            api0 = self.api
+            def _api(method, **p):
+                if method == "answerCallbackQuery":
+                    if p.get("show_alert") and p.get("text"):
+                        return api0("sendMessage", chat_id=cq["message"]["chat"]["id"], text=p["text"])
+                    return None
+                return api0(method, **p)
+            self.api = _api
+            try:
+                return self._callback(cq)
+            finally:
+                self.api = api0
+        return self._callback(cq)
+
+    def _callback(self, cq: dict) -> str | None:
         data, uid = cq.get("data") or "", cq["from"]["id"]
         chat = cq["message"]["chat"]["id"] if cq.get("message") else uid
         if data == "chk":

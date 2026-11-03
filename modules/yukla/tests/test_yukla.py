@@ -133,6 +133,21 @@ class T1(unittest.TestCase):
         from yukla.bot import Downloader
         self.assertIsNone(Downloader("/nonexistent/yt-dlp").fetch("https://www.instagram.com/reel/X/"))
 
+    def test_bottom_four_buttons(self):
+        """04.11 владелец: «4 кнопки сверху, внизу эти двое» — пастда Chaqqon тугмалари + Намоз."""
+        b = self.mk()
+        b.handle(msg("/start"))
+        kb = [p.get("reply_markup") for m, p in self.api.calls if m == "sendMessage"][-1]
+        texts = [x["text"] for row in kb["keyboard"] for x in row]
+        self.assertEqual(texts[:4], [T.GROUP_BTN, T.DESC_BTN, T.MP3_BTN, T.SAVE_BTN])
+        self.assertIn(T.NAMAZ_BTN, texts)
+        self.assertEqual(b.handle(msg(T.MP3_BTN)), "need_last")
+        self.assertEqual(b.handle(msg(T.GROUP_BTN)), "group_how")
+        b.handle(msg("https://www.instagram.com/reel/EEE/"))
+        self.assertEqual(b.handle(msg(T.MP3_BTN)), "mp3")
+        self.assertEqual(b.handle(msg(T.SAVE_BTN)), "save")
+        self.assertEqual(b.handle(msg(T.DESC_BTN)), "desc")
+
     def test_owner_ad_and_broadcast_needs_confirm(self):
         b = self.mk()
         b.handle(msg("/start", uid=50)); b.handle(msg("/start", uid=51))
@@ -206,7 +221,7 @@ class T1(unittest.TestCase):
         b.namaz = lambda: t
         b.handle(msg("/start"))
         kb = self.api.to(42)[-1][1]["reply_markup"]["keyboard"]
-        self.assertEqual(kb, [[{"text": T.NAMAZ_BTN}]])                            # битта яшил тугма
+        self.assertEqual(kb[-1], [{"text": T.NAMAZ_BTN}])                          # яшил тугма — пастда (04.11: устида 4 та Chaqqon тугмаси)
         self.assertEqual(b.handle(msg(T.NAMAZ_BTN)), "namaz")
         last = self.api.to(42)[-1][1]
         self.assertIn("15:40", last["text"])
