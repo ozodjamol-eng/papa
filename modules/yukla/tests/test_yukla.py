@@ -180,6 +180,24 @@ class T1(unittest.TestCase):
         self.assertIn("1 240", self.api.to(OWNER)[-1][1]["text"])
         self.assertIsNone(b.handle(cb("sr:@kattadavrauz", uid=42)))
 
+    def test_namaz_button(self):
+        import datetime as dt, json as js
+        f = Path(tempfile.mkdtemp()) / "n.json"
+        f.write_text(js.dumps({"schedule": [{"day": "2026-10-29", "bomdod": "06:00", "peshin": "12:45", "asr": "15:40",
+                                              "shom": "17:25", "xufton": "18:55"}]}), encoding="utf-8")
+        t = B.namaz_text(f, dt.datetime(2026, 11, 3, 14, 0, tzinfo=B.TZ))
+        self.assertIn("15:40", t); self.assertIn("➡️ 🌤 Аср", t); self.assertIn("Сешанба", t)
+        self.assertIsNone(B.namaz_text(Path("/nope.json")))
+        b = self.mk()
+        b.namaz = lambda: t
+        b.handle(msg("/start"))
+        kb = self.api.to(42)[-1][1]["reply_markup"]["keyboard"]
+        self.assertEqual(kb, [[{"text": T.NAMAZ_BTN}]])                            # битта яшил тугма
+        self.assertEqual(b.handle(msg(T.NAMAZ_BTN)), "namaz")
+        last = self.api.to(42)[-1][1]
+        self.assertIn("15:40", last["text"])
+        self.assertIn("XOJAOBODCITY24BOT", last["reply_markup"]["inline_keyboard"][0][0]["url"])
+
     def test_groups_ignored(self):
         b = self.mk()
         self.assertIsNone(b.handle({"message": {"message_id": 1, "chat": {"id": -5, "type": "group"},

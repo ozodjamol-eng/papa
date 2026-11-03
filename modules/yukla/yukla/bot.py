@@ -80,6 +80,32 @@ def connect(path: str) -> sqlite3.Connection:
     return db
 
 
+NAMAZ_JSON = Path(os.environ.get("PAPA_NAMAZ_JSON", "/var/lib/papa-namaz/namaz.json"))
+N_KEYS = (("bomdod", "🌅 Бомдод"), ("peshin", "☀️ Пешин"), ("asr", "🌤 Аср"), ("shom", "🌇 Шом"), ("xufton", "🌙 Хуфтон"))
+WEEK = ("Душанба", "Сешанба", "Чоршанба", "Пайшанба", "Жума", "Шанба", "Якшанба")
+
+
+def user_kb() -> dict:
+    return {"keyboard": [[{"text": T.NAMAZ_BTN}]], "resize_keyboard": True, "is_persistent": True}
+
+
+def namaz_text(path: Path = NAMAZ_JSON, today: dt.datetime | None = None) -> str | None:
+    """«🕌 Намоз маркази»: владелец PAPA'га киритган вақт (ягона манба)."""
+    try:
+        sched = json.loads(path.read_text(encoding="utf-8"))["schedule"]
+    except (OSError, ValueError, KeyError):
+        return None
+    t = today or dt.datetime.now(TZ)
+    rows = [r for r in sched if r.get("day", "") <= t.date().isoformat()]
+    if not rows:
+        return None
+    r = rows[-1]
+    hm = t.strftime("%H:%M")
+    nxt = next((k for k, _ in N_KEYS if r.get(k, "") > hm), None)
+    lines = [f"{'➡️ ' if k == nxt else ''}{label} — <b>{r.get(k, '—')}</b>" for k, label in N_KEYS]
+    return T.NAMAZ.format(date=f"{t:%d.%m.%Y} · {WEEK[t.weekday()]}", rows="\n".join(lines))
+
+
 def owner_kb() -> dict:
     return {"keyboard": [[{"text": T.O_STATS}, {"text": T.O_SUBS}], [{"text": T.O_AD}, {"text": T.O_SEND}],
                          [{"text": T.O_PREVIEW}]], "resize_keyboard": True}
@@ -150,8 +176,13 @@ class Bot:
         return uid in self.owners and self.kv(f"preview:{uid}") == "1"
 
     def say(self, chat: int, text: str, kb: dict | None = None):
-        if kb is None and chat in self.owners:
-            kb = {"keyboard": [[{"text": T.O_BACK}]], "resize_keyboard": True} if self.preview(chat) else owner_kb()
+        if kb is None:
+            if chat in self.owners and not self.preview(chat):
+                kb = owner_kb()
+            elif chat in self.owners:
+                kb = {"keyboard": [[{"text": T.NAMAZ_BTN}], [{"text": T.O_BACK}]], "resize_keyboard": True}
+            else:
+                kb = user_kb()
         return self.api("sendMessage", chat_id=chat, text=text, parse_mode="HTML", reply_markup=kb,
                         disable_web_page_preview=True)
 
@@ -222,6 +253,9 @@ class Bot:
         ad = self.kv("ad") or ""
         return T.CAPTION.format(bot=self.username) + (f"\n\n{ad}" if ad else "")
 
+    def namaz(self) -> str | None:
+        return namaz_text()
+
     # ---------- кириш ----------
     def handle(self, upd: dict) -> str | None:
         if "callback_query" in upd:
@@ -242,6 +276,11 @@ class Bot:
         if text.startswith("/start"):
             self.say(chat, T.START)
             return "start"
+        if text == T.NAMAZ_BTN or text in ("/namoz", "/namaz"):
+            nt = self.namaz()
+            more = {"inline_keyboard": [[{"text": T.NAMAZ_MORE, "url": f"https://t.me/{T.CITY24_BOT}"}]]}
+            self.say(chat, nt or T.NAMAZ_NONE, more if nt else None)
+            return "namaz"
         link = LINK_RE.search(text)
         if not link or not platform_of(link.group()):
             self.say(chat, T.BAD_LINK)
