@@ -69,7 +69,8 @@
     "volidam-bot-status",
     "volidam-bot-restart",
     "yukla-restart",
-    "yukla-probe"
+    "yukla-probe",
+    "namaz-status"
   ],
   "approve": [
     "morning-pool-clear",

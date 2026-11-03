@@ -26,7 +26,8 @@
     "genplan5-parity2",
     "taxi-drift",
     "taxi-live-dump",
-    "taxi-live-diff"
+    "taxi-live-diff",
+    "city24-prayer-inspect"
   ],
   "approve": [
     "genplan5-overdue-skip",
