@@ -42,7 +42,8 @@ BOTS_ENV = Path(os.environ.get("PAPA_BOTS_ENV", "/etc/papa-genplan/bots.env"))
 DUAL_UNTIL = "2026-10-26"
 UPDATE = os.environ.get("PAPA_UPDATE", "/usr/local/bin/papa-update")
 TASK_TIMEOUT = int(os.environ.get("PAPA_AUTOPILOT_TIMEOUT", str(45 * 60)))
-APPROVAL_WAIT = int(os.environ.get("PAPA_AUTOPILOT_APPROVAL_WAIT", str(30 * 60)))
+# 03.11 (владелец: «пускай лучше до утра»): кнопка ждёт 12 ч и НЕ держит очередь — остальные задачи идут дальше
+APPROVAL_WAIT = int(os.environ.get("PAPA_AUTOPILOT_APPROVAL_WAIT", str(12 * 3600)))
 OUT_LIMIT = 12000
 SECRETS = [re.compile(p) for p in (r"\b\d{6,12}:[A-Za-z0-9_-]{30,}\b",          # токен бота Telegram
                                    r"\bAIza[0-9A-Za-z_-]{30,}\b",                 # ключ Google/Gemini
@@ -140,10 +141,11 @@ def set_status(tid: str, status: str, result: dict | None = None, path: Path = G
 
 
 def recover(path: Path = GW_DB) -> None:
-    """После перезапуска исполнителя: зависшие «running/awaiting_owner» — ошибка (повторять сами не будем)."""
+    """После перезапуска исполнителя: зависшие «running/deciding» — ошибка (повторять сами не будем).
+    «awaiting_owner» не трогаем: кнопка владельца действует APPROVAL_WAIT (03.11)."""
     with db(path) as c:
         n = c.execute("UPDATE tasks SET status='failed', result=?, updated_at=? WHERE operation='papa_task' "
-                      "AND ((target='frankfurt' AND status='running') OR status IN ('awaiting_owner','deciding'))",
+                      "AND ((target='frankfurt' AND status='running') OR status='deciding')",   # awaiting_owner ждёт кнопку дальше
                       (json.dumps({"error": "autopilot_restarted", "summary": "исполнитель перезапускался — запустите заново"}),
                        utc())).rowcount
         if n:
@@ -277,27 +279,54 @@ def handle(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.s
         set_status(tid, "failed", {"error": "denied", "summary": f"«{task}» автопилоту запрещена — только владелец в консоли"}, gw)
         return "denied"
     if pol == "approve":
-        set_status(tid, "awaiting_owner", None, gw)
-        msgs = notify(f"🤖 Автопилот просит разрешения ({where})\n\nЗадача: {task}\nЗачем: {reason or '—'}",
+        set_status(tid, "awaiting_owner", {"asked_at": time.time()}, gw)
+        msgs = notify(f"🤖 Автопилот просит разрешения ({where})\n\nЗадача: {task}\nЗачем: {reason or '—'}\n"
+                      f"⏳ Кнопка действует {APPROVAL_WAIT // 3600} ч",
                       {"inline_keyboard": [[{"text": "✅ Разрешить", "callback_data": f"ap:{tid}:y"},
                                             {"text": "❌ Нет", "callback_data": f"ap:{tid}:n"}]]},
                       dual=datetime.now(timezone.utc).date().isoformat() <= DUAL_UNTIL)
         if not msgs:
             set_status(tid, "failed", {"error": "no_owner_channel", "summary": "не смог спросить владельца в Telegram"}, gw)
             return "no_owner"
-        t0 = time.time()
-        ans = None
-        while time.time() - t0 < APPROVAL_WAIT:
-            ans = approval(tid, gp)
-            if ans:
-                break
-            sleep(3)
-        if ans != "yes":
-            set_status(tid, "failed", {"error": "not_approved",
-                                       "summary": "владелец отказал" if ans == "no" else "владелец не ответил за 30 минут"}, gw)
-            return "rejected"
-        if server == "frankfurt":
+        return decide(t, gw, gp, runner, sleep)
+    return execute(t, gw, runner, sleep)
+
+
+def decide(t: dict, gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.sleep, asked_at: float | None = None) -> str:
+    """Ответ владельца есть? да — выполнить; нет — отказ; срок вышел — снять; иначе ждём дальше (очередь не держим)."""
+    tid = t["id"]
+    ans = approval(tid, gp)
+    if ans == "yes":
+        if t.get("server", "frankfurt") == "frankfurt":
             set_status(tid, "running", None, gw)
+        return execute(t, gw, runner, sleep)
+    if ans == "no":
+        set_status(tid, "failed", {"error": "not_approved", "summary": "владелец отказал"}, gw)
+        return "rejected"
+    if asked_at is not None and time.time() - asked_at > APPROVAL_WAIT:
+        set_status(tid, "failed", {"error": "not_approved",
+                                   "summary": f"владелец не ответил за {APPROVAL_WAIT // 3600} ч"}, gw)
+        return "expired"
+    return "asked"
+
+
+def pending(gw: Path = GW_DB, gp: Path = GP_DB, runner=run, sleep=time.sleep) -> list[str]:
+    """Каждый круг: задачи, ждущие кнопку владельца — проверить ответ (до APPROVAL_WAIT)."""
+    with db(gw) as c:
+        rows = c.execute("SELECT * FROM tasks WHERE operation='papa_task' AND status='awaiting_owner' "
+                         "ORDER BY created_at").fetchall()
+    out = []
+    for r in rows:
+        res = json.loads(r["result"] or "{}")
+        t = {"id": r["id"], **json.loads(r["payload"]), "by": r["requested_by"], "server": r["target"]}
+        out.append(decide(t, gw, gp, runner, sleep, asked_at=float(res.get("asked_at") or 0)))
+    return out
+
+
+def execute(t: dict, gw: Path = GW_DB, runner=run, sleep=time.sleep) -> str:
+    tid, task, reason = t["id"], t.get("task", ""), (t.get("reason") or "").strip()
+    server = t.get("server", "frankfurt")
+    where = SERVER_NAME.get(server, server)
     notify(f"🤖 Автопилот запускает ({where}): {task}" + (f"\nЗачем: {reason}" if reason else ""))
     t0 = time.time()
     if server == "london":
@@ -341,6 +370,9 @@ def main() -> None:
     while True:
         try:
             t = claim()
+            for res in pending():                          # 03.11: кнопки владельца — не держат очередь
+                if res != "asked":
+                    log("по кнопке:", res)
             if t:
                 log("задача", t["id"], t.get("task"))
                 log("итог", handle(t))

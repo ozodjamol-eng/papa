@@ -71,20 +71,36 @@ class TestFlow(unittest.TestCase):
         self.assertEqual(self.store.get(tid)["status"], "failed")
 
     def test_approve_waits_for_owner_button(self):
+        """03.11: кнопка не держит очередь — «asked», потом pending() выполняет после «✅»."""
         tid = self.new("morning-pool-clear")
         ran = []
-        ticks = []
-
-        def sleep(_):
-            ticks.append(1)
-            if len(ticks) == 2:                       # владелец нажал «✅ Разрешить»
-                c = sqlite3.connect(self.gp)
-                c.execute("INSERT INTO kv VALUES (?, 'yes')", (f"autopilot_{tid}",))
-                c.commit()
-                c.close()
-        r = ap.handle(ap.claim(self.gw), self.gw, self.gp, runner=lambda task: ran.append(task) or (0, "done"), sleep=sleep)
-        self.assertEqual((r, ran), ("ok", ["morning-pool-clear"]))
+        run_ = lambda task: ran.append(task) or (0, "done")
+        self.assertEqual(ap.handle(ap.claim(self.gw), self.gw, self.gp, runner=run_, sleep=lambda s: None), "asked")
+        self.assertEqual((self.store.get(tid)["status"], ran), ("awaiting_owner", []))
+        other = self.new("genplan-restart")                     # очередь идёт дальше, пока ждём кнопку
+        self.assertEqual(ap.handle(ap.claim(self.gw), self.gw, self.gp, runner=run_, sleep=lambda s: None), "ok")
+        self.assertEqual(self.store.get(other)["status"], "succeeded")
+        self.assertEqual(ap.pending(self.gw, self.gp, runner=run_, sleep=lambda s: None), ["asked"])
+        c = sqlite3.connect(self.gp)
+        c.execute("INSERT INTO kv VALUES (?, 'yes')", (f"autopilot_{tid}",))
+        c.commit()
+        c.close()
+        self.assertEqual(ap.pending(self.gw, self.gp, runner=run_, sleep=lambda s: None), ["ok"])
+        self.assertEqual(ran, ["genplan-restart", "morning-pool-clear"])
         self.assertIn("ap:" + tid + ":y", json.dumps(self.sent[0][1]))
+
+    def test_approve_expires_after_wait_and_survives_restart(self):
+        tid = self.new("morning-pool-clear")
+        ap.handle(ap.claim(self.gw), self.gw, self.gp, runner=lambda t: (0, ""), sleep=lambda s: None)
+        ap.recover(self.gw)                                        # перезапуск не снимает ожидание кнопки
+        self.assertEqual(self.store.get(tid)["status"], "awaiting_owner")
+        old = ap.APPROVAL_WAIT
+        ap.APPROVAL_WAIT = -1
+        try:
+            self.assertEqual(ap.pending(self.gw, self.gp, runner=lambda t: (0, ""), sleep=lambda s: None), ["expired"])
+        finally:
+            ap.APPROVAL_WAIT = old
+        self.assertEqual(self.store.get(tid)["status"], "failed")
 
     def test_owner_says_no(self):
         tid = self.new("morning-pool-clear")
@@ -158,24 +174,13 @@ class TestLondon(unittest.TestCase):
 
     def test_approve_needs_button_before_runner_sees_it(self):
         tid = self.new("genplan5-overdue-skip")
-        t = ap.claim(self.gw)
-        seen_before = []
-        ticks = []
-
-        def sleep(_):
-            ticks.append(1)
-            st = self.store.get(tid)["status"]
-            if st == "awaiting_owner":
-                seen_before.append(self.store.next_runner("london-runner"))
-                if len(ticks) == 2:
-                    c = sqlite3.connect(self.gp)
-                    c.execute("INSERT INTO kv VALUES (?, 'yes')", (f"autopilot_{tid}",))
-                    c.commit()
-                    c.close()
-            else:
-                self.runner_side(tid)(None)
-        self.assertEqual(ap.handle(t, self.gw, self.gp, runner=NORUN, sleep=sleep), "ok")
-        self.assertTrue(seen_before and all(x is None for x in seen_before))
+        self.assertEqual(ap.handle(ap.claim(self.gw), self.gw, self.gp, runner=NORUN, sleep=lambda s: None), "asked")
+        self.assertIsNone(self.store.next_runner("london-runner"))      # без кнопки Лондон её не видит
+        c = sqlite3.connect(self.gp)
+        c.execute("INSERT INTO kv VALUES (?, 'yes')", (f"autopilot_{tid}",))
+        c.commit()
+        c.close()
+        self.assertEqual(ap.pending(self.gw, self.gp, runner=NORUN, sleep=self.runner_side(tid)), ["ok"])
         self.assertIn("ap:" + tid + ":y", json.dumps(self.sent[0][1]))
 
     def test_deny_never_reaches_runner(self):
