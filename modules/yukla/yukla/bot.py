@@ -127,6 +127,10 @@ class Bot:
             for i, c in enumerate(x.strip() for x in sub_chat.split(",") if x.strip()):   # бошланғич: муддатсиз
                 self.q("INSERT OR IGNORE INTO subs(chat, until, added, pos) VALUES (?,?,?,?)", (c, None, now(), i))
             self.kv("subs_seeded", now())
+        if not self.kv("subs_v2"):                       # 03.11: КАТТА ДАВРА — асосий (сервердаги эски .env'да фақат Xo'jaobod эди)
+            self.kv("subs_v2", now())
+            if not self.q("SELECT 1 FROM subs WHERE chat='@kattadavrauz'", one=True):
+                self.q("INSERT INTO subs(chat, until, added, pos) VALUES ('@kattadavrauz', NULL, ?, -1)", (now(),))
 
     # ---------- ёрдамчилар ----------
     def q(self, sql: str, args=(), one=False):
