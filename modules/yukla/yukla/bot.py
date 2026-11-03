@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 """
 LINK_RE = re.compile(r"https?://[^\s]+", re.I)
 PLATFORMS = (("instagram", re.compile(r"(?:^|\.)instagram\.com$")), ("tiktok", re.compile(r"(?:^|\.)tiktok\.com$")),
-             ("youtube", re.compile(r"(?:^|\.)(?:youtube\.com|youtu\.be)$")))
+             ("youtube", re.compile(r"(?:^|\.)(?:youtube\.com|youtu\.be)$")),
+             ("facebook", re.compile(r"(?:^|\.)(?:facebook\.com|fb\.watch|fb\.com)$")))   # 03.11 владелец: «многие сидят в Фейсбуке»
 
 
 def now() -> str:

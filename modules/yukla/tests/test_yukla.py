@@ -73,6 +73,8 @@ class T1(unittest.TestCase):
         self.assertEqual(B.norm_key("https://youtu.be/abcdefgh123?si=zz"), "yt:abcdefgh123")
         self.assertEqual(B.norm_key("https://www.youtube.com/watch?v=abcdefgh123&t=4"), "yt:abcdefgh123")
         self.assertEqual(B.platform_of("https://vm.tiktok.com/ZM123/"), "tiktok")
+        self.assertEqual(B.platform_of("https://www.facebook.com/share/r/1Abc/"), "facebook")
+        self.assertEqual(B.platform_of("https://fb.watch/abc123/"), "facebook")
         self.assertIsNone(B.platform_of("https://evil.com/instagram.com/reel/x"))
 
     def test_download_then_cache(self):
