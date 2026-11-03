@@ -98,7 +98,8 @@
     "reports-to-bot",
     "namaz-import",
     "xojaobod-golive",
-    "evening-install"
+    "evening-install",
+    "namaz-center-install"
   ],
   "deny_patterns": [
     "-key$",

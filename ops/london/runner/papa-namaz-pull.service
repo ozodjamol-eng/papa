@@ -1,0 +1,7 @@
+[Unit]
+Description=PAPA «Намоз маркази» (Лондон) — время намаза из PAPA → бот XOJAOBOD CITY 24
+After=network-online.target
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/papa-runner/runner.env
+ExecStart=/usr/bin/python3 -I /opt/papa/ops/london/runner/namaz_pull.py

@@ -262,6 +262,16 @@ def create_app(config:Settings|None=None):
         if device_id!=RUNNER_DEVICE:raise HTTPException(403,'runner_only')
         store.seen(device_id,'Linux','runner',{'role':'papa-runner'})
         return {'task':store.next_runner(device_id)}
+    # 03.11 «🕌 Намоз маркази»: время намаза, которое владелец ввёл в PAPA (выгрузка papa-namaz-export) — только чтение.
+    @app.get('/api/runner/namaz')
+    def runner_namaz(request:Request):
+        device_id=device_auth(request)
+        if device_id!=RUNNER_DEVICE:raise HTTPException(403,'runner_only')
+        f=Path(os.getenv('PAPA_NAMAZ_JSON','/var/lib/papa-namaz/namaz.json'))
+        try:data=json.loads(f.read_text(encoding='utf-8'))
+        except (OSError,ValueError):raise HTTPException(404,'no_namaz_export')
+        if not isinstance(data,dict) or not isinstance(data.get('schedule'),list):raise HTTPException(500,'bad_namaz_export')
+        return data
     @app.post('/api/runner/result')
     def runner_result(request:Request,body:AgentResult):
         device_id=device_auth(request)

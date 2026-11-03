@@ -49,7 +49,8 @@
     "taxi-brigada-deploy",
     "taxi-brigada-rollback",
     "city24-namaz-fix",
-    "city24-namaz-rollback"
+    "city24-namaz-rollback",
+    "namaz-pull-install"
   ],
   "deny_patterns": [
     "-key$",

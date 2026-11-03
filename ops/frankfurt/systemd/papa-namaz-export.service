@@ -1,0 +1,8 @@
+[Unit]
+Description=PAPA «Намоз маркази» — выгрузка времени намаза для других серверов (только чтение базы PAPA)
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/papa/ops/frankfurt/namaz_export.py
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes

@@ -80,3 +80,17 @@ def test_result_size_limited(env):
     c.post('/api/runner/next', headers=RUN)
     big = {'output': 'x' * 40000}
     assert c.post('/api/runner/result', headers=RUN, json={'task_id': tid, 'ok': True, 'result': big}).status_code == 409
+
+
+def test_namaz_export_only_for_runner(env, tmp_path, monkeypatch):
+    """03.11: Лондон берёт время намаза у PAPA — только исполнитель, только чтение."""
+    c, db = env
+    f = tmp_path / 'namaz.json'
+    monkeypatch.setenv('PAPA_NAMAZ_JSON', str(f))
+    assert c.get('/api/runner/namaz', headers=RUN).status_code == 404          # выгрузки ещё нет
+    f.write_text('{"schedule": [{"day": "2026-10-29", "bomdod": "06:00", "peshin": "12:45", "asr": "15:40", '
+                 '"shom": "17:25", "xufton": "18:55"}], "exported_at": "x"}', encoding='utf-8')
+    r = c.get('/api/runner/namaz', headers=RUN)
+    assert r.status_code == 200 and r.json()['schedule'][0]['asr'] == '15:40'
+    assert c.get('/api/runner/namaz', headers=RO).status_code == 403
+    assert c.get('/api/runner/namaz').status_code in (401, 403)
