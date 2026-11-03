@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:IB;src:url(InterDisplay-Black.otf)}
+@font-face{font-family:IE;src:url(InterDisplay-ExtraBold.otf)}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#0B1E3F}
+#cam{position:absolute;inset:0;transform-origin:540px 900px}
+.abs{position:absolute}
+canvas{position:absolute;left:0;top:0}
+.w{font-family:IB;color:#fff;letter-spacing:-2px;line-height:.92;white-space:nowrap}
+.chip{font-family:IE;font-size:44px;color:#0B1E3F;background:#FFB000;border-radius:40px;padding:16px 30px;letter-spacing:1px}
+.bub{font-family:IE;border-radius:28px;padding:22px 28px;font-size:30px}
+</style></head><body>
+<div id="cam">
+  <canvas id="bg" width="1080" height="1920"></canvas>
+  <div id="ghost" class="abs w" style="font-size:520px;color:transparent;-webkit-text-stroke:3px rgba(255,255,255,.07);left:-40px;top:300px;transform:rotate(-90deg) translate(-700px,0);transform-origin:0 0">ЮКЛА</div>
+
+  <!-- S1 -->
+  <div id="s1" class="abs" style="inset:0">
+    <div id="h1a" class="abs w" style="font-size:190px;left:0;width:1080px;text-align:center;top:1010px">ВИДЕО</div>
+    <div id="h1b" class="abs w" style="font-size:150px;left:0;width:1080px;text-align:center;top:1190px;color:#FFB000">КЕРАКМИ?</div>
+    <svg id="sel" class="abs" style="left:0;top:0" width="1080" height="1920"></svg>
+    <div id="chips" class="abs" style="left:0;width:1080px;top:1420px;display:flex;justify-content:center;gap:18px">
+      <span class="chip" id="c0">INSTAGRAM</span><span class="chip" id="c1">TIKTOK</span><span class="chip" id="c2">YOUTUBE</span>
+    </div>
+  </div>
+
+  <!-- S2 phone -->
+  <div id="s2" class="abs" style="inset:0">
+    <div id="h2" class="abs w" style="font-size:112px;left:0;width:1080px;text-align:center;top:300px">ҲАВОЛАНИ<br>ТАШЛАНГ</div>
+    <div id="h2b" class="abs w" style="font-size:124px;left:0;width:1080px;text-align:center;top:300px;color:#FFB000">ВИДЕО<br>ТАЙЁР!</div>
+    <div id="phoneWrap" class="abs" style="left:190px;top:600px;width:700px;height:1240px;perspective:1600px">
+      <div id="phone" class="abs" style="inset:0;background:#F4F6FA;border-radius:70px;border:14px solid #061128;box-sizing:border-box;overflow:hidden;transform-origin:50% 100%">
+        <div class="abs" style="left:0;right:0;top:0;height:150px;background:#fff;border-bottom:2px solid #E3E7EF">
+          <div class="abs" style="left:40px;top:52px;width:76px;height:76px;border-radius:50%;background:#0B1E3F"></div>
+          <canvas id="av" width="76" height="76" style="left:40px;top:52px"></canvas>
+          <div class="abs" style="left:136px;top:56px;font-family:IE;font-size:30px;color:#0B1E3F">Хўжаобод Юкла</div>
+          <div class="abs" style="left:136px;top:96px;font-family:IE;font-size:22px;color:#7A869A">бот</div>
+        </div>
+        <div id="ub" class="abs bub" style="right:30px;top:220px;background:#0B1E3F;color:#fff;max-width:470px">instagram.com/reel/<span style="color:#FFB000">C9x…</span></div>
+        <div id="bb" class="abs" style="left:30px;top:370px;width:470px;height:600px;background:#fff;border-radius:28px;box-shadow:0 6px 20px rgba(11,30,63,.12);overflow:hidden">
+          <canvas id="thumb" width="470" height="520"></canvas>
+          <div id="ok" class="abs" style="left:24px;bottom:18px;font-family:IE;font-size:28px;color:#0B1E3F">✓ Тайёр · <span style="color:#E08A00">MP3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 -->
+  <canvas id="blob" width="1080" height="1920"></canvas>
+  <div id="s3" class="abs" style="inset:0">
+    <div id="w0" class="abs w" style="font-size:230px;color:#0B1E3F;left:90px;top:520px">ТЕЗ.</div>
+    <div id="w1" class="abs w" style="font-size:200px;color:#0B1E3F;left:90px;top:760px">БЕПУЛ.</div>
+    <div id="w2" class="abs w" style="font-size:170px;color:#0B1E3F;left:90px;top:980px">СИФАТЛИ.</div>
+  </div>
+
+  <!-- S4 -->
+  <div id="s4" class="abs" style="inset:0">
+    <div id="o1" class="abs w" style="font-size:96px;left:0;width:1080px;text-align:center;top:1110px;letter-spacing:-1px">@XojaobodYuklaBot</div>
+    <div id="o2" class="abs" style="left:0;width:1080px;top:1270px;display:flex;justify-content:center">
+      <div id="btn" style="font-family:IB;font-size:58px;color:#0B1E3F;background:#FFB000;border-radius:80px;padding:30px 70px">БОТНИ ОЧИНГ</div>
+    </div>
+    <div id="o3" class="abs" style="left:0;width:1080px;text-align:center;top:1440px;font-family:IE;font-size:34px;color:#9FB0CC;letter-spacing:6px">TELEGRAM</div>
+  </div>
+
+  <canvas id="fx" width="1080" height="1920"></canvas>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const DUR=12.5; window.DUR=DUR;
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const lin=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const spr=x=>x<=0?0:1-Math.exp(-7*x)*Math.cos(11*x);
+const mix=(a,b,k)=>a+(b-a)*k;
+// assets
+const spin=[];for(let i=0;i<30;i++){const im=new Image();im.src=`bolt/spin/${String(i).padStart(2,'0')}.png`;spin.push(im)}
+const hero=new Image();hero.src='bolt/hero.png';
+window.ready=Promise.all([...spin,hero].map(i=>i.decode().catch(()=>0)).concat([document.fonts.ready]));
+// random cells for pixel assemble
+const R=[];let s=7;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647};
+for(let i=0;i<20*22;i++)R.push(rnd());
+const bg=$('bg').getContext('2d'),fx=$('fx').getContext('2d'),bl=$('blob').getContext('2d'),th=$('thumb').getContext('2d'),av=$('av').getContext('2d');
+
+function drawBg(t){
+  bg.fillStyle='#0B1E3F';bg.fillRect(0,0,1080,1920);
+  // grid draws in
+  const g=eo(lin(t,0,1.2));
+  bg.strokeStyle='rgba(255,255,255,.06)';bg.lineWidth=2;
+  for(let x=0;x<=1080;x+=90){bg.beginPath();bg.moveTo(x,0);bg.lineTo(x,1920*g);bg.stroke()}
+  for(let y=0;y<=1920;y+=90){bg.beginPath();bg.moveTo(0,y);bg.lineTo(1080*g,y);bg.stroke()}
+  // construction circles
+  bg.strokeStyle='rgba(255,176,0,.18)';bg.lineWidth=2;
+  bg.beginPath();bg.arc(540,700,360,-Math.PI/2,-Math.PI/2+Math.PI*2*eo(lin(t,.2,1.6)));bg.stroke();
+  bg.setLineDash([10,14]);bg.beginPath();bg.arc(540,700,470,Math.PI/2,Math.PI/2+Math.PI*2*eo(lin(t,.4,1.9)));bg.stroke();bg.setLineDash([]);
+  // radial glow
+  const gr=bg.createRadialGradient(540,700,0,540,700,700);gr.addColorStop(0,'rgba(255,176,0,.22)');gr.addColorStop(1,'rgba(255,176,0,0)');
+  bg.fillStyle=gr;bg.fillRect(0,0,1080,1920);
+}
+function drawBolt(t,x,y,size,alpha=1,useHero=false){
+  let im;
+  if(useHero){im=hero}else{const k=Math.round(cl(lin(t,0,1.0))*29);im=spin[k]}
+  if(!(im.complete&&im.naturalWidth))return;
+  fx.save();fx.globalAlpha=alpha;fx.shadowColor='rgba(255,176,0,.55)';fx.shadowBlur=60;
+  fx.drawImage(im,x-size/2,y-size/2,size,size);fx.restore();
+}
+function setW(el,op,ty=0,sc=1,extra=''){el.style.opacity=op;el.style.transform=`translateY(${ty}px) scale(${sc}) ${extra}`}
+
+window.renderAt=function(t){
+  fx.clearRect(0,0,1080,1920);bl.clearRect(0,0,1080,1920);
+  drawBg(t);
+  // camera: always moving
+  let cs=mix(1.12,1.0,eo(lin(t,0,3))), cr=mix(-1.5,0,eo(lin(t,0,3))), cy=0;
+  if(t>3){cs=mix(1.0,1.05,eio(lin(t,3,7)));cr=mix(0,.8,eio(lin(t,3,7)));cy=mix(0,-20,eio(lin(t,3,7)))}
+  if(t>7){cs=mix(1.04,1.0,eo(lin(t,7,9.6)));cr=mix(.8,0,eo(lin(t,7,9.6)));cy=0}
+  if(t>9.6){cs=mix(1.08,1.0,eo(lin(t,9.6,12.5)));cr=0}
+  $('cam').style.transform=`translateY(${cy}px) scale(${cs}) rotate(${cr}deg)`;
+  $('ghost').style.transform=`rotate(-90deg) translate(${-700+t*-28}px,0)`;
+
+  // ---------- S1 0..3.2
+  const s1=t<3.4; $('s1').style.display=s1?'block':'none';
+  if(s1){
+    const out=eio(lin(t,2.9,3.3));
+    // bolt lands with spin
+    const land=spr(lin(t,0,1.1));
+    const by=mix(-300,700,cl(land*1.0,0,1.2));
+    drawBolt(t,540,mix(700,-450,eio(out)),820*(1-out*.3),1);
+    if(t<1.0){} // spin handled
+    // impact ring
+    const ir=lin(t,.85,1.5); if(ir>0&&ir<1){fx.strokeStyle=`rgba(255,176,0,${1-ir})`;fx.lineWidth=10*(1-ir);fx.beginPath();fx.arc(540,700,200+ir*420,0,7);fx.stroke()}
+    const a=spr(lin(t,1.0,1.6)),b=spr(lin(t,1.2,1.8));
+    setW($('h1a'),cl(a)*(1-out),mix(80,0,cl(a))-out*120);
+    setW($('h1b'),cl(b)*(1-out),mix(80,0,cl(b))-out*120);
+    // figma selection
+    const sl=eo(lin(t,1.7,2.2)), so=1-out;
+    const L=150,T=990,W=780,H=360;
+    $('sel').innerHTML = sl>0? `<g opacity="${so}"><rect x="${L+W/2-W/2*sl}" y="${T}" width="${W*sl}" height="${H}" fill="none" stroke="#FFB000" stroke-width="3" stroke-dasharray="14 10"/>`+
+      [[L,T],[L+W,T],[L,T+H],[L+W,T+H]].map(([x,y],i)=>{const k=spr(lin(t,2.0+i*.05,2.4+i*.05));return `<rect x="${x-14*k}" y="${y-14*k}" width="${28*k}" height="${28*k}" fill="#fff" stroke="#FFB000" stroke-width="3"/>`}).join('')+
+      `<rect x="${L}" y="${T-58}" width="190" height="44" rx="6" fill="#FFB000" opacity="${cl(lin(t,2.1,2.3))}"/><text x="${L+18}" y="${T-27}" font-family="IE" font-size="26" fill="#0B1E3F" opacity="${cl(lin(t,2.1,2.3))}">1080 × 360</text></g>`:'';
+    ['c0','c1','c2'].forEach((c,i)=>{const k=spr(lin(t,2.0+i*.12,2.6+i*.12));setW($(c),cl(k*1.5)*(1-out),mix(60,0,cl(k))+out*200,Math.max(.01,k))});
+  } else $('sel').innerHTML='';
+
+  // ---------- S2 3.2..7.2
+  const s2=t>=3.0&&t<7.4; $('s2').style.display=s2?'block':'none';
+  if(s2){
+    const pin=spr(lin(t,3.0,3.9)), pout=eio(lin(t,6.9,7.3));
+    $('phone').style.transform=`translateY(${mix(1300,0,cl(pin))+pout*200}px) rotateX(${mix(28,6,cl(pin))-Math.sin(t*.9)*2}deg) rotateY(${Math.sin(t*.7)*4}deg) scale(${1-pout*.1})`;
+    const ha=spr(lin(t,3.3,3.9)), hb=spr(lin(t,5.7,6.2)), hsw=lin(t,5.45,5.65);
+    setW($('h2'),cl(ha)*(1-hsw),mix(-60,0,cl(ha)));
+    setW($('h2b'),cl(hb)*(1-pout),mix(60,0,cl(hb)),mix(.8,1,cl(hb)));
+    const ub=spr(lin(t,3.9,4.4)); $('ub').style.opacity=cl(ub*2); $('ub').style.transform=`translateX(${mix(120,0,cl(ub))}px) scale(${mix(.6,1,cl(ub))})`;
+    // avatar bolt
+    av.clearRect(0,0,76,76); if(hero.naturalWidth)av.drawImage(hero,6,6,64,64);
+    // zap flash
+    const z=lin(t,4.5,4.9); if(z>0&&z<1){fx.fillStyle=`rgba(255,176,0,${.14*(1-z)})`;fx.fillRect(0,0,1080,1920);
+      drawBolt(t,540,1000,mix(200,520,eo(z)),1-z,true)}
+    const bb=spr(lin(t,4.6,5.1)); $('bb').style.opacity=cl(bb*2); $('bb').style.transform=`scale(${mix(.7,1,cl(bb))})`;$('bb').style.transformOrigin='0 0';
+    // pixel assemble thumbnail
+    th.clearRect(0,0,470,520);
+    const pa=lin(t,4.8,5.8);
+    const cols=20,rows=22,cw=470/cols,ch=520/rows;
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const k=R[r*cols+c]; if(pa<k*0.85) continue;
+      const loc=cl((pa-k*.85)/.15);
+      const x=c*cw,y=r*ch;
+      // thumbnail art: navy->yellow gradient + play disk
+      const u=c/cols,v=r/rows;
+      const q=cl(v*.85+u*.15);const col=`rgb(${mix(11,255,q)|0},${mix(30,176,q)|0},${mix(63,0,q)|0})`;
+      th.globalAlpha=loc;th.fillStyle=col;th.fillRect(x+(1-loc)*cw/2,y+(1-loc)*ch/2,cw*loc+.6,ch*loc+.6);
+    }
+    th.globalAlpha=cl(lin(t,5.6,5.9));
+    th.fillStyle='rgba(255,255,255,.95)';th.beginPath();th.arc(235,250,62,0,7);th.fill();
+    th.fillStyle='#0B1E3F';th.beginPath();th.moveTo(218,218);th.lineTo(218,282);th.lineTo(272,250);th.fill();
+    th.globalAlpha=1;
+    $('ok').style.opacity=cl(lin(t,5.8,6.1));
+  }
+
+  // ---------- S3 liquid wipe 7.0..9.7
+  const wipeIn=eio(lin(t,7.0,7.6)), wipeOut=eio(lin(t,9.4,9.9));
+  if(t>=7.0&&t<9.95){
+    const cx=540,cy=1000;
+    const Rr=mix(0,1400,wipeIn), Rh=mix(0,1400,wipeOut);
+    bl.fillStyle='#FFB000';bl.beginPath();
+    for(let i=0;i<=120;i++){const a=i/120*Math.PI*2;const rr=Rr*(1+.06*Math.sin(5*a+t*7)+.03*Math.sin(9*a-t*5));bl.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr)}
+    bl.fill();
+    if(Rh>0){bl.globalCompositeOperation='destination-out';bl.beginPath();
+      for(let i=0;i<=120;i++){const a=i/120*Math.PI*2;const rr=Rh*(1+.06*Math.sin(5*a-t*7));bl.lineTo(540+Math.cos(a)*rr,900+Math.sin(a)*rr)}
+      bl.fill();bl.globalCompositeOperation='source-over'}
+  }
+  const s3=t>=7.3&&t<9.8; $('s3').style.display=s3?'block':'none';
+  if(s3){
+    ['w0','w1','w2'].forEach((w,i)=>{const k=spr(lin(t,7.5+i*.45,8.1+i*.45));const o=lin(t,9.3,9.6);
+      setW($(w),cl(k*2)*(1-o),0,1,`translateX(${mix(-700,0,cl(k))+o*-200}px) skewX(${mix(-12,0,cl(k))}deg)`)});
+    // hero bolt on the right, floating, partially behind words
+    const k=spr(lin(t,7.4,8.2));
+    bl.save();bl.globalAlpha=cl(k)*(1-lin(t,9.3,9.6));
+    const bx=mix(1400,640,cl(k)), by=mix(1700,1480,cl(k))+Math.sin(t*2.2)*18;
+    bl.translate(bx,by);bl.rotate(.18+Math.sin(t*1.7)*.04);bl.shadowColor='rgba(11,30,63,.55)';bl.shadowBlur=70;bl.shadowOffsetY=45;
+    if(hero.naturalWidth)bl.drawImage(hero,-470,-470,940,940);bl.restore();
+  }
+
+  // ---------- S4 9.7..12.5
+  const s4=t>=9.5; $('s4').style.display=s4?'block':'none';
+  if(s4){
+    const k=spr(lin(t,9.55,10.35));
+    drawBolt(t,540,mix(1200,700,cl(k))+Math.sin(t*2)*12,mix(300,640,cl(k)),cl(k*2),true);
+    const a=spr(lin(t,10.1,10.7)), b=spr(lin(t,10.4,11.0)), c=lin(t,10.7,11.0);
+    setW($('o1'),cl(a*2),mix(60,0,cl(a)));
+    const tap=lin(t,11.6,11.9), tp=tap>0&&tap<1?1-Math.sin(tap*Math.PI)*.07:1;
+    setW($('o2'),cl(b*2),mix(60,0,cl(b)),mix(.6,1,cl(b))*tp);
+    $('o3').style.opacity=c;
+    // tap ripple
+    if(tap>0&&tap<1){fx.strokeStyle=`rgba(255,255,255,${1-tap})`;fx.lineWidth=6;fx.beginPath();fx.arc(700,1330,30+tap*120,0,7);fx.stroke()}
+  }
+};
+</script></body></html>

@@ -1,41 +1,50 @@
 import bpy, math, sys
 from mathutils import Vector
-color=tuple(float(x) for x in sys.argv[sys.argv.index('--')+1].split(','))
-out=sys.argv[sys.argv.index('--')+2]
+a=sys.argv[sys.argv.index('--')+1:]
+ang=float(a[0]); samples=int(a[1]); res=int(a[2]); out=a[3]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc=bpy.context.scene
-# bolt outline
 pts=[(0.15,1.0),(-0.55,-0.1),(-0.05,-0.1),(-0.25,-1.0),(0.55,0.15),(0.05,0.15),(0.35,1.0)]
 cu=bpy.data.curves.new('bolt','CURVE');cu.dimensions='2D';cu.fill_mode='BOTH'
 sp=cu.splines.new('POLY');sp.points.add(len(pts)-1)
-for p,(x,y) in zip(sp.points,pts): p.co=(x,y,0,1)
+for p,(x,y) in zip(sp.points,pts): p.co=(x-0.0,y,0,1)
 sp.use_cyclic_u=True
-cu.extrude=0.16;cu.bevel_depth=0.09;cu.bevel_resolution=8
+cu.extrude=0.18;cu.bevel_depth=0.075;cu.bevel_resolution=10
 ob=bpy.data.objects.new('bolt',cu);sc.collection.objects.link(ob)
-ob.rotation_euler=(math.radians(78),math.radians(-18),math.radians(22));ob.location=(0,0,1.25)
-m=bpy.data.materials.new('lacquer');m.use_nodes=True
+ob.rotation_euler=(math.radians(78),math.radians(8),math.radians(ang))
+m=bpy.data.materials.new('candy');m.use_nodes=True
 b=m.node_tree.nodes['Principled BSDF']
-b.inputs['Base Color'].default_value=(*color,1);b.inputs['Roughness'].default_value=0.12
-b.inputs['Coat Weight'].default_value=1.0;b.inputs['Coat Roughness'].default_value=0.03
+b.inputs['Base Color'].default_value=(1.0,0.42,0.0,1);b.inputs['Roughness'].default_value=0.18
+b.inputs['Coat Weight'].default_value=1.0;b.inputs['Coat Roughness'].default_value=0.02
+b.inputs['Subsurface Weight'].default_value=0.15;b.inputs['Subsurface Radius'].default_value=(1.0,0.4,0.1)
 ob.data.materials.append(m)
-# floor + backdrop (cream)
-bpy.ops.mesh.primitive_plane_add(size=40);fl=bpy.context.object
-fm=bpy.data.materials.new('cream');fm.use_nodes=True
-fb=fm.node_tree.nodes['Principled BSDF'];fb.inputs['Base Color'].default_value=(0.93,0.90,0.85,1);fb.inputs['Roughness'].default_value=0.6
-fl.data.materials.append(fm)
+# world: deep blue, low
 w=bpy.data.worlds.new('w');sc.world=w;w.use_nodes=True
-w.node_tree.nodes['Background'].inputs[0].default_value=(0.93,0.90,0.85,1);w.node_tree.nodes['Background'].inputs[1].default_value=0.25
-def area(loc,size,en,rot):
-    l=bpy.data.lights.new('a','AREA');l.size=size;l.energy=en
-    o=bpy.data.objects.new('a',l);o.location=loc;o.rotation_euler=rot;sc.collection.objects.link(o)
-area((-3,-2,5),3,380,(math.radians(35),0,math.radians(-55)))   # key
-area((3.5,-1,2.5),1.2,260,(math.radians(70),0,math.radians(60)))   # rim
-area((0,3,4),3,120,(math.radians(-40),0,0))                    # back
-cam=bpy.data.cameras.new('c');cam.lens=70
+bg=w.node_tree.nodes['Background'];bg.inputs[0].default_value=(0.02,0.05,0.14,1);bg.inputs[1].default_value=1.0
+# softbox strips (seen in reflections, hidden from camera)
+def strip(loc,rot,sx,sy,stren):
+    bpy.ops.mesh.primitive_plane_add(size=1,location=loc,rotation=rot);p=bpy.context.object
+    p.scale=(sx,sy,1)
+    em=bpy.data.materials.new('em');em.use_nodes=True;nt=em.node_tree
+    for n in list(nt.nodes): nt.nodes.remove(n)
+    e=nt.nodes.new('ShaderNodeEmission');e.inputs[1].default_value=stren
+    o=nt.nodes.new('ShaderNodeOutputMaterial');nt.links.new(e.outputs[0],o.inputs[0])
+    p.data.materials.append(em);p.visible_camera=False
+strip((-2.2,-1.6,1.2),(math.radians(90),0,math.radians(-50)),0.5,3.5,14)
+strip((2.4,-1.2,0.6),(math.radians(90),0,math.radians(55)),0.35,3.0,9)
+strip((0,-1.5,3.2),(math.radians(20),0,0),3.0,0.6,6)
+strip((-1.6,-5.0,1.6),(math.radians(75),0,math.radians(-15)),0.9,4.0,10)
+strip((1.8,-5.2,-0.4),(math.radians(95),0,math.radians(20)),0.25,3.5,7)
+l=bpy.data.lights.new('key','AREA');l.size=3;l.energy=260
+lo=bpy.data.objects.new('key',l);lo.location=(-2.5,-3,3);sc.collection.objects.link(lo)
+lo.rotation_euler=(Vector((0,0,0))-lo.location).to_track_quat('-Z','Y').to_euler()
+cam=bpy.data.cameras.new('c');cam.lens=85
 co=bpy.data.objects.new('c',cam);sc.collection.objects.link(co);sc.camera=co
-co.location=(0,-6.2,4.6)
-d=Vector((0,0,1.0))-co.location;co.rotation_euler=d.to_track_quat('-Z','Y').to_euler()
-sc.render.engine='CYCLES';sc.cycles.device='CPU';sc.cycles.samples=96;sc.cycles.use_denoising=True
-sc.render.resolution_x=1080;sc.render.resolution_y=1080
-sc.view_settings.view_transform='AgX';sc.view_settings.look='AgX - Punchy';sc.view_settings.exposure=-0.3
+co.location=(0,-7.5,0.6)
+co.rotation_euler=(Vector((0,0,0))-co.location).to_track_quat('-Z','Y').to_euler()
+sc.render.engine='CYCLES';sc.cycles.device='CPU';sc.cycles.samples=samples;sc.cycles.use_denoising=True
+sc.render.film_transparent=True
+sc.render.resolution_x=res;sc.render.resolution_y=res
+sc.render.image_settings.color_mode='RGBA'
+sc.view_settings.view_transform='Standard';sc.view_settings.exposure=-0.9
 sc.render.filepath=out;bpy.ops.render.render(write_still=True)
