@@ -142,7 +142,14 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
         if f and int(f["material_id"]) == int(mid):
             at = (extras.opts(cfg["channels"][m["channel"]], "final") or {}).get("at", "22:00")
             return f"{base}\n\n🌙 {name} · Якуний пост — ҳар куни {at}, пока не замените", {"inline_keyboard": []}
-        return f"{base}\n\n🗑 Убрано", {"inline_keyboard": []}
+        # 04.11 владелец: «для меня должно быть исключение» — правило «новости только из СРОЧНО НОВОСТИ» держит агентов,
+        # не владельца: на убранной карточке — его кнопки «🆘 сейчас» и «🧠 в план».
+        rs = rubrics(cfg, m["channel"]) if m["channel"] else []
+        ri = rs.index(m["rubric"]) if m["rubric"] in rs else 0
+        kb = [[{"text": "🆘 Срочно — опубликовать", "callback_data": f"ur:{mid}"}]]
+        if rs:
+            kb.append([{"text": "🧠 Вернуть в план", "callback_data": f"rq:{mid}:{ri}"}])
+        return f"{base}\n\n🗑 Убрано · вернуть можно кнопками ниже", {"inline_keyboard": kb}
     if m["status"] == "queued" and m["scheduled_at"]:
         t = dt.datetime.fromisoformat(m["scheduled_at"])
         when = "сейчас (🆘)" if m["urgent"] else smart.fmt(t, now)
@@ -659,7 +666,7 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         # Найденное агентами (не брошенное владельцем) новостное — не выходит само; владелец может вернуть кнопками карточки.
         store.update(db, mid, auto=0, stock=0, status="rejected")
         stock = sk = False
-        notes = ["⛔ Новость — сама не выйдет (01.11: новости только из «СРОЧНО НОВОСТИ»)"] + [n for n in (notes or []) if "выйдет сам" not in n]
+        notes = ["⛔ Новость — сама не выйдет (01.11: новости только из «СРОЧНО НОВОСТИ») · ваше решение — 🆘 кнопкой ниже"] + [n for n in (notes or []) if "выйдет сам" not in n]
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
     if pol:
         notes = (notes or []) + [pol]

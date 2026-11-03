@@ -167,6 +167,17 @@ class SrochnoNewsTest(unittest.TestCase):
         r = store.get(self.db, 1)
         self.assertEqual((r["status"], r["stock"]), ("rejected", 0))
 
+    def test_owner_can_release_rejected_news(self):
+        """04.11 владелец: «для меня должно быть исключение» — убранная новость выходит по 🆘 владельца."""
+        bot = Bot()
+        hub.intake(bot, self.db, self.cfg, {42}, 42, [10],
+                   [fwd(10, "@Andijonliklar_TV", "⚡️АНДИЖОНДА СЕЛ ХАВФИ ЭЪЛОН ҚИЛИНДИ! Расман огоҳлантириш")], reply_chat=42, channel="xojaobod")
+        self.assertEqual(store.get(self.db, 1)["status"], "rejected")
+        txt, kb = hub.card(self.db, self.cfg, 1)
+        cbs = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+        self.assertIn("ur:1", cbs)
+        self.assertTrue(any(c.startswith("rq:1:") for c in cbs))
+
     def test_migrate_removes_queued_news(self):
         bot = Bot()
         hub.intake(bot, self.db, self.cfg, {42}, 42, [10], [fwd(10, "УЙДА БИЗНЕС", "Уйда нон пишириш")],
