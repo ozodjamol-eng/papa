@@ -9,12 +9,19 @@ job.json:
   {"do": "clone", "name": "PAPA-ref", "files": ["ref.mp3"], "description": "...", "denoise": false},
   {"do": "design", "name": "D", "description": "...", "text": "(100–1000 знаков)", "model": "eleven_ttv_v3"},
   {"do": "sts", "name": "S", "voice_id": "...", "file": "rec.mp3", "settings": {"stability": 0.5, "similarity_boost": 0.85}},
-  {"do": "tts", "name": "A", "voice_id": "...|$clone:PAPA-ref", "public_owner_id": "(для голоса из библиотеки)",
+  {"do": "tts", "name": "A", "voice_id": "...|$clone:PAPA-ref|$asosiy (или без voice_id — главный голос PAPA)", "public_owner_id": "(для голоса из библиотеки)",
    "text": "...", "model": "eleven_v3", "settings": {"stability": 0.4, "similarity_boost": 0.8, "style": 0.3},
    "format": "mp3_44100_64"}
 ]}"""
-import base64, json, os, sys, urllib.error, urllib.parse, urllib.request, uuid
+import base64, importlib.util, json, os, sys, urllib.error, urllib.parse, urllib.request, uuid
 from pathlib import Path
+
+# 03.11: талаффуз + асосий голос (modules/fabrika/golos/talaffuz.py). voice.py запускается с -I — грузим по пути.
+_TP = Path(__file__).resolve().parents[2] / "modules/fabrika/golos/talaffuz.py"
+talaffuz = None
+if _TP.exists():
+    _sp = importlib.util.spec_from_file_location("talaffuz", _TP)
+    talaffuz = importlib.util.module_from_spec(_sp); _sp.loader.exec_module(talaffuz)
 
 API = "https://api.elevenlabs.io"
 
@@ -93,6 +100,12 @@ def main(job_dir, out_dir):
             clones[st["name"]] = d.get("voice_id")
             print("voice_id", d.get("voice_id"))
         elif do == "tts":
+            if talaffuz:  # voice_id йўқ/"$asosiy" → асосий голос (SAFO-MARVA-diktor C); матн → оғзаки талаффуз
+                talaffuz.asosiy_qadam(st)
+                if st.get("talaffuz", True):
+                    st["text"], oz = talaffuz.tayyorla(st["text"], undov=st.get("undov", True))
+                    if oz:
+                        print("talaffuz:", ", ".join(f"{a}→{b}" for a, b in oz))
             vid = st["voice_id"]
             if vid.startswith("$clone:"):
                 vid = clones.get(vid[7:]) or ""
