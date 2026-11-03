@@ -67,7 +67,9 @@
     "marker-status",
     "marker-shelf-check",
     "volidam-bot-status",
-    "volidam-bot-restart"
+    "volidam-bot-restart",
+    "yukla-restart",
+    "yukla-probe"
   ],
   "approve": [
     "morning-pool-clear",
@@ -108,6 +110,7 @@
   "deny": [
     "xojaobod-bot-token",
     "audit-reports",
-    "volidam-bot-token"
+    "volidam-bot-token",
+    "yukla-bot-token"
   ]
 }

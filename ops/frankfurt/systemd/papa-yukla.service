@@ -1,0 +1,37 @@
+[Unit]
+Description=PAPA YUKLA — «Хўжаобод Юкла ⚡» (@XojaobodYuklaBot): видео/MP3 из Instagram, TikTok, YouTube
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=papa-yukla
+Group=papa-yukla
+EnvironmentFile=/etc/papa-yukla/bot.env
+Environment=YUKLA_DB=/var/lib/papa-yukla/yukla.sqlite3 YUKLA_YTDLP=/opt/papa-venv/yukla/bin/yt-dlp PYTHONUNBUFFERED=1
+Environment=HOME=/var/lib/papa-yukla XDG_CACHE_HOME=/var/lib/papa-yukla/cache PATH=/opt/papa-venv/yukla/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/opt/papa/modules/yukla
+ExecStart=/usr/bin/python3 -m yukla
+Restart=on-failure
+RestartSec=30
+StateDirectory=papa-yukla
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0077
+MemoryMax=350M
+CPUQuota=60%
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target
