@@ -90,7 +90,8 @@ class T1(unittest.TestCase):
     def test_mp3_from_button_cached(self):
         b = self.mk()
         b.handle(msg("https://www.tiktok.com/@a/video/123"))
-        rid = self.ups[0][4]["inline_keyboard"][0][0]["callback_data"]
+        kb = self.ups[0][4]["inline_keyboard"]
+        rid = next(x["callback_data"] for row in kb for x in row if x.get("callback_data", "").startswith("a:"))
         self.assertEqual(b.handle(cb(rid)), "mp3")
         self.assertEqual(self.ups[-1][0], "sendAudio")
         b.handle(cb(rid, uid=44))
@@ -229,10 +230,30 @@ class T1(unittest.TestCase):
         self.assertEqual([x["media"] for x in grp["media"]], ["L0", "L1", "L2", "L3", "L4"])
         self.assertIn("НАМОЗ", grp["media"][0]["caption"])
 
-    def test_groups_ignored(self):
+    def test_group_link_downloads_other_text_ignored(self):
+        """04.11: «👥 Гуруҳда ишлатиш» — гуруҳдаги ҳавола юкланади (обунасиз), оддий гапга жим."""
+        b = self.mk(member="left")
+        g = lambda t: {"message": {"message_id": 3, "chat": {"id": -5, "type": "supergroup"}, "from": {"id": 1}, "text": t}}
+        self.assertIsNone(b.handle(g("салом ҳаммага")))
+        self.assertEqual(b.handle(g("https://youtu.be/abcdefgh123")), "job")
+        self.assertEqual(self.ups[-1][1], -5)
+        waits = [p for m, p in self.api.calls if p.get("chat_id") == -5 and m == "sendMessage"]
+        self.assertTrue(all("keyboard" not in (p.get("reply_markup") or {}) for p in waits))
+
+    def test_chaqqon_buttons_desc_and_save(self):
+        """04.11: под видео — Гуруҳда ишлатиш · Тавсиф · MP3 · Сақлаш."""
         b = self.mk()
-        self.assertIsNone(b.handle({"message": {"message_id": 1, "chat": {"id": -5, "type": "group"},
-                                                "from": {"id": 1}, "text": "https://youtu.be/abcdefgh123"}}))
+        b.handle(msg("https://www.instagram.com/reel/DDD/"))
+        kb = self.ups[0][4]["inline_keyboard"]
+        flat = [x for row in kb for x in row]
+        self.assertTrue(any("startgroup" in (x.get("url") or "") for x in flat))
+        d = next(x["callback_data"] for x in flat if x.get("callback_data", "").startswith("d:"))
+        s_ = next(x["callback_data"] for x in flat if x.get("callback_data", "").startswith("s:"))
+        b.q("UPDATE cache SET descr='Асл матн <b>'")
+        self.assertEqual(b.handle(cb(d)), "desc")
+        self.assertTrue(any("Асл матн &lt;b&gt;" in (p.get("text") or "") for m, p in self.api.calls))
+        self.assertEqual(b.handle(cb(s_)), "save")
+        self.assertEqual(self.ups[-1][0], "sendDocument")
 
 
 if __name__ == "__main__":

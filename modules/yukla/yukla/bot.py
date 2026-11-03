@@ -76,6 +76,10 @@ def connect(path: str) -> sqlite3.Connection:
     db = sqlite3.connect(path, timeout=15, check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    cols = {r[1] for r in db.execute("PRAGMA table_info(cache)")}
+    for c in ("descr", "doc"):                    # 04.11: «📝 Тавсиф» ва «💾 Сақлаш» (Chaqqon каби)
+        if c not in cols:
+            db.execute(f"ALTER TABLE cache ADD COLUMN {c} TEXT")
     db.commit()
     return db
 
@@ -141,6 +145,7 @@ class Downloader:
         if audio:
             cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "5"]
         else:
+            cmd += ["--print-to-file", "%(description)s", str(out / "desc.txt")]   # 04.11: «📝 Тавсиф»
             cmd += ["-f", "best[ext=mp4][filesize<49M]/bv*[ext=mp4]+ba[ext=m4a]/best[filesize<49M]/best",
                     "--merge-output-format", "mp4"]
         try:
@@ -151,7 +156,7 @@ class Downloader:
         except OSError as e:                      # 04.11: yt-dlp не запускается (права) — не молчим, а «не удалось»
             print(f"fetch: {type(e).__name__}: {e}", flush=True)
             return None
-        files = [f for f in out.iterdir() if f.is_file() and not f.name.endswith(".part")]
+        files = [f for f in out.iterdir() if f.is_file() and not f.name.endswith((".part", ".txt"))]
         return max(files, key=lambda f: f.stat().st_size) if files else None
 
 
@@ -194,7 +199,10 @@ class Bot:
     def preview(self, uid: int) -> bool:
         return uid in self.owners and self.kv(f"preview:{uid}") == "1"
 
-    def say(self, chat: int, text: str, kb: dict | None = None):
+    def say(self, chat: int, text: str, kb: dict | None = None, reply_to: int | None = None):
+        if chat < 0:                              # 04.11: гуруҳда пастки тугмалар йўқ — фақат хабар (ва инлайн тугмалар)
+            return self.api("sendMessage", chat_id=chat, text=text, parse_mode="HTML", reply_markup=kb,
+                            disable_web_page_preview=True, reply_to_message_id=reply_to)
         if kb is None:
             if chat in self.owners and not self.preview(chat):
                 kb = owner_kb()
@@ -263,10 +271,13 @@ class Bot:
         return self.q("SELECT rowid FROM cache WHERE key=?", (key,), one=True)[0]
 
     def media_kb(self, rid: int) -> dict:
-        row = [{"text": T.MP3_BTN, "callback_data": f"a:{rid}"}]   # callback_data ≤ 64 байт — калит эмас, рақам
+        """04.11 владелец: «панель как в Chaqqon бот» — под видео: Гуруҳда ишлатиш · Тавсиф · MP3 · Сақлаш (+ канал)."""
+        rows = [[{"text": T.GROUP_BTN, "url": f"https://t.me/{self.username}?startgroup=true"}],
+                [{"text": T.DESC_BTN, "callback_data": f"d:{rid}"}, {"text": T.MP3_BTN, "callback_data": f"a:{rid}"}],
+                [{"text": T.SAVE_BTN, "callback_data": f"s:{rid}"}]]   # callback_data ≤ 64 байт — калит эмас, рақам
         if self.sub_link():
-            row.append({"text": T.CHANNEL_BTN, "url": self.sub_link()})
-        return {"inline_keyboard": [row]}
+            rows[2].append({"text": T.CHANNEL_BTN, "url": self.sub_link()})
+        return {"inline_keyboard": rows}
 
     def caption(self) -> str:
         ad = self.kv("ad") or ""
@@ -306,7 +317,11 @@ class Bot:
         if "callback_query" in upd:
             return self.callback(upd["callback_query"])
         m = upd.get("message")
-        if not m or m["chat"]["type"] != "private":
+        if not m:
+            return None
+        if m["chat"]["type"] in ("group", "supergroup"):     # 04.11: «👥 Гуруҳда ишлатиш» — гуруҳдаги ҳаволани ўзи юклайди
+            return self.group(m)
+        if m["chat"]["type"] != "private":
             return None
         frm, chat = m["from"], m["chat"]["id"]
         text = (m.get("text") or m.get("caption") or "").strip()
@@ -340,12 +355,20 @@ class Bot:
             return self.gate(chat, miss)
         return self.start_job(frm["id"], chat, url)
 
+    def group(self, m: dict) -> str | None:
+        text = (m.get("text") or m.get("caption") or "").strip()
+        link = LINK_RE.search(text)
+        if not link or not platform_of(link.group()):
+            return None                           # гуруҳда бошқа гапларга жавоб бермаймиз
+        url = link.group().rstrip(").,")
+        return self.start_job(m["from"]["id"], m["chat"]["id"], url, reply_to=m["message_id"])
+
     def gate(self, chat: int, miss: list[str]) -> str:
         rows = [[{"text": f"📢 {c}", "url": self.link(c)}] for c in miss if self.link(c)]
         self.say(chat, T.NEED_SUB, {"inline_keyboard": rows + [[{"text": T.CHECK_BTN, "callback_data": "chk"}]]})
         return "need_sub"
 
-    def start_job(self, uid: int, chat: int, url: str) -> str:
+    def start_job(self, uid: int, chat: int, url: str, reply_to: int | None = None) -> str:
         key = norm_key(url)
         hit = self.q("SELECT * FROM cache WHERE key=? AND video IS NOT NULL", (key,), one=True)
         if hit:                                   # хотирадан — дарҳол
@@ -359,7 +382,7 @@ class Bot:
                 self.say(chat, T.BUSY)
                 return "busy"
             self.busy.add(uid)
-        wait = self.say(chat, T.WAIT) or {}
+        wait = self.say(chat, T.WAIT, reply_to=reply_to) or {}
         self.submit(self.job, uid, chat, url, key, wait.get("message_id"))
         return "job"
 
@@ -370,6 +393,12 @@ class Bot:
             if f and f.stat().st_size > MAX_BYTES:
                 self.say(chat, T.TOO_BIG); res = "big"
             elif f:
+                d = f.parent / "desc.txt"
+                if d.exists():
+                    txt = d.read_text(encoding="utf-8", errors="replace").strip()
+                    if txt and txt not in ("NA", "None"):
+                        self.row_id(key, url)
+                        self.q("UPDATE cache SET descr=? WHERE key=?", (txt[:3500], key))
                 msg = self.upload("sendVideo", chat, "video", f, self.caption(), self.media_kb(self.row_id(key, url))) or {}
                 fid = (msg.get("video") or msg.get("document") or {}).get("file_id")
                 if fid:
@@ -392,6 +421,21 @@ class Bot:
                 except Exception:  # noqa: BLE001
                     pass
             self.q("INSERT INTO log(uid, platform, result, ts) VALUES (?,?,?,?)", (uid, platform_of(url), res, now()))
+
+    def doc_job(self, chat: int, rid: str):
+        """💾 Сақлаш: видео файл сифатида (сиқилмайди — галереяга асл сифатда сақланади)."""
+        row = self.q("SELECT rowid, * FROM cache WHERE rowid=?", (int(rid) if rid.isdigit() else -1,), one=True)
+        if not row:
+            self.say(chat, T.FAIL); return
+        if row["doc"]:
+            self.api("sendDocument", chat_id=chat, document=row["doc"], caption=self.caption(), parse_mode="HTML"); return
+        f = self.dl.fetch(row["url"])
+        if not f:
+            self.say(chat, T.FAIL); return
+        msg = self.upload("sendDocument", chat, "document", f, self.caption(), None) or {}
+        fid = (msg.get("document") or {}).get("file_id")
+        if fid:
+            self.q("UPDATE cache SET doc=? WHERE rowid=?", (fid, row["rowid"]))
 
     def audio_job(self, chat: int, rid: str):
         row = self.q("SELECT rowid, * FROM cache WHERE rowid=?", (int(rid) if rid.isdigit() else -1,), one=True)
@@ -425,6 +469,16 @@ class Bot:
             self.api("answerCallbackQuery", callback_query_id=cq["id"], text="🎵")
             self.submit(self.audio_job, chat, data[2:])
             return "mp3"
+        if data.startswith("d:"):                                  # 📝 Тавсиф — асл пост матни
+            self.api("answerCallbackQuery", callback_query_id=cq["id"])
+            row = self.q("SELECT descr FROM cache WHERE rowid=?", (int(data[2:]) if data[2:].isdigit() else -1,), one=True)
+            t = (row["descr"] if row else None) or ""
+            self.say(chat, f"📝 <b>{T.DESC_HEAD}</b>\n\n{esc(t)}" if t else T.DESC_NONE, {"inline_keyboard": []} if chat > 0 else None)
+            return "desc"
+        if data.startswith("s:"):                                  # 💾 Сақлаш — асл сифатда файл
+            self.api("answerCallbackQuery", callback_query_id=cq["id"], text="💾")
+            self.submit(self.doc_job, chat, data[2:])
+            return "save"
         if uid in self.owners and data.startswith("sd:"):          # каналнии олиб ташлаш
             self.api("answerCallbackQuery", callback_query_id=cq["id"])
             self.q("DELETE FROM subs WHERE chat=?", (data[3:],))
