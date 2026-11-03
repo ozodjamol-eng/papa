@@ -3,6 +3,7 @@ Description=PAPA «Намоз маркази» — выгрузка времен
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 -I /opt/papa/ops/frankfurt/namaz_export.py
+ExecStartPost=/opt/papa-venv/razvedka/bin/python -I /opt/papa/modules/namaz_oboi/render.py
 NoNewPrivileges=yes
 ProtectHome=yes
 PrivateTmp=yes

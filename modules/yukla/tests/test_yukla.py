@@ -198,6 +198,24 @@ class T1(unittest.TestCase):
         self.assertIn("15:40", last["text"])
         self.assertIn("XOJAOBODCITY24BOT", last["reply_markup"]["inline_keyboard"][0][0]["url"])
 
+    def test_namaz_album_5_oboi_then_cached(self):
+        d = Path(tempfile.mkdtemp())
+        files = []
+        for i in range(5):
+            f = d / f"{i}.jpg"; f.write_bytes(b"x"); files.append(f)
+        b = self.mk()
+        b.oboi = lambda: ("2026-10-29_x", files, "🕌 ХЎЖАОБОД ТУМАНИ — НАМОЗ ВАҚТЛАРИ")
+        sent = []
+        b.upload_group = lambda chat, fs, cap: sent.append((chat, len(fs), cap)) or [
+            {"photo": [{"file_id": f"s{i}", "file_size": 1}, {"file_id": f"L{i}", "file_size": 9}]} for i in range(5)]
+        self.assertEqual(b.handle(msg(T.NAMAZ_BTN)), "namaz_oboi")
+        self.assertEqual(sent[0][1], 5)
+        self.assertEqual(b.handle(msg(T.NAMAZ_BTN, uid=43)), "namaz_oboi")       # иккинчиси — file_id, юкламасдан
+        self.assertEqual(len(sent), 1)
+        grp = [p for m, p in self.api.calls if m == "sendMediaGroup"][-1]
+        self.assertEqual([x["media"] for x in grp["media"]], ["L0", "L1", "L2", "L3", "L4"])
+        self.assertIn("НАМОЗ", grp["media"][0]["caption"])
+
     def test_groups_ignored(self):
         b = self.mk()
         self.assertIsNone(b.handle({"message": {"message_id": 1, "chat": {"id": -5, "type": "group"},

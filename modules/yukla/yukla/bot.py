@@ -85,6 +85,21 @@ N_KEYS = (("bomdod", "🌅 Бомдод"), ("peshin", "☀️ Пешин"), ("as
 WEEK = ("Душанба", "Сешанба", "Чоршанба", "Пайшанба", "Жума", "Шанба", "Якшанба")
 
 
+OBOI = Path(os.environ.get("PAPA_NAMAZ_OBOI", "/var/lib/papa-namaz/oboi"))
+
+
+def oboi_current(base: Path = OBOI) -> tuple[str, list[Path], str] | None:
+    """03.11: 5 та обои + тайёр матн («Намоз маркази» дан, papa-namaz-export чизади)."""
+    try:
+        key = (base / "CURRENT").read_text(encoding="utf-8").strip()
+        d = base / key
+        files = sorted(f for f in d.iterdir() if f.suffix == ".jpg")
+        cap = (d / "caption.txt").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return (key, files, cap) if len(files) == 5 else None
+
+
 def user_kb() -> dict:
     return {"keyboard": [[{"text": T.NAMAZ_BTN}]], "resize_keyboard": True, "is_persistent": True}
 
@@ -144,6 +159,7 @@ class Bot:
         self.db, self.api, self.owners, self.username, self.sub_chat = db, api, owners, username, sub_chat
         self.dl = downloader or Downloader()
         self.upload = upload                  # upload(method, chat, field, path, caption, kb) -> message dict
+        self.upload_group = None              # upload_group(chat, files, caption) -> [message]
         self.lock = threading.RLock()
         self.busy: set[int] = set()
         self.sync = sync                      # тестда — навбатсиз, дарҳол
@@ -256,6 +272,32 @@ class Bot:
     def namaz(self) -> str | None:
         return namaz_text()
 
+    def oboi(self):
+        return oboi_current()
+
+    def send_oboi(self, chat: int) -> bool:
+        """Альбом: 5 обои, остида тайёр матн. Биринчи марта юклаб, кейин file_id билан — дарҳол."""
+        cur = self.oboi()
+        if not cur:
+            return False
+        key, files, cap = cur
+        ids = json.loads(self.kv(f"oboi:{key}") or "[]")
+        if len(ids) == 5:
+            media = [{"type": "photo", "media": fid} for fid in ids]
+            media[0].update(caption=cap, parse_mode="HTML")
+            try:
+                self.api("sendMediaGroup", chat_id=chat, media=media)
+                return True
+            except Exception:  # noqa: BLE001 — file_id эскирган бўлса — қайта юклаймиз
+                pass
+        res = self.upload_group(chat, files, cap) if self.upload_group else None
+        if not res:
+            return False
+        ids = [max(m["photo"], key=lambda p: p.get("file_size", 0))["file_id"] for m in res if m.get("photo")]
+        if len(ids) == 5:
+            self.kv(f"oboi:{key}", json.dumps(ids))
+        return True
+
     # ---------- кириш ----------
     def handle(self, upd: dict) -> str | None:
         if "callback_query" in upd:
@@ -277,6 +319,8 @@ class Bot:
             self.say(chat, T.START)
             return "start"
         if text == T.NAMAZ_BTN or text in ("/namoz", "/namaz"):
+            if self.send_oboi(chat):
+                return "namaz_oboi"
             nt = self.namaz()
             more = {"inline_keyboard": [[{"text": T.NAMAZ_MORE, "url": f"https://t.me/{T.CITY24_BOT}"}]]}
             self.say(chat, nt or T.NAMAZ_NONE, more if nt else None)
@@ -556,6 +600,24 @@ def make_upload(token: str):
     return upload
 
 
+def make_upload_group(token: str):
+    def upload_group(chat: int, files: list[Path], caption: str):
+        b = uuid.uuid4().hex
+        media = [{"type": "photo", "media": f"attach://f{i}"} for i in range(len(files))]
+        media[0].update(caption=caption[:1024], parse_mode="HTML")
+        parts = [f"--{b}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat}\r\n".encode(),
+                 f"--{b}\r\nContent-Disposition: form-data; name=\"media\"\r\n\r\n{json.dumps(media, ensure_ascii=False)}\r\n".encode()]
+        for i, f in enumerate(files):
+            parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"f{i}\"; filename=\"{f.name}\"\r\n"
+                         f"Content-Type: image/jpeg\r\n\r\n".encode() + f.read_bytes() + b"\r\n")
+        parts.append(f"--{b}--\r\n".encode())
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMediaGroup", data=b"".join(parts),
+                                     headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read()).get("result")
+    return upload_group
+
+
 def main():
     tok = os.environ["YUKLA_BOT_TOKEN"]
     api = make_api(tok)
@@ -569,6 +631,7 @@ def main():
     bot = Bot(connect(os.environ.get("YUKLA_DB", "yukla.sqlite3")), api, owners, uname,
               os.environ.get("YUKLA_SUB_CHAT", "@kattadavrauz,@xojaobodcity24") or None, dl, make_upload(tok))
     bot.bot_id = bid
+    bot.upload_group = make_upload_group(tok)
     off = 0
     print(f"yukla: запущен @{uname}", flush=True)
     while True:
