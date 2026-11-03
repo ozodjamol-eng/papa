@@ -929,7 +929,7 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
             if r != "not_namaz":
                 return r
         if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):   # 🕌 время намаза
-            r = save_namaz(bot, db, cfg, msg, txt)
+            r = save_namaz(bot, db, cfg, msg, txt, env=env)
             if r != "not_namaz":
                 return r
         wait = store.kv_get(db, "await_text", "")
@@ -1032,7 +1032,7 @@ def hub_edit(bot, db, cfg: dict, owners: set[int], ed: dict) -> str:
     return "hub_edit"
 
 
-def save_namaz(bot, db, cfg: dict, msg: dict, txt: str) -> str:
+def save_namaz(bot, db, cfg: dict, msg: dict, txt: str, env: dict | None = None) -> str:
     from . import namaz
     now = _now()
     try:
@@ -1045,6 +1045,8 @@ def save_namaz(bot, db, cfg: dict, msg: dict, txt: str) -> str:
         bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],
             text=f"⚠️ Не сохранено: {e}.\nИсправьте и пришлите весь блок ещё раз — ничего не изменено.")
         return "namaz_error"
+    if len(items) == 1 and env is not None:              # 03.11: один блок времени — сначала показать, потом ✅
+        return namaz_text_draft(bot, db, cfg, env, msg, txt, items[0][1])
     namaz.save(db, items, now)
     for c in cfg["channels"]:
         for d in (now.date(), now.date() + dt.timedelta(days=1)):
@@ -1060,6 +1062,87 @@ def save_namaz(bot, db, cfg: dict, msg: dict, txt: str) -> str:
     tail = ("\n\nСегодня ещё выйдут:\n" + "\n".join(left)) if left else ""
     bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"], text=f"{head}\n{body}{tail}")
     return "namaz"
+
+
+# 03.11 владелец: «кидаешь готовый текст с временами — бот сам раскладывает по рисункам, я смотрю и подтверждаю».
+# Текст → 5 обоев (шаблоны владельца, modules/namaz_oboi) + его текст → карточка ✅ / ✏️ / ❌. Только после ✅ время
+# сохраняется: посты в каналах (баннер — одна из обоев, по неделе), «Намоз маркази» → XOJAOBOD CITY 24, Юкла, обои.
+
+def _oboi_render(day: dt.date, times: dict, out: Path):
+    import importlib.util
+    f = Path(__file__).resolve().parents[2] / "namaz_oboi" / "render.py"
+    spec = importlib.util.spec_from_file_location("namaz_oboi_render", f)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    files = mod.render({"day": day.isoformat(), **times}, out)
+    return files, (out / "caption.txt").read_text(encoding="utf-8")
+
+
+def namaz_text_draft(bot, db, cfg: dict, env: dict, msg: dict, txt: str, times: dict, up=None, render=None) -> str:
+    from . import adsin, bots, namaz
+    from .fabrika import STATE
+    now = _now()
+    day = namaz.start_date(txt, now.date())
+    chat = msg["chat"]["id"]
+    out = STATE / "namaz" / f"oboi-{day.isoformat()}-{int(now.timestamp())}"
+    files, cap = [], ""
+    try:
+        files, cap = (render or _oboi_render)(day, times, out)
+        media = [{"type": "photo", "media": f"attach://f{i}"} for i in range(len(files))]
+        media[0].update(caption=cap[:1024], parse_mode="HTML")
+        (up or adsin.upload)(bots.token_of(bot, env), "sendMediaGroup", {"chat_id": chat, "media": json.dumps(media, ensure_ascii=False)},
+                             {f"f{i}": (f.name, f.read_bytes()) for i, f in enumerate(files)})
+    except Exception as e:  # noqa: BLE001 — обои не получились: время всё равно можно утвердить
+        bot("sendMessage", chat_id=chat, text=f"⚠️ Обои чизилмади ({type(e).__name__}) — вақтни барибир тасдиқлаш мумкин.")
+    body = "\n".join(f"{namaz.ICON[n]} {namaz.LABEL[n]} — {times[n]}" for n in namaz.NAMES)
+    card = (f"🕌 Намоз вақтлари — {day:%d.%m} ({namaz.WEEKDAY[day.weekday()]}) дан\n\n{body}\n\n"
+            "👆 Одамлар шу обоиларни ва матнни кўради.\nТасдиқласангиз — 10 дақиқа ичида ҳамма жойда янгиланади: "
+            "каналлар, XOJAOBOD CITY 24, Юкла.")
+    kb = {"inline_keyboard": [[{"text": "✅ Тасдиқлаш", "callback_data": "nzt:ok"}],
+                              [{"text": "✏️ Тузатиш", "callback_data": "nzt:ed"}, {"text": "❌ Бекор", "callback_data": "nzt:no"}]]}
+    r = bot("sendMessage", chat_id=chat, text=card, reply_markup=kb)
+    store.kv_set(db, "namaz_tdraft", json.dumps({"day": day.isoformat(), "times": times, "card": r["message_id"],
+                                                 "files": [str(f) for f in files], "caption": cap}, ensure_ascii=False))
+    return "namaz_tdraft"
+
+
+def namaz_text_callback(bot, db, cfg: dict, cq: dict) -> str:
+    import re as _re
+    from . import namaz
+    from .fabrika import STATE
+    chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]
+    act = cq["data"][4:]
+    bot("answerCallbackQuery", callback_query_id=cq["id"])
+    raw = store.kv_get(db, "namaz_tdraft", "")
+    d = json.loads(raw) if raw else None
+    text0 = cq["message"].get("text") or ""
+    if not d or int(d.get("card", 0)) != int(msg_id):
+        _edit(bot, chat, msg_id, text0 + "\n\n⚠️ Карточка эскирган — вақтни қайта юборинг.", None)
+        return "namaz_t_stale"
+    if act == "no":
+        store.kv_set(db, "namaz_tdraft", "")
+        _edit(bot, chat, msg_id, text0 + "\n\n❌ Бекор — ҳеч нарса ўзгармади.", None)
+        return "namaz_t_no"
+    if act == "ed":
+        store.kv_set(db, "namaz_tdraft", "")
+        _edit(bot, chat, msg_id, text0 + "\n\n✏️ Тузатилган матнни (5 та вақт билан) юборинг — янги кўриниш келади.", None)
+        return "namaz_t_edit"
+    now = _now()
+    day = dt.date.fromisoformat(d["day"])
+    photo, caption = None, None
+    files = [Path(f) for f in d.get("files") or [] if Path(f).is_file()]
+    if files:                                            # баннер канал учун — обоилардан бири (ҳар ҳафта бошқаси)
+        pick = files[day.isocalendar()[1] % len(files)]
+        final = STATE / "namaz" / f"banner-{day.isoformat()}-{msg_id}.jpg"
+        final.write_bytes(pick.read_bytes())
+        photo, caption = str(final), _re.sub(r"<[^>]+>", "", d.get("caption") or "") or None
+    namaz.save(db, [(day, d["times"])], now, photo=photo, caption=caption)
+    for c in cfg["channels"]:
+        for x in (now.date(), now.date() + dt.timedelta(days=1)):
+            namaz.ensure_day(db, cfg, c, x, now)
+    store.kv_set(db, "namaz_tdraft", "")
+    _edit(bot, chat, msg_id, text0 + f"\n\n✅ Сақланди — {day:%d.%m} дан. 10 дақиқа ичида ҳамма жойда янгиланади.", None)
+    return "namaz_t_ok"
 
 
 def save_logo(bot, db, cfg: dict, env: dict, msg: dict, cap: str) -> str:
@@ -1117,6 +1200,8 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
     if cq["data"].startswith("sw:"):                      # 26.10: выбор источников — карточка в пульте своего канала
         from . import sources_choice
         return sources_choice.callback(bot, cq)
+    if cq["data"].startswith("nzt:"):                     # 03.11 🕌 время текстом → предпросмотр 5 обоев → ✅/✏️/❌
+        return namaz_text_callback(bot, db, cfg, cq)
     if cq["data"].startswith("nz:"):                      # 🕌 готовый пост намаза: ✅ / ✏️ / ❌
         return namaz_callback(bot, db, cfg, cq)
     if cq["data"].split(":", 1)[0] in ("al", "ac", "as", "asy", "ax", "axy"):   # 📢 Мои кампании

@@ -1,5 +1,6 @@
 import asyncio
 import datetime as dt
+import json
 import sys
 import tomllib
 import unittest
@@ -103,8 +104,15 @@ class TestNamaz(unittest.TestCase):
     def test_owner_message_saves_and_reminder(self):
         bot = Bot()
         u = {"message": {"message_id": 1, "from": {"id": 42}, "chat": {"id": 42, "type": "private"}, "text": BLOCK}}
-        self.assertEqual(hub.handle(bot, self.db, CFG, ENV, u), "namaz")
-        self.assertIn("✅ Намоз вақтлари сақланди", bot.calls[-1][1]["text"])
+        old_r, hub._oboi_render = hub._oboi_render, (lambda day, t, out: ([], ""))   # 03.11: обоев в тесте нет
+        try:
+            self.assertEqual(hub.handle(bot, self.db, CFG, ENV, u), "namaz_tdraft")     # 03.11: сначала предпросмотр
+        finally:
+            hub._oboi_render = old_r
+        card = json.loads(store.kv_get(self.db, "namaz_tdraft"))["card"]
+        cq = {"id": "q", "from": {"id": 42}, "data": "nzt:ok", "message": {"chat": {"id": 42}, "message_id": card, "text": ""}}
+        self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq), "namaz_t_ok")
+        self.assertIn("✅ Сақланди", bot.calls[-1][1]["text"])
         self.assertIsNone(namaz.reminder(self.db, CFG, dt.datetime.now(plan.TZ).replace(hour=21)))   # свежее — не напоминает
         db2 = store.connect(":memory:")
         self.assertIn("киритилмаган", namaz.reminder(db2, CFG, at("20:30")))

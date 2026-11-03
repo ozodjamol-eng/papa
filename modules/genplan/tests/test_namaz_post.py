@@ -154,3 +154,62 @@ class TestNamazPost(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+TXT = ("🕌 ХЎЖАОБОД ТУМАНИ — НАМОЗ ВАҚТЛАРИ\n\n📅 29 октябрь – 5 ноябрь 2026 йил\n\n🕔 Бомдод — 06:00\n🕑 Пешин — 12:45\n"
+       "🕒 Аср — 15:40\n🕔 Шом — 17:25\n🕖 Хуфтон — 18:55\n\n🤲 Аллоҳ барчамизнинг ибодатларимизни қабул қилсин!")
+WED = dt.date(2026, 10, 28)
+
+
+class TestNamazText(unittest.TestCase):
+    """03.11: время текстом → 5 обоев + текст → ✅ → сохраняется (до ✅ — ничего)."""
+
+    def setUp(self):
+        self.db = store.connect(":memory:")
+        namaz.setup(self.db)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_state, fabrika.STATE = fabrika.STATE, Path(self.tmp.name)
+        self.old_now, hub._now = hub._now, (lambda: plan.slot_time(WED, "20:00"))
+        self.ups = []
+
+    def tearDown(self):
+        fabrika.STATE, hub._now = self.old_state, self.old_now
+        self.tmp.cleanup()
+
+    def render(self, day, times, out):
+        out.mkdir(parents=True, exist_ok=True)
+        fs = []
+        for i in range(5):
+            f = out / f"{i}.jpg"; f.write_bytes(b"jpg"); fs.append(f)
+        return fs, f"<b>НАМОЗ</b> {times['asr']}"
+
+    def up(self, token, method, fields, files):
+        self.ups.append((method, fields, len(files))); return [{}]
+
+    def test_preview_then_ok(self):
+        bot = Bot()
+        msg = {"message_id": 5, "chat": {"id": 42}, "text": TXT}
+        r = hub.namaz_text_draft(bot, self.db, CFG, {"GENPLAN_BOT_TOKEN": "t"}, msg, TXT, namaz.parse(TXT, WED)[0][1],
+                                 up=self.up, render=self.render)
+        self.assertEqual(r, "namaz_tdraft")
+        self.assertEqual(self.ups[0][0], "sendMediaGroup"); self.assertEqual(self.ups[0][2], 5)     # 5 обоев альбомом
+        self.assertIsNone(namaz.schedule_for(self.db, dt.date(2026, 10, 30)))                     # до ✅ ничего
+        d = json.loads(store.kv_get(self.db, "namaz_tdraft"))
+        self.assertEqual(d["day"], "2026-10-29")                                                   # с четверга из текста
+        cq = {"id": "q", "from": {"id": 42}, "data": "nzt:ok", "message": {"chat": {"id": 42}, "message_id": d["card"], "text": "x"}}
+        self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq), "namaz_t_ok")
+        s = namaz.schedule_for(self.db, dt.date(2026, 10, 30))
+        self.assertEqual((s["asr"], s["shom"]), ("15:40", "17:25"))
+        self.assertTrue(s["photo"] and Path(s["photo"]).is_file())                                # баннер — одна из обоев
+        self.assertNotIn("<b>", s["caption"])
+
+    def test_no_and_stale(self):
+        bot = Bot()
+        msg = {"message_id": 5, "chat": {"id": 42}, "text": TXT}
+        hub.namaz_text_draft(bot, self.db, CFG, {"GENPLAN_BOT_TOKEN": "t"}, msg, TXT, namaz.parse(TXT, WED)[0][1],
+                             up=self.up, render=self.render)
+        d = json.loads(store.kv_get(self.db, "namaz_tdraft"))
+        cq = lambda a, mid: {"id": "q", "from": {"id": 42}, "data": a, "message": {"chat": {"id": 42}, "message_id": mid, "text": ""}}
+        self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq("nzt:ok", 1)), "namaz_t_stale")
+        self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq("nzt:no", d["card"])), "namaz_t_no")
+        self.assertIsNone(namaz.schedule_for(self.db, dt.date(2026, 10, 30)))
