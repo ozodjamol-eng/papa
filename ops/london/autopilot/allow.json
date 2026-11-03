@@ -47,7 +47,9 @@
     "genplan5-start",
     "old-digest-reset",
     "taxi-brigada-deploy",
-    "taxi-brigada-rollback"
+    "taxi-brigada-rollback",
+    "city24-namaz-fix",
+    "city24-namaz-rollback"
   ],
   "deny_patterns": [
     "-key$",
