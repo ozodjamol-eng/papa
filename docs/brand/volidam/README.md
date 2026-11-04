@@ -37,3 +37,5 @@
 - 02.11: панель-визитка Нодирбека (владелец: «как в моём био»): https://ozodjamol-eng.github.io/papa-site/nodirbek/ — бот (главная кнопка), пакеты (сайт volidam — «в меню»), канал, @Nodirbek_umra, 2 номера, YouTube, Instagram. Метка источника: ?s=instagram → бот start=insta, ?s=youtube → YouTube.
 - 04.11: аватар Шаҳзодбека (Хўжаобод филиали) SHAHZODBEK_avatar.png — шаблон VOLIDAM_avatar_nodir, только имя «ШАҲЗОДБЕК» (владелец: «имя поменять и всё»). Фото-вариант SHAHZODBEK_avatar_foto.png (04.11, по образцу NODIRBEK_avatar_foto) — Instagram @umra_xojaobod, панель papa-site/filial.
 - 04.11: аватар Telegram-группы Хўжаобод филиали XOJAOBOD_filial_avatar.png — шаблон SHAHZODBEK_avatar, в плашке «ХЎЖАОБОД».
+- 04.11 ПРАВИЛО ВЛАДЕЛЬЦА («всегда»): в КАЖДОМ посте VOLIDAM/Safo Marva внизу — юзернеймы бота, канала и группы:
+  `🤖 Бот: @VolidamUmraBot` (ссылка внутри — ?start=br_xojaobod для постов филиала) · `📢 Канал: @safo_marva_nodirbek` · `👥 Гуруҳ: @UmraXojaobod`. Пост — только через бота (outbox *.post.json).
