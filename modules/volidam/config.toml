@@ -13,3 +13,17 @@ welcome_photo = "https://ozodjamol-eng.github.io/papa-site/volidam/img/og.jpg"
 minutes = 15
 day_start = 8
 day_end = 21
+
+# 04.11: ФИЛИАЛЫ. Новый филиал = ещё один блок [[branch]].
+#   id      — латиница, в ссылках: ?start=br_<id> (клиент), ?start=mgr_<MANAGER_CODE>_<id> (менеджер филиала)
+#   group   — юзернейм Telegram-группы филиала (или /bind <id> владельцем прямо в группе)
+#   starts  — старые метки ссылок, которые тоже ведут в этот филиал (панель papa-site/filial)
+[[branch]]
+id = "xojaobod"
+name = "Хўжаобод филиали"
+head = "Шаҳзодбек"
+manager = "umra_xojaobod"
+write = "✍️ Шаҳзодбекка ёзиш"
+phone_label = "Хўжаобод"
+group = "volidam_xojaobod"
+starts = ["filial", "insta_filial"]
