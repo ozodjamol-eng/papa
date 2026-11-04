@@ -35,3 +35,4 @@
 - 02.11: личный Telegram Нодирбека («шеф Умры»): @Nodirbek_umra — кнопка «✍️ Нодирбекка ёзиш» в боте (Алоқа + после заявки) и на странице.
 - 02.11: аватар @Nodirbek_umra — его фото в золотой рамке + «НОДИРБЕК» + «VOLIDAM · SAFO MARVA» (NODIRBEK_avatar_foto.png), заменяет логотипный вариант.
 - 02.11: панель-визитка Нодирбека (владелец: «как в моём био»): https://ozodjamol-eng.github.io/papa-site/nodirbek/ — бот (главная кнопка), пакеты (сайт volidam — «в меню»), канал, @Nodirbek_umra, 2 номера, YouTube, Instagram. Метка источника: ?s=instagram → бот start=insta, ?s=youtube → YouTube.
+- 04.11: аватар Шаҳзодбека (Хўжаобод филиали) SHAHZODBEK_avatar.png — шаблон VOLIDAM_avatar_nodir, плашка «ШАҲЗОДБЕК» + «ХЎЖАОБОД ФИЛИАЛИ». Фото-вариант — когда будет его фото.
