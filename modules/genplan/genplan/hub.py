@@ -272,7 +272,7 @@ def kb_times(db, cfg, mid: int, now: dt.datetime) -> dict:
 
 
 def has_ads(cfg: dict, channel: str | None) -> bool:
-    """Реклама — только там, где в сетке есть рекламные окна (решение 20.10: только Хўжаобод)."""
+    """Реклама — только там, где в сетке есть рекламные окна (20.10: Хўжаобод; 04.11: + КАТТА ДАВРА)."""
     ch = cfg["channels"].get(channel or "") or {}
     return any(s.get("kind") == "ad" for s in ch.get("slots", []))
 

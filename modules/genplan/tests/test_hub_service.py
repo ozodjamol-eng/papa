@@ -447,7 +447,10 @@ class TestAdButton(Base):
         store.update(self.db, 1, channel="xojaobod")
         _, kb = hub.card(self.db, CFG, 1, now)
         self.assertIn("📣 Реклама", [b["text"] for b in self.flat(kb)])
-        store.update(self.db, 1, channel="davra")
+        store.update(self.db, 1, channel="davra")             # 04.11 владелец: реклама и в КАТТА ДАВРА
+        _, kb = hub.card(self.db, CFG, 1, now)
+        self.assertIn("📣 Реклама", [b["text"] for b in self.flat(kb)])
+        store.update(self.db, 1, channel="paparazzi")
         _, kb = hub.card(self.db, CFG, 1, now)
         self.assertNotIn("📣 Реклама", [b["text"] for b in self.flat(kb)])
 
