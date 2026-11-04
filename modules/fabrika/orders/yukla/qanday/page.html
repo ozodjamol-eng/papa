@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:IB;src:url(InterDisplay-Black.otf)}
+@font-face{font-family:IE;src:url(InterDisplay-ExtraBold.otf)}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#0B1E3F}
+#cam{position:absolute;inset:0;transform-origin:540px 900px}
+.abs{position:absolute}
+canvas{position:absolute;left:0;top:0}
+.w{font-family:IB;color:#fff;letter-spacing:-2px;line-height:.95;white-space:nowrap;text-align:center;left:0;width:1080px}
+.y{color:#FFB000}
+.bub{font-family:IE;border-radius:28px;padding:22px 28px;font-size:30px}
+.num{width:150px;height:150px;border-radius:50%;background:#FFB000;color:#0B1E3F;font-family:IB;font-size:90px;display:flex;align-items:center;justify-content:center}
+</style></head><body>
+<div id="cam">
+  <canvas id="bg" width="1080" height="1920"></canvas>
+  <div id="ghost" class="abs" style="font-family:IB;font-size:520px;color:transparent;-webkit-text-stroke:3px rgba(255,255,255,.06);left:-40px;top:300px;transform-origin:0 0;white-space:nowrap">ЮКЛА</div>
+  <canvas id="mid" width="1080" height="1920"></canvas>
+
+  <!-- A: video card -->
+  <div id="card" class="abs" style="left:310px;top:560px;width:460px;height:720px;border-radius:40px;overflow:hidden;background:#fff;box-shadow:0 30px 80px rgba(0,0,0,.45)">
+    <div class="abs" style="inset:0;background:linear-gradient(180deg,#132d5c 0%,#0B1E3F 40%,#c97f00 85%,#FFB000 100%)"></div>
+    <div class="abs" style="left:170px;top:300px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.95)"></div>
+    <div class="abs" style="left:218px;top:332px;width:0;height:0;border-left:42px solid #0B1E3F;border-top:28px solid transparent;border-bottom:28px solid transparent"></div>
+    <div class="abs" style="left:30px;bottom:36px;font-family:IE;font-size:30px;color:#fff">♥ 12,4K</div>
+  </div>
+  <div id="dl" class="abs" style="left:430px;top:1330px;width:220px;height:90px;border-radius:50px;background:#fff;display:flex;align-items:center;justify-content:center;font-family:IB;font-size:40px;color:#0B1E3F">↓ ЮКЛАШ</div>
+  <div id="xx" class="abs" style="left:490px;top:1325px;width:100px;height:100px;border-radius:50%;background:#E5484D;color:#fff;font-family:IB;font-size:64px;display:flex;align-items:center;justify-content:center">✕</div>
+  <div id="hA" class="abs w" style="font-size:132px;top:300px">ВИДЕО<br><span class="y">ЁҚДИМИ?</span></div>
+  <div id="hA2" class="abs w" style="font-size:118px;top:300px">ҚАНДАЙ<br><span class="y">ЮКЛАЙМАН?</span></div>
+
+  <!-- B/C: bot -->
+  <div id="hB" class="abs w" style="font-size:112px;top:300px">БОТИМИЗ<br><span class="y">ЁРДАМ БЕРАДИ</span></div>
+  <div id="prof" class="abs" style="left:140px;top:1080px;width:800px;height:300px;border-radius:44px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.18)">
+    <div class="abs" style="left:40px;top:50px;width:200px;height:200px;border-radius:50%;background:#0B1E3F;border:4px solid #FFB000"></div>
+    <canvas id="pav" width="200" height="200" style="left:40px;top:50px"></canvas>
+    <div class="abs" style="left:280px;top:70px;font-family:IB;font-size:60px;color:#fff">Хўжаобод Юкла</div>
+    <div class="abs" style="left:280px;top:150px;font-family:IE;font-size:38px;color:#FFB000">@XojaobodYuklaBot</div>
+    <div class="abs" style="left:280px;top:212px;font-family:IE;font-size:26px;color:#9FB0CC;letter-spacing:6px">TELEGRAM · БОТ</div>
+  </div>
+  <svg id="sel" class="abs" style="left:0;top:0" width="1080" height="1920"></svg>
+
+  <!-- D: how -->
+  <div id="hD" class="abs w" style="font-size:130px;top:620px">ҚАНДАЙ<br><span class="y">ИШЛАЙДИ?</span></div>
+  <div id="nums" class="abs" style="left:0;width:1080px;top:1000px;display:flex;justify-content:center;gap:60px">
+    <div class="num" id="n0">1</div><div class="num" id="n1">2</div><div class="num" id="n2">3</div>
+  </div>
+
+  <!-- E: phone -->
+  <div id="badge" class="abs" style="left:0;width:1080px;top:300px;display:flex;justify-content:center;align-items:center;gap:28px">
+    <div class="num" id="bn" style="width:130px;height:130px;font-size:76px">1</div>
+    <div id="bt" style="font-family:IB;font-size:74px;color:#fff;line-height:1;white-space:nowrap">ҲАВОЛАНИ<br>НУСХАЛАНГ</div>
+  </div>
+  <div id="phoneWrap" class="abs" style="left:190px;top:480px;width:700px;height:1240px;perspective:1600px;transform:scale(.8);transform-origin:50% 0">
+    <div id="phone" class="abs" style="inset:0;background:#F4F6FA;border-radius:70px;border:14px solid #061128;box-sizing:border-box;overflow:hidden;transform-origin:50% 100%">
+      <!-- step1: video app -->
+      <div id="app" class="abs" style="inset:0;background:#0d0d12">
+        <div class="abs" style="left:0;right:0;top:0;bottom:0;background:linear-gradient(180deg,#132d5c 0%,#0B1E3F 45%,#c97f00 90%)"></div>
+        <div class="abs" style="left:250px;top:380px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.9)"></div>
+        <div class="abs" style="left:310px;top:420px;border-left:52px solid #0B1E3F;border-top:34px solid transparent;border-bottom:34px solid transparent"></div>
+        <div id="menu" class="abs" style="left:30px;right:30px;bottom:30px;height:330px;background:#fff;border-radius:36px">
+          <div class="abs" style="left:40px;top:40px;font-family:IE;font-size:30px;color:#7A869A">Улашиш</div>
+          <div id="copyRow" class="abs" style="left:24px;right:24px;top:100px;height:96px;border-radius:24px;display:flex;align-items:center;padding-left:24px;font-family:IB;font-size:36px;color:#0B1E3F">🔗&nbsp; Ҳаволани нусхалаш</div>
+          <div class="abs" style="left:48px;top:226px;font-family:IE;font-size:34px;color:#B3BBC8">Юбориш…</div>
+        </div>
+        <div id="toast" class="abs" style="left:150px;top:120px;width:380px;height:80px;border-radius:40px;background:#FFB000;display:flex;align-items:center;justify-content:center;font-family:IB;font-size:32px;color:#0B1E3F">✓ Нусхаланди</div>
+      </div>
+      <!-- step2/3: bot chat -->
+      <div id="chat" class="abs" style="inset:0">
+        <div class="abs" style="left:0;right:0;top:0;height:150px;background:#fff;border-bottom:2px solid #E3E7EF">
+          <div class="abs" style="left:40px;top:52px;width:76px;height:76px;border-radius:50%;background:#0B1E3F"></div>
+          <canvas id="av" width="76" height="76" style="left:40px;top:52px"></canvas>
+          <div class="abs" style="left:136px;top:56px;font-family:IE;font-size:30px;color:#0B1E3F">Хўжаобод Юкла</div>
+          <div class="abs" style="left:136px;top:96px;font-family:IE;font-size:22px;color:#7A869A">бот</div>
+        </div>
+        <div id="ub" class="abs bub" style="right:30px;top:220px;background:#0B1E3F;color:#fff">instagram.com/reel/<span style="color:#FFB000">C9x…</span></div>
+        <div id="bb" class="abs" style="left:30px;top:370px;width:470px;height:600px;background:#fff;border-radius:28px;box-shadow:0 6px 20px rgba(11,30,63,.12);overflow:hidden;transform-origin:0 0">
+          <canvas id="thumb" width="470" height="520"></canvas>
+          <div id="ok" class="abs" style="left:24px;bottom:18px;font-family:IE;font-size:28px;color:#0B1E3F">✓ Тайёр</div>
+        </div>
+        <div id="mp3" class="abs" style="left:300px;top:1000px;height:96px;padding:0 34px;border-radius:50px;background:#FFB000;display:flex;align-items:center;font-family:IB;font-size:44px;color:#0B1E3F">♪ MP3</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- F: free -->
+  <canvas id="blob" width="1080" height="1920"></canvas>
+  <div id="sF" class="abs" style="inset:0">
+    <div id="f0" class="abs w" style="font-size:110px;top:520px;color:#0B1E3F;letter-spacing:4px">ҲАММАСИ</div>
+    <div id="f1" class="abs w" style="font-size:270px;top:640px;color:#0B1E3F">БЕПУЛ.</div>
+  </div>
+
+  <!-- G: outro -->
+  <div id="sG" class="abs" style="inset:0">
+    <div id="o1" class="abs w" style="font-size:96px;top:1110px;letter-spacing:-1px">@XojaobodYuklaBot</div>
+    <div id="o2" class="abs" style="left:0;width:1080px;top:1270px;display:flex;justify-content:center">
+      <div id="btn" style="font-family:IB;font-size:58px;color:#0B1E3F;background:#FFB000;border-radius:80px;padding:30px 70px">ҲОЗИРОҚ СИНАБ КЎРИНГ</div>
+    </div>
+  </div>
+
+  <canvas id="fx" width="1080" height="1920"></canvas>
+</div>
+<div id="sub" class="abs" style="left:0;width:1080px;top:1530px;display:flex;justify-content:center">
+  <div id="subt" style="font-family:IE;font-size:40px;color:#fff;background:rgba(6,17,40,.82);border-radius:22px;padding:14px 28px;letter-spacing:1px;max-width:900px;text-align:center"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const T=[0.5,1.9,4.45,7.46,10.87,12.39,14.87,16.62,20.05,22.31,24.41,26.38];
+const LINES=["Видео ёқдими?","Қандай юклаб олишни билмайсизми?","Бизнинг ботимиз сизга ёрдам беради.","Хўжаобод Юкла — Телеграмдаги бот.","Қандай ишлайди?","Видеонинг ҳаволасини нусхаланг…","…ботга ташланг…","…ва бир неча сонияда видео тайёр.","Хоҳласангиз, MP3 ҳам.","Ҳаммаси бепул.","Хўжаобод Юкла бот.","Ҳозироқ синаб кўринг."];
+const DUR=30.5; window.DUR=DUR;
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const lin=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const spr=x=>x<=0?0:1-Math.exp(-7*x)*Math.cos(11*x);
+const mix=(a,b,k)=>a+(b-a)*k;
+const spin=[];for(let i=0;i<30;i++){const im=new Image();im.src=`bolt/spin/${String(i).padStart(2,'0')}.png`;spin.push(im)}
+const hero=new Image();hero.src='bolt/hero.png';
+window.ready=Promise.all([...spin,hero].map(i=>i.decode().catch(()=>0)).concat([document.fonts.ready]));
+const R=[];let s=7;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647};for(let i=0;i<440;i++)R.push(rnd());
+const bg=$('bg').getContext('2d'),mid=$('mid').getContext('2d'),fx=$('fx').getContext('2d'),bl=$('blob').getContext('2d'),th=$('thumb').getContext('2d');
+const ok=im=>im.complete&&im.naturalWidth;
+function show(id,on){const e=$(id);if(e.dataset.d===undefined)e.dataset.d=getComputedStyle(e).display;e.style.display=on?e.dataset.d:'none'}
+function st(id,op,tf){const e=$(id);e.style.opacity=op;e.style.transform=tf||''}
+function drawBg(t){
+  bg.fillStyle='#0B1E3F';bg.fillRect(0,0,1080,1920);
+  const g=eo(lin(t,0,1.2));bg.strokeStyle='rgba(255,255,255,.055)';bg.lineWidth=2;
+  for(let x=0;x<=1080;x+=90){bg.beginPath();bg.moveTo(x,0);bg.lineTo(x,1920*g);bg.stroke()}
+  for(let y=0;y<=1920;y+=90){bg.beginPath();bg.moveTo(0,y);bg.lineTo(1080*g,y);bg.stroke()}
+  bg.strokeStyle='rgba(255,176,0,.16)';bg.lineWidth=2;
+  bg.beginPath();bg.arc(540,900,380,-Math.PI/2+t*.05,-Math.PI/2+t*.05+Math.PI*2*eo(lin(t,.2,1.8)));bg.stroke();
+  bg.setLineDash([10,14]);bg.beginPath();bg.arc(540,900,500,Math.PI/2-t*.04,Math.PI/2-t*.04+Math.PI*2*eo(lin(t,.4,2.0)));bg.stroke();bg.setLineDash([]);
+  const gr=bg.createRadialGradient(540,880,0,540,880,760);gr.addColorStop(0,'rgba(255,176,0,.2)');gr.addColorStop(1,'rgba(255,176,0,0)');bg.fillStyle=gr;bg.fillRect(0,0,1080,1920);
+}
+function bolt(ctx,im,x,y,size,alpha=1,rot=0,glow=true){
+  if(!ok(im))return;ctx.save();ctx.globalAlpha=alpha;ctx.translate(x,y);ctx.rotate(rot);
+  if(glow){ctx.shadowColor='rgba(255,176,0,.55)';ctx.shadowBlur=60}
+  ctx.drawImage(im,-size/2,-size/2,size,size);ctx.restore();
+}
+function selBox(t,t0,L,Tp,W,H,label){
+  const sl=eo(lin(t,t0,t0+.45));if(sl<=0)return '';
+  return `<rect x="${L+W/2-W/2*sl}" y="${Tp}" width="${W*sl}" height="${H}" fill="none" stroke="#FFB000" stroke-width="3" stroke-dasharray="14 10"/>`+
+    [[L,Tp],[L+W,Tp],[L,Tp+H],[L+W,Tp+H]].map(([x,y],i)=>{const k=spr(lin(t,t0+.3+i*.05,t0+.7+i*.05));return `<rect x="${x-14*k}" y="${y-14*k}" width="${28*k}" height="${28*k}" fill="#fff" stroke="#FFB000" stroke-width="3"/>`}).join('')+
+    `<rect x="${L}" y="${Tp-58}" width="${label.length*15+36}" height="44" rx="6" fill="#FFB000" opacity="${cl(lin(t,t0+.4,t0+.6))}"/><text x="${L+18}" y="${Tp-27}" font-family="IE" font-size="26" fill="#0B1E3F" opacity="${cl(lin(t,t0+.4,t0+.6))}">${label}</text>`;
+}
+window.renderAt=function(t){
+  fx.clearRect(0,0,1080,1920);mid.clearRect(0,0,1080,1920);bl.clearRect(0,0,1080,1920);
+  drawBg(t);
+  // camera: always moving + push on each line
+  let li=0;for(let i=0;i<T.length;i++)if(t>=T[i]-.05)li=i;
+  const lp=lin(t,T[li]-.05,(T[li+1]||DUR)-.05);
+  const cs=1.0+.035*(1-eo(lp))+.01*Math.sin(t*.6), cr=Math.sin(t*.45)*.6, cx=Math.sin(t*.37)*8;
+  $('cam').style.transform=`translateX(${cx}px) scale(${cs}) rotate(${cr}deg)`;
+  $('ghost').style.transform=`rotate(-90deg) translate(${-700-t*22}px,0)`;
+  // subtitles
+  const sa=lin(t,T[li],T[li]+.2), sbo=(li<T.length-1)?1-lin(t,T[li+1]-.15,T[li+1]):1;
+  $('subt').textContent=t>=T[0]?LINES[li]:'';$('sub').style.opacity=t>=T[0]?cl(sa)*cl(sbo):0;
+  $('sub').style.display=(t>=T[9]&&t<T[10])?'none':'';
+
+  // ---- A: video card + can't download (T0..T2)
+  const aOn=t<T[2]+.5; show('card',aOn);show('dl',aOn);show('xx',aOn);show('hA',aOn);show('hA2',aOn);
+  if(aOn){
+    const k=spr(lin(t,0,.8)), out=eio(lin(t,T[2]-.1,T[2]+.4));
+    st('card',cl(k*2)*(1-out),`translateY(${mix(500,0,cl(k))+out*-900}px) rotate(${mix(8,-3,cl(k))+Math.sin(t*1.3)*1.2}deg) scale(${1-out*.4})`);
+    // hearts
+    for(let i=0;i<6;i++){const p=lin(t,.4+i*.18,1.8+i*.18);if(p>0&&p<1&&out<.5){fx.save();fx.globalAlpha=(1-p);fx.fillStyle=i%2?'#FFB000':'#ff5a7a';fx.font='60px IB';fx.fillText('♥',300+i*95+Math.sin(p*6+i)*20,1300-p*700);fx.restore()}}
+    const ha=spr(lin(t,.3,.9)), sw=lin(t,T[1]-.1,T[1]+.1), hb=spr(lin(t,T[1],T[1]+.6));
+    st('hA',cl(ha)*(1-sw),`translateY(${mix(70,0,cl(ha))}px)`);
+    st('hA2',cl(hb)*(1-out),`translateY(${mix(70,0,cl(hb))-out*80}px)`);
+    // download button press -> fail
+    const d=spr(lin(t,T[1]+.2,T[1]+.7)), press=lin(t,T[1]+.9,T[1]+1.1), fail=spr(lin(t,T[1]+1.2,T[1]+1.6));
+    const pr0=0;const pr=press>0&&press<1?1-Math.sin(press*Math.PI)*.1:1;
+    st('dl',cl(d*2)*(1-cl(fail))*(1-out),`scale(${mix(.5,1,cl(d))*pr})`);
+    const shake=fail>0?Math.sin(t*60)*10*(1-lin(t,T[1]+1.3,T[1]+1.9)):0;
+    st('xx',cl(fail*2)*(1-out),`translateX(${shake}px) scale(${cl(fail)})`);
+  }
+  // ---- B: bolt arrives (T2..T3) + C profile (T3..T4)
+  const bOn=t>=T[2]-.1&&t<T[4]+.3; show('hB',bOn);show('prof',bOn);
+  if(bOn){
+    const out=eio(lin(t,T[4]-.2,T[4]+.2));
+    const sp=lin(t,T[2],T[2]+1.0), k=Math.round(sp*29);
+    const by=mix(-200,820,spr(lin(t,T[2],T[2]+1.1)))+Math.sin(t*2)*10;
+    const toProf=eio(lin(t,T[3]-.2,T[3]+.4));
+    bolt(fx,sp<1?spin[k]:hero,mix(540,540,toProf),mix(by,780,toProf)-out*900,mix(700,520,toProf),1-out);
+    const ir=lin(t,T[2]+.8,T[2]+1.4);if(ir>0&&ir<1){fx.strokeStyle=`rgba(255,176,0,${1-ir})`;fx.lineWidth=10*(1-ir);fx.beginPath();fx.arc(540,820,200+ir*420,0,7);fx.stroke()}
+    const hb=spr(lin(t,T[2]+.3,T[2]+.9));st('hB',cl(hb)*(1-out),`translateY(${mix(70,0,cl(hb))-out*100}px)`);
+    const pk=spr(lin(t,T[3],T[3]+.6));st('prof',cl(pk*2)*(1-out),`translateY(${mix(200,0,cl(pk))+out*300}px) scale(${mix(.85,1,cl(pk))})`);
+    const pav=$('pav').getContext('2d');pav.clearRect(0,0,200,200);if(ok(hero))pav.drawImage(hero,10,10,180,180);
+    $('sel').innerHTML=out<1?`<g opacity="${1-out}">${selBox(t,T[3]+.5,130,1070,820,320,'БОТ')}</g>`:'';
+  } else $('sel').innerHTML='';
+  // ---- D: how it works (T4..T5)
+  const dOn=t>=T[4]-.1&&t<T[5]+.4; show('hD',dOn);show('nums',dOn);
+  if(dOn){
+    const out=eio(lin(t,T[5]-.1,T[5]+.3));
+    const h=spr(lin(t,T[4],T[4]+.6));st('hD',cl(h)*(1-out),`translateY(${mix(70,0,cl(h))-out*300}px)`);
+    ['n0','n1','n2'].forEach((n,i)=>{const k=spr(lin(t,T[4]+.4+i*.15,T[4]+.9+i*.15));st(n,cl(k*2)*(1-out),`scale(${cl(k)})`)});
+  }
+  // ---- E: phone steps (T5..T9)
+  const eOn=t>=T[5]-.2&&t<T[9]+.6; show('phoneWrap',eOn);show('badge',eOn);
+  if(eOn){
+    const pin=spr(lin(t,T[5]-.2,T[5]+.7)), pout=eio(lin(t,T[9]-.2,T[9]+.4));
+    $('phone').style.transform=`translateY(${mix(1300,0,cl(pin))+pout*250}px) rotateX(${mix(28,5,cl(pin))-Math.sin(t*.9)*2}deg) rotateY(${Math.sin(t*.7)*4}deg)`;
+    let step=1,label='ҲАВОЛАНИ<br>НУСХАЛАНГ';
+    if(t>=T[6]-.1){step=2;label='БОТГА<br>ТАШЛАНГ'} if(t>=T[7]-.1){step=3;label='ВИДЕО<br>ТАЙЁР!'} if(t>=T[8]-.1){step='+';label='MP3<br>ҲАМ БОР'}
+    const bk=spr(lin(t,[T[5],T[6],T[7],T[8]][step==='+'?3:step-1]-.1,[T[5],T[6],T[7],T[8]][step==='+'?3:step-1]+.45));
+    $('bn').textContent=step;$('bt').innerHTML=label;
+    st('badge',cl(bk*2)*(1-pout),`translateY(${mix(-40,0,cl(bk))}px) scale(${mix(.9,1,cl(bk))})`);
+    // step1 app
+    const appOn=t<T[6]+.2; show('app',appOn);
+    if(appOn){
+      const m=spr(lin(t,T[5]+.4,T[5]+.9));$('menu').style.transform=`translateY(${mix(400,0,cl(m))}px)`;
+      const tap=lin(t,T[5]+1.2,T[5]+1.45);$('copyRow').style.background=tap>0?'#FFF1CC':'transparent';
+      $('copyRow').style.transform=`scale(${tap>0&&tap<1?1-Math.sin(tap*Math.PI)*.05:1})`;
+      const to=spr(lin(t,T[5]+1.5,T[5]+1.9));st('toast',cl(to*2),`translateY(${mix(-60,0,cl(to))}px)`);
+      if(tap>0&&tap<1){fx.strokeStyle=`rgba(255,176,0,${1-tap})`;fx.lineWidth=6;fx.beginPath();fx.arc(520,1302,30+tap*100,0,7);fx.stroke()}
+      const sw=eio(lin(t,T[6]-.15,T[6]+.2));$('app').style.transform=`translateX(${-sw*700}px)`;
+    }
+    const chatOn=t>=T[6]-.15; show('chat',chatOn);
+    if(chatOn){
+      const sw=eio(lin(t,T[6]-.15,T[6]+.2));$('chat').style.transform=`translateX(${(1-sw)*700}px)`;
+      const av=$('av').getContext('2d');av.clearRect(0,0,76,76);if(ok(hero))av.drawImage(hero,6,6,64,64);
+      const ub=spr(lin(t,T[6]+.3,T[6]+.8));st('ub',cl(ub*2),`translateX(${mix(140,0,cl(ub))}px) scale(${mix(.6,1,cl(ub))})`);
+      const z=lin(t,T[7]-.05,T[7]+.35);if(z>0&&z<1){fx.fillStyle=`rgba(255,176,0,${.14*(1-z)})`;fx.fillRect(0,0,1080,1920);bolt(fx,hero,540,1000,mix(220,560,eo(z)),1-z)}
+      const bb=spr(lin(t,T[7]+.1,T[7]+.6));st('bb',cl(bb*2),`scale(${mix(.7,1,cl(bb))})`);
+      th.clearRect(0,0,470,520);const pa=lin(t,T[7]+.3,T[7]+1.4);const cols=20,rows=22,cw=470/cols,ch=520/rows;
+      for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const k=R[r*cols+c];if(pa<k*.85)continue;const loc=cl((pa-k*.85)/.15);
+        const q=cl(r/rows*.85+c/cols*.15);th.globalAlpha=loc;th.fillStyle=`rgb(${mix(11,255,q)|0},${mix(30,176,q)|0},${mix(63,0,q)|0})`;
+        th.fillRect(c*cw+(1-loc)*cw/2,r*ch+(1-loc)*ch/2,cw*loc+.6,ch*loc+.6)}
+      th.globalAlpha=cl(lin(t,T[7]+1.2,T[7]+1.5));th.fillStyle='rgba(255,255,255,.95)';th.beginPath();th.arc(235,250,62,0,7);th.fill();
+      th.fillStyle='#0B1E3F';th.beginPath();th.moveTo(218,218);th.lineTo(218,282);th.lineTo(272,250);th.fill();th.globalAlpha=1;
+      $('ok').style.opacity=cl(lin(t,T[7]+1.4,T[7]+1.7));
+      const mp=spr(lin(t,T[8]+.1,T[8]+.7));st('mp3',cl(mp*2),`translateY(${mix(80,0,cl(mp))}px) scale(${cl(mp)}) rotate(${mix(-12,0,cl(mp))}deg)`);
+    }
+  }
+  // ---- F: free (T9..T10)
+  if(t>=T[9]-.25&&t<T[10]+.4){
+    const wi=eio(lin(t,T[9]-.25,T[9]+.3)), wo=eio(lin(t,T[10]-.15,T[10]+.35));
+    const Rr=mix(0,1400,wi),Rh=mix(0,1400,wo);bl.fillStyle='#FFB000';bl.beginPath();
+    for(let i=0;i<=120;i++){const a=i/120*Math.PI*2;const rr=Rr*(1+.06*Math.sin(5*a+t*7)+.03*Math.sin(9*a-t*5));bl.lineTo(540+Math.cos(a)*rr,1000+Math.sin(a)*rr)}bl.fill();
+    const k=spr(lin(t,T[9]+.1,T[9]+.8));
+    bl.save();bl.globalAlpha=cl(k)*(1-wo);bl.translate(mix(1400,640,cl(k)),mix(1700,1420,cl(k))+Math.sin(t*2.2)*18);bl.rotate(.18+Math.sin(t*1.7)*.04);
+    bl.shadowColor='rgba(11,30,63,.55)';bl.shadowBlur=70;bl.shadowOffsetY=45;if(ok(hero))bl.drawImage(hero,-470,-470,940,940);bl.restore();
+    if(Rh>0){bl.globalCompositeOperation='destination-out';bl.beginPath();
+      for(let i=0;i<=120;i++){const a=i/120*Math.PI*2;const rr=Rh*(1+.06*Math.sin(5*a-t*7));bl.lineTo(540+Math.cos(a)*rr,900+Math.sin(a)*rr)}bl.fill();bl.globalCompositeOperation='source-over'}
+  }
+  const fOn=t>=T[9]&&t<T[10]+.2; show('sF',fOn);
+  if(fOn){const o=lin(t,T[10]-.2,T[10]+.1);const a=spr(lin(t,T[9]+.1,T[9]+.6)),b=spr(lin(t,T[9]+.3,T[9]+.9));
+    st('f0',cl(a*2)*(1-o),`translateX(${mix(-600,0,cl(a))}px)`);st('f1',cl(b*2)*(1-o),`translateX(${mix(-800,0,cl(b))}px) skewX(${mix(-12,0,cl(b))}deg)`)}
+  // ---- G: outro
+  const gOn=t>=T[10]-.2; show('sG',gOn);
+  if(gOn){
+    const k=spr(lin(t,T[10]-.2,T[10]+.6));bolt(fx,hero,540,mix(1200,700,cl(k))+Math.sin(t*2)*12,mix(300,640,cl(k)),cl(k*2));
+    const a=spr(lin(t,T[10]+.2,T[10]+.8)),b=spr(lin(t,T[11]-.1,T[11]+.5));
+    st('o1',cl(a*2),`translateY(${mix(60,0,cl(a))}px)`);
+    const tap=lin(t,T[11]+1.6,T[11]+1.9),tp=tap>0&&tap<1?1-Math.sin(tap*Math.PI)*.07:1;
+    st('o2',cl(b*2),`translateY(${mix(60,0,cl(b))}px) scale(${mix(.6,1,cl(b))*tp})`);
+    if(tap>0&&tap<1){fx.strokeStyle=`rgba(255,255,255,${1-tap})`;fx.lineWidth=6;fx.beginPath();fx.arc(700,1335,30+tap*120,0,7);fx.stroke()}
+  }
+};
+</script></body></html>
