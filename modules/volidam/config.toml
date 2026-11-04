@@ -25,5 +25,5 @@ head = "Шаҳзодбек"
 manager = "umra_xojaobod"
 write = "✍️ Шаҳзодбекка ёзиш"
 phone_label = "Хўжаобод"
-group = "volidam_xojaobod"
+group = "UmraXojaobod"
 starts = ["filial", "insta_filial"]

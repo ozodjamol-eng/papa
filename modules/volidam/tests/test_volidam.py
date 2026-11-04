@@ -151,7 +151,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def gmsg(uid, chat_id=-100, username="volidam_xojaobod", **kw):
+def gmsg(uid, chat_id=-100, username="umraxojaobod", **kw):
     m = {"message_id": kw.pop("mid", 50), "chat": {"id": chat_id, "type": "supergroup", "username": username,
                                                    "title": "Умра Хўжаобод"},
          "from": {"id": uid, "first_name": "Ҳасан", "is_bot": False}}
@@ -204,6 +204,8 @@ class Branch(unittest.TestCase):
         self.assertLess(p["text"].index("97 543"), p["text"].index("90 766"))
         btns = [r[0]["text"] for r in p["reply_markup"]["inline_keyboard"]]
         self.assertEqual(btns[0], "✍️ Шаҳзодбекка ёзиш")
+        urls = [r[0].get("url", "") for r in p["reply_markup"]["inline_keyboard"]]
+        self.assertIn("https://t.me/UmraXojaobod", urls)
 
     def test_bad_branch_manager_code(self):
         b, _ = make()

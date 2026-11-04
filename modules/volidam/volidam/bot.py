@@ -651,6 +651,9 @@ class Bot:
         lines = ["📞 <b>Алоқа</b>", ""] + [f"<b>{esc(p['label'])}:</b> {esc(p['show'])}" for p in self.phones(br)]
         lines += ["", "🕋 Safo Marva Tour расмий ҳамкори"]
         rows = self.write_rows(br)
+        g = self.branches.get(br or "", {}).get("group")
+        if g:
+            rows.append([{"text": f"👥 {self.branches[br]['name']} гуруҳи", "url": f"https://t.me/{g.lstrip('@')}"}])
         if self.cfg.get("youtube"):
             rows.append([{"text": "▶️ YouTube — VOLIDAM", "url": self.cfg["youtube"]}])
         if self.cfg.get("instagram"):
