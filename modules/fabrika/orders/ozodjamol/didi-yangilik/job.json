@@ -1,0 +1,208 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "tts",
+   "name": "s00",
+   "voice_id": "$asosiy",
+   "text": "O'zbekistonga kirib kelayotgan Xitoy taksi kompaniyasining nomi ma'lum bo'ldi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "next_text": "Besh ming ta mashina bilan kirarkan. Lekin shoshilmang, bu O'zbekiston bozori egallandi degani emas. Nega ekanini oxirida aytib beraman."
+  },
+  {
+   "do": "tts",
+   "name": "s01",
+   "voice_id": "$asosiy",
+   "text": "Besh ming ta mashina bilan kirarkan. Lekin shoshilmang, bu O'zbekiston bozori egallandi degani emas. Nega ekanini oxirida aytib beraman.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "O'zbekistonga kirib kelayotgan Xitoy taksi kompaniyasining nomi ma'lum bo'ldi.",
+   "next_text": "Ushbu videoni taksida ishlaydigan tanishingizga yuborib qo'ying."
+  },
+  {
+   "do": "tts",
+   "name": "s02",
+   "voice_id": "$asosiy",
+   "text": "Ushbu videoni taksida ishlaydigan tanishingizga yuborib qo'ying.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Besh ming ta mashina bilan kirarkan. Lekin shoshilmang, bu O'zbekiston bozori egallandi degani emas. Nega ekanini oxirida aytib beraman.",
+   "next_text": "Transport vazirligi Xitoyning yirik taksi kompaniyasi bozorga kirayotganini ma'lum qilgan edi."
+  },
+  {
+   "do": "tts",
+   "name": "s03",
+   "voice_id": "$asosiy",
+   "text": "Transport vazirligi Xitoyning yirik taksi kompaniyasi bozorga kirayotganini ma'lum qilgan edi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Ushbu videoni taksida ishlaydigan tanishingizga yuborib qo'ying.",
+   "next_text": "Kompaniya nomi rasman aytilmadi. Lekin biznes reyestrga ko'ra, Toshkent viloyatida Didi Taksi em-che-je ro'yxatdan o'tgan."
+  },
+  {
+   "do": "tts",
+   "name": "s04",
+   "voice_id": "$asosiy",
+   "text": "Kompaniya nomi rasman aytilmadi. Lekin biznes reyestrga ko'ra, Toshkent viloyatida Didi Taksi em-che-je ro'yxatdan o'tgan.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Transport vazirligi Xitoyning yirik taksi kompaniyasi bozorga kirayotganini ma'lum qilgan edi.",
+   "next_text": "Didi — Xitoydagi eng mashhur taksi giganti."
+  },
+  {
+   "do": "tts",
+   "name": "s05",
+   "voice_id": "$asosiy",
+   "text": "Didi — Xitoydagi eng mashhur taksi giganti.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Kompaniya nomi rasman aytilmadi. Lekin biznes reyestrga ko'ra, Toshkent viloyatida Didi Taksi em-che-je ro'yxatdan o'tgan.",
+   "next_text": "Mana bu joyga e'tibor bering: gap besh ming ta mashina haqida ketyapti, haydovchilar haqida emas."
+  },
+  {
+   "do": "tts",
+   "name": "s06",
+   "voice_id": "$asosiy",
+   "text": "Mana bu joyga e'tibor bering: gap besh ming ta mashina haqida ketyapti, haydovchilar haqida emas.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Didi — Xitoydagi eng mashhur taksi giganti.",
+   "next_text": "Bu mashinalarni kim haydashi va mahalliy haydovchilar qanday shartlarda ishlashi hali ochiqlanmagan."
+  },
+  {
+   "do": "tts",
+   "name": "s07",
+   "voice_id": "$asosiy",
+   "text": "Bu mashinalarni kim haydashi va mahalliy haydovchilar qanday shartlarda ishlashi hali ochiqlanmagan.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Mana bu joyga e'tibor bering: gap besh ming ta mashina haqida ketyapti, haydovchilar haqida emas.",
+   "next_text": "Hozir O'zbekistonda agregatorlar orqali besh yuz yetmish mingdan ortiq haydovchi ishlaydi."
+  },
+  {
+   "do": "tts",
+   "name": "s08",
+   "voice_id": "$asosiy",
+   "text": "Hozir O'zbekistonda agregatorlar orqali besh yuz yetmish mingdan ortiq haydovchi ishlaydi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Bu mashinalarni kim haydashi va mahalliy haydovchilar qanday shartlarda ishlashi hali ochiqlanmagan.",
+   "next_text": "Besh ming ta mashina — bularning atigi nol butun o'ndan to'qqiz foizi."
+  },
+  {
+   "do": "tts",
+   "name": "s09",
+   "voice_id": "$asosiy",
+   "text": "Besh ming ta mashina — bularning atigi nol butun o'ndan to'qqiz foizi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Hozir O'zbekistonda agregatorlar orqali besh yuz yetmish mingdan ortiq haydovchi ishlaydi.",
+   "next_text": "Lekin bu baribir muhim."
+  },
+  {
+   "do": "tts",
+   "name": "s10",
+   "voice_id": "$asosiy",
+   "text": "Lekin bu baribir muhim.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Besh ming ta mashina — bularning atigi nol butun o'ndan to'qqiz foizi.",
+   "next_text": "Hozir bozorda deyarli bitta o'yinchi bor — Yandex Go."
+  },
+  {
+   "do": "tts",
+   "name": "s11",
+   "voice_id": "$asosiy",
+   "text": "Hozir bozorda deyarli bitta o'yinchi bor — Yandex Go.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Lekin bu baribir muhim.",
+   "next_text": "Yaqinda unda yirik uzilishlar bo'ldi, narxlar oshdi."
+  },
+  {
+   "do": "tts",
+   "name": "s12",
+   "voice_id": "$asosiy",
+   "text": "Yaqinda unda yirik uzilishlar bo'ldi, narxlar oshdi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Hozir bozorda deyarli bitta o'yinchi bor — Yandex Go.",
+   "next_text": "Raqib paydo bo'lsa, narxlar tushishi va xizmat yaxshilanishi kutilyapti."
+  },
+  {
+   "do": "tts",
+   "name": "s13",
+   "voice_id": "$asosiy",
+   "text": "Raqib paydo bo'lsa, narxlar tushishi va xizmat yaxshilanishi kutilyapti.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Yaqinda unda yirik uzilishlar bo'ldi, narxlar oshdi.",
+   "next_text": "Endi va'da qilingan gap."
+  },
+  {
+   "do": "tts",
+   "name": "s14",
+   "voice_id": "$asosiy",
+   "text": "Endi va'da qilingan gap.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Raqib paydo bo'lsa, narxlar tushishi va xizmat yaxshilanishi kutilyapti.",
+   "next_text": "Didi Qozog'istonga ham ikki ming yigirma birinchi yilda xuddi shunday shov-shuv bilan kirib kelgan edi."
+  },
+  {
+   "do": "tts",
+   "name": "s15",
+   "voice_id": "$asosiy",
+   "text": "Didi Qozog'istonga ham ikki ming yigirma birinchi yilda xuddi shunday shov-shuv bilan kirib kelgan edi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Endi va'da qilingan gap.",
+   "next_text": "Lekin bir yil ham ishlamasdan, ikki ming yigirma ikkinchi yilning martida chiqib ketdi."
+  },
+  {
+   "do": "tts",
+   "name": "s16",
+   "voice_id": "$asosiy",
+   "text": "Lekin bir yil ham ishlamasdan, ikki ming yigirma ikkinchi yilning martida chiqib ketdi.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Didi Qozog'istonga ham ikki ming yigirma birinchi yilda xuddi shunday shov-shuv bilan kirib kelgan edi.",
+   "next_text": "Demak, bizni ham ko'radi. Yoqmasa, foyda qilmasa — chiqib ketishi mumkin."
+  },
+  {
+   "do": "tts",
+   "name": "s17",
+   "voice_id": "$asosiy",
+   "text": "Demak, bizni ham ko'radi. Yoqmasa, foyda qilmasa — chiqib ketishi mumkin.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Lekin bir yil ham ishlamasdan, ikki ming yigirma ikkinchi yilning martida chiqib ketdi.",
+   "next_text": "Siz nima deysiz? Didi bu safar qolib, narxlarni tushiradimi, yoki Qozog'istondagidek ketib qoladimi?"
+  },
+  {
+   "do": "tts",
+   "name": "s18",
+   "voice_id": "$asosiy",
+   "text": "Siz nima deysiz? Didi bu safar qolib, narxlarni tushiradimi, yoki Qozog'istondagidek ketib qoladimi?",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Demak, bizni ham ko'radi. Yoqmasa, foyda qilmasa — chiqib ketishi mumkin.",
+   "next_text": "Izohlarda yozib qoldiring."
+  },
+  {
+   "do": "tts",
+   "name": "s19",
+   "voice_id": "$asosiy",
+   "text": "Izohlarda yozib qoldiring.",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "previous_text": "Siz nima deysiz? Didi bu safar qolib, narxlarni tushiradimi, yoki Qozog'istondagidek ketib qoladimi?"
+  },
+  {
+   "do": "credits"
+  }
+ ]
+}
