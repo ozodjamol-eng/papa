@@ -664,8 +664,34 @@ def build_davra(db, root: Path, now: dt.datetime | None = None, get=_get, gen=No
 EVENING_DIR = Path(os.environ.get("PAPA_EVENING_DIR", "/var/lib/papa-evening"))
 
 
-def evening_bg(day: dt.date, folder: Path | None = None, slot: int = 0) -> Path | None:
-    """🌆 30.10 владелец: вечерний пул — каждый вечер новый фон «Кечки дайжест». Нет пула — осенний по умолчанию."""
+# 🌧 05.11 владелец: «дайджест надо делать с дождиком» — в дождливый вечер фон тоже дождливый.
+RAIN_WORDS = ("rain", "ёмғир", "yomg'ir", "дожд")
+BG_CITY = {"xojaobod": (40.6710, 72.5650), "davra": (41.2995, 69.2401)}     # как в make.py (КАТТА ДАВРА — Тошкент)
+
+
+def is_rainy(name: str, day: dt.date, folder: Path | None = None, get=_get) -> bool:
+    """Дождь вечером в городе канала: решение владельца (файл rain-ДАТА в пуле) или прогноз 16:00–21:00."""
+    folder = folder or EVENING_DIR
+    if (folder / f"rain-{day.isoformat()}").exists():
+        return True
+    lat, lon = BG_CITY.get(name, BG_CITY["xojaobod"])
+    try:
+        h = json.loads(get(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+                           "&hourly=weather_code,precipitation_probability&timezone=Asia%2FTashkent&forecast_days=1",
+                           timeout=20, tries=2))["hourly"]
+        for t, c, pr in zip(h["time"], h["weather_code"], h["precipitation_probability"]):
+            if 16 <= int(t[11:13]) <= 21 and ((51 <= int(c or 0) <= 67) or 80 <= int(c or 0) <= 82
+                                               or int(c or 0) >= 95 or int(pr or 0) >= 60):
+                return True
+    except Exception:  # noqa: BLE001 — нет прогноза → обычный фон
+        pass
+    return False
+
+
+def evening_bg(day: dt.date, folder: Path | None = None, slot: int = 0, rain=False) -> Path | None:
+    """🌆 30.10 владелец: вечерний пул — каждый вечер новый фон «Кечки дайжест». Нет пула — осенний по умолчанию.
+    rain=True (или функция-проверка, зовётся только если в пуле есть дождливые) — только дождливые фоны
+    (метки из tags.json вечернего агента); их нет — обычный по кругу."""
     folder = folder or EVENING_DIR
     m = day.month
     s = "qish" if m in (12, 1, 2) else "bahor" if m in (3, 4, 5) else "yoz" if m in (6, 7, 8) else "kuz"
@@ -673,6 +699,14 @@ def evening_bg(day: dt.date, folder: Path | None = None, slot: int = 0) -> Path 
         files = sorted(p for p in folder.glob(f"{s}-*.mp4") if p.stat().st_size > 200_000)
     except OSError:
         return None
+    if rain and files:
+        try:
+            tags = json.loads((folder / "tags.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            tags = {}
+        wet = [p for p in files if any(w in str(tags.get(p.name, "")).lower() for w in RAIN_WORDS)]
+        if wet and (rain() if callable(rain) else rain):
+            files = wet
     return files[(day.toordinal() * 2 + slot) % len(files)] if files else None
 
 
@@ -698,7 +732,7 @@ def push_video_data(day: dt.date, payloads: dict, run=None, branch: str = "diges
             if branch == "digest-data":                  # 🌆 30.10: фон вечера из вечернего пула; у каждого канала — свой
                 import shutil
                 for slot, name in enumerate(sorted(payloads)):
-                    bg = evening_bg(day, slot=slot)
+                    bg = evening_bg(day, slot=slot, rain=lambda n=name: is_rainy(n, day))
                     if bg:
                         shutil.copyfile(bg, Path(tmp) / "data" / f"bg_kech_{name}.mp4")
             for name, data in payloads.items():

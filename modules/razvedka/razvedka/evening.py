@@ -37,6 +37,13 @@ QUERIES = {
     "bahor": ["spring sunset", "evening clouds", "sunset field", "evening city lights"],
     "yoz": ["summer sunset", "sunset sea", "evening city lights", "sunset clouds timelapse"],
 }
+# 🌧 05.11 владелец: «дайджест с дождиком» — в пуле всегда должен быть запас дождливых вечеров
+RAIN_QUERIES = {"kuz": ["rain window evening", "rainy night city", "rain drops window", "rain street night"],
+                "qish": ["rain window night", "rainy night city", "winter rain window"],
+                "bahor": ["spring rain evening", "rain window evening", "rainy night city"],
+                "yoz": ["summer rain evening", "rain window evening", "rainy night city"]}
+RAIN_MIN = 6
+RAIN_WORDS = ("rain", "ёмғир", "yomg'ir", "дожд")
 NO_PEOPLE = {"person", "people", "man", "woman", "girl", "boy", "couple", "child", "children", "crowd", "face",
              "model", "portrait", "selfie", "family", "lady", "men", "women", "bride", "dance", "dancing"}
 
@@ -122,8 +129,13 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
     added = 0
     key = os.environ.get("PIXABAY_API_KEY", "").strip()
     need = min(ADD_PER_RUN, target(now.date()) - len(in_season))
+    queries = QUERIES[s]
+    wet = sum(1 for m in in_season if any(w in (getattr(m, "message", "") or "").lower() for w in RAIN_WORDS))
+    rain_first = wet < RAIN_MIN                  # 🌧 дождливых мало — этот прогон начинает с дождя
+    if rain_first:
+        queries = RAIN_QUERIES[s] + [q for q in queries if q not in RAIN_QUERIES[s]]
+        need = max(need, RAIN_MIN - wet)
     if need > 0 and key:
-        queries = QUERIES[s]
         found: dict[str, list[dict]] = {}
         for q in queries:                        # по запросу — список годных, потом берём по кругу (разнообразие)
             try:
@@ -131,7 +143,7 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             except Exception as e:  # noqa: BLE001
                 log(f"  Pixabay «{q}»: {type(e).__name__}")
                 found[q] = []
-        start = now.toordinal() % len(queries)
+        start = 0 if rain_first else now.toordinal() % len(queries)
         order = [queries[(start + i) % len(queries)] for i in range(len(queries))]
         while added < need and any(found.values()):
             for q in order:
@@ -183,6 +195,10 @@ async def run(client, state_dir: Path, now: dt.datetime | None = None, log=print
             except Exception as e:  # noqa: BLE001
                 log(f"  скачать #{m.id}: {type(e).__name__}")
                 dst.unlink(missing_ok=True)
+    # 🌧 метки фонов (подпись в канале) → tags.json: GENPLAN в дождливый вечер берёт дождливый фон
+    tags = {f"{st.get('season_of', {}).get(str(m.id), s)}-{m.id}.mp4": (getattr(m, "message", "") or "")[:120] for m in msgs[:KEEP]}
+    (OUT / "tags.json").write_text(json.dumps(tags, ensure_ascii=False), encoding="utf-8")
+    os.chmod(OUT / "tags.json", 0o640)
     gone = 0
     for p in OUT.glob("*.mp4"):
         if p.name not in keep:

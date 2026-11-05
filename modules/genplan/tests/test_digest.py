@@ -335,3 +335,30 @@ class TestEveningBg(unittest.TestCase):
             self.assertIsNone(digest.evening_bg(dt.date(2026, 12, 5), d))   # зимнего нет — фон по умолчанию
             day = dt.date(2026, 11, 2)
             self.assertNotEqual(digest.evening_bg(day, d, slot=0), digest.evening_bg(day, d, slot=1))  # два канала — разные
+
+    def test_rainy_evening_takes_rain_bg(self):
+        """05.11 владелец: «дайджест с дождиком» — в дождь только дождливые фоны пула."""
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            for n in (1, 2, 3, 4):
+                (d / f"kuz-{n}.mp4").write_bytes(b"0" * 300_000)
+            (d / "tags.json").write_text(json.dumps({"kuz-2.mp4": "🌆 rain window evening · Pixabay #7",
+                                                     "kuz-4.mp4": "🌆 rainy night city · Pixabay #8"}), encoding="utf-8")
+            day = dt.date(2026, 11, 5)
+            wet = {digest.evening_bg(day + dt.timedelta(days=i), d, slot=k, rain=True).name for i in range(4) for k in (0, 1)}
+            self.assertEqual(wet, {"kuz-2.mp4", "kuz-4.mp4"})
+            self.assertNotEqual(digest.evening_bg(day, d, 0, rain=True), digest.evening_bg(day, d, 1, rain=True))
+            calls = []
+            digest.evening_bg(day, d, rain=lambda: calls.append(1) or False)
+            self.assertEqual(calls, [1])                                   # проверка погоды — только если есть дождливые
+            (d / f"rain-{day.isoformat()}").write_text("owner")
+            self.assertTrue(digest.is_rainy("xojaobod", day, d, get=lambda *a, **k: 1 / 0))   # решение владельца
+            hourly = {"hourly": {"time": ["2026-11-05T18:00"], "weather_code": [61], "precipitation_probability": [80]}}
+            self.assertTrue(digest.is_rainy("davra", day + dt.timedelta(days=1), d,
+                                            get=lambda *a, **k: json.dumps(hourly).encode()))
+            dry = {"hourly": {"time": ["2026-11-06T18:00"], "weather_code": [1], "precipitation_probability": [5]}}
+            self.assertFalse(digest.is_rainy("davra", day + dt.timedelta(days=1), d,
+                                             get=lambda *a, **k: json.dumps(dry).encode()))
+            self.assertFalse(digest.is_rainy("davra", day + dt.timedelta(days=1), d, get=lambda *a, **k: 1 / 0))

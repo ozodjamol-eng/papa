@@ -45,8 +45,8 @@ if __name__ == "__main__":
 
 
 class FakeMsg:
-    def __init__(self, i):
-        self.id, self.video = i, True
+    def __init__(self, i, message=""):
+        self.id, self.video, self.message = i, True, message
 
 
 class FakeClient:
@@ -59,7 +59,7 @@ class FakeClient:
 
     async def send_file(self, ent, path, caption=None, supports_streaming=True):
         self.n += 1
-        m = FakeMsg(self.n)
+        m = FakeMsg(self.n, caption or "")
         self.msgs.append(m)
         return m
 
@@ -75,7 +75,8 @@ class TestEveningRun(unittest.TestCase):
         from unittest import mock
         with tempfile.TemporaryDirectory() as t:
             out, stdir = Path(t) / "out", Path(t) / "st"
-            hits = {q: [hit(i * 100 + k) for k in range(20)] for i, q in enumerate(evening.QUERIES["kuz"])}
+            qs = evening.RAIN_QUERIES["kuz"] + [q for q in evening.QUERIES["kuz"] if q not in evening.RAIN_QUERIES["kuz"]]
+            hits = {q: [hit(i * 100 + k) for k in range(20)] for i, q in enumerate(qs)}
             fake = FakeClient()
 
             async def ent(c):
@@ -96,4 +97,8 @@ class TestEveningRun(unittest.TestCase):
                 self.assertEqual(r["фонов сезона"], 22)
                 r2 = asyncio.run(evening.run(fake, stdir, now, log=lambda *_: None))
                 self.assertEqual(r2["добавлено"], 0)              # уже полно — ничего не добирает
+                import json as _j
+                tags = _j.loads((out / "tags.json").read_text(encoding="utf-8"))
+                wet = [k for k, v in tags.items() if "rain" in v]
+                self.assertGreaterEqual(len(wet), evening.RAIN_MIN)   # 🌧 05.11: запас дождливых фонов, метки на диске
             shutil.rmtree(out, ignore_errors=True)
