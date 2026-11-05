@@ -4,7 +4,11 @@
 import sys, os, cv2, numpy as np
 from insightface.app import FaceAnalysis
 C = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ozod_centroid.npy"))
-app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"]); app.prepare(ctx_id=-1, det_size=(1024, 1024))
+app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"]); app.prepare(ctx_id=-1, det_size=(640, 640))
+app2 = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"]); app2.prepare(ctx_id=-1, det_size=(1024, 1024))
+def detect(im):  # крупное лицо видно на 640, мелкое — на 1024
+    fs = [f for f in app.get(im) if f.det_score > .6]
+    return fs or [f for f in app2.get(im) if f.det_score > .6]
 def frames(p):
     if p.lower().endswith((".mp4", ".mov")):
         cap = cv2.VideoCapture(p); n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)); fps = cap.get(cv2.CAP_PROP_FPS) or 24
@@ -15,7 +19,7 @@ def frames(p):
 for p in sys.argv[1:]:
     worst = 1
     for tag, im in frames(p):
-        fs = [f for f in app.get(im) if f.det_score > .6]
+        fs = detect(im)
         if not fs: print(f"{p} {tag}: лица нет"); continue
         f = max(fs, key=lambda f: float(f.normed_embedding @ C)); s = float(f.normed_embedding @ C)
         yaw = abs(float(f.pose[1])) if f.pose is not None else 0; lim = .65 if yaw > 50 else .80
