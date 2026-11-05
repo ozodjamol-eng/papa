@@ -18,6 +18,8 @@
  *  grain(ctx,{t,amt})                                   плёночное зерно, меняется на двойках
  *  fill(ctx,{box:{x,y,w,h},items:[{name,color}],t,t0,every,cols,rest,slots:[[x,y,w,h]],drawItem,counter:{x,y,size,label},out}) → число приземлившихся  «Ичига қаранг»: вещи по дуге влетают в шкаф, счётчик «+N» прыгает на каждой
  *  proof(ctx,{i,n,title,sub,t,t0,out,x,y})              «6 исбот»: полоса глав сверху + «2/6 МАТОСИ»
+ *  meter(ctx,{x,y,value|from,to,dur,digits,size,unit,label,t,t0,out}) «литромер»: барабанные цифры как на колонке/счётчике воды — младшая крутится
+ *                                                       плавно, старшие перекатываются только на переносе 9→0 (живой счёт «Андижон бугун ичди: 12 480 л»)
  */
 (function () {
   'use strict';
@@ -274,6 +276,31 @@
     for (let i = 0; i < 4; i++) grain(x, { t: i / 12 + 1e-4, amt: 0.01 });
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); })());
 
-  window.MK = { warm, fill, proof, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
+  /* ---------- «литромер»: барабан цифр (разведка «Вода» 05.11, по мотиву Yo-Chi «живой счёт за воду» на экранах) ---------- */
+  // value: число или функция (t)=>число; иначе from→to за dur (линейно, как колонка). digits — сколько барабанов (ведущие нули тусклые).
+  function meter(ctx, o) {
+    const k = life(o.t, o.t0, o.out, 0.4); if (k <= 0) return;
+    const v = Math.max(0, typeof o.value === 'function' ? o.value(o.t) : o.value != null ? o.value : lerp(o.from || 0, o.to, prog(o.t, o.t0 + 0.3, o.t0 + 0.3 + (o.dur || 3))));
+    const n = o.digits || 5, fz = o.size || 170, cw = fz * 0.74, ch = fz * 1.18, gap = fz * 0.08, tw = n * cw + (n - 1) * gap, x0 = o.x - tw / 2, y0 = o.y - ch / 2;
+    const grp = o.group !== false ? fz * 0.16 : 0; // промежуток между тысячами
+    ctx.save(); ctx.globalAlpha *= k; ctx.translate(0, (1 - E.outBack(prog(o.t, o.t0, o.t0 + 0.45))) * 60);
+    shadow(ctx, 0.45, 30, 12); ctx.fillStyle = o.frame || '#0A0F18'; rr(ctx, x0 - fz * 0.18 - grp / 2, y0 - fz * 0.16, tw + grp + fz * 0.36, ch + fz * 0.32, fz * 0.16); ctx.fill(); noShadow(ctx);
+    ctx.strokeStyle = P.accent; ctx.lineWidth = Math.max(3, fz * 0.025); ctx.stroke();
+    const lead = Math.floor(v).toString().length;
+    for (let i = 0; i < n; i++) { // i — разряд справа
+      const p = Math.pow(10, i), rem = v % p, d = Math.floor(v / p) % 10 + (i === 0 ? v % 1 : clamp(rem - (p - 1), 0, 1));
+      const x = x0 + (n - 1 - i) * (cw + gap) + (i >= 3 ? -grp / 2 : grp / 2);
+      ctx.save(); rr(ctx, x, y0, cw, ch, fz * 0.08); ctx.fillStyle = o.cell || '#F7F3EA'; ctx.fill(); ctx.clip();
+      ctx.font = `400 ${fz}px ${F.head}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = i >= lead ? 'rgba(22,19,15,0.18)' : (o.ink || P.ink);
+      const base = Math.floor(d), f = d - base; // f — доля прокрутки к следующей цифре
+      for (const j of [0, 1]) ctx.fillText(String((base + j) % 10), x + cw / 2, y0 + ch / 2 + fz * 0.04 + (j - f) * ch);
+      const g = ctx.createLinearGradient(0, y0, 0, y0 + ch); g.addColorStop(0, 'rgba(0,0,0,0.38)'); g.addColorStop(0.22, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.10)'); g.addColorStop(0.78, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.42)');
+      ctx.fillStyle = g; ctx.fillRect(x, y0, cw, ch); ctx.restore(); }
+    if (o.unit) { ctx.font = `400 ${fz * 0.42}px ${F.head}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = P.accent; ctx.fillText(o.unit, x0 + tw + grp / 2 + fz * 0.34, o.y); }
+    if (o.label) { ctx.font = `800 ${fz * 0.24}px ${F.body}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = o.labelColor || P.cream; ctx.fillText(o.label, o.x, y0 + ch + fz * 0.36); }
+    ctx.restore(); return v;
+  }
+
+  window.MK = { warm, fill, proof, meter, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
     get P() { return P; }, setPalette: (p) => { P = Object.assign({}, P, p); }, setFonts: (f) => { F = Object.assign({}, F, f); } };
 })();
