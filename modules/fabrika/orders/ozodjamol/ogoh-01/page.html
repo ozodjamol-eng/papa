@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:IB;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf)}
+@font-face{font-family:IE;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf)}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#0D1220}
+#cam{position:absolute;inset:0;transform-origin:540px 900px}
+.abs{position:absolute}
+canvas{position:absolute;left:0;top:0}
+.h{font-family:IB;color:#fff;letter-spacing:-2px;line-height:.98;text-align:center;left:0;width:1080px;top:300px}
+.y{color:#FFB000}.r{color:#FF3B47}.g{color:#22C55E}
+.tag{width:400px;height:250px;border-radius:30px;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.tag .k{position:absolute;left:0;width:100%;top:42px;text-align:center;font-family:IE;font-size:36px;letter-spacing:6px}
+.tag .v{position:absolute;left:0;width:100%;top:100px;text-align:center;font-family:IB;font-size:74px;letter-spacing:-2px}
+.tag .s{position:absolute;left:0;width:100%;top:186px;text-align:center;font-family:IE;font-size:30px}
+.tag .hole{position:absolute;left:184px;top:-14px;width:32px;height:32px;border-radius:50%;background:#0D1220;border:5px solid rgba(255,255,255,.6)}
+.ic{width:290px;height:330px;border-radius:36px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;font-family:IB;font-size:40px;color:#fff;text-align:center;line-height:1}
+#sub{left:70px;width:940px;top:1420px;display:flex;justify-content:center}
+#subt{font-family:IE;font-size:42px;line-height:1.18;color:#fff;background:rgba(0,0,0,.55);padding:16px 26px;border-radius:20px;text-align:center}
+</style></head><body>
+<canvas id="bg" width="1080" height="1920"></canvas>
+<div id="cam">
+  <canvas id="mid" width="1080" height="1920"></canvas>
+  <div id="h" class="abs h"></div>
+
+  <!-- 1: glossy phone -->
+  <div id="phone" class="abs" style="left:330px;top:640px;width:420px;height:820px;border-radius:64px;background:linear-gradient(145deg,#2a3245,#0a0e18 60%,#1d2433);box-shadow:0 50px 100px rgba(0,0,0,.6),inset 0 0 0 4px rgba(255,255,255,.08)">
+    <div class="abs" style="left:22px;top:22px;right:22px;bottom:22px;border-radius:46px;background:radial-gradient(circle at 50% 40%,#3a2a00,#0b0f1a 70%);overflow:hidden">
+      <div id="pz" class="abs" style="left:0;width:100%;top:250px;text-align:center;font-family:IB;font-size:220px;color:#FFB000;letter-spacing:-8px">0%</div>
+      <div class="abs" style="left:0;width:100%;top:500px;text-align:center;font-family:IE;font-size:36px;color:#fff;letter-spacing:4px">МУДДАТЛИ<br>ТЎЛОВ</div>
+      <div id="sheen" class="abs" style="top:-200px;width:160px;height:1300px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);transform:rotate(18deg)"></div>
+    </div>
+    <div class="abs" style="left:160px;top:36px;width:100px;height:26px;border-radius:14px;background:#05070c"></div>
+  </div>
+  <div id="stop" class="abs" style="left:0;width:1080px;top:1180px;text-align:center"><span style="font-family:IB;font-size:96px;color:#fff;background:#FF3B47;padding:10px 46px;border-radius:24px;letter-spacing:4px">ТЎХТАНГ!</span></div>
+
+  <!-- 2: shop -->
+  <div id="shop" class="abs" style="left:110px;top:620px;width:860px;height:760px">
+    <div class="abs" style="left:0;top:120px;width:860px;height:640px;border-radius:28px;background:linear-gradient(180deg,#18213a,#111829);border:2px solid rgba(255,255,255,.12)"></div>
+    <canvas id="awn" width="860" height="200" style="left:0;top:0"></canvas>
+    <div class="abs" style="left:70px;top:280px;width:720px;height:380px;border-radius:20px;background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.02));border:2px solid rgba(255,255,255,.14)"></div>
+    <div id="swing" class="abs" style="left:260px;top:240px;width:340px;transform-origin:170px -60px">
+      <div class="abs" style="left:168px;top:-60px;width:4px;height:70px;background:rgba(255,255,255,.6)"></div>
+      <div class="abs" style="left:0;top:0;width:340px;height:230px;border-radius:26px;background:#FFB000;box-shadow:0 24px 50px rgba(0,0,0,.5);text-align:center">
+        <div style="font-family:IB;font-size:112px;color:#0D1220;line-height:1;padding-top:26px">0%</div>
+        <div style="font-family:IB;font-size:44px;color:#0D1220">ФОИЗСИЗ!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3-5, 7: price tags -->
+  <div id="tagA" class="abs tag" style="left:100px;top:760px;background:#fff">
+    <div class="hole"></div><div class="k" style="color:#0D1220">НАҚД</div>
+    <div class="v" style="color:#0D1220" id="va">3 000 000</div><div class="s" style="color:#5b6478">сўм</div>
+  </div>
+  <div id="tagB" class="abs tag" style="left:580px;top:760px;background:#FFB000">
+    <div class="hole"></div><div class="k" style="color:#0D1220">МУДДАТЛИ</div>
+    <div class="v" style="color:#0D1220" id="vb">3 000 000</div><div class="s" style="color:#0D1220">сўм · 0%</div>
+  </div>
+  <div id="per" class="abs" style="left:520px;width:520px;top:1050px;text-align:center;font-family:IE;font-size:40px;color:#fff">300 000 × 12 ой</div>
+  <div id="diff" class="abs" style="left:0;width:1080px;top:1100px;text-align:center">
+    <div style="font-family:IB;font-size:170px;color:#FF3B47;letter-spacing:-6px;line-height:1;text-shadow:0 0 60px rgba(255,59,71,.6)">+600 000</div>
+    <div style="font-family:IB;font-size:56px;color:#fff;letter-spacing:10px;margin-top:6px">ЯШИРИН</div>
+  </div>
+  <div id="note" class="abs" style="left:70px;top:1340px;font-family:IE;font-size:28px;color:rgba(255,255,255,.55)">* рақамлар — мисол</div>
+  <div id="check" class="abs" style="left:440px;top:1090px;width:200px;height:200px;border-radius:50%;background:#22C55E;box-shadow:0 0 70px rgba(34,197,94,.6)">
+    <svg width="200" height="200" viewBox="0 0 200 200"><path id="ckp" d="M55 104 L88 136 L148 70" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="160" stroke-dashoffset="160"/></svg>
+  </div>
+
+  <!-- 6: three traps -->
+  <div id="icons" class="abs" style="left:0;width:1080px;top:760px;display:flex;justify-content:center;gap:40px">
+    <div class="ic" id="i0"><svg width="120" height="130" viewBox="0 0 120 130"><path d="M60 6 L110 24 V62 C110 96 88 116 60 126 C32 116 10 96 10 62 V24 Z" fill="#FFB000"/><path d="M38 64 L54 80 L84 48" fill="none" stroke="#0D1220" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>СУҒУРТА</div>
+    <div class="ic" id="i1"><svg width="110" height="130" viewBox="0 0 110 130"><path d="M10 6 H100 V124 L85 112 L70 124 L55 112 L40 124 L25 112 L10 124 Z" fill="#FFB000"/><rect x="28" y="34" width="54" height="10" rx="5" fill="#0D1220"/><rect x="28" y="58" width="54" height="10" rx="5" fill="#0D1220"/><rect x="28" y="82" width="34" height="10" rx="5" fill="#0D1220"/></svg>ХИЗМАТ<br>ҲАҚИ</div>
+    <div class="ic" id="i2"><svg width="130" height="130" viewBox="0 0 130 130"><circle cx="65" cy="65" r="58" fill="#FF3B47"/><path d="M65 30 V66 L88 82" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/></svg>ЖАРИМА</div>
+  </div>
+
+  <!-- 8: wallet -->
+  <div id="wallet" class="abs" style="left:290px;top:860px;width:500px;height:360px">
+    <div class="abs" style="left:0;top:40px;width:500px;height:320px;border-radius:44px;background:linear-gradient(160deg,#7a4a1c,#3f240c);box-shadow:0 40px 80px rgba(0,0,0,.55)"></div>
+    <div class="abs" style="left:300px;top:150px;width:200px;height:110px;border-radius:30px 0 0 30px;background:#5a3412;border:3px solid rgba(255,255,255,.15)"></div>
+    <div class="abs" style="left:340px;top:186px;width:38px;height:38px;border-radius:50%;background:#FFB000"></div>
+  </div>
+  <div id="share" class="abs" style="left:0;width:1080px;top:1290px;text-align:center"><span style="font-family:IB;font-size:50px;color:#0D1220;background:#FFB000;padding:14px 40px;border-radius:50px">ТАНИШИНГИЗГА ЮБОРИНГ ↗</span></div>
+
+  <!-- 9: channel -->
+  <div id="chan" class="abs" style="left:120px;top:820px;width:840px;height:330px;border-radius:48px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.18)">
+    <div class="abs" style="left:46px;top:55px;width:220px;height:220px;border-radius:50%;background:linear-gradient(145deg,#FFB000,#ff7a00);display:flex;align-items:center;justify-content:center;font-family:IB;font-size:96px;color:#0D1220">КД</div>
+    <div class="abs" style="left:310px;top:80px;font-family:IB;font-size:72px;color:#fff;letter-spacing:-1px">КАТТА ДАВРА</div>
+    <div class="abs" style="left:310px;top:178px;font-family:IE;font-size:46px;color:#FFB000">@kattadavrauz</div>
+  </div>
+  <div id="sub2" class="abs" style="left:0;width:1080px;top:1210px;text-align:center"><span id="obuna" style="display:inline-block;font-family:IB;font-size:56px;color:#fff;background:#FF3B47;padding:18px 54px;border-radius:60px">ОБУНА БЎЛИНГ</span></div>
+  <canvas id="fx" width="1080" height="1920"></canvas>
+</div>
+<div id="sub" class="abs"><div id="subt"></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const T=[0.6,5.23,10.32,14.22,20.21,25.38,30.79,35.73,40.99], VEND=44.23;
+const LINES=["Телефонни «0% муддатли тўлов» деб оляпсизми? Тўхтанг.","Дўконда «фоизсиз» деб ёзишади. Лекин бир нарсани айтишмайди.","Мисол: телефоннинг нақд нархи — 3 миллион сўм.","Муддатли тўловда эса — 3 миллион 600 минг. Ойига 300 минг, 12 ой.","Фоиз — нол. Лекин сиз 600 минг сўм ортиқча тўлаяпсиз.","Яна: «суғурта», «хизмат ҳақи» ва кечиксангиз — жарима.","Энг осон йўл: «нақд нархи қанча?» деб сўранг ва солиштиринг.","Фарқ — бу сизнинг пулингиз. Фойдали бўлса — танишингизга юборинг.","Бундай фойдали маълумотлар — «Катта Давра» каналида."];
+const HEAD=['0% — <span class="y">РОСТМИ?</span>','НИМАНИ<br><span class="y">АЙТИШМАЙДИ?</span>','НАҚД <span class="y">НАРХИ</span>','МУДДАТЛИ <span class="y">НАРХИ</span>','ФОИЗ — <span class="g">0</span><br>ЛЕКИН…','ЯНА <span class="y">3 ТА</span><br>ТУЗОҚ','НАҚД НАРХИНИ<br><span class="g">СЎРАНГ!</span>','ФАРҚ = СИЗНИНГ<br><span class="y">ПУЛИНГИЗ</span>','БУНДАЙ ФОЙДАЛИ<br><span class="y">МАЪЛУМОТЛАР</span>'];
+const HSIZE=[150,120,130,124,130,130,116,104,104];
+const STOP=T[0]+3.56, OYIGA=T[3]+3.2, LEKIN=T[4]+1.48, SUG=T[5]+0.6, XIZ=T[5]+1.65, KECH=T[5]+3.04, FOYD=T[7]+2.29;
+const DUR=VEND+1.3; window.DUR=DUR;
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x)), lin=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3), eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const spr=x=>x<=0?0:1-Math.exp(-7*x)*Math.cos(11*x), mix=(a,b,k)=>a+(b-a)*k;
+const bg=$('bg').getContext('2d'),mid=$('mid').getContext('2d'),fx=$('fx').getContext('2d'),awn=$('awn').getContext('2d');
+window.ready=document.fonts.ready.then(()=>Promise.all([...document.fonts].map(f=>f.load().catch(()=>0))));
+function st(id,op,tf){const e=$(id);e.style.opacity=op;e.style.transform=tf||'';e.style.visibility=op>0.001?'visible':'hidden'}
+const fmt=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+function drawBg(t,li){
+  bg.fillStyle='#0D1220';bg.fillRect(0,0,1080,1920);
+  const ox=(t*14)%90, oy=(t*9)%90;bg.strokeStyle='rgba(255,255,255,.05)';bg.lineWidth=2;
+  for(let x=-90;x<=1170;x+=90){bg.beginPath();bg.moveTo(x-ox,0);bg.lineTo(x-ox,1920);bg.stroke()}
+  for(let y=-90;y<=2010;y+=90){bg.beginPath();bg.moveTo(0,y-oy);bg.lineTo(1080,y-oy);bg.stroke()}
+  const col=(li===4||li===5)?'255,59,71':(li===6?'34,197,94':'255,176,0');
+  const gr=bg.createRadialGradient(540,950,0,540,950,820);gr.addColorStop(0,`rgba(${col},.20)`);gr.addColorStop(1,`rgba(${col},0)`);bg.fillStyle=gr;bg.fillRect(0,0,1080,1920);
+  for(let i=0;i<26;i++){const px=(i*197+t*(8+i%5*4))%1180-50, py=(i*331+t*(5+i%3*3)*-1)%2000; bg.fillStyle=`rgba(255,255,255,${.04+.03*(i%3)})`;bg.beginPath();bg.arc(px,(py+2000)%2000,2+i%3*2,0,7);bg.fill()}
+}
+window.renderAt=function(t){
+  fx.clearRect(0,0,1080,1920);mid.clearRect(0,0,1080,1920);
+  let li=0;for(let i=0;i<T.length;i++)if(t>=T[i]-.25)li=i;
+  drawBg(t,li);
+  // камера: всегда в движении + толчок на каждой фразе
+  const lp=lin(t,T[li]-.25,(T[li+1]||DUR)-.25);
+  const cs=1.0+.04*(1-eo(lp))+.012*Math.sin(t*.6), cr=Math.sin(t*.43)*.7, cx=Math.sin(t*.37)*10, cy=Math.cos(t*.29)*8;
+  const shake=(t>STOP&&t<STOP+.35)?Math.sin(t*90)*9*(1-lin(t,STOP,STOP+.35)):0;
+  $('cam').style.transform=`translate(${cx+shake}px,${cy}px) scale(${cs}) rotate(${cr}deg)`;
+  // заголовок сцены
+  const hk=spr(lin(t,T[li]-.15,T[li]+.45)), hout=li<8?eio(lin(t,T[li+1]-.4,T[li+1]-.1)):0;
+  const he=$('h');if(he.dataset.li!=li){he.innerHTML=HEAD[li];he.style.fontSize=HSIZE[li]+'px';he.dataset.li=li}
+  st('h',HSIZE[li]?cl(hk*2)*(1-hout):0,`translateY(${mix(80,0,cl(hk))-hout*60}px)`);
+  // субтитры
+  const si=t>=T[0]-.05?li:-1;
+  $('subt').textContent=si>=0?LINES[si]:'';
+  const sa=lin(t,T[li]-.05,T[li]+.15), sb=li<8?1-lin(t,T[li+1]-.4,T[li+1]-.25):1-lin(t,VEND+.3,VEND+.6);
+  $('sub').style.opacity=si>=0?cl(sa)*cl(sb):0;
+
+  // 1 — телефон 0%
+  { const on=t<T[1]+.2; const k=spr(lin(t,0,1.1)), out=eio(lin(t,T[1]-.35,T[1]+.1));
+    const fr=t>STOP?0:1; // стоп-кадр
+    const rot=mix(-24,0,cl(k))+fr*Math.sin(Math.min(t,STOP)*1.4)*3;
+    st('phone',on?cl(k*2)*(1-out):0,`translateY(${mix(900,0,cl(k))+out*-900}px) rotate(${rot}deg) scale(${(1+.03*Math.sin(Math.min(t,STOP)*2))*(1-out*.3)})`);
+    $('sheen').style.left=(mix(-300,700,((Math.min(t,STOP))*.45)%1))+'px';
+    const zp=t>STOP?1+.25*eo(lin(t,STOP,STOP+.3)):1;$('pz').style.transform=`scale(${zp})`;
+    const sk=spr(lin(t,STOP,STOP+.4));st('stop',on?cl(sk*2)*(1-out):0,`scale(${mix(1.6,1,cl(sk))})`);
+    if(t>STOP&&t<STOP+.18){fx.fillStyle=`rgba(255,59,71,${.35*(1-lin(t,STOP,STOP+.18))})`;fx.fillRect(0,0,1080,1920)}
+  }
+  // 2 — витрина, ценник качается
+  { const on=t>T[1]-.4&&t<T[2]+.2; const k=spr(lin(t,T[1]-.3,T[1]+.6)), out=eio(lin(t,T[2]-.35,T[2]+.05));
+    st('shop',on?cl(k*2)*(1-out):0,`translateY(${mix(700,0,cl(k))-out*500}px) scale(${mix(.85,1,cl(k))})`);
+    if(on){awn.clearRect(0,0,860,200);const n=10,w=86;for(let i=0;i<n;i++){awn.fillStyle=i%2?'#FFB000':'#f4f1ea';awn.beginPath();awn.moveTo(i*w,0);awn.lineTo(i*w+w,0);awn.lineTo(i*w+w,120);
+      awn.quadraticCurveTo(i*w+w/2,170+6*Math.sin(t*3+i),i*w,120);awn.fill()}}
+    const sw=Math.sin((t-T[1])*3.2)*14*Math.exp(-Math.max(0,t-T[1]-1.5)*.3);$('swing').style.transform=`rotate(${sw}deg)`;
+  }
+  // 3,4,5,7 — ценники
+  { const aOn=(t>T[2]-.4&&t<T[5]+.1)||(t>T[6]-.4&&t<T[7]+.1);
+    const enter=t<T[5]?spr(lin(t,T[2]-.2,T[2]+.6)):spr(lin(t,T[6]-.3,T[6]+.5));
+    const outA=t<T[6]-.4?eio(lin(t,T[5]-.4,T[5]-.05)):eio(lin(t,T[7]-.4,T[7]-.05));
+    const ya=(t>T[4]-.3&&t<T[5])?-40*eo(lin(t,LEKIN,LEKIN+.4)):0;
+    st('tagA',aOn?cl(enter*2)*(1-outA):0,`translate(${mix(-700,0,cl(enter))}px,${ya}px) rotate(${mix(-14,-4,cl(enter))+Math.sin(t*1.5)*1.5}deg)`);
+    const bIn=t<T[5]?spr(lin(t,T[3]-.2,T[3]+.6)):spr(lin(t,T[6]-.15,T[6]+.65));
+    const bOn=(t>T[3]-.4&&t<T[5]+.1)||(t>T[6]-.4&&t<T[7]+.1);
+    st('tagB',bOn?cl(bIn*2)*(1-outA):0,`translate(${mix(700,0,cl(bIn))}px,${ya}px) rotate(${mix(14,4,cl(bIn))+Math.sin(t*1.3+1)*1.5}deg)`);
+    const cnt=eo(lin(t,T[3]+.3,T[3]+2.2));$('vb').textContent=fmt(t<T[5]?3000000+600000*cnt:3600000);
+    const pk=spr(lin(t,OYIGA,OYIGA+.5));const pOn=t>OYIGA-.1&&t<T[4]+.2;
+    st('per',pOn?cl(pk*2)*(1-eio(lin(t,T[4]-.3,T[4]))):0,`translateY(${mix(40,0,cl(pk))}px)`);
+    const dk=spr(lin(t,LEKIN,LEKIN+.55));const dOn=t>LEKIN-.1&&t<T[5]+.1;
+    st('diff',dOn?cl(dk*2)*(1-outA):0,`scale(${mix(1.8,1,cl(dk))})`);
+    const nOn=t>T[2]&&t<T[5]-.2;st('note',nOn?.9*cl(lin(t,T[2]+.5,T[2]+.9)):0,'');
+    // трещины на ценнике «муддатли»
+    if(t>LEKIN&&t<T[5]-.1){const c=eo(lin(t,LEKIN+.1,LEKIN+.6))*(1-outA);fx.save();fx.translate(cx,cy);fx.strokeStyle=`rgba(13,18,32,${.85*c})`;fx.lineWidth=5;
+      const ox=780,oy=885+ya;[[0,0,-60,-50,-120,-40],[0,0,40,-70,90,-110],[0,0,70,30,150,10],[0,0,-30,60,-90,110]].forEach(p=>{fx.beginPath();fx.moveTo(ox+p[0],oy+p[1]);fx.lineTo(ox+p[2]*c,oy+p[3]*c);fx.lineTo(ox+p[4]*c,oy+p[5]*c);fx.stroke()});fx.restore()}
+    // 7 — галочка
+    const ck=spr(lin(t,T[6]+.6,T[6]+1.1));const cOn=t>T[6]+.5&&t<T[7]+.1;
+    st('check',cOn?cl(ck*2)*(1-outA):0,`scale(${cl(ck)})`);$('ckp').style.strokeDashoffset=160*(1-eo(lin(t,T[6]+.8,T[6]+1.2)));
+  }
+  // 6 — три ловушки, падают по слову
+  { const on=t>T[5]-.3&&t<T[6]+.1; const out=eio(lin(t,T[6]-.4,T[6]-.05));
+    [SUG,XIZ,KECH].forEach((s0,i)=>{const k=spr(lin(t,s0-.15,s0+.45));st('i'+i,on?cl(k*2)*(1-out):0,`translateY(${mix(-900,0,cl(k))+out*200}px) rotate(${mix(i%2?18:-18,0,cl(k))}deg)`)});
+    st('icons',on?1:0,'');
+  }
+  // 8 — кошелёк, купюры летят обратно
+  { const on=t>T[7]-.4&&t<T[8]+.1; const k=spr(lin(t,T[7]-.25,T[7]+.6)), out=eio(lin(t,T[8]-.4,T[8]-.05));
+    st('wallet',on?cl(k*2)*(1-out):0,`translateY(${mix(600,0,cl(k))}px) scale(${1+.04*Math.sin(t*4)*lin(t,T[7]+.4,T[7]+.8)})`);
+    if(on&&out<1){for(let i=0;i<7;i++){const s0=T[7]+.3+i*.22,p=lin(t,s0,s0+.9);if(p<=0||p>=1)continue;const e=eio(p);
+      const x0=i%2?-150:1230,y0=500+i*60,x1=540,y1=1020;fx.save();fx.translate(cx,cy);fx.globalAlpha=(1-out)*(p<.85?1:(1-p)/.15);
+      fx.translate(mix(x0,x1,e),mix(y0,y1,e)-Math.sin(e*Math.PI)*260);fx.rotate((1-e)*(i%2?-2:2));fx.fillStyle='#2bb673';fx.fillRect(-110,-55,220,110);
+      fx.strokeStyle='rgba(255,255,255,.55)';fx.lineWidth=4;fx.strokeRect(-96,-41,192,82);fx.fillStyle='rgba(255,255,255,.75)';fx.beginPath();fx.arc(0,0,24,0,7);fx.fill();fx.restore()}}
+    const sh=spr(lin(t,FOYD,FOYD+.5));st('share',on?cl(sh*2)*(1-out):0,`translateY(${mix(60,0,cl(sh))}px) scale(${mix(.7,1,cl(sh))})`);
+  }
+  // 9 — канал
+  { const on=t>T[8]-.3; const k=spr(lin(t,T[8]-.2,T[8]+.6)), b=spr(lin(t,T[8]+.7,T[8]+1.3));
+    st('chan',on?cl(k*2):0,`translateY(${mix(400,0,cl(k))}px) scale(${mix(.8,1,cl(k))})`);
+    const pulse=1+.04*Math.sin(Math.max(0,t-T[8]-1.3)*6);st('sub2',on?cl(b*2):0,`scale(${mix(.5,1,cl(b))*pulse})`);
+  }
+};
+</script></body></html>

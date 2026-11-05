@@ -1,0 +1,172 @@
+{
+ "steps": [
+  {
+   "do": "search",
+   "params": {
+    "search": "Davronbek",
+    "page_size": 5
+   }
+  },
+  {
+   "do": "tts",
+   "name": "s01",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Telefonni nol foizli muddatli to'lov deb olyapsizmi? To'xtang.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "next_text": "Do'konda «foizsiz» deb yozishadi. Lekin bir narsani aytishmaydi."
+  },
+  {
+   "do": "tts",
+   "name": "s02",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Do'konda «foizsiz» deb yozishadi. Lekin bir narsani aytishmaydi.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Telefonni nol foizli muddatli to'lov deb olyapsizmi? To'xtang.",
+   "next_text": "Misol: telefonning naqd narxi — uch million so'm."
+  },
+  {
+   "do": "tts",
+   "name": "s03",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Misol: telefonning naqd narxi — uch million so'm.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Do'konda «foizsiz» deb yozishadi. Lekin bir narsani aytishmaydi.",
+   "next_text": "Muddatli to'lovda esa — uch million olti yuz ming. Oyiga uch yuz ming, o'n ikki oy."
+  },
+  {
+   "do": "tts",
+   "name": "s04",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Muddatli to'lovda esa — uch million olti yuz ming. Oyiga uch yuz ming, o'n ikki oy.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Misol: telefonning naqd narxi — uch million so'm.",
+   "next_text": "Foiz — nol. Lekin siz olti yuz ming so'm ortiqcha to'layapsiz."
+  },
+  {
+   "do": "tts",
+   "name": "s05",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Foiz — nol. Lekin siz olti yuz ming so'm ortiqcha to'layapsiz.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Muddatli to'lovda esa — uch million olti yuz ming. Oyiga uch yuz ming, o'n ikki oy.",
+   "next_text": "Yana: «sug'urta», «xizmat haqi», va kechiksangiz — jarima."
+  },
+  {
+   "do": "tts",
+   "name": "s06",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Yana: «sug'urta», «xizmat haqi», va kechiksangiz — jarima.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Foiz — nol. Lekin siz olti yuz ming so'm ortiqcha to'layapsiz.",
+   "next_text": "Eng oson yo'l: «naqd narxi qancha?» deb so'rang va solishtiring."
+  },
+  {
+   "do": "tts",
+   "name": "s07",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Eng oson yo'l: «naqd narxi qancha?» deb so'rang va solishtiring.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Yana: «sug'urta», «xizmat haqi», va kechiksangiz — jarima.",
+   "next_text": "Farq — bu sizning pulingiz. Foydali bo'lsa — tanishingizga yuboring."
+  },
+  {
+   "do": "tts",
+   "name": "s08",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Farq — bu sizning pulingiz. Foydali bo'lsa — tanishingizga yuboring.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Eng oson yo'l: «naqd narxi qancha?» deb so'rang va solishtiring.",
+   "next_text": "Bunday foydali ma'lumotlar — «Katta Davra» kanalida."
+  },
+  {
+   "do": "tts",
+   "name": "s09",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "public_owner_id": "auto",
+   "text": "Bunday foydali ma'lumotlar — «Katta Davra» kanalida.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Farq — bu sizning pulingiz. Foydali bo'lsa — tanishingizga yuboring."
+  }
+ ],
+ "hear": true
+}
