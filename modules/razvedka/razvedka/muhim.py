@@ -18,29 +18,30 @@ from pathlib import Path
 
 from . import curate as C
 
-# Признаки — начало слова, кириллица и латиница (узбекский), плюс русский.
+# 05.11 (после первого запуска: «сувни кўп ичинг», «пахта рекорди» — мусор): одиночное слово «сув/газ/ток» не годится.
+# Коммуналка — только ПАРА «что» + «случилось» рядом (до 60 знаков); остальное — устойчивые сочетания.
+_A = r"[ʻ'’`ʼ]?"
+_UTIL = r"(?:электр|elektr|свет|svet|ток(?:ни)?\b|tok(?:ni)?\b|газ|gaz\b|ичимлик сув|ichimlik suv|сув(?:ни)?\b|suv(?:ni)?\b|иссиқлик|issiqlik|отоплен)"
+_EVT = (r"(?:ўчирил|o" + _A + r"chiril|узилиш|uzilish|берилмай|berilmay|отключ|чеклов|cheklov|тўхтатил|to" + _A +
+        r"xtatil|таъмирлаш ишлари|ta" + _A + r"mirlash ishlari|бўлмайди|bo" + _A + r"lmaydi)")
+UTIL = re.compile(r"(?<![\w'ʻ’])" + _UTIL + r".{0,60}?" + _EVT + "|" + r"(?<![\w'ʻ’])" + _EVT + r".{0,60}?" + _UTIL, re.I | re.S)
 _M = (
-    # свет, газ, вода — отключения и подача
-    r"электр|elektr|свет(?:а|ни)?(?![\w])|svet(?![\w])|ток(?:ни)?(?![\w])|tok(?:ni)?(?![\w])|газ(?:ни|сиз)?(?![\w])|gaz(?:ni|siz)?(?![\w])|"
-    r"ичимлик сув|ichimlik suv|сув(?:ни|сиз)?(?![\w])|suv(?:ni|siz)?(?![\w])|отключ|ўчирил|o[ʻ'’`]chiril|узилиш|uzilish|"
-    r"берилмайди|berilmaydi|таъминот|ta[ʼ'ʻ’]?minot|"
-    # дороги
-    r"йўл ёпил|yo[ʻ'’`]l yopil|ёпилади|yopiladi|айланма йўл|aylanma yo[ʻ'’`]l|перекрыт|тирбандлик|tirbandlik|"
-    # деньги на каждый день
-    r"доллар курс|dollar kurs|валюта курс|valyuta kurs|курс доллара|бензин|benzin|метан(?![\w])|metan(?![\w])|пропан|propan|"
-    r"пенсия|pensiya|нафақа|nafaqa|ойлик|oylik|тариф|tarif|"
-    # выходные, праздники
-    r"дам олиш кун|dam olish kun|ишланмайди|ishlanmaydi|байрам кун|bayram kun|выходн|"
-    # погода — предупреждения
-    r"огоҳлантир|ogohlantir|бўрон|bo[ʻ'’`]ron|дўл(?![\w])|do[ʻ'’`]l(?![\w])|сел(?:ь)?(?![\w])|sel(?![\w])|туманли|tumanli|"
-    r"кучли шамол|kuchli shamol|кучли ёмғир|kuchli yomg|қор ёғ|qor yog|совуқ|sovuq|аёз|ayoz|"
-    # мошенники
-    r"фирибгар|firibgar|алдов|aldov|мошенни|смс орқали|sms orqali|карта маълумот|karta ma[ʼ'ʻ’]?lumot"
+    r"доллар курс|dollar kurs|курс доллар|валюта курс|valyuta kurs|"
+    r"(?:бензин|benzin|метан|metan|пропан|propan|ёқилғи|yoqilg" + _A + r"i|суюлтирилган газ)\w*\s+нарх|"
+    r"(?:бензин|benzin|metan)\w*\s+narx|"
+    r"дам олиш кун|dam olish kun|ишланмайди|ishlanmaydi|байрам\w* дам|bayram\w* dam|"
+    r"йўл\w* ёпил|yo" + _A + r"l\w* yopil|ҳаракат\w* чеклан|harakat\w* cheklan|айланма йўл|aylanma yo" + _A + r"l|"
+    r"(?:пенсия|pensiya|нафақа|nafaqa|ойлик|oylik|маош|maosh)\w*.{0,40}?(?:ошир|oshir|тўлан|to" + _A + r"lan|кўпай|ko" + _A + r"pay)|"
+    r"(?:об-ҳаво|ob-havo|ҳаво ҳарорат|havo harorat|синоптик|sinoptik|гидромет|gidromet).{0,80}?(?:огоҳлант|ogohlant|кескин|keskin)|"
+    r"кучли шамол|kuchli shamol|кучли ёмғир|kuchli yomg|дўл ёғ|do" + _A + r"l yog|қор ёғ|qor yog|сел келиш|sel kelish|"
+    r"туманли|tumanli|аёз|ayoz|бўрон|bo" + _A + r"ron|"
+    r"фирибгар|firibgar|мошенни|алдов\w* усул|aldov\w* usul|смс орқали|sms orqali|карта маълумот|karta ma" + _A + r"lumot"
 )
-MUHIM = re.compile(r"(?<![\w'ʻ’])(?:" + _M + ")", re.I)
-# Никогда: политика, криминал (curate.POLICY) + аварии, смерти, катастрофы — это паника, не польза.
+MUHIM = re.compile(r"(?<![\w'ʻ’])(?:" + _M + ")", re.I | re.S)
+# Никогда: политика, криминал (curate.POLICY) + аварии, смерти, катастрофы — это паника, не польза; и отчёты-пропаганда.
 _SAD = (r"ҳалок|halok|вафот|vafot|ўлим|o[ʻ'’`]lim|ўлди|o[ʻ'’`]ldi|жасад|jasad|ЙТҲ|YTH|авари|avariya|"
         r"фалокат|falokat|ёнғин|yong[ʻ'’`]in|портла|portla|погиб|смерт|трагед|теракт")
+_SAD += r"|янги ўзбекистон|yangi o" + _A + r"zbekiston|рекорд|rekord|тарихий|tarixiy"
 SAD = re.compile(r"(?<![\w'ʻ’])(?:" + _SAD + ")", re.I)
 
 PER_DAY = int(os.environ.get("MUHIM_PER_DAY", "3"))
@@ -52,7 +53,7 @@ CHANNELS = {"xojaobod": ("XOJAOBOD CITY", "XOJAOBODCITY", "PAPA·Шаҳар")}  
 
 def is_muhim(text: str | None) -> bool:
     t = text or ""
-    return bool(MUHIM.search(t)) and not SAD.search(t) and not C.POLICY["politics"].search(t) \
+    return bool(MUHIM.search(t) or UTIL.search(t)) and not SAD.search(t) and not C.POLICY["politics"].search(t) \
         and not C.POLICY["crime"].search(t)
 
 

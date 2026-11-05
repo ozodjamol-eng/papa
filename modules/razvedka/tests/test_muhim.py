@@ -37,3 +37,12 @@ class T(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class T2(unittest.TestCase):
+    def test_first_run_garbage_rejected(self):          # 05.11: первый запуск — 2 из 3 были мусором
+        self.assertFalse(muhim.is_muhim("Сочингиз тўкиляптими? Бунинг сабаби кеч ухлашингиз экан. Сувни кўп ичинг"))
+        self.assertFalse(muhim.is_muhim("☄️Пахтачиликда тарихий рекорд! Янги Ўзбекистонда илк бор 5 тонна ҳосил, ойлик ошди"))
+        self.assertTrue(muhim.is_muhim("Доллар курси кўтарилди. 6 ноябрь куни амал қиладиган АҚШ доллари курси"))
+        self.assertFalse(muhim.is_muhim("Газ плитада тез пишадиган овқат рецепти"))
+        self.assertFalse(muhim.is_muhim("Сув ичиш фойдаси ҳақида"))
