@@ -4,7 +4,12 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 W, H, FPS = 1080, 1920, 30
+LANG = os.environ.get("LANG_V", "uz")
 F9 = "/home/claude/fnt/montserrat-900.ttf"
+FZH = "/home/claude/fnt/notosc-900.ttf"
+TX = {"uz": ("БИЗНИНГ ҲАМКОРЛАР", "БУ ЖОЙ —", "СИЗНИНГ БРЕНДИНГИЗ УЧУН"),
+      "ru": ("НАШИ ПАРТНЁРЫ", "ЭТО МЕСТО —", "ДЛЯ ВАШЕГО БРЕНДА"),
+      "zh": ("我们的合作伙伴", "下一个合作伙伴", "就是您！")}[LANG]
 RED = (255, 16, 36)
 D = "/home/claude/fin"
 os.makedirs(f"{D}/seg", exist_ok=True)
@@ -22,9 +27,9 @@ for i, (f, a, b, rev) in enumerate(PARTS):
     sh(f'ffmpeg -v error -y -i {D}/{f} -an -vf "{vf}" -c:v libx264 -crf 14 -preset veryfast -pix_fmt yuv420p {D}/seg/p{i}.mp4')
 
 # 2) кадры для графики
-def font(sz): return ImageFont.truetype(F9, sz)
+def font(sz, zh=False): return ImageFont.truetype(FZH if zh else F9, sz)
 def text_img(txt, sz, fill=(255, 255, 255), track=4, shadow=True):
-    f = font(sz); ws = [f.getlength(c) for c in txt]
+    f = font(sz, any(ord(c) > 0x2E80 for c in txt)); ws = [f.getlength(c) for c in txt]
     im = Image.new("RGBA", (int(sum(ws) + track * len(txt)) + 60, int(sz * 1.5)), (0, 0, 0, 0)); d = ImageDraw.Draw(im); x = 30
     for c, w in zip(txt, ws): d.text((x, 10), c, font=f, fill=fill); x += w + track
     if shadow:
@@ -41,7 +46,7 @@ def back_out(t, s=1.4): t -= 1; return t * t * ((s + 1) * t + s) + 1
 def ease_out(t): return 1 - (1 - t) ** 3
 
 # шапка поверх партнёров
-HEAD = text_img("БИЗНИНГ ҲАМКОРЛАР", 50, (255, 255, 255), 6)
+HEAD = text_img(TX[0], 50, (255, 255, 255), 6)
 hd = Image.new("RGBA", (W, H), (0, 0, 0, 0)); place(hd, HEAD, W / 2, H * .075); hd.save(f"{D}/head.png")
 
 # 3) интро 0–1,0 с: OJ из темноты (тихое вступление трека)
@@ -75,7 +80,8 @@ for path, t, cy in [(f"{D}/seg/p0.mp4", 3.95, .50), (f"{D}/seg/p1.mp4", 3.95, .4
     fr.alpha_composite(c, (10, 10)); tiles.append(fr)
 pos = [(W * .27, H * .2), (W * .73, H * .2), (W * .27, H * .43), (W * .73, H * .43)]
 frm = [(-W, H * .2), (2 * W, H * .2), (-W, H * .43), (2 * W, H * .43)]
-L1 = text_img("БУ ЖОЙ —", 64); L2 = text_img("СИЗНИНГ БРЕНДИНГИЗ УЧУН", 50, track=2); L3 = text_img("@Ozodjamol", 74, RED, 2)
+L1 = text_img(TX[1], 64 if LANG != "zh" else 70); L2 = text_img(TX[2], 54 if LANG != "zh" else 76, track=2)
+LOVE = Image.open("/home/claude/anim/love.png").convert("RGBA"); L3 = text_img("@Ozodjamol", 74, RED, 2)
 os.makedirs(f"{D}/fin", exist_ok=True)
 for n in range(int(3.1 * FPS)):
     t = n / FPS; cv = BGI.copy()
@@ -93,9 +99,14 @@ for n in range(int(3.1 * FPS)):
         for s_ in range(0, int(y1 - y0), 46):
             d.line([(x0, y0 + s_), (x0, y0 + s_ + 26)], fill=RED + (255,), width=9); d.line([(x1, y0 + s_), (x1, y0 + s_ + 26)], fill=RED + (255,), width=9)
         box.putalpha(box.getchannel("A").point(lambda v: int(v * pa))); cv.alpha_composite(box)
-    place(cv, L1, W / 2, H * .62, 1, clamp((t - .6) / .2))
-    place(cv, L2, W / 2, H * .69, 1, clamp((t - .75) / .2))
+    fz = (1 - clamp((t - 1.4) / .25)) if LANG == "zh" else 1
+    place(cv, L1, W / 2, H * .62, 1, clamp((t - .6) / .2) * fz)
+    place(cv, L2, W / 2, H * .69, 1, clamp((t - .75) / .2) * fz)
     place(cv, L3, W / 2, H * .82, 1, clamp((t - .95) / .2))
+    if LANG == "zh" and t > 1.4:
+        e = back_out(clamp((t - 1.4) / .4)); k2 = 780 / LOVE.width
+        place(cv, LOVE, W / 2, H * .655, k2 * e)
+        place(cv, text_img("下一个合作伙伴 — 就是您！", 58), W / 2, H * .545, 1, clamp((t - 1.6) / .2))
     if t < .12: cv.alpha_composite(Image.new("RGBA", (W, H), (255, 255, 255, int(220 * (1 - t / .12)))))
     cv.convert("RGB").save(f"{D}/fin/{n:03d}.jpg", quality=93)
 sh(f"ffmpeg -v error -y -framerate {FPS} -i {D}/fin/%03d.jpg -c:v libx264 -crf 14 -preset veryfast -pix_fmt yuv420p {D}/seg/final.mp4")
@@ -115,5 +126,5 @@ sh(f'ffmpeg -v error -y -i {D}/main_raw.mp4 -loop 1 -i {D}/head.png -i /home/cla
 K = "/home/claude/papa/docs/brand/ozod-jamol/koncovka/2s/OZOD_JAMOL_KONCOVKA_CHERNAYA.mp4"
 sh(f'ffmpeg -v error -y -i {D}/main.mp4 -i {K} -filter_complex "[1:a]aresample=48000,aformat=channel_layouts=stereo[ka];'
    f'[0:v][0:a][1:v][ka]concat=n=2:v=1:a=1[v][a]" -map "[v]" -map "[a]" -c:v libx264 -crf 15 -preset veryfast -pix_fmt yuv420p '
-   f'-c:a aac -b:a 192k {D}/BIZNING_HAMKORLAR_v5.mp4')
+   f'-c:a aac -b:a 192k {D}/BIZNING_HAMKORLAR_v5_{LANG}.mp4')
 print("ok")
