@@ -703,6 +703,10 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         t = dt.datetime.fromisoformat(m["scheduled_at"])
         items.append((f"{t:%H:%M}", f"⏳ {t:%H:%M}  {m['rubric']} — {short(m['text'])}{' 🔒' if m['locked'] else ''}"))
     empty = 0
+    stash: dict[str, list[str]] = {}                   # 05.11: рубрика → склады (config sklad), как в заказе needs.py
+    for name, rub in (ch.get("sklad") or {}).items():
+        for r in ([rub] if isinstance(rub, str) else rub):
+            stash.setdefault(r, []).append(name)
     if hourly(ch):
         # 30.10: запас ставится в час только за 90 мин — дальние часы показываем честно: «возьмёт из запаса», а не «нет материала»
         left: dict[str, int] = {}
@@ -717,13 +721,31 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
                 left[got] -= 1
                 items.append((f"{t:%H:%M}", f"📦 {t:%H:%M}  {got} — возьмёт из запаса"))
                 continue
+            sk = next((r for r in (w or []) if stash.get(r)), None)
+            if sk:                                     # 05.11: склад этой рубрики есть — якорь закроет час за 2,5 ч до него
+                items.append((f"{t:%H:%M}", f"⚓ {t:%H:%M}  {sk} — закроет якорь"))
+                continue
             empty += 1
-            items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {w[0] + ' — нет материала' if w else 'час пустой — нет поста'}"))
+            items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {w[0] + ' — нет источника' if w else 'час пустой — нет поста'}"))
+    if not hourly(ch):                                 # 05.11: сетка со слотами — тоже честно: запас / якорь / нет источника
+        left2: dict[str, int] = {}
+        for m in store.stock(db, channel):
+            left2[m["rubric"]] = left2.get(m["rubric"], 0) + 1
     for t, s in ([] if hourly(ch) else grid(ch, day)):
         if s["kind"] == "ad" or t < now or not is_free(ch, t, busy):
             continue
+        w = [s["rubric"]] + list(s.get("fallback", []))
+        got = next((r for r in w if left2.get(r, 0) > 0), None)
+        if got:
+            left2[got] -= 1
+            items.append((f"{t:%H:%M}", f"📦 {t:%H:%M}  {got} — возьмёт из запаса"))
+            continue
+        sk = next((r for r in w if stash.get(r)), None)
+        if sk:
+            items.append((f"{t:%H:%M}", f"⚓ {t:%H:%M}  {sk} — закроет якорь"))
+            continue
         empty += 1
-        items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {s['rubric']} — нет материала"))
+        items.append((f"{t:%H:%M}", f"⚠️ {t:%H:%M}  {s['rubric']} — нет источника"))
     from . import namaz
     items += namaz.today_lines(db, channel, day)
     from . import morning
@@ -740,7 +762,7 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
     head = f"📅 {ch['title']} — {day:%d.%m}"
     tail = []
     if empty:
-        tail.append(f"⚠️ Пустых слотов впереди: {empty} — бросайте посты боту.")
+        tail.append(f"⚠️ Часов без источника: {empty} — для них нужен склад/хаб.")
     if later:
         tail.append(f"📦 Запланировано на следующие дни: {later}")
     return "\n".join([head] + [i[1] for i in items] + ([""] + tail if tail else []))

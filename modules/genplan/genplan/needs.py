@@ -21,7 +21,8 @@ _LAST: dict = {}
 def build(db, cfg: dict, now: dt.datetime) -> dict:
     out = {}
     for channel, ch in cfg["channels"].items():
-        if not ch.get("hour_rubrics") or not smart.hourly(ch):
+        grid_mode = not (ch.get("hour_rubrics") and smart.hourly(ch))
+        if grid_mode and not ch.get("sklad"):
             continue
         inv: dict[str, list[str]] = {}
         for code, rub in (ch.get("source_rubrics") or {}).items():
@@ -37,8 +38,13 @@ def build(db, cfg: dict, now: dt.datetime) -> dict:
             stock[m["rubric"]] = stock.get(m["rubric"], 0) + 1
         left = dict(stock)
         empty = []
-        for t in smart.free_hours(db, ch, channel, None, now, now.date(), minbar=True):
-            want = smart.hour_wants(ch, t) or []
+        if grid_mode:                                  # 05.11 владелец: «пользуйся тем, что есть» — сетка со слотами (PaparazziUZ) тоже в заказе
+            busy = smart.occupied(db, channel, now, ch=ch)
+            slots = [(t, [s["rubric"]] + list(s.get("fallback", []))) for t, s in smart.grid(ch, now.date())
+                     if s["kind"] != "ad" and t >= now + smart.LEAD and smart.is_free(ch, t, busy) and not smart.blocked(db, channel, t)]
+        else:
+            slots = [(t, smart.hour_wants(ch, t) or []) for t in smart.free_hours(db, ch, channel, None, now, now.date(), minbar=True)]
+        for t, want in slots:
             have = next((r for r in want if left.get(r, 0) > 0), None)
             if have:                                   # запас этой рубрики закроет час — не заказываем
                 left[have] -= 1

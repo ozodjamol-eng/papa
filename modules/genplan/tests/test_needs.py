@@ -31,7 +31,11 @@ class T(unittest.TestCase):
         self.assertIn("warn", e17["codes"])
         e20 = next(e for e in x["empty"] if e["h"] == "20")
         self.assertIn("МАЪНАВИЯТ", e20["stash"])
-        self.assertNotIn("paparazzi", d["channels"])   # без карты часов — заказа нет
+        pz = d["channels"]["paparazzi"]["empty"]        # 05.11: сетка со слотами — тоже в заказе (якорь закрывает)
+        e16 = next(e for e in pz if e["at"].endswith("16:00:00+05:00"))
+        self.assertIn("Jonlik ijrolar", e16["stash"])
+        e17 = next(e for e in pz if e["at"].endswith("17:00:00+05:00"))
+        self.assertIn("ФОЙДАЛИК", e17["stash"])        # Юлдузлар ҳаёти → запасная «Видео» (ФОЙДАЛИК)
         p = Path(tempfile.mkdtemp()) / "needs.json"
         self.assertTrue(needs.write(db, cfg, now, p, force=True))
         self.assertIn("xojaobod", json.loads(p.read_text())["channels"])

@@ -292,7 +292,9 @@ class TestService(Base):
         t = service.today_text(self.db, CFG, at("09:00"))
         self.assertIn("🟢 работа", t)
         self.assertIn("⏳ 13:30  Мусиқа", t)
-        self.assertIn("⚠️ 10:30  Фойдали видео — нет материала", t)
+        self.assertIn("⚓ 10:30  Фойдали видео — закроет якорь", t)   # 05.11: есть склад — честно «закроет якорь»
+        self.assertIn("— нет источника", t)                           # дыра без склада видна отдельно
+        self.assertNotIn("бросайте посты боту", t)
 
 
 class TestMenu(unittest.TestCase):
