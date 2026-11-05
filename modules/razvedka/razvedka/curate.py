@@ -259,7 +259,8 @@ def kind(m) -> str | None:
     return None
 
 
-async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel: str, log=print) -> list[dict]:
+async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel: str, log=print,
+                     min_age: int = MIN_AGE_MIN, min_views: int = MIN_VIEWS) -> list[dict]:
     # 20.10: только чужие каналы-источники — не свои каналы/ХАБы, не группы и не боты (в папках бывает всё вместе)
     title = (getattr(ent, "title", "") or "").upper()
     if (not getattr(ent, "broadcast", False) or (getattr(ent, "username", "") or "").lower() in OWN
@@ -275,7 +276,7 @@ async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel:
             groups.setdefault(m.grouped_id, []).append(m)
     out, done = [], set()
     for m in posts:
-        if m.date < since or m.date > now - dt.timedelta(minutes=MIN_AGE_MIN) or (m.grouped_id and m.grouped_id in done):
+        if m.date < since or m.date > now - dt.timedelta(minutes=min_age) or (m.grouped_id and m.grouped_id in done):
             continue
         part = sorted(groups.get(m.grouped_id, [m]), key=lambda x: x.id) if m.grouped_id else [m]
         if m.grouped_id:
@@ -289,7 +290,7 @@ async def candidates(client, ent, since: dt.datetime, now: dt.datetime, channel:
         v = max(x.views or 0 for x in part)
         if k != "audio" and len(WORD.findall(text)) < MIN_CAPTION_WORDS:   # 30.10: без понятной подписи не берём
             continue
-        if v < MIN_VIEWS or is_ad(text, bool(getattr(part[0], "reply_markup", None))) or off_policy(text, channel):
+        if v < min_views or is_ad(text, bool(getattr(part[0], "reply_markup", None))) or off_policy(text, channel):
             continue
         age = (now - m.date).total_seconds() / 3600
         out.append({"key": f"{ent.id}_{part[0].id}", "ent": ent, "ids": [x.id for x in part], "msg": part[0],

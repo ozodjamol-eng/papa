@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA ⚡ МУҲИМ — срочное полезное без политики → пульт Хўжаобода (05.11), дважды в час 07:25–21:45 Ташкент
+
+[Timer]
+OnCalendar=*-*-* 02..16:25,45:00 UTC
+RandomizedDelaySec=1min
+Persistent=false
+Unit=papa-razvedka@muhim.service
+
+[Install]
+WantedBy=timers.target

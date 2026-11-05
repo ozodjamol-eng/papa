@@ -164,6 +164,12 @@ def card(db, cfg: dict, mid: int, now: dt.datetime | None = None) -> tuple[str, 
             lbl = extras.ad_label(db, int(mid))
             txt += f"\n🏷 Кампания: {lbl}" if lbl else "\n🏷 Название: не задано — напишите его одним сообщением (например: ИЖАРА)"
         return txt, {"inline_keyboard": kb_queued(db, cfg, m, now)}
+    if store.kv_get(db, f"muhim_{mid}", "") == "1":   # ⚡ 05.11: срочное полезное от Разведки — две кнопки, без лишнего
+        from . import muhim
+        return (f"📍 Канал: {name}\n\n{base}\n\n{muhim.NOTE}{dup}",
+                {"inline_keyboard": [[{"text": "🆘 Срочно — опубликовать", "callback_data": f"ur:{mid}"}],
+                                     [{"text": "✏️ Текст", "callback_data": f"ed:{mid}"},
+                                      {"text": "🗑 Не нужно", "callback_data": f"del:{mid}"}]]})
     # черновик — экран «➕ ПОСТ» пульта Хўжаобода (GENPLAN 5): группы → подрубрика (= смысл и один хэштег) → умное время
     from . import picker
     rs = rubrics(cfg, m["channel"])
@@ -636,9 +642,18 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
     n_src = db.execute("SELECT count(*) FROM materials WHERE channel=? AND source=? AND id<>?",
                        (channel, src, mid)).fetchone()[0] if src else 0
     sk = smart.sklad_rubric(cfg["channels"].get(channel) or {}, src, n_src)   # РЕТРО: рубрики по очереди
-    from . import sources_choice
-    chosen = not sk and sources_choice.is_chosen(channel, origin_id(msgs[0]))
-    if sk:                                         # 26.10 владелец: склад — доверенный, сам по сетке, с вето 🗑
+    from . import sources_choice, muhim
+    mh = bool(src) and not hot and muhim.hit(msgs)           # ⚡ 05.11: срочное полезное от Разведки — только по 🆘
+    chosen = not sk and not mh and sources_choice.is_chosen(channel, origin_id(msgs[0]))
+    if mh:
+        sk = False
+        store.update(db, mid, auto=0, stock=0)
+        store.kv_set(db, f"muhim_{mid}", "1")
+        from . import ai as _ai, translit as _tr       # текст — в нашем стиле (кириллица, без чужих @), как у ИИ-редактора
+        if _ai.available() and text.strip() and cfg.get("ai_editor", True) and not _tr.language_note(text):
+            store.job_add(db, "ai", {"mid": mid, "owner_chat": reply_chat or next(iter(owners)), "quiet": True})
+            notes.append("✍️ ИИ перепишет текст в нашем стиле — через минуту карточка обновится")
+    elif sk:                                         # 26.10 владелец: склад — доверенный, сам по сетке, с вето 🗑
         store.update(db, mid, rubric=sk, guessed=0, auto=1)
         stock = True
         notes = [f"📦 Склад «{src}» · выйдет сам в свободный час · не нужно — 🗑"] + (notes or [])
@@ -660,7 +675,7 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
             notes.append("✍️ ИИ-редактор перепишет текст в нашем стиле")
     elif src:
         notes = [f"📡 Куратор нашёл · {src}"] + (notes or [])
-    if src and smart.news_banned(cfg, channel, rub, sources_choice.rubric_code(channel, origin_id(msgs[0])),
+    if src and not mh and smart.news_banned(cfg, channel, rub, sources_choice.rubric_code(channel, origin_id(msgs[0])),
                                  text=strip_sources(text), source=src):
         # 01.11 владелец: «это развлекательный канал… разобраться по тематике». Правило 30.10: в КАТТА ДАВРА новостей нет.
         # Найденное агентами (не брошенное владельцем) новостное — не выходит само; владелец может вернуть кнопками карточки.
@@ -684,7 +699,7 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
             notes = (notes or []) + ["🤖 Русский текст — перевожу на узбекский (кириллица) автоматически"]
         else:
             notes = (notes or []) + ["⛔ Русский текст, ИИ недоступен — пост НЕ выйдет, пока не будет перевода (✏️)"]
-    placed = None if stock or store.get(db, mid)["status"] == "rejected" else auto_place(db, cfg, mid)
+    placed = None if mh or stock or store.get(db, mid)["status"] == "rejected" else auto_place(db, cfg, mid)
     if placed:
         notes = (notes or []) + [placed]
     txt, kb = card(db, cfg, mid)

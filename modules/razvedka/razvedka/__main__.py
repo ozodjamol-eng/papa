@@ -8,6 +8,7 @@
   python -m razvedka run              — collect + send (для ежедневного таймера)
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
   python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
+  python -m razvedka muhim            — ⚡ МУҲИМ: срочное полезное без политики → карточка в пульт Хўжаобода
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
   python -m razvedka github [--send] (github-auto — для таймера) — 🧭 GitHub-разведка: новые полезные инструменты (раз в неделю)
@@ -227,7 +228,7 @@ async def _sort_folders() -> dict:
 
 async def _insta() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}
@@ -243,7 +244,7 @@ async def _insta() -> dict:
 
 async def _archive() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim", "insta") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}
@@ -260,7 +261,7 @@ async def _archive() -> dict:
 async def _evening() -> dict:
     """🌆 30.10: вечерний пул — Pixabay → канал «PAPA ВЕЧЕР ПУЛ» → фоны дайджеста на диске."""
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "archive") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim", "insta", "archive") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}
@@ -287,7 +288,7 @@ async def _purge() -> dict:
 
 async def _bank() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "evening", "archive") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim", "insta", "evening", "archive") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return {"пропуск": f"Разведка занята ({', '.join(busy)}) — повторите через 5–10 минут"}
@@ -304,7 +305,7 @@ async def _bank() -> dict:
 async def _humor() -> str:
     import datetime as _dt
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim", "insta") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return f"Разведка занята ({', '.join(busy)}) — повторите через 10–20 минут"
@@ -327,7 +328,7 @@ async def _humor() -> str:
 async def _weekly() -> str:
     """🧹 31.10: раз в неделю — самоочистка источников, потом разведчик приколов (новые чистые — подключить)."""
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "archive") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim", "insta", "archive") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return f"Разведка занята ({', '.join(busy)}) — неделька в следующий раз"
@@ -344,7 +345,7 @@ async def _weekly() -> str:
 
 async def _scout() -> str:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:
         return f"Разведка занята ({', '.join(busy)}) — повторите через 5–10 минут"
@@ -362,9 +363,27 @@ async def _scout() -> str:
         await c.disconnect()
 
 
+async def _muhim() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "archive") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:                                   # один профиль — одна задача; через 20 мин — снова
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import muhim
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    try:
+        return await muhim.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _curate() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "sources", "pain") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "muhim") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:                                   # один профиль — одна задача за раз
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}
@@ -437,7 +456,7 @@ async def _sources(inside_run: bool = False) -> dict:
 
 async def _pain() -> dict:
     import subprocess
-    busy = [u for u in ("hunt", "collect", "run", "curate") if subprocess.run(
+    busy = [u for u in ("hunt", "collect", "run", "curate", "muhim") if subprocess.run(
         ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
     if busy:                                   # один профиль — одна задача за раз
         return {"пропуск": f"профиль занят: {', '.join(busy)}"}
@@ -598,6 +617,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "curate":
         print("CURATE_DONE", asyncio.run(_curate()))
+        return
+    if cmd == "muhim":                          # ⚡ 05.11: срочное полезное без политики → пульт Хўжаобода
+        print("MUHIM_DONE", asyncio.run(_muhim()))
         return
     if cmd == "sort-folders":
         print("FOLDERS_DONE", asyncio.run(_sort_folders()))
