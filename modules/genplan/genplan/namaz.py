@@ -129,7 +129,7 @@ MONTH_RE = re.compile(r"(?<!\d)(\d{1,2})\s+([а-яўқғҳё]+)", re.I)
 
 def start_date(text: str, today: dt.date) -> dt.date:
     """С какого дня действует готовый пост: «23–29 октябр» / «23 октябр» / «23.10.2026» → 23.10; прошедшая дата или
-    даты нет — с сегодняшнего дня. Готовый пост на следующую неделю, брошенный в четверг, не трогает сегодняшний намаз."""
+    даты нет — с сегодняшнего дня. 05.11: начало — четверг недели этой даты (время меняется по четвергам)."""
     day = None
     for rx in (RANGE_RE, MONTH_RE):
         for m in rx.finditer(text or ""):
@@ -151,6 +151,8 @@ def start_date(text: str, today: dt.date) -> dt.date:
                 day = None
     if day and day < today - dt.timedelta(days=180):          # «5 январ», брошенный в декабре, — следующий год
         day = day.replace(year=day.year + 1)
+    if day:                                                   # 05.11 владелец: «каждый четверг меняется» — неделя
+        day -= dt.timedelta(days=(day.weekday() - 3) % 7)     # намаза начинается с четверга (06.11 пт → 05.11 чт)
     return day if day and day > today else today
 
 

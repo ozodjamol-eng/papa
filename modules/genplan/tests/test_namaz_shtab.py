@@ -62,7 +62,7 @@ class TestShtabNamaz(unittest.TestCase):
         self.assertEqual(self.ups[0], ("shtab", "sendMediaGroup", 5))           # обои — ключом ШТАБа, в чат ШТАБа
         self.assertIsNone(namaz.schedule_for(self.db, dt.date(2026, 11, 6)))   # до ✅ ничего
         d = json.loads(store.kv_get(self.db, "namaz_tdraft"))
-        self.assertEqual(d["day"], "2026-11-06")
+        self.assertEqual(d["day"], "2026-11-05")                               # 06.11 (пт) → с четверга 05.11
         cq = {"callback_query": {"id": "q", "from": {"id": 42}, "data": "nzt:ok",
                                  "message": {"chat": {"id": 42}, "message_id": d["card"], "text": "x"}}}
         self.assertEqual(hub.shtab_handle(self.shtab, self.db, CFG, ENV, cq), "namaz_t_ok")

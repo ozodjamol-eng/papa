@@ -72,12 +72,14 @@ class TestNamazPost(unittest.TestCase):
         return json.loads(store.kv_get(self.db, "namaz_draft"))
 
     def test_start_date_and_times_from_text(self):
-        self.assertEqual(namaz.start_date(CAP, THU), FRI)                   # пост на неделю, брошенный в четверг, — с пятницы
+        self.assertEqual(namaz.start_date(CAP, THU), THU)                   # 05.11: неделя намаза — с четверга (23.10 пт → 22.10 чт)
+        self.assertEqual(namaz.start_date(CAP, dt.date(2026, 10, 21)), THU)  # брошен в среду — с завтрашнего четверга
         self.assertEqual(namaz.start_date(CAP, SAT), SAT)                   # дата прошла — с сегодняшнего дня
         self.assertEqual(namaz.start_date("Бомдод 05:55", THU), THU)
-        self.assertEqual(namaz.start_date("23.10.2026 й", THU), FRI)
+        self.assertEqual(namaz.start_date("23.10.2026 й", THU), THU)
+        self.assertEqual(namaz.start_date("Намоз вақтлари: 06.11.2026 йил", dt.date(2026, 11, 5)), dt.date(2026, 11, 5))
         day, t = namaz.parse_post(CAP, THU)
-        self.assertEqual((day, t), (FRI, {"bomdod": "05:55", "peshin": "12:45", "asr": "15:50",
+        self.assertEqual((day, t), (THU, {"bomdod": "05:55", "peshin": "12:45", "asr": "15:50",
                                           "shom": "17:35", "xufton": "19:00"}))
 
     def test_card_has_three_buttons_and_nothing_changes_before_ok(self):
@@ -96,9 +98,9 @@ class TestNamazPost(unittest.TestCase):
         d = self.draft(bot)
         self.assertEqual(hub.namaz_callback(bot, self.db, CFG, self.cq("nz:ok", d["card"])), "namaz_ok")
         self.assertIn("✅ Принято", bot.calls[-1][1]["text"])
-        self.assertEqual(namaz.schedule_for(self.db, THU)["bomdod"], "05:45")   # сегодня — по-старому
+        self.assertEqual(namaz.schedule_for(self.db, THU)["bomdod"], "05:55")   # 05.11: четверг — уже по-новому
         s = namaz.schedule_for(self.db, SAT)
-        self.assertEqual((s["day"], s["bomdod"], s["caption"]), (FRI.isoformat(), "05:55", CAP))
+        self.assertEqual((s["day"], s["bomdod"], s["caption"]), (THU.isoformat(), "05:55", CAP))
         namaz.ensure_day(self.db, CFG, "xojaobod", SAT, at("22:40"))
         rows = {r["key"]: r for r in self.db.execute("SELECT * FROM namaz_posts WHERE day=?", (SAT.isoformat(),))}
         self.assertEqual(rows["table"]["text"], CAP)                         # никаких лишних слов
