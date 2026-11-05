@@ -107,7 +107,7 @@ def _namaz_line(db, ch: dict, now: dt.datetime) -> str:
         return ""
     s = namaz.schedule_for(db, now.date() + dt.timedelta(days=1)) or namaz.schedule_for(db, now.date())
     if not s:
-        return "Намоз: ⚠️ время не задано — нажмите «🕌 Намоз — новый пост»\n"
+        return "Намоз: ⚠️ время не задано — отправьте время в PAPA ШТАБ («🕌 Намоз вақтлари»)\n"
     kind = "готовый пост (баннер)" if ("photo" in s.keys() and s["photo"]) else "таблица бота"
     return (f"Намоз: {kind} с {dt.date.fromisoformat(s['day']):%d.%m} · "
             + " · ".join(s[n] for n in namaz.NAMES) + "\n")
@@ -122,8 +122,9 @@ def panel_markup(cfg: dict, channel: str, button: str, db=None, now: dt.datetime
         _, kb = hub.ads_screen(db, cfg, channel, (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ))
         if kb["inline_keyboard"]:
             return kb
-    if button == P_SETTINGS and namaz.opts(cfg["channels"][channel]):
-        return {"inline_keyboard": [[{"text": "🕌 Намоз — новый пост", "callback_data": "nz:set"}]]}
+    from . import bots
+    if button == P_SETTINGS and namaz.opts(cfg["channels"][channel]) and bots.SHTAB.get("bot") is None:
+        return {"inline_keyboard": [[{"text": "🕌 Намоз — новый пост", "callback_data": "nz:set"}]]}   # 05.11: есть ШТАБ — там
     return PANEL
 
 

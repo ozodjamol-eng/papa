@@ -822,6 +822,10 @@ def shtab_handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if cq["data"].startswith("sw:"):                   # 26.10: выбор источников — карточка Разведки
             from . import sources_choice
             return sources_choice.callback(bot, cq)
+        if cq["data"].startswith("nzt:"):                  # 05.11 🕌 Намоз маркази — ввод в ШТАБе: обои → ✅/✏️/❌
+            return namaz_text_callback(bot, db, cfg, cq)
+        if cq["data"].startswith("nz:"):                   # 🕌 готовый баннер намаза → ✅/✏️/❌
+            return namaz_callback(bot, db, cfg, cq)
         bot("answerCallbackQuery", callback_query_id=cq["id"], text="Эта кнопка — в пульте канала")
         return "foreign"
     msg = upd.get("message")
@@ -829,15 +833,48 @@ def shtab_handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         return None                                       # посты в PAPA HUB и группах штаб не берёт
     if int((msg.get("from") or {}).get("id", 0)) not in owners:
         return None
+    r = shtab_namaz(bot, db, cfg, env, msg)                  # 05.11 владелец: намоз — в ШТАБе, оттуда берут все
+    if r:
+        return r
     if any(k in msg for k in ("photo", "video", "document", "audio", "animation", "voice")) or msg.get("forward_origin"):
-        bot("sendMessage", chat_id=msg["chat"]["id"], text=SHTAB_HELP)
+        bot("sendMessage", chat_id=msg["chat"]["id"], text=SHTAB_HELP, reply_markup=SHTAB_KB)
         return "help"
     from . import service
     txt = service.today_text(db, cfg)
     bot("sendMessage", chat_id=msg["chat"]["id"], text=(("" if (msg.get("text") or "") != "/start" else SHTAB_HELP + "\n\n")
                                                         + "📅 Сегодня по всем каналам\n\n" + txt)[:4096],
-        disable_web_page_preview=True)
+        disable_web_page_preview=True, reply_markup=SHTAB_KB)
     return "overview"
+
+
+# 05.11 владелец: «лучше перевести в PAPA ШТАБ, чтобы оттуда давал всем». Единственная дверь «Намоз маркази»:
+# текст с 5 временами (или готовый баннер с текстом) → ШТАБ → обои/карточка → ✅ → база PAPA → все каналы и боты.
+B_SHTAB_NAMAZ = "🕌 Намоз вақтлари"
+SHTAB_KB = {"keyboard": [[{"text": B_SHTAB_NAMAZ}]], "resize_keyboard": True, "is_persistent": True,
+            "input_field_placeholder": "Намоз вақтларини шу ерга юборинг"}
+
+
+def shtab_namaz(bot, db, cfg: dict, env: dict, msg: dict) -> str | None:
+    from . import namaz
+    chat = msg["chat"]["id"]
+    txt = (msg.get("text") or "").strip()
+    cap = msg.get("caption") or ""
+    if txt in (B_SHTAB_NAMAZ, "/namaz", "🕌 Намоз"):
+        bot("sendMessage", chat_id=chat, reply_markup=SHTAB_KB,
+            text="🕌 Янги вақтларни шу ерга бир хабарда юборинг (масалан, «Намоз вақтлари: 06.11.2026 йил» ва 5 та вақт)."
+                 "\nБот 5 та обои кўрсатади → «✅ Тасдиқлаш» → 10 дақиқа ичида ҳамма жойда янгиланади: "
+                 "Хўжаобод Сити 24 гуруҳи, XOJAOBOD CITY 24 бот, Юкла.\n\nҲозирги вақтлар:\n\n"
+                 + namaz.editor_text(db, _now().date()))
+        return "namaz_help"
+    if "photo" in msg and cap and (namaz_waiting(db) or (namaz.looks_like_schedule(cap) and "намоз" in cap.lower())):
+        r = namaz_draft(bot, db, env, msg, cap, cfg=cfg)
+        if r != "not_namaz":
+            return r
+    if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):
+        r = save_namaz(bot, db, cfg, msg, txt, env=env)
+        if r != "not_namaz":
+            return r
+    return None
 
 
 def is_morning_upload(db, mid: int, wait: float = 4.0) -> bool:
@@ -931,11 +968,18 @@ def handle(bot, db, cfg: dict, env: dict, upd: dict) -> str | None:
         if wn:                                                        # бросил новый пост — ожидание названия снимаем
             store.kv_set(db, "await_name", "")
         from . import namaz
+        if (txt and namaz.looks_like_schedule(txt) and "намоз" in txt.lower() and not any(k in msg for k in MEDIA_KEYS)) \
+                or ("photo" in msg and cap and namaz.looks_like_schedule(cap) and "намоз" in cap.lower()):
+            if bots.SHTAB.get("bot") is not None:              # 05.11: намоз — только через PAPA ШТАБ (одна дверь)
+                bot("sendMessage", chat_id=msg["chat"]["id"], reply_to_message_id=msg["message_id"],
+                    text="🕌 Намоз вақтлари энди фақат PAPA ШТАБ орқали: шу матнни PAPA ШТАБ ботига юборинг — "
+                         "у ердан ҳамма каналлар ва ботлар олади. Бу ерда ҳеч нарса ўзгармади.")
+                return "namaz_to_shtab"
         if "photo" in msg and cap and (namaz_waiting(db) or (namaz.looks_like_schedule(cap) and "намоз" in cap.lower())):
-            r = namaz_draft(bot, db, env, msg, cap, cfg=cfg)          # 22.10: 🕌 готовый пост намаза на неделю → карточка ✅/✏️/❌
+            r = namaz_draft(bot, db, env, msg, cap, cfg=cfg)          # 22.10: 🕌 готовый пост намаза (без ШТАБа — запасной путь)
             if r != "not_namaz":
                 return r
-        if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):   # 🕌 время намаза
+        if txt and namaz.looks_like_schedule(txt) and not any(k in msg for k in MEDIA_KEYS):   # 🕌 время намаза (запасной путь)
             r = save_namaz(bot, db, cfg, msg, txt, env=env)
             if r != "not_namaz":
                 return r

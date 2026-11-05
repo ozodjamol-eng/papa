@@ -34,6 +34,8 @@ def key_of(bot) -> str:
 
 
 def token_of(bot, env: dict) -> str:
+    if SHTAB.get("bot") is not None and bot is SHTAB["bot"]:   # 05.11: намоз вводится в ШТАБе — файлы/альбомы его ключом
+        return SHTAB["token"]
     return TOKENS.get(key_of(bot)) or env["GENPLAN_BOT_TOKEN"]
 
 

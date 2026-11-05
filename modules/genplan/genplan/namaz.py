@@ -280,10 +280,10 @@ def reminder(db, cfg: dict, now: dt.datetime) -> str | None:
         return None
     store.kv_set(db, key, "1")
     if not s:
-        return "⚠️ Намоз вақтлари киритилмаган — эртага намоз постлари чиқмайди.\nНажмите «🕌 Намоз» и пришлите время."
+        return "⚠️ Намоз вақтлари киритилмаган — эртага намоз постлари чиқмайди.\nPAPA ШТАБ → «🕌 Намоз вақтлари» → пришлите время."
     days = (tomorrow - dt.date.fromisoformat(s["day"])).days
     return (f"🕌 Время намаза не обновлялось {days} дн. (с {dt.date.fromisoformat(s['day']):%d.%m}).\n"
-            "Время сдвигается каждый день — пришлите свежее, нажмите «🕌 Намоз».")
+            "Время сдвигается каждый день — пришлите свежее в PAPA ШТАБ («🕌 Намоз вақтлари»).")
 
 
 def today_lines(db, channel: str, day: dt.date) -> list[tuple[str, str]]:
