@@ -48,6 +48,7 @@ LOGOS = {
     "gw": extrude(load_logo("gw.png", circle=True, size=760), 28),
     "vol": extrude(load_logo("vol.png", circle=True, size=740), 28),
     "dan": extrude(load_logo("dandana.png", size=760), 28),
+    "love": extrude(load_logo("love.png", size=900), 22),
 }
 OJ = extrude(oj, 14)
 
@@ -72,6 +73,7 @@ BG = {
     "vol": radial((120, 18, 30), (30, 2, 8)),
     "dan": radial((40, 26, 12), (0, 0, 0)),
     "end": radial((60, 6, 12), (0, 0, 0)),
+    "love": radial((50, 80, 230), (8, 14, 80)),
 }
 rnd = random.Random(7)
 PART = {k: [(rnd.random(), rnd.random(), rnd.random()) for _ in range(60)] for k in BG}
@@ -109,6 +111,17 @@ def world(k, t):
         for (a, b, c) in PART[k][14:]:
             y = (b - t * (0.35 + 0.4 * c)) % 1.0; x = a * W + math.sin(t * 6 + c * 9) * 20; r = 3 + 4 * c
             d.ellipse([x - r, y * H - r, x + r, y * H + r], fill=(255, 170, 60, 220))
+    if k == "love":  # лёгкая ткань волнами + синие искры (цвет тележки)
+        for j in range(4):
+            pts = []
+            for xi in range(0, W + 60, 60):
+                y = H * (.18 + .2 * j) + math.sin(xi / 170 + t * 2.2 + j) * 70
+                pts.append((xi, y))
+            poly = pts + [(W + 60, pts[-1][1] + 120), (0, pts[0][1] + 120)]
+            d.polygon(poly, fill=(255, 235, 210, 34))
+        for (a, b, c) in PART[k][:30]:
+            y = (b - t * 0.12 * (1 + c)) % 1.0; r = 3 + 5 * c
+            d.ellipse([a * W - r, y * H - r, a * W + r, y * H + r], fill=(255, 140, 40, 220))
     if k in ("oj", "end"):
         for (a, b, c) in PART[k][:25]:
             y = (b - t * 0.05) % 1.0; r = 2 + 3 * c
@@ -135,11 +148,12 @@ def glint(canvas, t, strength=1.0):
 
 # ---------- монтаж ----------
 LABELS = {"shod": ("МЕБЕЛЬ", (40, 70, 50)), "gw": ("ТОЗА СУВ", (255, 255, 255)),
-          "vol": ("УМРА ЗИЁРАТИ", (255, 220, 150)), "dan": ("ПИЦЦА & БУРГЕР", (255, 200, 90))}
+          "vol": ("УМРА ЗИЁРАТИ", (255, 220, 150)), "dan": ("ПИЦЦА & БУРГЕР", (255, 200, 90)),
+          "love": ("КИЙИМ-КЕЧАК", (255, 170, 80))}
 HEAD = text_img("БИЗНИНГ ҲАМКОРЛАР", 54, (255, 255, 255), 6)
 HEAD_D = text_img("БИЗНИНГ ҲАМКОРЛАР", 54, (40, 30, 20), 6)
-SEQ = [("shod", 1.0), ("gw", 2.8), ("vol", 4.6), ("dan", 6.4)]   # по 1,8 с = 3 доли при 100 BPM
-SEG = 1.8
+SEQ = [("shod", 1.0), ("gw", 2.5), ("vol", 4.0), ("love", 5.5), ("dan", 7.0)]   # по 1,5 с
+SEG = 1.5
 HOOK1 = text_img("НАВБАТДАГИ", 92, (255, 255, 255), 4)
 HOOK2 = text_img("ҲАМКОР — СИЗ?", 92, (255, 16, 36), 4)
 CTA = text_img("@Ozodjamol", 64, (255, 255, 255), 2)
@@ -171,19 +185,19 @@ def frame(t):
             if lt < .12:  # вспышка на ударе
                 fl = Image.new("RGBA", (W, H), (255, 255, 255, int(200 * (1 - lt / .12)))); c.alpha_composite(fl)
             return c
-    # 8.2–10.6: все партнёры 2×2 + хук
-    lt = t - 8.2; c = world("end", lt)
-    pos = [(W * .29, H * .25), (W * .71, H * .25), (W * .29, H * .47), (W * .71, H * .47)]
-    for j, k in enumerate(["shod", "gw", "vol", "dan"]):
-        e = back_out(clamp((lt - j * .12) / .4))
-        place(c, LOGOS[k], pos[j][0], pos[j][1], .40 * e, clamp((lt - j * .12) / .15))
-    h1 = clamp((lt - .6) / .3); h2 = clamp((lt - .9) / .3)
-    place(c, HOOK1, W / 2, H * .66, .9 + .1 * ease_out(h1), h1)
-    place(c, HOOK2, W / 2, H * .72, .9 + .1 * ease_out(h2), h2)
-    place(c, CTA, W / 2, H * .81, 1, clamp((lt - 1.3) / .3))
+    # 8.5–10.6: все партнёры + хук
+    lt = t - 8.5; c = world("end", lt)
+    pos = [(W * .22, H * .2, .30), (W * .5, H * .2, .30), (W * .78, H * .2, .30), (W * .5, H * .335, .42), (W * .5, H * .46, .30)]
+    for j, k in enumerate(["shod", "gw", "vol", "love", "dan"]):
+        e = back_out(clamp((lt - j * .1) / .35))
+        place(c, LOGOS[k], pos[j][0], pos[j][1], pos[j][2] * e, clamp((lt - j * .1) / .15))
+    h1 = clamp((lt - .5) / .25); h2 = clamp((lt - .75) / .25)
+    place(c, HOOK1, W / 2, H * .62, .9 + .1 * ease_out(h1), h1)
+    place(c, HOOK2, W / 2, H * .68, .9 + .1 * ease_out(h2), h2)
+    place(c, CTA, W / 2, H * .77, 1, clamp((lt - 1.05) / .25))
     if lt < .12:
         fl = Image.new("RGBA", (W, H), (255, 255, 255, int(200 * (1 - lt / .12)))); c.alpha_composite(fl)
-    if lt > 2.2: c.alpha_composite(Image.new("RGBA", (W, H), (0, 0, 0, int(255 * clamp((lt - 2.2) / .2)))))
+    if lt > 1.9: c.alpha_composite(Image.new("RGBA", (W, H), (0, 0, 0, int(255 * clamp((lt - 1.9) / .2)))))
     return c
 
 if __name__ == "__main__":
