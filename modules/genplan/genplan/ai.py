@@ -81,8 +81,10 @@ def _gemini(system: str, user: str, http=None) -> str:
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.6}}
-    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest"]))
-    for i, model in enumerate(models):          # перегрузка (503) — следующая бесплатная модель Gemini
+    # 05.11 владелец «да»: лимит основной модели (429) → облегчённая Flash-Lite (свой бесплатный лимит), 0 $
+    models = list(dict.fromkeys([os.environ.get("GEMINI_MODEL", "gemini-flash-latest"), "gemini-flash-latest",
+                                 "gemini-flash-lite-latest"]))
+    for i, model in enumerate(models):          # перегрузка (503) или лимит (429) — следующая бесплатная модель Gemini
         req = urllib.request.Request(f"{('http://127.0.0.1:8790' if os.path.exists('/etc/papa-gemini-proxy/on') else 'https://generativelanguage.googleapis.com')}/v1beta/models/{model}:generateContent",
                                      data=json.dumps(body).encode(),
                                      headers={"content-type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
@@ -90,7 +92,7 @@ def _gemini(system: str, user: str, http=None) -> str:
             data = http(req) if http else json.loads(urllib.request.urlopen(req, timeout=60).read())
             break
         except urllib.error.HTTPError as e:
-            if e.code not in (500, 503, 404) or i == len(models) - 1:
+            if e.code not in (429, 500, 503, 404) or i == len(models) - 1:
                 raise
     parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
     return "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
