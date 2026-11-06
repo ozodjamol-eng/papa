@@ -37,6 +37,33 @@ class NovinkiTest(unittest.TestCase):
             self.assertIn("не получилось", novinki.run(Path(d), NOW, ask=bad))
             self.assertIn("лимит", novinki.short_err(TrendError("Gemini HTTP 429: quota")))
 
+    def test_anthropic_first_and_daily_window(self):
+        p = novinki.prompt(NOW, [], days=2)
+        self.assertIn("26.10.2026", p)
+        self.assertLess(p.index("Anthropic"), p.index("ElevenLabs"))
+
+    def test_fallback_when_gemini_limit(self):
+        def limit(p, search):
+            raise TrendError("Gemini HTTP 429: quota")
+        with tempfile.TemporaryDirectory() as d:
+            out = novinki.run(Path(d), NOW, ask=limit, fallback=lambda p: "🤖 ok\nТЕМЫ: Claude X")
+            self.assertTrue(out.startswith("🤖 ok"))
+            self.assertEqual(novinki.load_history(Path(d) / "history-novinki.json"), ["Claude X"])
+
+    def test_quiet_day_not_sent(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = novinki.run(Path(d), NOW, ask=lambda p, search: ("НИЧЕГО", {}))
+            self.assertTrue(novinki.quiet(out))
+        self.assertFalse(novinki.quiet("🤖 НАШИ ИНСТРУМЕНТЫ\n1) Claude"))
+
+    def test_or_ask_body(self):
+        seen = {}
+        out = novinki.or_ask("q", key="k", post=lambda b: seen.update(b) or {"choices": [{"message": {"content": "ответ"}}]})
+        self.assertEqual(out, "ответ")
+        self.assertEqual(seen["plugins"][0]["max_results"], 5)
+        with self.assertRaises(TrendError):
+            novinki.or_ask("q", key="")
+
 
 if __name__ == "__main__":
     unittest.main()

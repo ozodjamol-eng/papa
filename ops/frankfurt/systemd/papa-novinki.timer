@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 🤖 Наши инструменты — новинки каждый день 13:40 Ташкент (после обнуления лимита Gemini)
+
+[Timer]
+OnCalendar=*-*-* 08:40:00 UTC
+RandomizedDelaySec=5min
+Persistent=false
+Unit=papa-novinki.service
+
+[Install]
+WantedBy=timers.target

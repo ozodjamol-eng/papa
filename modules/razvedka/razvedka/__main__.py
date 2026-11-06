@@ -12,6 +12,7 @@
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
   python -m razvedka github [--send] (github-auto — для таймера) — 🧭 GitHub-разведка: новые полезные инструменты (раз в неделю)
+  python -m razvedka novinki [--send] (novinki-auto — для таймера) — 🤖 новинки наших инструментов, Anthropic первым (ежедневно 13:40)
   python -m razvedka neyro [--send] (neyro-auto — для таймера) — 📡 нейроновинки дня из папки «Нейросеть» (ежедневно 13:30)
   python -m razvedka sources          — 📡 отбор каналов-источников (белый список, 26.10) → таблица в главный пульт
   python -m razvedka hunt             — найти утренние видео («Жума тонги»…) для утреннего блока GENPLAN
@@ -509,6 +510,22 @@ def main(argv: list[str]) -> None:
                 print("TREND_SENT", m)
         print("TREND_DONE")
         return
+    if cmd in ("novinki", "novinki-auto"):    # 🤖 06.11 владелец: новинки наших инструментов (Anthropic первым) — каждый день
+        from . import novinki
+        out = Path(PUB) / "github"
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            text = novinki.run(out, days=2)
+        except Exception as e:
+            text = f"🤖 Наши инструменты: ошибка — {type(e).__name__}: {e}"
+        print(text, flush=True)
+        if (cmd == "novinki-auto" or "--send" in argv) and not novinki.quiet(text):
+            from . import masters
+            for part in masters.messages(text):
+                asyncio.run(_send(part))
+            print("NOVINKI_SENT")
+        print("NOVINKI_DONE")
+        return
     if cmd in ("neyro", "neyro-auto"):        # 📡 01.11: ежедневные нейроновинки из папки «Нейросеть»
         from . import masters
         out = Path(PUB) / "github"
@@ -544,16 +561,7 @@ def main(argv: list[str]) -> None:
         if cmd == "github-auto" or "--send" in argv:
             asyncio.run(_send(text))
             print("GITHUB_SENT")
-        # 28.10 владелец: + «Новинки сервисов» (ElevenLabs, Google, Kling…) — тем же недельным заходом, отдельным сообщением
-        from . import novinki
-        try:
-            ntext = novinki.run(out)
-        except Exception as e:
-            ntext = f"🆕 Новинки сервисов: ошибка — {type(e).__name__}: {e}"
-        print(ntext, flush=True)
-        if cmd == "github-auto" or "--send" in argv:
-            asyncio.run(_send(ntext))
-            print("NOVINKI_SENT")
+        # 06.11: «Новинки сервисов» ушли из недельного захода в ежедневный (команда novinki, таймер papa-novinki)
         # 01.11 владелец («Да, уши нам нужны»): 🎓 уроки мастеров YouTube — Gemini смотрит ролики целиком
         from . import masters
         try:
