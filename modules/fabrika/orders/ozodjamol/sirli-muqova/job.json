@@ -1,0 +1,184 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "tts",
+   "name": "m01",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Bu muqova internetni portlatdi. Undagi har bir rasm — bir sir. Keling, birma-bir ochamiz.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "next_text": "Tepada — toj va oltin shahar. Osmonga ko'tarilayotgan odamlar. Farishtalar karnay chalmoqda."
+  },
+  {
+   "do": "tts",
+   "name": "m02",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Tepada — toj va oltin shahar. Osmonga ko'tarilayotgan odamlar. Farishtalar karnay chalmoqda.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Bu muqova internetni portlatdi. Undagi har bir rasm — bir sir. Keling, birma-bir ochamiz.",
+   "next_text": "O'ng tomonda — to'rt otliq, qizil oy va qum soat. Vaqt tugayaptimi?"
+  },
+  {
+   "do": "tts",
+   "name": "m03",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "O'ng tomonda — to'rt otliq, qizil oy va qum soat. Vaqt tugayaptimi?",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Tepada — toj va oltin shahar. Osmonga ko'tarilayotgan odamlar. Farishtalar karnay chalmoqda.",
+   "next_text": "Pastda — Amerika va Xitoy bayrog'i. Tanklar, tutun."
+  },
+  {
+   "do": "tts",
+   "name": "m04",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Pastda — Amerika va Xitoy bayrog'i. Tanklar, tutun.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "O'ng tomonda — to'rt otliq, qizil oy va qum soat. Vaqt tugayaptimi?",
+   "next_text": "Sun'iy intellekt, kuzatuv kameralari va tushayotgan valyutalar. Yonida — bitkoin."
+  },
+  {
+   "do": "tts",
+   "name": "m05",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Sun'iy intellekt, kuzatuv kameralari va tushayotgan valyutalar. Yonida — bitkoin.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Pastda — Amerika va Xitoy bayrog'i. Tanklar, tutun.",
+   "next_text": "Eng pastda — yorilgan yer va boshini ushlagan odamlar."
+  },
+  {
+   "do": "tts",
+   "name": "m06",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Eng pastda — yorilgan yer va boshini ushlagan odamlar.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Sun'iy intellekt, kuzatuv kameralari va tushayotgan valyutalar. Yonida — bitkoin.",
+   "next_text": "Millionlar bu bashoratni tarqatdi. Lekin bitta savol: buni kim chizgan?"
+  },
+  {
+   "do": "tts",
+   "name": "m07",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Millionlar bu bashoratni tarqatdi. Lekin bitta savol: buni kim chizgan?",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Eng pastda — yorilgan yer va boshini ushlagan odamlar.",
+   "next_text": "Javob: Ekonomist jurnali emas. Bu muqova — soxta. Muallifning o'zi tan olgan: bu — taqlid. Tarqatishdan oldin — manbani tekshiring."
+  },
+  {
+   "do": "tts",
+   "name": "m08",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Javob: Ekonomist jurnali emas. Bu muqova — soxta. Muallifning o'zi tan olgan: bu — taqlid. Tarqatishdan oldin — manbani tekshiring.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Millionlar bu bashoratni tarqatdi. Lekin bitta savol: buni kim chizgan?",
+   "next_text": "Haqiqiy muqova esa bir necha kunda chiqadi. Unda nima borligini Katta Davrada birinchi bo'lib ko'rsatamiz."
+  },
+  {
+   "do": "tts",
+   "name": "m09",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Haqiqiy muqova esa bir necha kunda chiqadi. Unda nima borligini Katta Davrada birinchi bo'lib ko'rsatamiz.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Javob: Ekonomist jurnali emas. Bu muqova — soxta. Muallifning o'zi tan olgan: bu — taqlid. Tarqatishdan oldin — manbani tekshiring.",
+   "next_text": "Rostini ayting: siz bunga ishonganmidingiz? Izohda yozing."
+  },
+  {
+   "do": "tts",
+   "name": "m10",
+   "voice_id": "HuvYaRnnFThBzzjuGfrR",
+   "text": "Rostini ayting: siz bunga ishonganmidingiz? Izohda yozing.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Haqiqiy muqova esa bir necha kunda chiqadi. Unda nima borligini Katta Davrada birinchi bo'lib ko'rsatamiz."
+  },
+  {
+   "do": "music",
+   "name": "musiqa",
+   "prompt": "Dark investigative documentary underscore for a mystery explainer. Slow tense pulse at 80 BPM, low cello and contrabass drones, sparse felt piano notes, soft ticking clock texture, distant timpani swells, building suspense, a hushed reveal moment around 45 seconds, then calm unresolved ending. No vocals, no heavy drums, cinematic, true crime style.",
+   "ms": 80000,
+   "instrumental": true
+  }
+ ],
+ "telegram": false,
+ "hear": true
+}
