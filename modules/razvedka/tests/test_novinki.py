@@ -41,6 +41,8 @@ class NovinkiTest(unittest.TestCase):
         p = novinki.prompt(NOW, [], days=2)
         self.assertIn("26.10.2026", p)
         self.assertLess(p.index("Anthropic"), p.index("ElevenLabs"))
+        self.assertIn("anthropic.com", p)
+        self.assertIn("не раньше 26.10.2026", p)
 
     def test_fallback_when_gemini_limit(self):
         def limit(p, search):
