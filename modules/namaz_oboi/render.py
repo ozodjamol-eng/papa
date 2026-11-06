@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""«🕌 Намоз обои» (03.11.2026, шаблоны владельца NAMOZ_EDITOR): 5 обоев 1080×2400 с временем недели.
+"""«🕌 Намоз обои» (06.11.2026 v3, шаблоны владельца из ChatGPT): обои на весь экран с пустой рамкой.
 
-Владелец: «5 материалов кидаются вместе с готовым текстом — человек сам выбирает». Время — из «Намоз маркази»
-(выгрузка PAPA /var/lib/papa-namaz/namaz.json); перерисовка только когда время изменилось. Координаты — из редактора
-владельца (index.html, android). Результат: /var/lib/papa-namaz/oboi/<день>/{01..05}.jpg + caption.txt.
+Владелец 06.11: «все эти фоны с пустым шаблоном утверждаю… впредь, если буду менять фоны, буду так использовать этот
+шаблон… когда намаз хотят видеть, пускай выходят все варианты». Старые шаблоны 1080×2400 были картинкой с мутными
+полосами — на телефоне выглядело «не до конца». Код вписывает только неделю (в синюю ленту) и 5 времён (в кремовые плашки),
+шрифт — жирный засечный, как названия на шаблоне. Новый фон = положить PNG в assets/v3 + строку в TEMPLATES.
+Результат: /var/lib/papa-namaz/oboi/<день_время_v3>/{01..}.jpg + caption.txt.
 """
 import datetime as dt
 import json
@@ -14,10 +16,15 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).resolve().parent
-STYLES = ("01_Rassvet", "02_Nochnaya_mechet", "03_Bely_mramor", "04_Zelenaya_priroda", "05_Nasledie_Uzbekistana")
-POS = {"01_Rassvet": ((.50, .468), (.556, .598, .640, .683, .726)), "02_Nochnaya_mechet": ((.50, .468), (.556, .598, .640, .683, .726))}
-POS_B = ((.50, .409), (.505, .550, .596, .641, .687))
-X_TIME = .7135
+VERSION = "v3"
+FRAME_1290 = {"date": (646, 1120, 500, 42), "times": (901, (1392, 1523, 1650, 1778, 1909), 70)}   # одна рамка у всех 1290×2796
+TEMPLATES = [   # (файл, разметка). 03_Tong_masjid — двойная рамка (брак ChatGPT): включить, только если владелец скажет
+    ("01_Bogcha.png", {"date": (471, 690, 345, 30), "times": (657, (885, 983, 1072, 1165, 1265), 50)}),
+    ("02_Samarqand.png", FRAME_1290),
+    ("04_Tungi_masjid.png", FRAME_1290),
+    ("05_Tungi_fonus.png", FRAME_1290),
+    ("06_Vodiy.png", FRAME_1290),
+]
 NAMES = ("bomdod", "peshin", "asr", "shom", "xufton")
 MONTHS = ("январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь")
 CAPTION = ("🕌 <b>ХЎЖАОБОД ТУМАНИ — НАМОЗ ВАҚТЛАРИ</b>\n\n📅 {week}\n\n"
@@ -35,30 +42,31 @@ def week_label(day: dt.date) -> str:
     return f"{a} – {end.day} {MONTHS[end.month - 1]} {end.year} йил"
 
 
+def fnt(size: int):
+    return ImageFont.truetype(str(HERE / "assets" / "DejaVuSerif-Bold.ttf"), size)
+
+
 def text(draw, xy, s, size, fill, stroke):
-    f = ImageFont.truetype(str(HERE / "assets" / "DejaVuSerif-Bold.ttf"), size)
-    draw.text(xy, s, font=f, fill=fill, anchor="mm", stroke_width=max(2, round(size * .065)), stroke_fill=stroke)
+    draw.text(xy, s, font=fnt(size), fill=fill, anchor="mm", stroke_width=max(2, round(size * .06)), stroke_fill=stroke)
 
 
-def render(row: dict, out: Path) -> list[Path]:
+def render(row: dict, out: Path, templates=None) -> list[Path]:
     day = dt.date.fromisoformat(row["day"])
     week = week_label(day)
     out.mkdir(parents=True, exist_ok=True)
     files = []
-    for i, st in enumerate(STYLES, 1):
-        im = Image.open(HERE / "assets" / f"{st}_android.jpg").convert("RGB")
-        w, h = im.size
+    for i, (name, lay) in enumerate(templates or TEMPLATES, 1):
+        im = Image.open(HERE / "assets" / VERSION / name).convert("RGB")
         d = ImageDraw.Draw(im)
-        (dx, dy), rows = POS.get(st, POS_B)
-        size = 40                                  # сана пиллага сиғсин (DejaVu Georgia'дан кенгроқ)
-        fnt = lambda z: ImageFont.truetype(str(HERE / "assets" / "DejaVuSerif-Bold.ttf"), z)
-        while size > 22 and d.textlength(week, font=fnt(size)) > .58 * w:
+        cx, cy, maxw, size = lay["date"]
+        while size > 16 and d.textlength(week, font=fnt(size)) > maxw:      # неделя сама влезает в ленту
             size -= 1
-        text(d, (dx * w, dy * 2400), week, size, "#FFF9E9", "#0c2745")
-        for n, y in zip(NAMES, rows):
-            text(d, (X_TIME * w, y * 2400), row[n], 54, "#081632", "#fff9e8")
-        f = out / f"{i:02d}_{st}.jpg"
-        im.save(f, quality=92)
+        text(d, (cx, cy), week, size, "#FFF6DC", "#0b1d45")
+        tx, ys, ts = lay["times"]
+        for n, y in zip(NAMES, ys):
+            text(d, (tx, y), row[n], ts, "#0b1838", "#fffaf0")
+        f = out / f"{i:02d}_{Path(name).stem}.jpg"
+        im.save(f, quality=93)
         files.append(f)
     (out / "caption.txt").write_text(CAPTION.format(week=week, **{n: row[n] for n in NAMES}), encoding="utf-8")
     return files
@@ -75,7 +83,7 @@ def main() -> int:
     row = current(json.loads(src.read_text(encoding="utf-8"))["schedule"], dt.date.today())
     if not row:
         print("обои: нет времени"); return 0
-    key = row["day"] + "_" + "-".join(row[n].replace(":", "") for n in NAMES)
+    key = row["day"] + "_" + "-".join(row[n].replace(":", "") for n in NAMES) + "_" + VERSION
     out = base / key
     if not (out / "caption.txt").exists():
         render(row, out)

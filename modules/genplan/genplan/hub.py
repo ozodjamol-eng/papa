@@ -1197,10 +1197,11 @@ def namaz_text_callback(bot, db, cfg: dict, cq: dict) -> str:
     day = dt.date.fromisoformat(d["day"])
     photo, caption = None, None
     files = [Path(f) for f in d.get("files") or [] if Path(f).is_file()]
-    if files:                                            # баннер канал учун — обоилардан бири (ҳар ҳафта бошқаси)
-        pick = files[day.isocalendar()[1] % len(files)]
-        final = STATE / "namaz" / f"banner-{day.isoformat()}-{msg_id}.jpg"
-        final.write_bytes(pick.read_bytes())
+    if files:                                            # 06.11 владелец: «пускай выходят все варианты» — альбом из всех обоев
+        final = STATE / "namaz" / f"album-{day.isoformat()}-{msg_id}"
+        final.mkdir(parents=True, exist_ok=True)
+        for f in files[:10]:
+            (final / f.name).write_bytes(f.read_bytes())
         photo, caption = str(final), _re.sub(r"<[^>]+>", "", d.get("caption") or "") or None
     namaz.save(db, [(day, d["times"])], now, photo=photo, caption=caption)
     for c in cfg["channels"]:

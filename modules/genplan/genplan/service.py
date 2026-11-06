@@ -560,7 +560,15 @@ async def tick_namaz(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, log
                 ERRORS.append(f"⚠️ {ch['title']}: баннер намаза не найден — вышел только текст. Бросьте пост ещё раз.")
                 photo = None
             try:
-                if photo:                                       # 22.10: готовый пост владельца (баннер + его текст)
+                if photo and Path(photo).is_dir():               # 06.11: альбом всех обоев намаза + текст
+                    pics = sorted(str(f) for f in Path(photo).iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png"))[:10]
+                    if hasattr(p, "publish_photos"):
+                        mid = p.publish_photos(to, pics, r["text"])
+                    else:                                       # бот-публикатор без альбома — первая обоя
+                        mid = p.publish_photo(to, pics[0], r["text"])
+                    if ch["publisher"] == "account":
+                        mid = await mid
+                elif photo:                                     # 22.10: готовый пост владельца (баннер + его текст)
                     mid = p.publish_photo(to, photo, r["text"])
                     if ch["publisher"] == "account":
                         mid = await mid

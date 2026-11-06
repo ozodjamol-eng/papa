@@ -102,7 +102,7 @@ def oboi_current(base: Path = OBOI) -> tuple[str, list[Path], str] | None:
         cap = (d / "caption.txt").read_text(encoding="utf-8")
     except OSError:
         return None
-    return (key, files, cap) if len(files) == 5 else None
+    return (key, files, cap) if 1 <= len(files) <= 10 else None      # 06.11: шаблонов может быть больше/меньше 5
 
 
 TOP_ROWS = [[{"text": T.GROUP_BTN}, {"text": T.DESC_BTN}], [{"text": T.MP3_BTN}, {"text": T.SAVE_BTN}]]   # 04.11 владелец: 4 кнопки Chaqqon сверху

@@ -202,7 +202,7 @@ class TestNamazText(unittest.TestCase):
         self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq), "namaz_t_ok")
         s = namaz.schedule_for(self.db, dt.date(2026, 10, 30))
         self.assertEqual((s["asr"], s["shom"]), ("15:40", "17:25"))
-        self.assertTrue(s["photo"] and Path(s["photo"]).is_file())                                # баннер — одна из обоев
+        self.assertTrue(s["photo"] and Path(s["photo"]).is_dir() and any(Path(s["photo"]).iterdir()))   # 06.11: альбом всех обоев
         self.assertNotIn("<b>", s["caption"])
 
     def test_no_and_stale(self):
@@ -215,3 +215,38 @@ class TestNamazText(unittest.TestCase):
         self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq("nzt:ok", 1)), "namaz_t_stale")
         self.assertEqual(hub.namaz_text_callback(bot, self.db, CFG, cq("nzt:no", d["card"])), "namaz_t_no")
         self.assertIsNone(namaz.schedule_for(self.db, dt.date(2026, 10, 30)))
+
+
+class TestNamazAlbum(unittest.TestCase):
+    """06.11 владелец: «когда намаз хотят видеть, пускай выходят все эти варианты» — таблица намаза уходит альбомом."""
+
+    def test_album_dir_published_as_album(self):
+        import asyncio
+        import tempfile
+        import tomllib
+        from genplan import namaz, service, store
+        cfg = tomllib.loads((Path(__file__).resolve().parent.parent / "config.toml").read_text(encoding="utf-8"))
+        cfg["channels"]["xojaobod"]["mode"] = "shadow"
+        db = store.connect(":memory:")
+        with tempfile.TemporaryDirectory() as d:
+            for i in range(3):
+                (Path(d) / f"0{i}.jpg").write_bytes(b"x")
+            day = dt.date(2026, 11, 9)
+            namaz.save(db, [(day, {"bomdod": "06:10", "peshin": "12:45", "asr": "15:30", "shom": "17:15", "xufton": "18:45"})],
+                       dt.datetime(2026, 11, 8, 20, 0, tzinfo=namaz.plan.TZ), photo=d, caption="ok")
+
+            class Acc:
+                sent = []
+
+                async def publish_photos(self, chat, paths, caption=""):
+                    self.sent.append(paths)
+                    return 7
+
+                async def publish(self, *a, **k):
+                    return 8
+            acc = Acc()
+            now = namaz.plan.slot_time(day, "05:41")
+            asyncio.run(service.tick_namaz(db, cfg, {"TEST_CHAT_ID": "-100", "TEST_GROUP_ID": "-100"},
+                                           {"account": acc, "bot": acc}, now, log=lambda s: None))
+            self.assertEqual(len(acc.sent), 1)
+            self.assertEqual(len(acc.sent[0]), 3)
