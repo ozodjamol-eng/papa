@@ -265,6 +265,16 @@ async def run() -> None:
                         _b.rename(_b.with_name(_b.name.replace("bad-", "err-")))
                 except Exception as e:  # noqa: BLE001
                     print(f"adsin: {type(e).__name__}: {e}", flush=True)
+                try:                                          # 📅 06.11 21:30 — режим дня на завтра в пульт канала
+                    from . import rezhim as _rz
+                    _n = dt.datetime.now(plan.TZ)
+                    for _c in _rz.evening_due(db, c, _n):
+                        _t, _kb = _rz.open_card(db, c, _c, _n.date() + dt.timedelta(days=1), _n)
+                        _b = bots.for_channel(_c, bot)
+                        for o in owners:
+                            _b("sendMessage", chat_id=o, text=_t, reply_markup=_kb)
+                except Exception as e:  # noqa: BLE001
+                    print(f"rezhim: {type(e).__name__}: {e}", flush=True)
                 try:                                          # 🌙 Кечки дайжест → группа Хўжаобод (20:30)
                     from . import digest as _dg
                     pub = await _dg.publish_live(db, c, env, acc)

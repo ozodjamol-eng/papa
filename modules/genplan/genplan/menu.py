@@ -122,6 +122,11 @@ def panel_markup(cfg: dict, channel: str, button: str, db=None, now: dt.datetime
         _, kb = hub.ads_screen(db, cfg, channel, (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ))
         if kb["inline_keyboard"]:
             return kb
+    if button == P_TODAY:                            # 📅 06.11: «🗓 Режим дня» — под планом дня, без новой кнопки в панели
+        from . import rezhim
+        kb = rezhim.today_button(cfg, channel, (now or dt.datetime.now(plan.TZ)).astimezone(plan.TZ))
+        if kb:
+            return kb
     from . import bots
     if button == P_SETTINGS and namaz.opts(cfg["channels"][channel]) and bots.SHTAB.get("bot") is None:
         return {"inline_keyboard": [[{"text": "🕌 Намоз — новый пост", "callback_data": "nz:set"}]]}   # 05.11: есть ШТАБ — там

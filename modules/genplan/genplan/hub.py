@@ -1270,6 +1270,9 @@ def callback(bot, db, cfg: dict, owners: set[int], cq: dict, now: dt.datetime | 
         return namaz_text_callback(bot, db, cfg, cq)
     if cq["data"].startswith("nz:"):                      # 🕌 готовый пост намаза: ✅ / ✏️ / ❌
         return namaz_callback(bot, db, cfg, cq)
+    if cq["data"].startswith("rz:"):                      # 📅 06.11 режим дня по галочкам
+        from . import rezhim
+        return rezhim.callback(bot, db, cfg, cq, now)
     if cq["data"].split(":", 1)[0] in ("al", "ac", "as", "asy", "ax", "axy"):   # 📢 Мои кампании
         return ads_callback(bot, db, cfg, cq, now)
     chat, msg_id = cq["message"]["chat"]["id"], cq["message"]["message_id"]

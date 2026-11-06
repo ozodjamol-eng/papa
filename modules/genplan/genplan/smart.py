@@ -161,7 +161,16 @@ def free_hours(db, ch: dict, channel: str, rubric: str | None, now: dt.datetime,
     return [t for t in hour_slots(ch, day)
             if t >= now + LEAD and (until is None or t < until) and allowed(ch, t, rubric)
             and (minbar or rubric == MINBAR or not is_minbar_hour(ch, t))
-            and not blocked(db, channel, t) and not hour_taken(db, channel, t, exclude)]
+            and not blocked(db, channel, t) and not hour_taken(db, channel, t, exclude)
+            and not _rezhim_off(db, ch, channel, t)]
+
+
+def _rezhim_off(db, ch: dict, channel: str, t: dt.datetime) -> bool:
+    """📅 06.11 режим дня: час выключен владельцем галочкой — запас/якорь/умное время его не занимают."""
+    if not ch.get("rezhim"):
+        return False
+    from . import rezhim
+    return rezhim.is_off(db, channel, t)
 
 
 def free_at(db, cfg: dict, channel: str, t: dt.datetime, rubric: str | None, now: dt.datetime,
@@ -750,6 +759,8 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
     items += namaz.today_lines(db, channel, day)
     from . import morning
     items += morning.today_lines(db, channel, day)
+    from . import rezhim
+    items += rezhim.day_lines(db, cfg, channel, day, now)
     items.sort(key=lambda x: x[0])
     later = len(sched) - len(today)
     st = store.stock(db, channel)
