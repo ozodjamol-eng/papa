@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<!-- «Нега сени севдим» (Бегзод Ҳаққиев) — рисованная история на белом листе. Чёрная линия + красное сердце. -->
+<style>
+@font-face{font-family:CV;src:url(file:///home/claude/k/fonts/Caveat.ttf);font-weight:100 900}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#F7F4EE}
+canvas{position:absolute;left:0;top:0}
+</style></head><body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+const O=3, SONG=82.9, DUR=O+SONG+0.4; window.DUR=DUR;
+const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)), lin=(t,a,b)=>cl((t-a)/(b-a));
+const eio=v=>v<.5?4*v*v*v:1-Math.pow(-2*v+2,3)/2, eo=v=>1-Math.pow(1-v,3);
+const mix=(a,b,k)=>a+(b-a)*k;
+const INK='#151515', RED='#FF1024', PAPER='#F7F4EE';
+// детерминированный шум
+function hash(n){n=Math.sin(n*127.1+311.7)*43758.5453;return n-Math.floor(n)}
+let SEED=0; const jit=(i,a)=>(hash(i*13.7+SEED*91.3)-.5)*2*a;
+// бумага (один раз)
+const paper=document.createElement('canvas');paper.width=1080;paper.height=1920;
+{const p=paper.getContext('2d');p.fillStyle=PAPER;p.fillRect(0,0,1080,1920);
+ const id=p.getImageData(0,0,1080,1920),d=id.data;
+ for(let i=0;i<d.length;i+=4){const n=(hash(i*.37)-.5)*10;d[i]+=n;d[i+1]+=n;d[i+2]+=n}
+ p.putImageData(id,0,0);
+ const g=p.createRadialGradient(540,900,300,540,900,1250);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(60,45,30,.16)');p.fillStyle=g;p.fillRect(0,0,1080,1920);
+ for(let k=0;k<70;k++){p.strokeStyle=`rgba(120,100,80,${.03+hash(k)*.03})`;p.lineWidth=1;p.beginPath();const sx=hash(k*3)*1080,sy=hash(k*5)*1920;p.moveTo(sx,sy);p.quadraticCurveTo(sx+hash(k*7)*40,sy+20,sx+hash(k*11)*80-40,sy+hash(k*13)*60);p.stroke()}}
+// ---------- штрихи ----------
+function seg(a,b,n=14,bend=0){const p=[];for(let i=0;i<=n;i++){const s=i/n,bx=-(b[1]-a[1]),by=b[0]-a[0],L=Math.hypot(bx,by)||1,k=Math.sin(s*Math.PI)*bend;
+  p.push([mix(a[0],b[0],s)+bx/L*k,mix(a[1],b[1],s)+by/L*k])}return p}
+function chain(pts,n=12,bend=0){let out=[];for(let i=0;i<pts.length-1;i++){const s=seg(pts[i],pts[i+1],n,bend*(i%2?-1:1));out=out.concat(i?s.slice(1):s)}return out}
+function circle(cx,cy,r,n=46){const p=[];for(let i=0;i<=n;i++){const a=-Math.PI/2+i/n*Math.PI*2.06;p.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r])}return p}
+function strokeLen(p){let L=0;for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return L}
+// рисует набор штрихов с прорисовкой rev (0..1) по общей длине, с «дрожью» линии
+function drawStrokes(S,rev,w=7,col=INK,boil=1.6,pen=false){
+  const Ls=S.map(strokeLen),T=Ls.reduce((a,b)=>a+b,0)||1;let left=rev*T,tip=null;
+  x.strokeStyle=col;x.lineCap='round';x.lineJoin='round';
+  S.forEach((p,si)=>{if(left<=0)return;const L=Ls[si];const f=Math.min(1,left/L);left-=L;
+    x.beginPath();let acc=0;for(let i=0;i<p.length;i++){if(i){acc+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(acc>f*L)break}
+      const px=p[i][0]+jit(si*100+i,boil),py=p[i][1]+jit(si*100+i+50,boil);
+      x.lineWidth=w*(0.75+0.35*Math.sin(i*.45+si));i?x.lineTo(px,py):x.moveTo(px,py);tip=[px,py]}
+    x.stroke()});
+  if(pen&&rev<1&&tip){x.fillStyle=INK;x.beginPath();x.arc(tip[0],tip[1],w*.9,0,7);x.fill()}
+}
+// ---------- фигуры ----------
+const P={ // позы: суставы относительно точки на земле (0,0), рост ~560
+ stand:{head:[0,-505],r:52,neck:[0,-448],hip:[0,-225],eL:[-48,-345],hL:[-58,-245],eR:[48,-345],hR:[58,-245],kL:[-26,-112],fL:[-44,0],kR:[26,-112],fR:[44,0]},
+ heart:{head:[6,-505],r:52,neck:[0,-448],hip:[0,-225],eL:[40,-360],hL:[18,-330],eR:[70,-360],hR:[30,-322],kL:[-26,-112],fL:[-44,0],kR:[26,-112],fR:[44,0]},
+ offer:{head:[10,-505],r:52,neck:[0,-448],hip:[0,-225],eL:[70,-385],hL:[150,-395],eR:[80,-375],hR:[160,-382],kL:[-26,-112],fL:[-44,0],kR:[26,-112],fR:[44,0]},
+ kneel:{head:[30,-395],r:52,neck:[20,-338],hip:[-10,-130],eL:[95,-290],hL:[175,-300],eR:[105,-280],hR:[185,-288],kL:[-20,-6],fL:[-140,-4],kR:[95,-120],fR:[105,0]},
+ kneel_down:{head:[62,-330],r:52,neck:[34,-300],hip:[-10,-130],eL:[80,-210],hL:[110,-130],eR:[92,-205],hR:[125,-125],kL:[-20,-6],fL:[-140,-4],kR:[95,-120],fR:[105,0]},
+ sit:{head:[120,-268],r:52,neck:[60,-280],hip:[-40,-30],eL:[95,-170],hL:[150,-120],eR:[105,-160],hR:[160,-110],kL:[110,-190],fL:[150,0],kR:[125,-180],fR:[170,0]},
+ // девушка (смотрит влево, юбка)
+ g_stand:{head:[0,-500],r:48,neck:[0,-445],hip:[0,-235],eL:[-40,-345],hL:[-48,-250],eR:[40,-345],hR:[48,-250],kL:[-20,-110],fL:[-32,0],kR:[20,-110],fR:[32,0]},
+ g_turn:{head:[8,-500],r:48,neck:[0,-445],hip:[0,-235],eL:[-34,-345],hL:[-20,-255],eR:[44,-345],hR:[58,-255],kL:[-20,-110],fL:[-32,0],kR:[20,-110],fR:[32,0]},
+};
+function lerpPose(a,b,k){const o={};for(const key in a){o[key]=Array.isArray(a[key])?[mix(a[key][0],b[key][0],k),mix(a[key][1],b[key][1],k)]:mix(a[key],b[key],k)}return o}
+function figStrokes(J,ox,oy,flip=1,girl=false,walk=0){
+  const T=p=>[ox+p[0]*flip*K,oy+p[1]*K];
+  let kL=J.kL,fL=J.fL,kR=J.kR,fR=J.fR;
+  if(walk){const s=Math.sin(walk);kL=[J.kL[0]+18*s,J.kL[1]];fL=[J.fL[0]+40*s,J.fL[1]-Math.max(0,s)*18];kR=[J.kR[0]-18*s,J.kR[1]];fR=[J.fR[0]-40*s,J.fR[1]-Math.max(0,-s)*18]}
+  const S=[circle(...T(J.head),J.r*K)];
+  S.push(seg(T(J.neck),T(J.hip),14,flip*4));
+  S.push(chain([T(J.neck),T(J.eL),T(J.hL)],10,3));S.push(chain([T(J.neck),T(J.eR),T(J.hR)],10,3));
+  if(girl){ // юбка-трапеция и волосы
+    const h=T(J.hip),n=T(J.neck);S.push(chain([[n[0]-22*K*flip,n[1]+70*K],[h[0]-70*K,h[1]+70*K],[h[0]+70*K,h[1]+70*K],[n[0]+22*K*flip,n[1]+70*K]],10,2));
+    const hd=T(J.head);for(let i=0;i<3;i++)S.push(chain([[hd[0]+(10+i*12)*K*flip,hd[1]-(J.r-4)*K],[hd[0]+(44+i*10)*K*flip,hd[1]+10*K],[hd[0]+(36+i*14)*K*flip,hd[1]+(110+i*18)*K]],10,6));
+    S.push(chain([T([J.hip[0],J.hip[1]+70]),T(kL),T(fL)],10,2));S.push(chain([T([J.hip[0],J.hip[1]+70]),T(kR),T(fR)],10,2));
+  } else {S.push(chain([T(J.hip),T(kL),T(fL)],12,3));S.push(chain([T(J.hip),T(kR),T(fR)],12,3))}
+  return S;
+}
+// ---------- сердце ----------
+function heartPath(cx,cy,s,half=0,gap=0){ // half: 0 целое, -1 левая, 1 правая
+  const pts=[];for(let i=0;i<=80;i++){const t=i/80*Math.PI*2;pts.push([16*Math.pow(Math.sin(t),3),-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))])}
+  x.save();x.translate(cx,cy);x.scale(s/17,s/17);
+  if(half){x.translate(half*gap,gap*.4*Math.abs(half));x.rotate(half*gap*.02);
+    x.beginPath();const zz=[[0,-5],[2.5,-1],[-2,3],[2,7],[-1.5,11],[0,17]];
+    if(half<0){x.moveTo(-30,-20);x.lineTo(0,-20);zz.forEach(p=>x.lineTo(p[0],p[1]));x.lineTo(0,20);x.lineTo(-30,20)}
+    else{x.moveTo(30,-20);x.lineTo(0,-20);zz.forEach(p=>x.lineTo(p[0],p[1]));x.lineTo(0,20);x.lineTo(30,20)}
+    x.closePath();x.clip()}
+  x.beginPath();pts.forEach((p,i)=>{const px=p[0]+jit(i,.25),py=p[1]+jit(i+40,.25);i?x.lineTo(px,py):x.moveTo(px,py)});x.closePath();
+  x.fillStyle=RED;x.fill();
+  // акварельная тёмная кромка и блик
+  x.lineWidth=17/s*5;x.strokeStyle='rgba(150,0,15,.55)';x.stroke();
+  x.fillStyle='rgba(255,255,255,.35)';x.beginPath();x.ellipse(-7,-5,3.2,1.8,-.6,0,7);x.fill();
+  x.restore();
+}
+// ---------- сцена ----------
+const GY=1340, K=1.38;
+window.ready=document.fonts.load('700 80px CV').then(()=>document.fonts.ready);
+window.renderAt=function(t){
+  SEED=Math.floor(t*12); // «живая» линия 12 раз в секунду
+  x.setTransform(1,0,0,1,0,0);x.drawImage(paper,0,0);
+  const z=1+.05*eio(lin(t,0,DUR)), dx=Math.sin(t*.21)*8;
+  x.setTransform(z,0,0,z,540-540*z+dx,1100-1100*z);
+  // заголовок — пишется рукой
+  { const a=lin(t,.2,2.6), out=1-lin(t,O+5,O+6.5);
+    if(out>0){x.save();x.globalAlpha=out;x.font='700 150px CV';x.textAlign='center';x.fillStyle=INK;
+      const tw=x.measureText('Нега сени севдим').width;x.beginPath();x.rect(540-tw/2-20,290,(tw+40)*eo(a),200);x.clip();
+      x.fillText('Нега сени севдим',540,440);x.restore();
+      x.save();x.globalAlpha=out*cl(lin(t,1.8,2.8));x.font='700 80px CV';x.textAlign='center';x.fillStyle=RED;x.fillText('Бегзод Ҳаққиев',540,545);x.restore()}
+  }
+  // земля
+  drawStrokes([chain([[90,GY+4],[400,GY-2],[700,GY+3],[990,GY-1]],16,2)],eo(lin(t,O-.3,O+1.2)),5,INK,1.2);
+  // --- парень ---
+  let bx=260, J=P.stand, walk=0;
+  if(t>O+13&&t<O+17)J=lerpPose(P.stand,P.heart,eio(lin(t,O+13,O+14.2)));
+  if(t>=O+14.2)J=lerpPose(P.heart,P.offer,eio(lin(t,O+15.5,O+17)));
+  if(t>=O+31){const k=lin(t,O+31,O+36);bx=mix(260,360,eio(k));walk=k<1?t*7:0}
+  if(t>=O+35.5)J=lerpPose(P.offer,P.kneel,eio(lin(t,O+35.5,O+37)));
+  if(t>=O+53)J=lerpPose(P.kneel,P.kneel_down,eio(lin(t,O+53,O+54.5)));
+  if(t>=O+56)J=lerpPose(P.kneel_down,P.sit,eio(lin(t,O+56,O+60)));
+  if(t>=O+56)bx=mix(360,230,eio(lin(t,O+56,O+60)));
+  const bRev=eo(lin(t,O,O+2.8));
+  drawStrokes(figStrokes(J,bx,GY,1,false,walk),bRev,9,INK,1.8,true);
+  // сердце: рождается в груди, переходит в ладони, падает и трескается
+  { const born=lin(t,O+2.6,O+3.4); if(born>0){
+    const beat=1+.08*Math.exp(-((t%0.73)/0.73)*7);
+    let hx=bx+(J.neck[0]+8)*K, hy=GY+(J.neck[1]+70)*K, s=46*K;
+    const toHand=eio(lin(t,O+14,O+17)); const hand=[bx+((J.hL[0]+J.hR[0])/2+26)*K,GY+((J.hL[1]+J.hR[1])/2-38)*K];
+    hx=mix(hx,hand[0],toHand);hy=mix(hy,hand[1],toHand);s=mix(46*K,70*K,toHand);
+    // падение (после «бундан зўр азоб йўқ»)
+    const fall=lin(t,O+53.6,O+54.4), crack=lin(t,O+54.4,O+55.2);
+    if(fall>0){hy=mix(hy,GY-55,fall*fall);hx=mix(hx,560,fall)}
+    const bs=s*cl(eo(born)*1.15)*(fall>0?1:beat);
+    if(crack<=0)heartPath(hx,hy,bs);
+    else{const g=eo(crack)*7;heartPath(hx,hy,bs,-1,g);heartPath(hx,hy,bs,1,g);
+      if(crack<1){x.strokeStyle=INK;x.lineWidth=4;for(let i=0;i<6;i++){const a=-Math.PI+i*.62,r1=60+40*crack,r2=r1+40*(1-crack);x.globalAlpha=1-crack;x.beginPath();x.moveTo(hx+Math.cos(a)*r1,hy+Math.sin(a)*r1*.6);x.lineTo(hx+Math.cos(a)*r2,hy+Math.sin(a)*r2*.6);x.stroke()}x.globalAlpha=1}}
+  }}
+  // --- девушка ---
+  { const gRev=eo(lin(t,O+27,O+30)); if(gRev>0){
+      let gx=820, flip=1, GJ=P.g_stand, gw=0;
+      const turn=lin(t,O+43,O+44);            // «бевафо» — отворачивается
+      if(turn>0){flip=turn<.5?mix(1,0.05,turn*2):mix(-0.05,-1,(turn-.5)*2);GJ=P.g_turn}
+      const away=lin(t,O+44.5,O+52); if(away>0){gx=mix(820,1320,eio(away));gw=t*6.5}
+      drawStrokes(figStrokes(GJ,gx,GY,flip<0?-1:1,true,gw).map(s=>flip<0||flip>=1?s:s.map(p=>[gx+(p[0]-gx)*Math.abs(flip)/(Math.abs(flip)||1),p[1]])),gRev,8,INK,1.8,true);
+      // следы — красные капли
+      if(away>0)for(let i=0;i<8;i++){const sx=840+i*55;if(gx>sx+30){x.fillStyle=RED;x.globalAlpha=.85*(1-lin(t,O+70,O+80));x.beginPath();x.ellipse(sx,GY+14+(i%2)*8,10,5,0,0,7);x.fill();x.globalAlpha=1}}
+  }}
+  // карандашный дождь после разбитого сердца
+  { const ra=lin(t,O+56,O+60)*(1-lin(t,O+80,O+82.5)); if(ra>0){x.strokeStyle='rgba(20,20,20,.35)';x.lineWidth=2.2;
+    for(let i=0;i<70;i++){const sx=hash(i)*1180-50,sp=500+hash(i+9)*400,y=((hash(i+3)*2000+t*sp)%1500)-200,l=26+hash(i+5)*30;
+      x.globalAlpha=ra;x.beginPath();x.moveTo(sx,y);x.lineTo(sx-6,y+l);x.stroke()}x.globalAlpha=1}}
+  // финал: красная нить из трещины уходит вверх и заливает лист
+  { const f=lin(t,O+79.5,O+82.4); if(f>0){x.strokeStyle=RED;x.lineWidth=6;x.lineCap='round';x.beginPath();
+      for(let i=0;i<=60*f;i++){const s=i/60;x.lineTo(560+Math.sin(s*9)*90*(1-s),GY-55-s*1400)}x.stroke()}
+    const w=lin(t,O+82,DUR); if(w>0){x.setTransform(1,0,0,1,0,0);x.fillStyle=`rgba(255,16,36,${eio(w)})`;x.fillRect(0,0,1080,1920)}}
+};
+</script></body></html>
