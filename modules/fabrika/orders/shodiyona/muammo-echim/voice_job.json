@@ -1,0 +1,74 @@
+{
+ "steps": [
+  {
+   "do": "tts",
+   "name": "e1",
+   "voice_id": "$asosiy",
+   "text": "Болангиз дарсни ошхона столида қиляптими? ... Унга o'z партаси керак.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "e2",
+   "voice_id": "$asosiy",
+   "text": "Китоблар ва ҳужжатлар уй бўйлаб сочилиб ётибдими? ... Уларга битта жавон етади.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "e3",
+   "voice_id": "$asosiy",
+   "text": "Меҳмон келса, o'tirishga жой етмаяптими? ... Ошхона столи ва to'rtta стул — бир to'plamda.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "e4",
+   "voice_id": "$asosiy",
+   "text": "Даҳлизда пойабзал сочилиб ётибдими? ... O'tirgich ҳам, жавон ҳам — битта буюмда.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "e5",
+   "voice_id": "$asosiy",
+   "text": "Ишдан келиб, дам олишга қулай жой yo'qmi? ... Сизга юмшоқ кресло керак.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "e6",
+   "voice_id": "$asosiy",
+   "text": "Офисингизда мижозлар тик туриб кутяптими? ... Уч кишилик кутиш o'rindig'i.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "end",
+   "voice_id": "$asosiy",
+   "text": "Шодиёна мебел маркази. ... Ишлаб чиқарувчидан — to'g'ridan-to'g'ri.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Болангиз дарсни ошхона столида қиляптими? ... Унга o'z партаси керак."
+  }
+ ]
+}
