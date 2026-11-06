@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<!-- «ОГОҲ БЎЛИНГ» №2 — номерни ўтказиш ва Telegram коди. Стиль серии = ogoh-01 -->
+<style>
+@font-face{font-family:IB;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf)}
+@font-face{font-family:IE;src:url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf)}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#0D1220}
+#cam{position:absolute;inset:0;transform-origin:540px 900px}
+.abs{position:absolute}
+canvas{position:absolute;left:0;top:0}
+.h{font-family:IB;color:#fff;letter-spacing:-2px;line-height:.98;text-align:center;left:0;width:1080px;top:300px}
+.y{color:#FFB000}.r{color:#FF3B47}.g{color:#22C55E}.b{color:#4FB3FF}
+.phone{width:400px;height:780px;border-radius:62px;background:linear-gradient(145deg,#2a3245,#0a0e18 60%,#1d2433);box-shadow:0 50px 100px rgba(0,0,0,.6),inset 0 0 0 4px rgba(255,255,255,.08)}
+.scr{position:absolute;left:22px;top:22px;right:22px;bottom:22px;border-radius:44px;overflow:hidden;background:radial-gradient(circle at 50% 35%,#16304d,#0b0f1a 70%)}
+.notch{position:absolute;left:150px;top:36px;width:100px;height:26px;border-radius:14px;background:#05070c}
+.tower{width:300px;height:420px;border-radius:36px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:IB;font-size:44px;color:#fff}
+.box{width:50px;height:76px;border-radius:12px;border:4px solid rgba(255,255,255,.35);display:inline-block;margin:0 4px}
+.num{width:300px;height:300px;border-radius:40px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-family:IB;color:#0D1220;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.pill{display:inline-block;font-family:IB;font-size:52px;padding:14px 42px;border-radius:50px}
+#sub{left:70px;width:940px;top:1500px;display:flex;justify-content:center}
+#subt{font-family:IE;font-size:42px;line-height:1.18;color:#fff;background:rgba(0,0,0,.55);padding:16px 26px;border-radius:20px;text-align:center}
+</style></head><body>
+<canvas id="bg" width="1080" height="1920"></canvas>
+<div id="cam">
+  <div id="h" class="abs h"></div>
+
+  <!-- 1: SIM + два оператора -->
+  <div id="opA" class="abs tower" style="left:80px;top:940px"><svg width="120" height="150" viewBox="0 0 120 150"><path d="M60 20 L60 140 M30 140 L60 60 L90 140" stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M28 30 A45 45 0 0 0 28 90 M92 30 A45 45 0 0 1 92 90" stroke="#FFB000" stroke-width="9" fill="none" stroke-linecap="round"/></svg>ОПЕРАТОР<br><span class="y" style="font-size:80px">A</span></div>
+  <div id="opB" class="abs tower" style="left:700px;top:940px"><svg width="120" height="150" viewBox="0 0 120 150"><path d="M60 20 L60 140 M30 140 L60 60 L90 140" stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M28 30 A45 45 0 0 0 28 90 M92 30 A45 45 0 0 1 92 90" stroke="#4FB3FF" stroke-width="9" fill="none" stroke-linecap="round"/></svg>ОПЕРАТОР<br><span class="b" style="font-size:80px">B</span></div>
+  <div id="sim" class="abs" style="left:440px;top:760px;width:200px;height:260px">
+    <svg width="200" height="260" viewBox="0 0 200 260"><defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd46b"/><stop offset=".55" stop-color="#FFB000"/><stop offset="1" stop-color="#b87400"/></linearGradient></defs>
+    <path d="M10 10 H140 L190 60 V250 H10 Z" rx="20" fill="url(#sg)" stroke="rgba(255,255,255,.5)" stroke-width="4"/>
+    <rect x="45" y="95" width="110" height="120" rx="18" fill="#0D1220" opacity=".85"/><path d="M45 135 H155 M45 175 H155 M100 95 V215" stroke="#FFB000" stroke-width="6"/></svg>
+    <div class="abs" style="left:0;width:200px;top:-70px;text-align:center;font-family:IB;font-size:52px;color:#fff">97</div>
+  </div>
+  <canvas id="arc" width="1080" height="1920"></canvas>
+
+  <!-- 2,3: телефон с кодом -->
+  <div id="ph" class="abs phone" style="left:340px;top:690px">
+    <div class="scr">
+      <div class="abs" style="left:0;width:100%;top:120px;text-align:center;font-family:IB;font-size:46px;color:#fff;letter-spacing:2px">TELEGRAM</div>
+      <div class="abs" style="left:0;width:100%;top:190px;text-align:center;font-family:IE;font-size:30px;color:rgba(255,255,255,.6)">Кодни киритинг</div>
+      <div class="abs" style="left:0;width:100%;top:270px;text-align:center"><span class="box"></span><span class="box"></span><span class="box"></span><span class="box"></span><span class="box"></span></div>
+      <div id="wait" class="abs" style="left:0;width:100%;top:420px;text-align:center;font-family:IE;font-size:32px;color:rgba(255,255,255,.55)">кутилмоқда…</div>
+      <div id="nocode" class="abs" style="left:0;width:100%;top:470px;text-align:center"><span style="font-family:IB;font-size:40px;color:#fff;background:#FF3B47;padding:12px 22px;border-radius:18px;white-space:nowrap">КОД КЕЛМАДИ</span></div>
+    </div><div class="notch"></div>
+  </div>
+  <!-- 3: календарь 30 кун -->
+  <div id="cal" class="abs" style="left:660px;top:1010px;width:300px;height:300px;border-radius:40px;background:#fff;box-shadow:0 30px 70px rgba(0,0,0,.55);overflow:hidden">
+    <div style="height:84px;background:#FF3B47;font-family:IB;font-size:44px;color:#fff;text-align:center;line-height:84px">1 ОЙ</div>
+    <div style="font-family:IB;font-size:130px;color:#0D1220;text-align:center;line-height:170px">30</div>
+    <div class="abs" style="left:0;width:300px;top:236px;text-align:center;font-family:IE;font-size:34px;color:#5b6478">кун</div>
+  </div>
+  <div id="back" class="abs" style="left:640px;top:760px;font-family:IB;font-size:64px;color:#fff;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.18);border-radius:30px;padding:24px 34px">B <span class="y">→</span> A</div>
+
+  <!-- 4: три карточки -->
+  <div id="three" class="abs" style="left:0;width:1080px;top:800px;display:flex;justify-content:center;gap:36px">
+    <div class="num" id="n0" style="background:#FFB000"><div style="font-size:150px;line-height:1">1</div></div>
+    <div class="num" id="n1" style="background:#FFB000"><div style="font-size:150px;line-height:1">2</div></div>
+    <div class="num" id="n2" style="background:#FFB000"><div style="font-size:150px;line-height:1">3</div></div>
+  </div>
+
+  <!-- 5: ноутбук + телефон, код летит на ноутбук -->
+  <div id="lap" class="abs" style="left:140px;top:760px;width:560px;height:420px">
+    <div class="abs" style="left:30px;top:0;width:500px;height:330px;border-radius:26px;background:linear-gradient(145deg,#2a3245,#0a0e18);border:4px solid rgba(255,255,255,.12)">
+      <div class="abs" style="left:18px;top:18px;right:18px;bottom:18px;border-radius:14px;background:radial-gradient(circle at 50% 40%,#16304d,#0b0f1a 75%)">
+        <div class="abs" style="left:0;width:100%;top:40px;text-align:center;font-family:IB;font-size:34px;color:#fff;letter-spacing:2px">TELEGRAM</div>
+        <div id="lcode" class="abs" style="left:0;width:100%;top:110px;text-align:center;font-family:IB;font-size:96px;color:#22C55E;letter-spacing:10px">48213</div>
+      </div></div>
+    <div class="abs" style="left:0;top:330px;width:560px;height:34px;border-radius:0 0 30px 30px;background:linear-gradient(180deg,#3a4256,#1a2030)"></div>
+  </div>
+  <div id="ph2" class="abs phone" style="left:720px;top:900px;transform-origin:0 0;width:240px;height:470px;border-radius:40px">
+    <div class="scr" style="left:14px;top:14px;right:14px;bottom:14px;border-radius:28px"><div class="abs" style="left:0;width:100%;top:170px;text-align:center;font-family:IB;font-size:28px;color:rgba(255,255,255,.7)">SMS</div>
+    <div class="abs" style="left:0;width:100%;top:215px;text-align:center;font-family:IB;font-size:60px;color:#FF3B47">✕</div></div>
+  </div>
+
+  <!-- 6: passkey -->
+  <div id="key" class="abs" style="left:290px;top:720px;width:500px;height:500px">
+    <div class="abs" style="left:50px;top:50px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#3a2a00,#0b0f1a 70%);border:3px solid rgba(255,176,0,.4);box-shadow:0 0 90px rgba(255,176,0,.25)"></div>
+    <svg class="abs" style="left:100px;top:110px" width="300" height="280" viewBox="0 0 300 280"><defs><linearGradient id="kg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset=".5" stop-color="#FFB000"/><stop offset="1" stop-color="#a86a00"/></linearGradient></defs>
+      <circle cx="95" cy="110" r="70" fill="url(#kg)"/><circle cx="95" cy="110" r="28" fill="#0D1220"/>
+      <path d="M150 140 L270 240 L245 265 L225 245 L205 262 L185 242 L200 225 L128 165 Z" fill="url(#kg)"/></svg>
+    <div id="fp" class="abs" style="left:330px;top:330px;width:150px;height:150px;border-radius:50%;background:#22C55E;box-shadow:0 0 60px rgba(34,197,94,.6)">
+      <svg width="150" height="150" viewBox="0 0 150 150" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"><path d="M45 95 C45 60 105 60 105 95"/><path d="M58 104 C58 75 92 75 92 104"/><path d="M75 82 V112"/><path d="M35 78 C45 40 105 40 115 78"/></svg>
+    </div>
+  </div>
+  <div id="pk" class="abs" style="left:0;width:1080px;top:1260px;text-align:center"><span class="pill" style="background:#22C55E;color:#fff">SMS'СИЗ КИРИШ</span></div>
+
+  <!-- 7: щит + не удалять -->
+  <div id="shield" class="abs" style="left:150px;top:760px;width:360px;height:420px">
+    <svg width="360" height="420" viewBox="0 0 120 140"><defs><linearGradient id="shg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1d6fd1"/></linearGradient></defs>
+      <path d="M60 6 L110 24 V62 C110 96 88 116 60 128 C32 116 10 96 10 62 V24 Z" fill="url(#shg)"/>
+      <rect x="40" y="62" width="40" height="32" rx="6" fill="#0D1220"/><path d="M47 62 V52 A13 13 0 0 1 73 52 V62" stroke="#0D1220" stroke-width="7" fill="none"/></svg>
+    <div class="abs" style="left:0;width:360px;top:430px;text-align:center;font-family:IB;font-size:42px;color:#fff">ПАРОЛ</div>
+  </div>
+  <div id="trash" class="abs" style="left:600px;top:800px;width:330px;height:380px">
+    <svg width="330" height="340" viewBox="0 0 120 124"><rect x="28" y="30" width="64" height="84" rx="8" fill="rgba(255,255,255,.85)"/><rect x="20" y="20" width="80" height="12" rx="6" fill="rgba(255,255,255,.85)"/><rect x="48" y="10" width="24" height="12" rx="4" fill="rgba(255,255,255,.85)"/>
+      <path d="M45 45 V100 M60 45 V100 M75 45 V100" stroke="#0D1220" stroke-width="5" stroke-linecap="round"/></svg>
+    <svg id="ban" class="abs" style="left:-10px;top:-10px" width="350" height="360" viewBox="0 0 350 360"><circle cx="175" cy="180" r="160" stroke="#FF3B47" stroke-width="30" fill="none"/><path d="M62 293 L288 67" stroke="#FF3B47" stroke-width="30" stroke-linecap="round"/></svg>
+    <div class="abs" style="left:0;width:330px;top:390px;text-align:center;font-family:IB;font-size:42px;color:#fff">ЎЧИРМАНГ</div>
+  </div>
+
+  <!-- 8: новость скоро -->
+  <div id="bell" class="abs" style="left:340px;top:700px;width:400px;height:440px">
+    <svg width="400" height="440" viewBox="0 0 130 140"><defs><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset=".5" stop-color="#FFB000"/><stop offset="1" stop-color="#a86a00"/></linearGradient></defs>
+      <path d="M65 14 C40 14 28 34 28 58 V84 L16 102 H114 L102 84 V58 C102 34 90 14 65 14 Z" fill="url(#bg2)"/><circle cx="65" cy="116" r="13" fill="url(#bg2)"/><circle cx="65" cy="10" r="7" fill="url(#bg2)"/></svg>
+  </div>
+  <div id="soon" class="abs" style="left:0;width:1080px;top:1180px;text-align:center"><span class="pill" style="background:#FF3B47;color:#fff">ЕЧИМ — ТЕЗ КУНДА</span></div>
+
+  <!-- 9: канал + переслать -->
+  <div id="chan" class="abs" style="left:120px;top:780px;width:840px;height:330px;border-radius:48px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.18)">
+    <div class="abs" style="left:46px;top:55px;width:220px;height:220px;border-radius:50%;background:linear-gradient(145deg,#FFB000,#ff7a00);display:flex;align-items:center;justify-content:center;font-family:IB;font-size:96px;color:#0D1220">КД</div>
+    <div class="abs" style="left:310px;top:80px;font-family:IB;font-size:72px;color:#fff;letter-spacing:-1px">КАТТА ДАВРА</div>
+    <div class="abs" style="left:310px;top:178px;font-family:IE;font-size:46px;color:#FFB000">@kattadavrauz</div>
+  </div>
+  <div id="share" class="abs" style="left:0;width:1080px;top:1180px;text-align:center"><span class="pill" style="background:#FFB000;color:#0D1220">ЯҚИНЛАРИНГИЗГА ЮБОРИНГ ↗</span></div>
+  <canvas id="fx" width="1080" height="1920"></canvas>
+</div>
+<div id="sub" class="abs"><div id="subt"></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const TM=window.TIMING; const T=TM.starts, VEND=TM.voice_end, W=TM.words||{};
+const LINES=TM.lines;
+const HEAD=['НОМЕРНИ<br><span class="y">ЎТКАЗДИНГИЗМИ?</span>','КОД ЎЗГАРМАЙДИ.<br><span class="r">ЛЕКИН…</span>','ЭСКИ ОПЕРАТОРГА<br><span class="y">ҚАЙТИШ</span>','ЎТИШДАН ОЛДИН<br><span class="y">3 ТА ИШ</span>','<span class="y">1.</span> ИККИНЧИ<br>ҚУРИЛМА','<span class="y">2.</span> PASSKEY<br><span class="g">КАЛИТ</span>','<span class="y">3.</span> ПАРОЛ ВА<br><span class="r">ЎЧИРМАСЛИК</span>','ЯНГИЛИК —<br><span class="y">БИРИНЧИ БИЗДА</span>','ФОЙДАЛИ<br><span class="y">БЎЛСА…</span>'];
+const HSIZE=[104,100,116,104,124,124,116,112,130];
+const DUR=VEND+1.3; window.DUR=DUR;
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x)), lin=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3), eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const spr=x=>x<=0?0:1-Math.exp(-7*x)*Math.cos(11*x), mix=(a,b,k)=>a+(b-a)*k;
+const bg=$('bg').getContext('2d'),fx=$('fx').getContext('2d'),arc=$('arc').getContext('2d');
+window.ready=document.fonts.ready.then(()=>Promise.all([...document.fonts].map(f=>f.load().catch(()=>0))));
+function st(id,op,tf){const e=$(id);e.style.opacity=op;e.style.transform=tf||'';e.style.visibility=op>0.001?'visible':'hidden'}
+const w=(k,d)=>W[k]!==undefined?W[k]:d;
+function drawBg(t,li){
+  bg.fillStyle='#0D1220';bg.fillRect(0,0,1080,1920);
+  const ox=(t*14)%90, oy=(t*9)%90;bg.strokeStyle='rgba(255,255,255,.05)';bg.lineWidth=2;
+  for(let x=-90;x<=1170;x+=90){bg.beginPath();bg.moveTo(x-ox,0);bg.lineTo(x-ox,1920);bg.stroke()}
+  for(let y=-90;y<=2010;y+=90){bg.beginPath();bg.moveTo(0,y-oy);bg.lineTo(1080,y-oy);bg.stroke()}
+  const col=(li===1||li===2)?'255,59,71':((li>=4&&li<=6)?'34,197,94':'255,176,0');
+  const gr=bg.createRadialGradient(540,950,0,540,950,820);gr.addColorStop(0,`rgba(${col},.20)`);gr.addColorStop(1,`rgba(${col},0)`);bg.fillStyle=gr;bg.fillRect(0,0,1080,1920);
+  for(let i=0;i<26;i++){const px=(i*197+t*(8+i%5*4))%1180-50, py=(i*331+t*(5+i%3*3)*-1)%2000; bg.fillStyle=`rgba(255,255,255,${.04+.03*(i%3)})`;bg.beginPath();bg.arc(px,(py+2000)%2000,2+i%3*2,0,7);bg.fill()}
+}
+// окно сцены i: [T[i]-.3, T[i+1]-.05]
+const win=i=>[T[i]-.3,(i+1<T.length?T[i+1]:DUR)];
+function show(id,i,from,tf,inDelay=0){ // общий вход/выход по сцене
+  const [a,b]=win(i), on=t_>a+inDelay-.1&&t_<b+.1, k=spr(lin(t_,a+inDelay,a+inDelay+.7)), out=i<8?eio(lin(t_,b-.4,b-.05)):0;
+  st(id,on?cl(k*2)*(1-out):0,tf(cl(k),out));
+}
+let t_=0;
+window.renderAt=function(t){
+  t_=t; fx.clearRect(0,0,1080,1920); arc.clearRect(0,0,1080,1920);
+  let li=0;for(let i=0;i<T.length;i++)if(t>=T[i]-.25)li=i;
+  drawBg(t,li);
+  const lp=lin(t,T[li]-.25,(T[li+1]||DUR)-.25);
+  const cs=1.0+.04*(1-eo(lp))+.012*Math.sin(t*.6), cr=Math.sin(t*.43)*.7, cx=Math.sin(t*.37)*10, cy=Math.cos(t*.29)*8;
+  const NOC=w('nocode',T[1]+3.0), sh=(t>NOC&&t<NOC+.35)?Math.sin(t*90)*9*(1-lin(t,NOC,NOC+.35)):0;
+  $('cam').style.transform=`translate(${cx+sh}px,${cy}px) scale(${cs}) rotate(${cr}deg)`;
+  const hk=spr(lin(t,T[li]-.15,T[li]+.45)), hout=li<8?eio(lin(t,T[li+1]-.4,T[li+1]-.1)):0;
+  const he=$('h');if(he.dataset.li!=li){he.innerHTML=HEAD[li];he.style.fontSize=HSIZE[li]+'px';he.dataset.li=li}
+  st('h',cl(hk*2)*(1-hout),`translateY(${mix(80,0,cl(hk))-hout*60}px)`);
+  const si=t>=T[0]-.05?li:-1; $('subt').textContent=si>=0?LINES[si]:'';
+  const sa=lin(t,T[li]-.05,T[li]+.15), sb=li<8?1-lin(t,T[li+1]-.4,T[li+1]-.25):1-lin(t,VEND+.3,VEND+.6);
+  $('sub').style.opacity=si>=0?cl(sa)*cl(sb):0;
+
+  // 1 — операторы и SIM, дуга A→B
+  show('opA',0,0,(k,o)=>`translateX(${mix(-500,0,k)}px)`);
+  show('opB',0,0,(k,o)=>`translateX(${mix(500,0,k)}px)`,.15);
+  { const [a,b]=win(0); const MV=w('almash',T[1]+1.0);
+    const p=eio(lin(t,T[0]+1.2,T[0]+2.6)); // SIM летит от A к B
+    const x=mix(-180,250,p), y=-Math.sin(p*Math.PI)*130;
+    const k=spr(lin(t,a+.3,a+1.0)), out=eio(lin(t,b-.4,b-.05)), on=t>a&&t<b+.1;
+    st('sim',on?cl(k*2)*(1-out):0,`translate(${x}px,${y}px) rotate(${mix(-10,10,p)+Math.sin(t*2)*3}deg) scale(${mix(.6,1,cl(k))})`);
+    if(on&&p>0){arc.save();arc.translate(cx,cy);arc.strokeStyle=`rgba(255,176,0,${.6*(1-out)})`;arc.lineWidth=8;arc.setLineDash([22,18]);arc.lineDashOffset=-t*60;
+      arc.beginPath();for(let s=0;s<=p;s+=.02){const X=540+mix(-180,250,s), Y=890-Math.sin(s*Math.PI)*130;s?arc.lineTo(X,Y):arc.moveTo(X,Y)}arc.stroke();arc.restore()}
+  }
+  // 2 — телефон, «код келмади»
+  { const a=T[1]-.3, b=T[3]; const k=spr(lin(t,a,a+.7)), out=eio(lin(t,b-.4,b-.05)), on=t>a-.1&&t<b+.1;
+    const slide=t>T[2]-.3?eo(lin(t,T[2]-.3,T[2]+.3)):0;
+    st('ph',on?cl(k*2)*(1-out):0,`translate(${mix(0,-170,slide)}px,${mix(900,0,cl(k))}px) scale(${mix(1,.86,slide)})`);
+    const nk=spr(lin(t,NOC,NOC+.45)); $('nocode').style.opacity=cl(nk*2); $('nocode').style.transform=`scale(${mix(1.6,1,cl(nk))})`;
+    $('wait').style.opacity=t<NOC?(.55+.45*Math.sin(t*6)):0;
+    if(t>NOC&&t<NOC+.18){fx.fillStyle=`rgba(255,59,71,${.3*(1-lin(t,NOC,NOC+.18))})`;fx.fillRect(0,0,1080,1920)}
+  }
+  // 3 — B→A и календарь 30 кун
+  show('back',2,0,(k,o)=>`translateX(${mix(600,0,k)}px) rotate(${mix(10,3,k)}deg)`,.5);
+  { const s0=w('oy',T[2]+3.2); const [a,b]=win(2); const k=spr(lin(t,s0-.2,s0+.45)), out=eio(lin(t,b-.4,b-.05)), on=t>s0-.3&&t<b+.1;
+    st('cal',on?cl(k*2)*(1-out):0,`translateY(${mix(-900,0,cl(k))}px) rotate(${mix(20,6,cl(k))}deg)`);
+  }
+  // 4 — три карточки падают
+  { const [a,b]=win(3); const on=t>a&&t<b+.1, out=eio(lin(t,b-.4,b-.05));
+    [0,1,2].forEach(i=>{const s0=w('uchta',T[3]+1.6)+i*.18;const k=spr(lin(t,s0-.2,s0+.4));st('n'+i,on?cl(k*2)*(1-out):0,`translateY(${mix(-900,0,cl(k))}px) rotate(${mix(i%2?16:-16,(i-1)*4,cl(k))}deg)`)});
+    st('three',on?1:0,'');
+  }
+  // 5 — ноутбук + маленький телефон
+  show('lap',4,0,(k,o)=>`translateY(${mix(700,0,k)-o*400}px) scale(${mix(.85,1,k)})`);
+  show('ph2',4,0,(k,o)=>`translateX(${mix(500,0,k)}px) rotate(${mix(20,8,k)}deg)`,.35);
+  { const s0=w('kod',T[4]+4.6); const p=eo(lin(t,s0,s0+.6)); $('lcode').style.opacity=p; $('lcode').style.transform=`scale(${mix(1.5,1,p)})`;
+    if(t>s0-.6&&t<s0+.1){const q=lin(t,s0-.6,s0);fx.save();fx.translate(cx,cy);fx.fillStyle='#22C55E';fx.globalAlpha=1-q*.3;fx.beginPath();fx.arc(mix(820,420,eio(q)),mix(1050,880,eio(q))-Math.sin(q*Math.PI)*120,26,0,7);fx.fill();fx.restore()}
+  }
+  // 6 — калит
+  show('key',5,0,(k,o)=>`translateY(${mix(700,0,k)}px) rotate(${mix(-30,0,k)+Math.sin(t*1.5)*3}deg)`);
+  { const s0=w('smssiz',T[5]+4.0); const k=spr(lin(t,s0-.2,s0+.4)); const [a,b]=win(5); const on=t>s0-.3&&t<b+.1, out=eio(lin(t,b-.4,b-.05));
+    $('fp').style.transform=`scale(${cl(spr(lin(t,T[5]+1.6,T[5]+2.2)))})`;
+    st('pk',on?cl(k*2)*(1-out):0,`scale(${mix(.6,1,cl(k))})`);
+  }
+  // 7 — щит + корзина
+  show('shield',6,0,(k,o)=>`translateX(${mix(-600,0,k)}px) rotate(${mix(-14,-3,k)}deg)`,.2);
+  { const s0=w('ochir',T[6]+3.0); const [a,b]=win(6); const k=spr(lin(t,s0-.25,s0+.4)), out=eio(lin(t,b-.4,b-.05)), on=t>s0-.3&&t<b+.1;
+    st('trash',on?cl(k*2)*(1-out):0,`translateY(${mix(-800,0,cl(k))}px) rotate(${mix(18,3,cl(k))}deg)`);
+    const bk=eo(lin(t,s0+.35,s0+.7)); $('ban').style.opacity=bk; $('ban').style.transform=`scale(${mix(1.4,1,bk)})`;
+  }
+  // 8 — колокольчик
+  show('bell',7,0,(k,o)=>`translateY(${mix(-800,0,k)}px) rotate(${Math.sin((t-T[7])*9)*12*Math.exp(-Math.max(0,t-T[7]-.6)*.8)}deg)`);
+  { const s0=w('vada',T[7]+2.0); const [a,b]=win(7); const k=spr(lin(t,s0-.2,s0+.4)), out=eio(lin(t,b-.4,b-.05)), on=t>s0-.3&&t<b+.1;
+    st('soon',on?cl(k*2)*(1-out):0,`scale(${mix(.6,1,cl(k))})`);
+  }
+  // 9 — канал
+  { const on=t>T[8]-.3; const k=spr(lin(t,T[8]-.2,T[8]+.6)), b=spr(lin(t,T[8]+.7,T[8]+1.3));
+    st('chan',on?cl(k*2):0,`translateY(${mix(400,0,cl(k))}px) scale(${mix(.8,1,cl(k))})`);
+    const pulse=1+.04*Math.sin(Math.max(0,t-T[8]-1.3)*6);st('share',on?cl(b*2):0,`scale(${mix(.5,1,cl(b))*pulse})`);
+  }
+};
+</script></body></html>

@@ -1,0 +1,169 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "tts",
+   "name": "d01",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Nomeringizni boshqa operatorga o'tkazdingizmi? Unda buni albatta biling.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "next_text": "Kodni o'zgartirmasdan operatorni almashtirish mumkin. Lekin ba'zi odamlarda keyin Telegram kodi kelmay qolyapti.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d02",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Kodni o'zgartirmasdan operatorni almashtirish mumkin. Lekin ba'zi odamlarda keyin Telegram kodi kelmay qolyapti.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Nomeringizni boshqa operatorga o'tkazdingizmi? Unda buni albatta biling.",
+   "next_text": "Yechim bitta bo'lib qolyapti: eski operatorga qaytish. Undan keyin bir oy qayta o'ta olmaysiz.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d03",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Yechim bitta bo'lib qolyapti: eski operatorga qaytish. Undan keyin bir oy qayta o'ta olmaysiz.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Kodni o'zgartirmasdan operatorni almashtirish mumkin. Lekin ba'zi odamlarda keyin Telegram kodi kelmay qolyapti.",
+   "next_text": "Shuning uchun o'tishdan oldin uchta ish qiling.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d04",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Shuning uchun o'tishdan oldin uchta ish qiling.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Yechim bitta bo'lib qolyapti: eski operatorga qaytish. Undan keyin bir oy qayta o'ta olmaysiz.",
+   "next_text": "Birinchi: Telegramni ikkinchi qurilmada ham ochiq qoldiring — kompyuter yoki planshetda. Kod SMS emas, o'sha yerga keladi.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d05",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Birinchi: Telegramni ikkinchi qurilmada ham ochiq qoldiring — kompyuter yoki planshetda. Kod SMS emas, o'sha yerga keladi.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Shuning uchun o'tishdan oldin uchta ish qiling.",
+   "next_text": "Ikkinchi: Maxfiylik va xavfsizlik bo'limida passkey — kalit yarating. U bilan SMSsiz kirasiz.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d06",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Ikkinchi: Maxfiylik va xavfsizlik bo'limida passkey — kalit yarating. U bilan SMSsiz kirasiz.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Birinchi: Telegramni ikkinchi qurilmada ham ochiq qoldiring — kompyuter yoki planshetda. Kod SMS emas, o'sha yerga keladi.",
+   "next_text": "Uchinchi: ikki bosqichli tekshirish parolini yoqing va akkauntni hech qachon o'chirmang.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d07",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Uchinchi: ikki bosqichli tekshirish parolini yoqing va akkauntni hech qachon o'chirmang.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Ikkinchi: Maxfiylik va xavfsizlik bo'limida passkey — kalit yarating. U bilan SMSsiz kirasiz.",
+   "next_text": "Bu muammo yuzasidan tegishli idoralar tez orada yechim va'da qilishdi. Yangiligini Katta Davrada birinchi bo'lib aytamiz.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d08",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Bu muammo yuzasidan tegishli idoralar tez orada yechim va'da qilishdi. Yangiligini Katta Davrada birinchi bo'lib aytamiz.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Uchinchi: ikki bosqichli tekshirish parolini yoqing va akkauntni hech qachon o'chirmang.",
+   "next_text": "Foydali bo'lsa — yaqinlaringizga yuboring.",
+   "public_owner_id": "auto"
+  },
+  {
+   "do": "tts",
+   "name": "d09",
+   "voice_id": "agoC45V78njTIxYzwmSb",
+   "text": "Foydali bo'lsa — yaqinlaringizga yuboring.",
+   "model": "eleven_v4",
+   "language_code": "uz",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "settings": {
+    "stability": 0.55,
+    "similarity_boost": 0.85,
+    "style": 0.15
+   },
+   "previous_text": "Bu muammo yuzasidan tegishli idoralar tez orada yechim va'da qilishdi. Yangiligini Katta Davrada birinchi bo'lib aytamiz.",
+   "public_owner_id": "auto"
+  }
+ ],
+ "telegram": false,
+ "hear": false
+}
