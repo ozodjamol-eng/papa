@@ -20,6 +20,9 @@
  *  proof(ctx,{i,n,title,sub,t,t0,out,x,y})              «6 исбот»: полоса глав сверху + «2/6 МАТОСИ»
  *  meter(ctx,{x,y,value|from,to,dur,digits,size,unit,label,t,t0,out}) «литромер»: барабанные цифры как на колонке/счётчике воды — младшая крутится
  *                                                       плавно, старшие перекатываются только на переносе 9→0 (живой счёт «Андижон бугун ичди: 12 480 л»)
+ *  checklist(ctx,{x,y,w,items:[{name,note}],t,t0,every,rowH,size,out,rowBg,done,ink,inkDone,box,boxLine,tally:{x,y,size,label,color,full,bg,fg}}) → число отмеченных
+ *                                                       «Сеп рўйхати»: строки списка выезжают, галочка рисуется штрихом, строка «загорается»,
+ *                                                       счётчик «4/6» прыгает на каждой галочке (разведка «Мебель» 06.11, по мотиву IKEA PH «One Piece at a Time»)
  */
 (function () {
   'use strict';
@@ -301,6 +304,42 @@
     ctx.restore(); return v;
   }
 
-  window.MK = { warm, fill, proof, meter, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
+  /* ---------- «Сеп рўйхати»: чек-лист с галочками (разведка «Мебель» 06.11, IKEA Philippines «One Piece at a Time» — жизнь «по одной вещи») ---------- */
+  // Строка i выезжает в t0 + i*every, через 0.45 с рисуется галочка (штрих), строка заливается акцентом. note — справа мелко («✓ бор», «3 ранг»).
+  function checklist(ctx, o) {
+    const n = o.items.length, ev = o.every || 0.7, rh = o.rowH || 150, fz = o.size || 54, x = o.x ?? 90, w = o.w ?? (W() - 2 * x), lag = o.lag ?? 0.45;
+    let done = 0, last = -9;
+    o.items.forEach((it, i) => {
+      const ts = o.t0 + i * ev, k = life(o.t, ts, o.out, 0.4); if (k <= 0) return;
+      const tc = ts + lag, ck = E.out3(prog(o.t, tc, tc + 0.35)); if (ck >= 1) { done++; last = tc + 0.35; }
+      const y = (o.y ?? 500) + i * rh, slide = (1 - E.out3(prog(o.t, ts, ts + 0.4))) * 120, h = rh * 0.8;
+      ctx.save(); ctx.globalAlpha *= k; ctx.translate(slide, 0);
+      shadow(ctx, 0.22, 18, 6); ctx.fillStyle = o.rowBg || 'rgba(251,248,241,0.94)'; rr(ctx, x, y, w, h, h * 0.22); ctx.fill(); noShadow(ctx);
+      if (ck > 0) { ctx.save(); ctx.globalAlpha *= ck; ctx.fillStyle = o.done || P.accent; rr(ctx, x, y, w, h, h * 0.22); ctx.fill(); ctx.restore(); } // строка «загорается»
+      const bs = h * 0.56, bx = x + h * 0.22, by = y + (h - bs) / 2; // квадрат-галочка
+      ctx.lineWidth = Math.max(4, bs * 0.09); ctx.strokeStyle = o.boxLine || P.green; rr(ctx, bx, by, bs, bs, bs * 0.2); ctx.stroke();
+      if (ck > 0) { const pop = 1 + 0.25 * Math.exp(-(o.t - tc) * 7) * Math.sin(clamp((o.t - tc) / 0.35) * Math.PI);
+        ctx.save(); ctx.translate(bx + bs / 2, by + bs / 2); ctx.scale(pop, pop); ctx.fillStyle = o.box || P.green; rr(ctx, -bs / 2, -bs / 2, bs, bs, bs * 0.2); ctx.fill();
+        const pts = [[-0.28, 0.02], [-0.07, 0.24], [0.3, -0.24]], L1 = Math.hypot(0.21, 0.22), L2 = Math.hypot(0.37, 0.48), d = ck * (L1 + L2);
+        ctx.strokeStyle = P.cream; ctx.lineWidth = bs * 0.14; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(pts[0][0] * bs, pts[0][1] * bs);
+        if (d <= L1) ctx.lineTo(lerp(pts[0][0], pts[1][0], d / L1) * bs, lerp(pts[0][1], pts[1][1], d / L1) * bs);
+        else { ctx.lineTo(pts[1][0] * bs, pts[1][1] * bs); const q = (d - L1) / L2; ctx.lineTo(lerp(pts[1][0], pts[2][0], q) * bs, lerp(pts[1][1], pts[2][1], q) * bs); }
+        ctx.stroke(); ctx.restore(); }
+      ctx.font = `800 ${fz * 0.55}px ${F.body}`; const nw = it.note ? ctx.measureText(it.note).width + h * 0.45 : h * 0.25, nx0 = bx + bs + h * 0.28; // место под note
+      ctx.font = `400 ${fz}px ${F.head}`; const fit = Math.min(1, (x + w - nw - nx0) / Math.max(1, ctx.measureText(it.name).width)); // длинное имя — ужимаем, не наезжает на note
+      ctx.fillStyle = ck > 0.5 ? (o.inkDone || P.green) : (o.ink || P.ink); ctx.font = `400 ${fz * fit}px ${F.head}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(it.name, nx0, y + h / 2 + fz * 0.04);
+      if (it.note) { const nk = E.outBack(prog(o.t, tc + 0.15, tc + 0.5)); if (nk > 0) { ctx.save(); ctx.translate(x + w - h * 0.25, y + h / 2); ctx.scale(nk, nk);
+        ctx.font = `800 ${fz * 0.55}px ${F.body}`; ctx.textAlign = 'right'; ctx.fillStyle = o.inkDone || P.green; ctx.fillText(it.note, 0, fz * 0.03); ctx.restore(); } }
+      ctx.restore();
+    });
+    const T = o.tally; if (T && done > 0) { const tk = life(o.t, o.t0 + lag + 0.35, o.out, 0.3), pop = 1 + 0.2 * Math.exp(-(o.t - last) * 8), tz = T.size || 150;
+      ctx.save(); ctx.globalAlpha *= tk; ctx.translate(T.x, T.y); ctx.scale(pop, pop); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; shadow(ctx, 0.45, 24, 8);
+      ctx.font = `400 ${tz}px ${F.head}`; ctx.fillStyle = done === n ? (T.full || P.accent) : (T.color || P.cream); ctx.fillText(`${done}/${n}`, 0, 0); ctx.restore();
+      if (T.label) { ctx.save(); ctx.globalAlpha *= tk; pill(ctx, T.x, T.y + tz * 0.42, T.label, { size: tz * 0.22, bg: T.bg || P.accent, fg: T.fg || P.green, font: F.head, weight: 400 }); ctx.restore(); } }
+    return done;
+  }
+
+  window.MK = { warm, fill, proof, meter, checklist, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
     get P() { return P; }, setPalette: (p) => { P = Object.assign({}, P, p); }, setFonts: (f) => { F = Object.assign({}, F, f); } };
 })();
