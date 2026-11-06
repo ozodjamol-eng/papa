@@ -1,0 +1,115 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "tts",
+   "name": "s01",
+   "voice_id": "$asosiy",
+   "text": "Янги уйга ko'chyapsizmi? ... Мебелни нимадан бошлашни билмаяпсизми?",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Ko'pchilik do'konma-do'kon юради — бирида стол, бошқасида стул. ... Вақт кетади, ранглари мос келмайди, пули ҳам ko'p кетади."
+  },
+  {
+   "do": "tts",
+   "name": "s02",
+   "voice_id": "$asosiy",
+   "text": "Ko'pchilik do'konma-do'kon юради — бирида стол, бошқасида стул. ... Вақт кетади, ранглари мос келмайди, пули ҳам ko'p кетади.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Янги уйга ko'chyapsizmi? ... Мебелни нимадан бошлашни билмаяпсизми?",
+   "next_text": "Маслаҳат: аввал хона-хона ro'yxat тузинг."
+  },
+  {
+   "do": "tts",
+   "name": "s03",
+   "voice_id": "$asosiy",
+   "text": "Маслаҳат: аввал хона-хона ro'yxat тузинг.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Ko'pchilik do'konma-do'kon юради — бирида стол, бошқасида стул. ... Вақт кетади, ранглари мос келмайди, пули ҳам ko'p кетади.",
+   "next_text": "Ошхона — стол ва to'rtta стул."
+  },
+  {
+   "do": "tts",
+   "name": "s04",
+   "voice_id": "$asosiy",
+   "text": "Ошхона — стол ва to'rtta стул.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Маслаҳат: аввал хона-хона ro'yxat тузинг.",
+   "next_text": "Меҳмонхона — китоб жавони ва кресло."
+  },
+  {
+   "do": "tts",
+   "name": "s05",
+   "voice_id": "$asosiy",
+   "text": "Меҳмонхона — китоб жавони ва кресло.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Ошхона — стол ва to'rtta стул.",
+   "next_text": "Иш хонаси — иш столи. ... Болалар хонаси — парта."
+  },
+  {
+   "do": "tts",
+   "name": "s06",
+   "voice_id": "$asosiy",
+   "text": "Иш хонаси — иш столи. ... Болалар хонаси — парта.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Меҳмонхона — китоб жавони ва кресло.",
+   "next_text": "Шодиёна мебел марказида ro'yxatingizdagi ҳамма нарса бир жойда — ишлаб чиқарувчидан to'g'ridan-to'g'ri, воситачисиз."
+  },
+  {
+   "do": "tts",
+   "name": "s07",
+   "voice_id": "$asosiy",
+   "text": "Шодиёна мебел марказида ro'yxatingizdagi ҳамма нарса бир жойда — ишлаб чиқарувчидан to'g'ridan-to'g'ri, воситачисиз.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Иш хонаси — иш столи. ... Болалар хонаси — парта.",
+   "next_text": "Шунинг учун нархи арзонроқ, услуби бир хил."
+  },
+  {
+   "do": "tts",
+   "name": "s08",
+   "voice_id": "$asosiy",
+   "text": "Шунинг учун нархи арзонроқ, услуби бир хил.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Шодиёна мебел марказида ro'yxatingizdagi ҳамма нарса бир жойда — ишлаб чиқарувчидан to'g'ridan-to'g'ri, воситачисиз.",
+   "next_text": "Ro'yxatingizni Телеграмга юборинг — ҳаммасини биз йиғиб берамиз."
+  },
+  {
+   "do": "tts",
+   "name": "s09",
+   "voice_id": "$asosiy",
+   "text": "Ro'yxatingizni Телеграмга юборинг — ҳаммасини биз йиғиб берамиз.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Шунинг учун нархи арзонроқ, услуби бир хил.",
+   "next_text": "Телефон: етмиш етти — to'qqiz юз йигирма уч — нол бир — to'qson бир."
+  },
+  {
+   "do": "tts",
+   "name": "s10",
+   "voice_id": "$asosiy",
+   "text": "Телефон: етмиш етти — to'qqiz юз йигирма уч — нол бир — to'qson бир.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Ro'yxatingizni Телеграмга юборинг — ҳаммасини биз йиғиб берамиз."
+  }
+ ]
+}
