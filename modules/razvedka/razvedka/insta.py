@@ -348,6 +348,11 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
                 if not cap:                            # 01.11: сырой чужой текст в банк — никогда
                     log(f"  ✋ {label} @{it['_owner']}: нет нашего кириллического текста — пропуск")
                     continue
+                try:                                   # 🕰 06.11: поздравление по времени — в «ТАБРИКЛАР», не в хаб направления
+                    dest = await H.greet_redirect(client, dest, cap + "\n" + (it.get("caption") or ""))
+                except Exception as e:  # noqa: BLE001
+                    log(f"  🕰 {label}: {e} — пропуск")
+                    continue
             else:
                 text = await asyncio.to_thread(write_text, it.get("caption") or "", chan)
                 cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])

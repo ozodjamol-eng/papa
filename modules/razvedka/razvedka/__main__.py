@@ -254,7 +254,13 @@ async def _archive() -> dict:
     c = client_from_env()
     await c.connect()
     try:
-        return await archive.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+        out = await archive.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+        try:                                    # 🧹 06.11: после архивариуса — Тозаловчи чистит хабы от «Хайрли тонг»/«Жума»
+            from . import tozalash
+            out["🧹 Тозаловчи"] = await tozalash.run(c, log=lambda s: print(s, flush=True))
+        except Exception as e:  # noqa: BLE001 — чистка не должна ломать архивариуса
+            out["🧹 Тозаловчи"] = {"ошибка": f"{type(e).__name__}: {e}"}
+        return out
     finally:
         await c.disconnect()
 

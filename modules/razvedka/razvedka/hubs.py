@@ -20,6 +20,9 @@ HUBS = {
     "МОТИВАЦИЯ": {"codes": ("motiv",), "insta": ("motiv",), "create": True},
     "Jonlik ijrolar": {"codes": ("music",), "insta": ("music",)},
     "ИБРАТ": {"codes": ("ibrat",), "insta": ("ibrat",), "create": True},   # 30.10 владелец: поучительные истории
+    # 🕰 06.11 владелец: «если надо — сделаем ещё папки». Поздравления по времени (Хайрли тонг / Жума муборак / Хайрли тун)
+    # — отдельно от вечных хабов: из МАЪНАВИЯТ «Жума муборак» ушёл в 20:00. Каналы отсюда сами не берут.
+    "ТАБРИКЛАР": {"codes": (), "insta": (), "create": True},
 }
 PROMPT = """Сен — Telegram-каналлар учун муҳаррирсан. Пост матнини (ёки видео мавзусини) ўқиб, ўзимизнинг қисқа матнимизни ёз:
 биринчи қатор — мос эмодзи билан қисқа сарлавҳа (БОШ ҲАРФЛАР), кейин 1–2 қисқа гап. Фақат ўзбек тилида, КИРИЛЛ алифбосида
@@ -114,6 +117,7 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
     from .curate import is_news
     if is_news(text) or any(is_news(getattr(m, "message", "") or "") for m in msgs):
         return False                      # 01.11 владелец: новости в банк не кладём («ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ» в УЙДА БИЗНЕС)
+    hub_ent = await greet_redirect(client, hub_ent, text, msgs)
     try:
         await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
     except TypeError:                     # альбом со смешанным медиа — кладём первое (30.10, 2 случая у архивариуса)
@@ -129,6 +133,26 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
             f.name = "video.mp4" if getattr(m, "video", None) else "photo.jpg"
             await client.send_file(hub_ent, f, caption=text or None, supports_streaming=bool(getattr(m, "video", None)))
     return True
+
+
+_REDIRECT_CACHE: dict = {}
+
+
+def greet_of(text: str | None, msgs: list = ()) -> str | None:
+    from . import timing
+    return timing.kind(text) or next((k for m in msgs if (k := timing.kind(getattr(m, "message", "") or ""))), None)
+
+
+async def greet_redirect(client, hub_ent, text: str | None, msgs: list = ()):
+    """🕰 06.11: любой агент (архивариус, тренды, куратор) кладёт «Хайрли тонг»/«Жума муборак»/«Хайрли тун»
+    не в хаб направления, а в «ТАБРИКЛАР». Хаб «ТАБРИКЛАР» создаётся сам; не вышло — в хаб направления не кладём."""
+    from . import timing
+    if not greet_of(text, msgs):
+        return hub_ent
+    tab = await entity(client, timing.HUB, _REDIRECT_CACHE)
+    if tab is None:
+        raise RuntimeError("нет хаба ТАБРИКЛАР")
+    return tab
 
 
 BANK_FOLDER = "KATTA BANK"
