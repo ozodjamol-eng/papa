@@ -515,6 +515,8 @@ def _stale(ch: dict, m, now: dt.datetime) -> bool:
 
 
 def _fits(ch: dict, m, t: dt.datetime, now: dt.datetime) -> bool:
+    if not greet_ok(m["text"], t):                   # 06.11: «Хайрли тонг»/«Жума муборак» вечером — никогда
+        return False
     return not is_sklad(ch, m) or t >= now + SKLAD_LEAD
 
 
@@ -543,6 +545,40 @@ def day_room(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
         for f in (namaz.busy, morning.busy, extras.busy):
             n += sum(1 for t in f(db, channel, now) if now < t < b)
     return int(lim.get("max", 20)) - n
+
+
+# 🕰 06.11 разбор (владелец: «такие вещи он должен различать»): в 20:00 в Хўжаобод из запаса МАЪНАВИЯТ вышел
+# «🕌 ЖУМА МУБОРАК…» с #ХАЙРЛИ_ТОНГ в начале — утреннее поздравление вечером. Текст, привязанный ко времени дня,
+# выходит только в своё время; не подходит — ждёт в запасе своего часа (утро — утро, Жума — пятница до намаза).
+GREET = {
+    "morning": re.compile(r"хайрли[\s_]*тонг|тонги[\s_]*муборак|тонгингиз|xayrli[\s_]*tong|tongi[\s_]*muborak|tongingiz"),
+    "juma": re.compile(r"жума\w*[\s_]*(?:айём\w*[\s_]*)?муборак|juma\w*[\s_]*(?:ayyom\w*[\s_]*)?muborak"),
+    "night": re.compile(r"хайрли[\s_]*(?:тун|кеч)\b|тунингиз|xayrli[\s_]*(?:tun|kech)\b|tuningiz"),
+}
+GREET_MORNING_TO = dt.time(10, 0)     # утреннее поздравление — только утренний блок
+GREET_JUMA_TO = dt.time(12, 0)        # «Жума муборак» — пятница до Жума-намаза (Пешин 12:45)
+GREET_NIGHT_FROM = dt.time(22, 0)     # 20.10: прощание раньше 22:00 — канал «закрылся»
+
+
+def greet_kind(text: str | None) -> str | None:
+    s = str(text or "").casefold()
+    for k in ("juma", "morning", "night"):
+        if GREET[k].search(s):
+            return k
+    return None
+
+
+def greet_ok(text: str | None, t: dt.datetime) -> bool:
+    """Поздравление/прощание в тексте подходит к времени выхода t? Нет таких слов — подходит всегда."""
+    k = greet_kind(text)
+    if k is None:
+        return True
+    x = t.astimezone(plan.TZ)
+    if k == "morning":
+        return x.time() < GREET_MORNING_TO
+    if k == "juma":
+        return x.weekday() == 4 and x.time() < GREET_JUMA_TO
+    return x.time() >= GREET_NIGHT_FROM
 
 
 MINBAR = "Муфтий минбари"
@@ -614,7 +650,7 @@ def minbar_pick(db, ch: dict, channel: str, pool: list, used: list, t: dt.dateti
     if rep:
         return rep[-1]
     return next((m for r in (hour_wants(ch, t) or [])[1:] for m in pool
-                 if m["id"] not in used and m["rubric"] == r and allowed(ch, t, r)), None)
+                 if m["id"] not in used and m["rubric"] == r and allowed(ch, t, r) and greet_ok(m["text"], t)), None)
 
 
 URGENT_TTL = dt.timedelta(hours=12)       # 01.11: срочная новость старше 12 ч — уже не срочная, не выходит

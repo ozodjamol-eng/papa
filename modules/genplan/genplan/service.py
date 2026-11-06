@@ -283,6 +283,15 @@ def hub_clean_once(db, cfg: dict, env: dict, pubs: dict, log=print) -> dict:
 async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day: str, log=print,
                       now: dt.datetime | None = None) -> bool:
     ch = cfg["channels"][channel]
+    at_ = now or dt.datetime.now(plan.TZ)
+    if not m["urgent"] and not smart.is_ad_rubric(m["rubric"]) and not smart.greet_ok(m["text"], at_):
+        # 🕰 06.11 разбор: последний предохранитель — утреннее/жума-поздравление или «хайрли тун» не в своё время
+        # не выходит, а возвращается в 📦 запас и ждёт своего часа (срочное и рекламу владельца не трогаем).
+        store.update(db, m["id"], status="draft", stock=1, scheduled_at=None)
+        ERRORS.append(f"⏸ {ch['title']}: #{m['id']} не вышел в {at_:%H:%M} — текст не к этому времени дня "
+                      f"(«{smart.greet_kind(m['text'])}»), вернул в запас до своего часа")
+        log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — поздравление не по времени дня, #{m['id']} → запас")
+        return HELD
     from . import translit
     if translit.language_note(m["text"] or "") and not (m["rubric"] or "").lower().startswith("реклама"):  # 20.10: предохранитель — русский текст в канал не выходит никогда
         from . import ai
