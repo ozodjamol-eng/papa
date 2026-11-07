@@ -214,6 +214,19 @@ async def _sklad_latest(n: int = 3) -> dict:
         await c.disconnect()
 
 
+async def _hub_audit() -> dict:
+    from .hubaudit import run
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    try:
+        return await run(c, Path(PUB), log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _sort_folders() -> dict:
     from .sortfolders import run
     from .telegram import client_from_env
@@ -634,6 +647,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "muhim":                          # ⚡ 05.11: срочное полезное без политики → пульт Хўжаобода
         print("MUHIM_DONE", asyncio.run(_muhim()))
+        return
+    if cmd == "hub-audit":                      # 🔎 07.11: копии / не по теме / без медиа в хабах KATTA BANK (только чтение)
+        print("HUB_AUDIT_DONE", asyncio.run(_hub_audit()))
         return
     if cmd == "sort-folders":
         print("FOLDERS_DONE", asyncio.run(_sort_folders()))
