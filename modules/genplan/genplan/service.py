@@ -317,6 +317,15 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
             ERRORS.append(f"⏸ {ch['title']}: пост задержан: текст не на узбекском — поправьте (повтор в {later:%H:%M}, #{m['id']})")
             log(f"{channel} {slot or 'срочно'}: ЗАДЕРЖАН — после ИИ текст не узбекский, повтор в {later:%H:%M}")
             return HELD
+    src_ = m["source"] if "source" in m.keys() else None
+    if not m["has_media"] and (m["auto"] or src_) and not smart.is_ad_rubric(m["rubric"]):
+        # 07.11 владелец («а это что?» — в КАТТА ДАВРА 13:00 вышел голый текст #ҲАЖВИЯ из склада): правило 31.10
+        # «пустых постов без фото/видео нет» — для всего, что взято из складов и источников. Не выходит никогда.
+        store.update(db, m["id"], status="rejected", stock=0, scheduled_at=None)
+        store.record(db, channel, day, slot, m["id"], "failed", error="без фото/видео — запрещено")
+        ERRORS.append(f"⛔ {ch['title']}: #{m['id']} из «{src_ or 'склада'}» без фото/видео — не опубликован (голый текст запрещён)")
+        log(f"{channel} {slot or 'срочно'}: снят — склад/источник без медиа, #{m['id']}")
+        return False
     from . import caption                      # ✍️ 01.11 владелец: «видео без подписи не выставлять — делать с подписью»
     if caption.needs_caption(m):
         via = m["via"] if "via" in m.keys() else None

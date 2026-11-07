@@ -726,6 +726,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
             and not waits_text(cfg, m) and not _stale(ch, m, now)
             and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
             and not repeat_block(db, channel, m, now) and not (m["auto"] and music_no_video(m))
+            and not (m["auto"] and not m["has_media"])
             and not (urgent_sklad(ch, m["source"]) and dt.datetime.fromisoformat(m["created_at"]) < now - URGENT_TTL)
             and (not full or m["rubric"] == MINBAR or urgent_sklad(ch, m["source"]))]
     if not pool and not (hourly(ch) and store.stock(db, channel)):   # 01.11: час Муфтия может взять повтор урока
