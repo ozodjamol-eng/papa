@@ -1298,3 +1298,9 @@
 - Правило: в директе — одна прямая открытая ссылка `t.me/<канал>`. Нельзя: ссылки-заявки `t.me/+…`, визитки/сайты между директом и Telegram. Нет канала — прямая ссылка в бот клиента. Сторож — тест `OneClickRule` (проверяет все `modules/voronka/*.toml`).
 - PAPA → t.me/kattadavrauz. Shodiyona → t.me/ShodiyonaMebelMarkazi (вместо визитки; отменяет 24.10 «бот — главный вход» для директа; воронка выключена с 27.10, включится уже по правилу). GOLD WATER — канала нет, остаётся бот @GoldWaterAndijonBot?start=instagram (воронка стоит до 23.11 — ограничение Instagram). VOLIDAM/Умра — заготовлена `volidam.toml` → t.me/safo_marva_nodirbek, dry_run, запуск после подключения Instagram Нодирбеком.
 - Расход 0 $. Откат: `git revert`.
+
+## 07.11.2026 — Воронки включает/выключает ИИ по слову владельца (core)
+- Владелец: «я даю задание — ты включаешь, даю задание отключать — ты отключаешь; так проще».
+- В автопилот (auto) добавлены: `voronki-status` (сводка всех воронок), `voronka-start/stop` (PAPA), `shodiyona-voronka-start/stop/restart/install`, `goldwater-voronka-install/restart/stop`, `volidam-voronka-install/stop`. ИИ запускает их сам через `nexus_papa_task`, без консоли и без кнопки.
+- Токены (`*-voronka-token`) — как и раньше, ТОЛЬКО владелец в консоли (deny): секреты ИИ не трогает. GOLD WATER не включать до 23.11 (ограничение Instagram) без прямого слова владельца.
+- Расход 0 $. Откат: вернуть задачи в `approve` в `ops/frankfurt/autopilot/allow.json`.
