@@ -1,0 +1,13 @@
+{
+ "photo": "shrift_tanlang.jpg",
+ "caption_html": "<b>Ҳасанхон ака, брендингиз учун шрифт танланг!</b>\n\n<b>А</b> — Montserrat: ҳамма жойда битта шрифт, тоза ва ишончли.\n<b>Б</b> — Oswald + Montserrat: баланд, концерт афишаларидек — саҳна руҳи.\n<b>В</b> — Montserrat + Inter: субтитрлар учун энг осон ўқилади.\n\nУчаласи ҳам ўзбек кирилл ҳарфларини (Ў, Қ, Ғ, Ҳ) тўлиқ ёзади.\n👇 Пастдаги сўровномада танланг ёки ҳарфни ёзиб юборинг.",
+ "poll": {
+  "question": "Қайси шрифт сизга ёқди?",
+  "options": [
+   "А — Montserrat",
+   "Б — Oswald + Montserrat",
+   "В — Montserrat + Inter"
+  ],
+  "anonymous": false
+ }
+}
