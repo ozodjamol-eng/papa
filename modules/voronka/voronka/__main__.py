@@ -153,7 +153,14 @@ def loop(db, c: dict) -> None:
                 if not last:  # новый токен: продлевать можно не раньше чем через сутки
                     store.kv_set(db, "token_refreshed", now_iso())
                 elif dt.datetime.fromisoformat(last) < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7):
-                    refresh(db)
+                    try:
+                        refresh(db)
+                    except (ApiError, OSError) as e:
+                        # 07.11: неудачное продление не должно останавливать воронку (Shodiyona: новый токен работал,
+                        # но продление падало → директы не уходили). Работаем дальше, повтор через сутки.
+                        print(f"продление токена: {e} — работаем дальше, повтор через сутки", flush=True)
+                        store.kv_set(db, "token_refreshed",
+                                     (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=6)).isoformat())
                 cc = with_join(cfg(), db, b)
                 i = ig()
                 s = engine.run_once(i, db, cc)
