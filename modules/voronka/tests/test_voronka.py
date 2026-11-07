@@ -233,6 +233,25 @@ class JoinLinkTest(unittest.TestCase):
         c2 = M.with_join({"dm_channel": "kattadavrauz", "dm_text": "{join}"}, db, None)   # из базы, без бота
         self.assertEqual(c2["dm_text"], "https://t.me/+ABC")
 
+    def test_open_link_wins(self):
+        """07.11 владелец: «нажал — сразу вошёл» — постоянная открытая ссылка, ссылка-заявка не создаётся."""
+        import voronka.__main__ as M
+        from voronka import store as S
+        db = S.connect(":memory:")
+        S.kv_set(db, "dm_join_link", "https://t.me/+OLD")
+
+        class B:
+            def call(self, method, **p):
+                raise AssertionError("бот не должен создавать ссылку-заявку")
+        c = M.with_join({"dm_channel": "kattadavrauz", "dm_link": "https://t.me/kattadavrauz", "dm_text": "{join}"}, db, B())
+        self.assertEqual(c["dm_text"], "https://t.me/kattadavrauz")
+
+    def test_config_open_link(self):
+        import tomllib
+        c = tomllib.loads((Path(__file__).resolve().parent.parent / "config.toml").read_text(encoding="utf-8"))
+        self.assertEqual(c["dm_link"], "https://t.me/kattadavrauz")
+        self.assertNotIn("+", c["dm_link"])
+
 
 class ShodiyonaLimit(unittest.TestCase):
     """27.10 владелец: воронку Shodiyona включать с низким лимитом (аудит 30.10: стояло 30/час)."""

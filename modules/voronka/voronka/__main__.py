@@ -70,7 +70,8 @@ def with_join(c: dict, db, b=None) -> dict:
     """30.10 владелец: директ — сразу ссылка-заявка в канал (в один клик, считаем пришедших), не визитка.
     Ссылка создаётся ботом один раз (имя «instagram-dm») и хранится в базе. Нет ссылки — визитка, как раньше."""
     ch = c.get("dm_channel")
-    link = store.kv_get(db, "dm_join_link")
+    # 07.11 владелец: «нажал — сразу вошёл». Постоянная открытая ссылка из настроек важнее ссылки-заявки бота.
+    link = c.get("dm_link") or store.kv_get(db, "dm_join_link")
     if ch and not link and b is not None:
         try:
             link = joins.make_invite(b, "@" + ch, "instagram-dm")
