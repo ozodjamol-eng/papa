@@ -511,7 +511,16 @@ VISION_PROMPT = """Ты проверяешь утреннее видео («Ха
  "weekday": день недели, написанный НА ВИДЕО по-узбекски (одно из: Душанба, Сешанба, Чоршанба, Пайшанба, Жума, Шанба, Якшанба) или null,
  "season": "autumn" | "winter" | "spring" | "summer" | "neutral" — какое время года видно на природе,
  "greeting": true, только если это спокойное утреннее видео-поздравление (природа, рассвет, чай/кофе, цветы, красивый город, надпись «Хайрли тонг»/«… тонги муборак»); false — если это новости, ДТП, политика, реклама, интервью, юмор-скетч,
+ "occasion": название праздника или события, если оно написано или явно показано на видео (Рамазон/Ramadan Kareem, Ҳайит/Eid, Наврўз, Янги йил/New Year, туғилган кун, тўй, 8 март, Мустақиллик и т.п.), иначе null. Жума и «… тонги муборак» — НЕ праздник (null),
  "quality": 1–5 (5 — красивое чёткое видео, 1 — плохое качество)}"""
+# 07.11 владелец: «Ramadan Kareem» вышел в превью «Хайрли тонг» в ноябре — праздничные видео в обычное утро не берём.
+OCCASION_RE = re.compile(r"рамаз|рамад|ramaz|ramad|ramaḍ|kareem|карим\b|ифтор|iftor|iftar|саҳарлик|сахарлик|saharlik|"
+                         r"ҳайит|хайит|hayit|\beid\b|қурбон|курбон|qurbon|наврўз|навруз|navro|nowruz|янги йил|yangi yil|"
+                         r"new year|туғилган кун|tug.ilgan kun|мустақиллик|mustaqillik|байрам|bayram", re.I)
+
+
+def occasion_in(text) -> bool:
+    return bool(text) and bool(OCCASION_RE.search(str(text)))
 WD_ALIASES = {w.lower(): w for w in WEEKDAY} | {"juma": "Жума", "shanba": "Шанба", "yakshanba": "Якшанба",
                                                  "dushanba": "Душанба", "seshanba": "Сешанба", "chorshanba": "Чоршанба",
                                                  "payshanba": "Пайшанба"}
@@ -669,6 +678,9 @@ def pool_check_one(db, day: dt.date, root: Path | None = None, http=None, allow_
         reasons.append("не утреннее поздравление")
     if int(v.get("quality") or 3) < 3:
         reasons.append("плохое качество")
+    occ = str(v.get("occasion") or "").strip()
+    if (occ and occ.lower() not in ("null", "none", "жума")) or occasion_in(r["text"]):
+        reasons.append(f"праздник не по дате: {occ or 'в подписи'}"[:80])
     if reasons:
         reject(", ".join(reasons))
         return True
@@ -689,8 +701,9 @@ def pool_pick(db, day: dt.date, salt: int = 0, avail=None):
     ok = avail or (lambda r: True)
 
     def rows_for(cond, args):
-        return db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND coalesce(season,'neutral') IN (?, 'neutral') "
+        rows = db.execute(f"SELECT * FROM morning_pool WHERE status='ok' AND {cond} AND coalesce(season,'neutral') IN (?, 'neutral') "
                           "ORDER BY quality DESC, views DESC", (*args, s)).fetchall()
+        return [x for x in rows if not occasion_in(x["text"])]       # праздник в подписи источника — не в обычное утро
 
     def take(rows):
         rnd = random.Random(day.toordinal() * 17 + salt)

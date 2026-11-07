@@ -756,3 +756,17 @@ class Shtab2310(unittest.TestCase):
         self.assertNotIn("КАТТА ДАВРА", xo.calls[0][1]["text"])
         self.assertIn("КАТТА ДАВРА", main.calls[0][1]["text"])
         self.assertIn("Ролики", sh.calls[0][1]["text"])
+
+
+class OccasionFilterTest(unittest.TestCase):
+    """07.11: «Ramadan Kareem» в ноябрьском «Хайрли тонг» — праздничные видео в обычное утро не берём."""
+
+    def test_detects_holidays(self):
+        from genplan import morning
+        for t in ("Ramadan Kareem", "Рамазон ойи муборак", "Ҳайит муборак!", "Yangi yil tabrigi", "Наврўз байрами"):
+            self.assertTrue(morning.occasion_in(t), t)
+
+    def test_plain_morning_passes(self):
+        from genplan import morning
+        for t in ("Хайрли тонг, азизлар!", "Жума тонги муборак", "Shanba tongi muborak", None, ""):
+            self.assertFalse(morning.occasion_in(t), t)
