@@ -259,3 +259,19 @@ class ShodiyonaLimit(unittest.TestCase):
         import tomllib
         c = tomllib.loads((Path(__file__).resolve().parent.parent / "shodiyona.toml").read_text(encoding="utf-8"))
         self.assertLessEqual(int(c["max_per_hour"]), 10)
+
+
+class OneClickRule(unittest.TestCase):
+    """07.11 владелец, единое правило всех воронок (PAPA и клиенты): нажал — сразу в Telegram клиента.
+    Ссылка в директе — только прямая t.me, без заявки (t.me/+…) и без промежуточных сайтов."""
+    def test_all_configs(self):
+        import tomllib
+        root = Path(__file__).resolve().parent.parent
+        for f in sorted(root.glob("*.toml")):
+            c = tomllib.loads(f.read_text(encoding="utf-8"))
+            link = c.get("dm_link") or c.get("page_url", "")
+            with self.subTest(f.name):
+                self.assertTrue(link.startswith("https://t.me/"), f"{f.name}: {link}")
+                self.assertNotIn("/+", link)
+                self.assertNotIn("joinchat", link)
+

@@ -19,7 +19,8 @@ max_per_hour = 30
 pause_minutes = 60
 retention_days = 90
 
-# Ссылка в бот с меткой instagram — учёт заявок в боте GOLD WATER сохраняется
+# 07.11 единое правило: один клик — сразу в Telegram клиента. Канала у GOLD WATER пока нет — ведём в бот (учёт по метке instagram).
+# Появится канал — поставить сюда его открытую ссылку t.me/<канал>.
 page_url = "https://t.me/GoldWaterAndijonBot?start=instagram"
 
 # 17.10: текст из ChatPlace (проверен, конверсия 40%) — дословно; у ChatPlace ссылка была кнопкой «💧 МАЪЛУМОТНИ ОЛИШ», у нас — последней строкой
