@@ -357,12 +357,35 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
                 text = await asyncio.to_thread(write_text, it.get("caption") or "", chan)
                 cap = ((text + "\n\n") if text else "") + footer(code, it["_owner"], it["_views"])
                 dest = target
+            gkeys: set = set()
+            if hub_name:                               # 🚪 07.11: ворота хабов — тема и копии (как hubs.put)
+                from . import hubgate as G
+                if G.GATE:
+                    gname = G.hub_name(dest)
+                    if gname in G.TOPIC:
+                        want = await asyncio.to_thread(G.topic_of, cap)
+                        if want is None or want == "NONE":
+                            log(f"  🚪 {label}: не по теме хабов / ИИ не ответил — пропуск")
+                            continue
+                        if want != gname:
+                            alt = await H.entity(client, want, hub_cache)
+                            if alt is None:
+                                continue
+                            log(f"  🚪 {label}: {gname} → {want}")
+                            dest = alt
+                    gkeys = {k for k in (G.text_key(cap),) if k}
+                    if gkeys & await G.index(client, dest):
+                        log(f"  🚪 {label}: копия — пропуск")
+                        continue
             try:
                 import io                              # 01.11: с именем файла — иначе Telegram показывает «unnamed»
                 f = io.BytesIO(video) if isinstance(video, (bytes, bytearray)) else video
                 if isinstance(f, io.BytesIO):
                     f.name = "video.mp4"
                 await client.send_file(dest, f, caption=cap[:1024], supports_streaming=True)
+                if gkeys:
+                    from . import hubgate as G
+                    G.remember(dest, gkeys)
             except Exception as e:  # noqa: BLE001
                 log(f"  отправка: {type(e).__name__}")
                 continue

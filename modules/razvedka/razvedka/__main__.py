@@ -273,6 +273,18 @@ async def _archive() -> dict:
             out["🧹 Тозаловчи"] = await tozalash.run(c, log=lambda s: print(s, flush=True))
         except Exception as e:  # noqa: BLE001 — чистка не должна ломать архивариуса
             out["🧹 Тозаловчи"] = {"ошибка": f"{type(e).__name__}: {e}"}
+        try:                                    # 🧹 07.11 владелец: копии в хабах — удалять, не по теме — в свой хаб/корзину
+            from . import hubaudit
+            out["🧹 Порядок в хабах"] = await hubaudit.clean(c, log=lambda s: print(s, flush=True))
+        except Exception as e:  # noqa: BLE001
+            out["🧹 Порядок в хабах"] = {"ошибка": f"{type(e).__name__}: {e}"}
+        try:
+            from . import hubs as _H
+            if _H.GATE_LOG:
+                from collections import Counter
+                out["🚪 Ворота"] = dict(Counter(_H.GATE_LOG))
+        except Exception:  # noqa: BLE001
+            pass
         return out
     finally:
         await c.disconnect()

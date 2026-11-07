@@ -43,7 +43,8 @@ def media_key(m) -> str:
 
 
 def dup_groups(items: list[dict]) -> list[list[int]]:
-    """Группы копий: одинаковый файл или одинаковый текст (≥ 40 букв). Первый в группе — самый старый (оставить)."""
+    """Группы копий: одинаковый файл или одинаковый длинный текст (≥ 80 букв — короткие общие подписи ИИ не в счёт).
+    Первый в группе — самый старый (оставить)."""
     parent: dict[int, int] = {}
 
     def find(x):
@@ -55,7 +56,7 @@ def dup_groups(items: list[dict]) -> list[list[int]]:
     for it in sorted(items, key=lambda x: x["id"]):
         keys = [k for k in it["media"] if k]
         t = _n(it["text"])[:150]
-        if len(t) >= 40:
+        if len(t) >= 80:
             keys.append("t" + t)
         for k in keys:
             if k in seen:
@@ -133,4 +134,126 @@ async def run(client, out: Path, log=print) -> dict:
         log(f"  {hub}: {report[hub]}")
     out.mkdir(parents=True, exist_ok=True)
     (out / "hubaudit.json").write_text(json.dumps(full, ensure_ascii=False), encoding="utf-8")
+    return report
+
+
+# ---------- 🧹 07.11 владелец: «архивариус пусть сам проверяет — одинаковые пусть удаляет; порядок должен быть» ----------
+# После каждого прохода архивариуса (3 раза в день): по каждому хабу
+#   1) копии (тот же файл или тот же текст) — УДАЛЯЕМ, оставляем самый старый (разрешение владельца 07.11);
+#   2) не по теме — ПЕРЕНОСИМ в свой хаб (Gemini, 1 запрос на хаб); никуда не подходит — в «🗑 КОРЗИНА»;
+#   3) без фото/видео, музыка без видео — в «🗑 КОРЗИНА».
+# Корзина — закрытый канал, владелец смотрит; старше 7 дней — удаляется сама. Откат: CLEAN = False.
+CLEAN = True
+TRASH = "🗑 КОРЗИНА"
+TRASH_DAYS = 7
+MOVE_MAX = 60                      # переносов на хаб за проход (Telegram не любит много сразу)
+
+SORT = """Ниже подписи постов из Telegram-хаба «{hub}» (тема хаба: {topic}).
+Другие хабы и их темы:
+{hubs}
+
+Найди посты, которые НЕ подходят теме «{hub}». Для каждого укажи хаб, куда он подходит, или "NONE", если никуда.
+Пустые и неясные подписи пропускай (не перечисляй). Ответ только JSON: {{"move": {{"<номер>": "<имя хаба или NONE>"}}}}
+
+{lines}"""
+
+
+async def _trash(client, cache: dict):
+    if "trash" not in cache:
+        from telethon.tl.functions.channels import CreateChannelRequest
+        ent = None
+        async for d in client.iter_dialogs():
+            if d.is_channel and not d.is_group and _n(d.title) == _n(TRASH):
+                ent = d.entity
+                break
+        if ent is None:
+            r = await client(CreateChannelRequest(title=TRASH, about="PAPA — что убрано из хабов (копии/не по теме). Через 7 дней удаляется само.",
+                                                  megagroup=False))
+            ent = r.chats[0]
+        cache["trash"] = ent
+    return cache["trash"]
+
+
+async def _to(client, target, it: dict, check_keys: bool = True) -> bool:
+    """Положить пост в target (копия уже там — тоже успех), без проверки темы."""
+    from . import hubgate as G
+    from . import hubs as H
+    msgs = sorted(it["msgs"], key=lambda x: x.id)
+    if check_keys and G.keys_of(msgs, it["text"]) & await G.index(client, target):
+        return True
+    media = [m.media for m in msgs if getattr(m, "media", None)]
+    if not media:                                   # голый текст — в корзину текстом
+        await client.send_message(target, it["text"] or "(пусто)")
+        return True
+    return await H.put(client, target, msgs, it["text"], check=False)
+
+
+async def clean(client, log=print) -> dict:
+    import asyncio
+    import datetime as dt
+    from . import hubgate as G
+    from . import hubs as H
+    from . import tozalash
+    if not CLEAN:
+        return {}
+    cache: dict = {}
+    report: dict[str, str] = {}
+    trash = await _trash(client, cache)
+    for name in H.HUBS:
+        ent = await H.entity(client, name, cache)
+        if ent is None:
+            continue
+        items = await tozalash.scan(client, ent)
+        for it in items:
+            it["media"] = [G.media_key(m) for m in it["msgs"]]
+        by_id = {it["id"]: it for it in items}
+        dels = [i for g in dup_groups(items) for i in g[1:]]
+        for i in dels:
+            await client.delete_messages(ent, [m.id for m in by_id[i]["msgs"]])
+            await asyncio.sleep(0.5)
+        left = [it for it in items if it["id"] not in set(dels)]
+        junk = [it for it in left if not any(it["media"])
+                or (name in G.VIDEO_ONLY and not any(getattr(m, "video", None) for m in it["msgs"]))]
+        moves: dict[int, str] = {it["id"]: "NONE" for it in junk}
+        if name in G.TOPIC and os.environ.get("GEMINI_API_KEY"):
+            lines = [(it["id"], it["text"].strip().replace("\n", " ")[:140]) for it in left
+                     if it["text"].strip() and it["id"] not in moves]
+            if lines:
+                others = "\n".join(f"- {h}: {t}" for h, t in G.TOPIC.items() if h != name)
+                r = G.ask(SORT.format(hub=name, topic=G.TOPIC[name], hubs=others,
+                                      lines="\n".join(f"{i}. {t}" for i, t in lines[:400])))
+                for k, v in (r.get("move") or {}).items():
+                    if str(k).isdigit() and int(k) in by_id:
+                        h = next((x for x in G.TOPIC if _n(x) == _n(str(v))), None)
+                        moves[int(k)] = h if h and h != name else "NONE"
+        moved, trashed = 0, 0
+        G.forget(ent)
+        for i, where in list(moves.items())[:MOVE_MAX]:
+            it = by_id[i]
+            target = trash if where == "NONE" else await H.entity(client, where, cache)
+            if target is None:
+                continue
+            try:
+                ok = await _to(client, target, it, check_keys=where != "NONE")
+            except Exception as e:  # noqa: BLE001
+                log(f"  🧹 {name} #{i}: перенос не вышел ({type(e).__name__}) — оставляю")
+                continue
+            if not ok:
+                continue
+            await client.delete_messages(ent, [m.id for m in it["msgs"]])
+            trashed += where == "NONE"
+            moved += where != "NONE"
+            await asyncio.sleep(2)
+        if dels or moved or trashed:
+            report[name] = f"копий удалено {len(dels)} · перенесено в свой хаб {moved} · в корзину {trashed}"
+            log(f"  🧹 {name}: {report[name]}")
+    old = []                                          # корзина: старше 7 дней — удаляем
+    cut = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=TRASH_DAYS)
+    async for m in client.iter_messages(trash, limit=3000):
+        if m.date < cut:
+            old.append(m.id)
+    for k in range(0, len(old), 100):
+        await client.delete_messages(trash, old[k:k + 100])
+    if old:
+        report[TRASH] = f"удалено старше {TRASH_DAYS} дн.: {len(old)}"
     return report

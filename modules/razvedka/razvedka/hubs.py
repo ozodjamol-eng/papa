@@ -109,15 +109,43 @@ async def entity(client, name: str, cache: dict):
     return ent
 
 
-async def put(client, hub_ent, msgs: list, text: str) -> bool:
-    """Положить в хаб без подписи «переслано»: медиа (альбом — одним) + наш текст."""
+GATE_LOG: list[str] = []
+
+
+async def put(client, hub_ent, msgs: list, text: str, check: bool = True) -> bool:
+    """Положить в хаб без подписи «переслано»: медиа (альбом — одним) + наш текст.
+    07.11: через ворота (hubgate): копия / музыка без видео / не та тема — не кладём (или кладём в нужный хаб).
+    check=False — перенос, который уже решён (чистка): проверка темы не нужна, копии — проверяются."""
     media = [m.media for m in msgs if getattr(m, "media", None)]
     if not media:
         return False
     from .curate import is_news
     if is_news(text) or any(is_news(getattr(m, "message", "") or "") for m in msgs):
         return False                      # 01.11 владелец: новости в банк не кладём («ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ» в УЙДА БИЗНЕС)
+    greet = greet_of(text, msgs)
     hub_ent = await greet_redirect(client, hub_ent, text, msgs)
+    from . import hubgate as G
+    keys: set[str] = set()
+    if G.GATE:
+        name = G.hub_name(hub_ent)
+        if check and not greet and name in G.TOPIC:
+            want = G.topic_of(text)
+            if want is None or want == "NONE":
+                GATE_LOG.append(f"{name}: {'нет ответа ИИ' if want is None else 'не по теме ни одного хаба'}")
+                return False
+            if want != name:
+                target = await entity(client, want, {})
+                if target is None:
+                    return False
+                GATE_LOG.append(f"{name} → {want}")
+                hub_ent, name = target, want
+        if name in G.VIDEO_ONLY and not any(getattr(m, "video", None) for m in msgs):
+            GATE_LOG.append(f"{name}: музыка без видео")
+            return False
+        keys = G.keys_of(msgs, text)
+        if keys & await G.index(client, hub_ent):
+            GATE_LOG.append(f"{name}: копия")
+            return False
     try:
         await client.send_file(hub_ent, media if len(media) > 1 else media[0], caption=text or None)
     except TypeError:                     # альбом со смешанным медиа — кладём первое (30.10, 2 случая у архивариуса)
@@ -132,6 +160,9 @@ async def put(client, hub_ent, msgs: list, text: str) -> bool:
             f = io.BytesIO(data)
             f.name = "video.mp4" if getattr(m, "video", None) else "photo.jpg"
             await client.send_file(hub_ent, f, caption=text or None, supports_streaming=bool(getattr(m, "video", None)))
+    if keys:
+        from . import hubgate as G
+        G.remember(hub_ent, keys)
     return True
 
 
