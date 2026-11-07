@@ -150,7 +150,7 @@ class TestNamazPost(unittest.TestCase):
     def test_settings_button(self):
         kb = menu.panel_markup(CFG, "xojaobod", menu.P_SETTINGS)
         self.assertEqual(kb["inline_keyboard"][0][0]["callback_data"], "nz:set")
-        self.assertIs(menu.panel_markup(CFG, "xojaobod", menu.P_TODAY), menu.PANEL)
+        self.assertEqual(menu.panel_markup(CFG, "xojaobod", menu.P_TODAY)["inline_keyboard"][0][0]["text"], "🗓 Режим дня")   # 07.11
         self.assertIn("Намоз:", menu.panel_reply(self.db, CFG, "xojaobod", menu.P_SETTINGS, at("22:40")))
 
 
