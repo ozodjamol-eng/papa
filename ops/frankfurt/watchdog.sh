@@ -25,6 +25,18 @@ if systemctl is-enabled --quiet papa-voronka 2>/dev/null; then
   vs=/var/lib/papa-voronka-pub/stats.json
   if [[ -e $vs ]]; then (( $(date +%s) - $(stat -c %Y "$vs") < 900 )) || fail+=("voronka_stalled"); fi
 fi
+# 07.11: зацикленные службы (xojaobod-bot упал 266 566 раз и молча грел процессор) и перегрузка
+now_mono=$(awk '{printf "%d", $1*1000000}' /proc/uptime)
+loops=()
+while read -r u _; do
+  [[ "$u" == *.service ]] || continue
+  eval "$(systemctl show -p NRestarts -p ActiveEnterTimestampMonotonic -p SubState "$u" 2>/dev/null | sed 's/^/W_/')"
+  n=${W_NRestarts:-0}; since=$(( (now_mono - ${W_ActiveEnterTimestampMonotonic:-0}) / 1000000 ))
+  if (( n >= 20 )) && { [[ "${W_SubState:-}" == auto-restart ]] || (( since < 300 )); }; then loops+=("${u%.service}:${n}"); fi
+done < <(systemctl list-units --type=service --all --no-legend --plain 2>/dev/null)
+((${#loops[@]})) && fail+=("restart_loop:${loops[*]}")
+load15=$(awk '{print $3}' /proc/loadavg)
+awk -v l="$load15" 'BEGIN{exit !(l>1.5)}' && fail+=("load15_${load15}")
 free_kb=$(df -Pk /var/lib/nexus-private-control | awk 'NR==2{print $4}')
 (( free_kb > 1048576 )) || fail+=("disk_low")
 avail_kb=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
