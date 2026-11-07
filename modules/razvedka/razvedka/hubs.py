@@ -12,7 +12,9 @@ import re
 
 # хаб → коды рубрик источников (куратор) и направления трендов Instagram (insta.DIRECTIONS)
 HUBS = {
-    "РАЗВЛЕКАТЕЛЬНО": {"codes": ("humor", "fun"), "insta": ("humor", "fun_world", "fun")},
+    "РАЗВЛЕКАТЕЛЬНО": {"codes": ("humor", "fun"), "insta": ("humor", "fun_world")},
+    # 07.11 владелец: «всё по рубрикам, чтобы не было путаницы» — главная рубрика КАТТА ДАВРА получила свой хаб
+    "ТРЕНДЛАР": {"codes": ("trend",), "insta": ("fun",)},
     "ФОЙДАЛИК": {"codes": ("useful",), "insta": ("useful",)},
     "ФОЙДАЛИК ОВКАТ": {"codes": ("food",), "insta": ("food",)},
     "МАЪНАВИЯТ": {"codes": ("faith",), "insta": ("faith",), "create": True},   # 30.10 владелец: «создай сам»
@@ -23,7 +25,25 @@ HUBS = {
     # 🕰 06.11 владелец: «если надо — сделаем ещё папки». Поздравления по времени (Хайрли тонг / Жума муборак / Хайрли тун)
     # — отдельно от вечных хабов: из МАЪНАВИЯТ «Жума муборак» ушёл в 20:00. Каналы отсюда сами не берут.
     "ТАБРИКЛАР": {"codes": (), "insta": (), "create": True},
+    # 07.11: сомнительное (ворота не нашли рубрику) — сюда, а не в чужой хаб; каналы отсюда НЕ берут, владелец разбирает.
+    "ТЕКШИРУВ": {"codes": (), "insta": ()},
 }
+# 07.11 владелец переименовывает хабы в единый вид «БАНК · …» (кириллица). Внутренние ключи прежние;
+# по названию в Telegram узнаём и старое, и новое имя — переход без остановки.
+TITLES = {"РАЗВЛЕКАТЕЛЬНО": "БАНК · КУЛГИ", "ФОЙДАЛИК": "БАНК · ФОЙДАЛИ", "ФОЙДАЛИК ОВКАТ": "БАНК · ОВҚАТ",
+          "МАЪНАВИЯТ": "БАНК · МАЪНАВИЯТ", "УЙДА БИЗНЕС": "БАНК · УЙ БИЗНЕСИ", "МОТИВАЦИЯ": "БАНК · МОТИВАЦИЯ",
+          "Jonlik ijrolar": "БАНК · МУСИҚА", "ИБРАТ": "БАНК · ИБРАТ", "ТАБРИКЛАР": "БАНК · ТАБРИКЛАР",
+          "ТРЕНДЛАР": "БАНК · ТРЕНДЛАР", "ТЕКШИРУВ": "БАНК · ТЕКШИРУВ"}
+
+
+def _nn(s) -> str:
+    return re.sub(r"[\W_]+", "", str(s or "")).casefold()
+
+
+def key_of_title(title) -> str | None:
+    """Внутренний ключ хаба по названию чата в Telegram (старое или новое «БАНК · …» имя)."""
+    t = _nn(title)
+    return next((k for k in HUBS if t in (_nn(k), _nn(TITLES.get(k, k)))), None) if t else None
 PROMPT = """Сен — Telegram-каналлар учун муҳаррирсан. Пост матнини (ёки видео мавзусини) ўқиб, ўзимизнинг қисқа матнимизни ёз:
 биринчи қатор — мос эмодзи билан қисқа сарлавҳа (БОШ ҲАРФЛАР), кейин 1–2 қисқа гап. Фақат ўзбек тилида, КИРИЛЛ алифбосида
 (манба русча, инглизча ёки лотинча бўлса — таржима қил). Бошқа каналлар номи, @юзернейм, ҳавола, хэштег, реклама — ЙЎҚ.
@@ -94,14 +114,15 @@ async def entity(client, name: str, cache: dict):
         return cache[name]
     from telethon.tl.functions.channels import CreateChannelRequest
     want = re.sub(r"[\W_]+", "", name).casefold()
+    alt = _nn(TITLES.get(name, name))
     if not cache.get("_dialogs"):
         cache["_dialogs"] = {}
         async for d in client.iter_dialogs():
             if d.is_channel and not d.is_group:
                 cache["_dialogs"][re.sub(r"[\W_]+", "", d.title or "").casefold()] = d.entity
-    ent = cache["_dialogs"].get(want)
+    ent = cache["_dialogs"].get(alt) or cache["_dialogs"].get(want)
     if ent is None and HUBS.get(name, {}).get("create"):
-        r = await client(CreateChannelRequest(title=name, about="PAPA — хаб направления (чистый материал для каналов)",
+        r = await client(CreateChannelRequest(title=TITLES.get(name, name), about="PAPA — хаб направления (чистый материал для каналов)",
                                               megagroup=False))
         ent = r.chats[0]
         cache["_dialogs"][want] = ent
@@ -130,9 +151,11 @@ async def put(client, hub_ent, msgs: list, text: str, check: bool = True) -> boo
         name = G.hub_name(hub_ent)
         if check and not greet and name in G.TOPIC:
             want = G.topic_of(text)
-            if want is None or want == "NONE":
-                GATE_LOG.append(f"{name}: {'нет ответа ИИ' if want is None else 'не по теме ни одного хаба'}")
+            if want is None:
+                GATE_LOG.append(f"{name}: нет ответа ИИ")
                 return False
+            if want == "NONE":                    # 07.11: не по теме ни одного хаба — в ТЕКШИРУВ на разбор владельцу
+                want = "ТЕКШИРУВ"
             if want != name:
                 target = await entity(client, want, {})
                 if target is None:

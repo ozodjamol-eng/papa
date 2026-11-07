@@ -208,7 +208,7 @@ async def folder_targets(client, st: dict, state_dir: Path, log=print) -> list[t
             continue
         u = (getattr(ent, "username", "") or "").lower()
         title = (getattr(ent, "title", "") or "").strip()
-        if title in hubs.HUBS or title.upper().startswith("PAPA"):
+        if hubs.key_of_title(title) or title.upper().startswith("PAPA"):
             continue                             # 01.11: свои хабы банка и служебные PAPA-каналы — не разбирать
         if u in curate.OWN or u in blocked or f"@{u}" in blocked:
             continue                             # свои — уже в списке; ставит своё лого — не тратим Gemini

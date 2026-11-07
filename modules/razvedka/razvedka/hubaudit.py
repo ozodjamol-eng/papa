@@ -100,9 +100,9 @@ async def run(client, out: Path, log=print) -> dict:
     want = {_n(h): h for h in hubs.HUBS}
     report, full = {}, {}
     async for d in client.iter_dialogs():
-        if not (d.is_channel and not d.is_group and _n(d.title) in want):
+        hub = hubs.key_of_title(d.title) if (d.is_channel and not d.is_group) else None
+        if not hub:
             continue
-        hub = want[_n(d.title)]
         items, albums = [], {}
         async for m in client.iter_messages(d.entity, limit=2000, wait_time=1):
             if m.action:

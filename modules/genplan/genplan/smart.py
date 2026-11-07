@@ -491,9 +491,16 @@ def _nrm(s) -> str:
     return re.sub(r"[\W_]+", "", str(s or "")).casefold()
 
 
+# 07.11 владелец переименовывает хабы KATTA BANK в «БАНК · …» — новое имя = прежний склад (как razvedka.hubs.TITLES)
+BANK_TITLES = {"БАНК · КУЛГИ": "РАЗВЛЕКАТЕЛЬНО", "БАНК · ФОЙДАЛИ": "ФОЙДАЛИК", "БАНК · ОВҚАТ": "ФОЙДАЛИК ОВКАТ",
+               "БАНК · МАЪНАВИЯТ": "МАЪНАВИЯТ", "БАНК · УЙ БИЗНЕСИ": "УЙДА БИЗНЕС", "БАНК · МОТИВАЦИЯ": "МОТИВАЦИЯ",
+               "БАНК · МУСИҚА": "Jonlik ijrolar", "БАНК · ИБРАТ": "ИБРАТ", "БАНК · ТРЕНДЛАР": "ТРЕНДЛАР"}
+
+
 def sklad_rubric(ch: dict, source: str | None, n: int = 0) -> str | None:
     """Пост переслан из склада владельца (config: sklad = {название склада: рубрика или [рубрики по очереди]})
     → рубрика (n — номер поста этого склада, для очереди); иначе None."""
+    source = next((old for new, old in BANK_TITLES.items() if _nrm(source) == _nrm(new)), source) if source else source
     for name, rub in (ch.get("sklad") or {}).items():
         if source and _nrm(source) == _nrm(name):
             return rub[n % len(rub)] if isinstance(rub, list) else rub

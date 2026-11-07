@@ -17,7 +17,7 @@ import urllib.request
 
 GATE = True
 VIDEO_ONLY = {"Jonlik ijrolar"}
-NO_TOPIC = {"ТАБРИКЛАР"}                  # поздравления сортирует timing.kind (без ИИ)
+NO_TOPIC = {"ТАБРИКЛАР", "ТЕКШИРУВ"}                  # поздравления сортирует timing.kind (без ИИ)
 SCAN = 3000
 
 TOPIC = {
@@ -29,6 +29,7 @@ TOPIC = {
     "МОТИВАЦИЯ": "мотивация: успех, цели, сила воли, не сдаваться, вдохновение к действию (НЕ воспитание, НЕ семейные наставления, НЕ религия)",
     "Jonlik ijrolar": "музыка: живое исполнение песен, клипы",
     "ИБРАТ": "поучительная жизненная история (сюжет) с выводом",
+    "ТРЕНДЛАР": "тренды: вирусные новинки, необычное и удивительное в мире, новые технологии и ИИ, то, что сейчас все обсуждают",
 }
 
 
@@ -58,8 +59,8 @@ def keys_of(msgs: list, text: str) -> set[str]:
 
 def hub_name(ent) -> str | None:
     from .hubs import HUBS
-    t = n(getattr(ent, "title", "") or "")
-    return next((h for h in HUBS if n(h) == t), None)
+    from .hubs import key_of_title
+    return key_of_title(getattr(ent, "title", "") or "")
 
 
 _INDEX: dict[int, set[str]] = {}

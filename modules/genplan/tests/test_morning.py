@@ -770,3 +770,15 @@ class OccasionFilterTest(unittest.TestCase):
         from genplan import morning
         for t in ("Хайрли тонг, азизлар!", "Жума тонги муборак", "Shanba tongi muborak", None, ""):
             self.assertFalse(morning.occasion_in(t), t)
+
+
+class BankTitlesTest(unittest.TestCase):
+    """07.11: хабы переименованы в «БАНК · …» — склад узнаётся и по старому, и по новому имени."""
+
+    def test_new_and_old_names(self):
+        ch = {"sklad": {"РАЗВЛЕКАТЕЛЬНО": "Ҳажвия", "Jonlik ijrolar": "Мусиқа", "ТРЕНДЛАР": "Қизиқарли"}}
+        self.assertEqual(smart.sklad_rubric(ch, "РАЗВЛЕКАТЕЛЬНО"), "Ҳажвия")
+        self.assertEqual(smart.sklad_rubric(ch, "БАНК · КУЛГИ"), "Ҳажвия")
+        self.assertEqual(smart.sklad_rubric(ch, "БАНК · МУСИҚА"), "Мусиқа")
+        self.assertEqual(smart.sklad_rubric(ch, "БАНК · ТРЕНДЛАР"), "Қизиқарли")
+        self.assertIsNone(smart.sklad_rubric(ch, "БАНК · ТЕКШИРУВ"))

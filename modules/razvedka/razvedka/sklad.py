@@ -34,6 +34,7 @@ SKLAD = {
     "Jonlik ijrolar": ("paparazzi", "davra"),          # 30.10: хаб музыки — и для КАТТА ДАВРА (музыка ×3)
     "УЙДА БИЗНЕС": ("davra", "xojaobod"),               # 30.10: хабы направлений (агенты кладут сами)
     "МОТИВАЦИЯ": ("davra",),
+    "ТРЕНДЛАР": ("davra",),                             # 07.11: главная рубрика КАТТА ДАВРА — свой хаб
     "ИБРАТ": ("davra", "xojaobod"),
     "РАЗВЛЕКАТЕЛЬНО": ("davra", "xojaobod", "paparazzi"),   # 26.10 владелец: склад юмора — для всех трёх
     # склады под пустые рубрики — подключатся, когда владелец назовёт свои каналы
@@ -61,7 +62,7 @@ FRESH_DAYS = {"СРОЧНО НОВОСТИ": 0.5, "@madaniyatvazirligi": 2}   # 
 URGENT = "СРОЧНО НОВОСТИ"                         # 01.11: отдельный проход каждый час, вне норм
 URGENT_PER_RUN = 3
 FIXED = {"davra": {"@shayx_nuriddinxoliqnazar": 1, "ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 2, "@AbduraxmonQiziq": 1,
-                   "МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1},
+                   "МОТИВАЦИЯ": 2, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1, "ТРЕНДЛАР": 2},
          "xojaobod": {"@shayx_nuriddinxoliqnazar": 1, "ФОЙДАЛИК": 3, "РАЗВЛЕКАТЕЛЬНО": 1, "МАЪНАВИЯТ": 1, "@AbduraxmonQiziq": 1},
          "paparazzi": {"ФОЙДАЛИК": 2, "Jonlik ijrolar": 2, "РАЗВЛЕКАТЕЛЬНО": 2, "РЕТРО КЛИПЛАР": 4,
                        "@AbduraxmonQiziq": 1, "@sanatdunyosi": 2, "@madaniyat_marifat_tv": 2, "@madaniyatvazirligi": 1, "@RizaNovaUZ": 2}}
@@ -200,8 +201,12 @@ async def find(client, log=print) -> dict[str, object]:
     want = {_norm(k): k for k in SKLAD if not external(k)}
     out = {}
     async for d in client.iter_dialogs():
-        if d.is_channel and not d.is_group and _norm(d.title) in want and want[_norm(d.title)] not in out:
-            out[want[_norm(d.title)]] = d.entity
+        if not (d.is_channel and not d.is_group):
+            continue
+        from .hubs import key_of_title          # 07.11: хаб узнаём и по новому имени «БАНК · …»
+        k = want.get(_norm(d.title)) or (key_of_title(d.title) if key_of_title(d.title) in SKLAD else None)
+        if k and k not in out:
+            out[k] = d.entity
     for k in SKLAD:
         if external(k):
             try:
