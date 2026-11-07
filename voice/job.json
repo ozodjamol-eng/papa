@@ -1,0 +1,93 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "tts",
+   "name": "s01",
+   "voice_id": "$asosiy",
+   "text": "Мебел олмоқчисиз... лекин нархи қимматми?",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Сабаби оддий: o'rtakash o'z устамасини қo'шади."
+  },
+  {
+   "do": "tts",
+   "name": "s02",
+   "voice_id": "$asosiy",
+   "text": "Сабаби оддий: o'rtakash o'z устамасини қo'шади.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Мебел олмоқчисиз... лекин нархи қимматми?",
+   "next_text": "Шодиёна мебел — Андижондаги ишлаб чиқарувчи. ... Беш йилдан бери — o'z цехимизда."
+  },
+  {
+   "do": "tts",
+   "name": "s03",
+   "voice_id": "$asosiy",
+   "text": "Шодиёна мебел — Андижондаги ишлаб чиқарувчи. ... Беш йилдан бери — o'z цехимизда.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Сабаби оддий: o'rtakash o'z устамасини қo'шади.",
+   "next_text": "Металл каркасдан юмшоқ қопламагача — ҳаммасини o'zimiz тайёрлаймиз."
+  },
+  {
+   "do": "tts",
+   "name": "s04",
+   "voice_id": "$asosiy",
+   "text": "Металл каркасдан юмшоқ қопламагача — ҳаммасини o'zimiz тайёрлаймиз.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Шодиёна мебел — Андижондаги ишлаб чиқарувчи. ... Беш йилдан бери — o'z цехимизда.",
+   "next_text": "Ошхона, уй, мактаб, тиббиёт ва офис учун — буюртма асосида, хоҳлаган o'lchamda."
+  },
+  {
+   "do": "tts",
+   "name": "s05",
+   "voice_id": "$asosiy",
+   "text": "Ошхона, уй, мактаб, тиббиёт ва офис учун — буюртма асосида, хоҳлаган o'lchamda.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Металл каркасдан юмшоқ қопламагача — ҳаммасини o'zimiz тайёрлаймиз.",
+   "next_text": "Дизайн хизмати — мутлақо бепул."
+  },
+  {
+   "do": "tts",
+   "name": "s06",
+   "voice_id": "$asosiy",
+   "text": "Дизайн хизмати — мутлақо бепул.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Ошхона, уй, мактаб, тиббиёт ва офис учун — буюртма асосида, хоҳлаган o'lchamda.",
+   "next_text": "Заводдан нархда — воситачисиз."
+  },
+  {
+   "do": "tts",
+   "name": "s07",
+   "voice_id": "$asosiy",
+   "text": "Заводдан нархда — воситачисиз.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Дизайн хизмати — мутлақо бепул.",
+   "next_text": "Буюртма учун — Телеграм ботимизга ёзинг ёки qo'ng'iroq қилинг."
+  },
+  {
+   "do": "tts",
+   "name": "s08",
+   "voice_id": "$asosiy",
+   "text": "Буюртма учун — Телеграм ботимизга ёзинг ёки qo'ng'iroq қилинг.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Заводдан нархда — воситачисиз."
+  }
+ ]
+}
