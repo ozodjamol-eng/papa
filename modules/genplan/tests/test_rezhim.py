@@ -48,9 +48,10 @@ class T(unittest.TestCase):
         hub.callback(b, self.db, self.cfg, {1}, cq(data), now)
         return b
 
-    def test_only_davra_for_trial_week(self):
+    def test_davra_and_xojaobod(self):                   # 07.11 владелец: и в Хўжаобод; PaparazziUZ — без часовой сетки
         self.assertTrue(rezhim.enabled(self.cfg["channels"]["davra"]))
-        self.assertFalse(rezhim.enabled(self.cfg["channels"]["xojaobod"]))
+        self.assertTrue(rezhim.enabled(self.cfg["channels"]["xojaobod"]))
+        self.assertFalse(rezhim.enabled(self.cfg["channels"]["paparazzi"]))
 
     def test_default_all_on(self):
         now = at("06:00")
@@ -110,13 +111,13 @@ class T(unittest.TestCase):
 
     def test_evening_once(self):
         self.assertEqual(rezhim.evening_due(self.db, self.cfg, at("21:00")), [])
-        self.assertEqual(rezhim.evening_due(self.db, self.cfg, at("21:31")), ["davra"])
+        self.assertEqual(rezhim.evening_due(self.db, self.cfg, at("21:31")), ["davra", "xojaobod"])
         self.assertEqual(rezhim.evening_due(self.db, self.cfg, at("21:40")), [])
 
     def test_today_button_under_segodnya(self):
         kb = menu.panel_markup(self.cfg, "davra", menu.P_TODAY, db=self.db, now=at("06:00"))
         self.assertEqual(kb["inline_keyboard"][0][0]["text"], "🗓 Режим дня")
-        self.assertEqual(menu.panel_markup(self.cfg, "xojaobod", menu.P_TODAY, db=self.db), menu.PANEL)
+        self.assertEqual(menu.panel_markup(self.cfg, "paparazzi", menu.P_TODAY, db=self.db), menu.PANEL)
 
     def test_flag_removed_hours_work_again(self):
         now = at("06:00")
