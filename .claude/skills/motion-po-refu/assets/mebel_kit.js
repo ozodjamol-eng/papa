@@ -23,6 +23,10 @@
  *  checklist(ctx,{x,y,w,items:[{name,note}],t,t0,every,rowH,size,out,rowBg,done,ink,inkDone,box,boxLine,tally:{x,y,size,label,color,full,bg,fg}}) → число отмеченных
  *                                                       «Сеп рўйхати»: строки списка выезжают, галочка рисуется штрихом, строка «загорается»,
  *                                                       счётчик «4/6» прыгает на каждой галочке (разведка «Мебель» 06.11, по мотиву IKEA PH «One Piece at a Time»)
+ *  route(ctx,{x0,x1,y,stops:[{name,sub}],at:[[t,idx],...],t,t0,out,size,line,done,ink,dot}) → индекс текущей остановки
+ *                                                       «Йўл чизиғи»: маршрут поездки по остановкам — линия рисуется, маркер едет к остановке в момент t,
+ *                                                       пройденные точки «вспыхивают» золотом, текущая подпись крупнее (разведка «Умра» 07.11 — дневник группы)
+ *  day(ctx,{x,y,n,place,note,t,t0,out,size,bg,fg,accent})  «Кун плашкаси»: штамп дневника «3-КУН · МАДИНА» + строка-заметка; при смене n — перелистывание
  */
 (function () {
   'use strict';
@@ -340,6 +344,40 @@
     return done;
   }
 
-  window.MK = { warm, fill, proof, meter, checklist, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
+  /* ---------- «Йўл чизиғи» + «Кун плашкаси»: дневник группы паломников (разведка «Умра» 07.11.2026) ---------- */
+  // at: [[t, i], ...] — к моменту t маркер доезжает до остановки i (переезд 0.8 с). Чистая функция t.
+  function routePos(t, at) { let pos = 0; for (const [ta, i] of at) { if (t >= ta) pos = i; else if (t > ta - 0.8) { pos = lerp(pos, i, E.inOut3(prog(t, ta - 0.8, ta))); break; } else break; } return pos; }
+  function route(ctx, o) {
+    const n = o.stops.length, x0 = o.x0 ?? 110, x1 = o.x1 ?? W() - 110, y = o.y ?? 1500, fz = o.size || 34, k = life(o.t, o.t0, o.out, 0.5); if (k <= 0) return 0;
+    const sx = (i) => lerp(x0, x1, n > 1 ? i / (n - 1) : 0), draw = E.out3(prog(o.t, o.t0, o.t0 + 0.8)), pos = routePos(o.t, o.at || [[o.t0, 0]]), cur = Math.round(pos);
+    ctx.save(); ctx.globalAlpha *= k; ctx.lineCap = 'round';
+    ctx.lineWidth = fz * 0.28; ctx.strokeStyle = o.line || 'rgba(246,240,222,0.28)'; ctx.setLineDash([fz * 0.05, fz * 0.55]);
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(lerp(x0, x1, draw), y); ctx.stroke(); ctx.setLineDash([]);
+    const px = lerp(x0, x1, n > 1 ? pos / (n - 1) : 0); ctx.strokeStyle = o.done || P.accent; ctx.lineWidth = fz * 0.3; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(px, y); ctx.stroke();
+    for (let i = 0; i < n; i++) { const di = E.outBack(prog(o.t, o.t0 + 0.1 * i, o.t0 + 0.1 * i + 0.4)); if (di <= 0) continue;
+      const reached = pos >= i - 0.02, ta = (o.at || []).find((a) => a[1] === i), pop = reached && ta ? 1 + 0.45 * Math.exp(-(o.t - ta[0]) * 6) * (o.t >= ta[0] ? 1 : 0) : 1, r = fz * 0.42 * di * pop;
+      shadow(ctx, 0.35, 12, 4); ctx.fillStyle = reached ? (o.done || P.accent) : (o.dot || '#3A0D14'); ctx.beginPath(); ctx.arc(sx(i), y, r, 0, Math.PI * 2); ctx.fill(); noShadow(ctx);
+      ctx.lineWidth = fz * 0.1; ctx.strokeStyle = o.done || P.accent; ctx.stroke();
+      const big = i === cur, f2 = big ? fz * 0.88 : fz * 0.6; ctx.font = `${big ? 900 : 800} ${f2}px ${F.head}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = big ? (o.done || P.accent) : (o.ink || 'rgba(246,240,222,0.75)'); ctx.fillText(o.stops[i].name, sx(i), y + fz * 0.85 + (i % 2 && n > 4 ? 0 : 0));
+      if (big && o.stops[i].sub) { ctx.font = `800 ${fz * 0.6}px ${F.body}`; ctx.fillStyle = o.ink || P.cream; ctx.fillText(o.stops[i].sub, sx(i), y + fz * 2.05); } }
+    // маркер — «самолётик-капля» с белой обводкой, слегка качается в пути
+    const moving = Math.abs(pos - cur) > 0.01, bob = moving ? Math.sin(o.t * 12) * fz * 0.08 : 0; shadow(ctx, 0.45, 16, 6); ctx.fillStyle = o.ink || P.cream;
+    ctx.beginPath(); ctx.arc(px, y - fz * 1.15 + bob, fz * 0.36, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(px - fz * 0.28, y - fz * 1.0 + bob); ctx.lineTo(px, y - fz * 0.55 + bob); ctx.lineTo(px + fz * 0.28, y - fz * 1.0 + bob); ctx.fill(); noShadow(ctx);
+    ctx.fillStyle = o.done || P.accent; ctx.beginPath(); ctx.arc(px, y - fz * 1.15 + bob, fz * 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); return cur;
+  }
+  function day(ctx, o) {
+    const k = life(o.t, o.t0, o.out, 0.4); if (k <= 0) return; const fz = o.size || 120, x = o.x ?? W() / 2, y = o.y ?? 300, ts = o.tn ?? o.t0, flip = E.outBack(prog(o.t, ts, ts + 0.45), 1.3);
+    ctx.save(); ctx.globalAlpha *= k; ctx.translate(x, y); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.save(); ctx.scale(1, Math.max(0.02, flip)); ctx.font = `900 ${fz * 0.42}px ${F.body}`; const lab = `${o.n}-КУН`, lw = ctx.measureText(lab).width + fz * 0.6;
+    shadow(ctx, 0.4, 20, 8); ctx.fillStyle = o.accent || P.accent; rr(ctx, -lw / 2, -fz * 0.95, lw, fz * 0.62, fz * 0.31); ctx.fill(); noShadow(ctx);
+    ctx.fillStyle = o.bg || '#3A0D14'; ctx.fillText(lab, 0, -fz * 0.63);
+    ctx.font = `400 ${fz}px ${F.head}`; shadow(ctx, 0.45, 24, 8); ctx.fillStyle = o.fg || P.cream; ctx.fillText(o.place, 0, fz * 0.18); noShadow(ctx); ctx.restore();
+    if (o.note) { const nk = E.out3(prog(o.t, ts + 0.3, ts + 0.7)); ctx.globalAlpha *= nk; ctx.font = `800 ${fz * 0.33}px ${F.body}`; ctx.fillStyle = o.accent || P.accent; ctx.fillText(o.note, 0, fz * 0.95 + (1 - nk) * 20); }
+    ctx.restore();
+  }
+
+  window.MK = { route, day, warm, fill, proof, meter, checklist, size, pointer, swatches, TEX, badge, price, counter, panels, lower, subs, cta, wipe, grain, pill, life, E, prog, clamp, lerp, rr,
     get P() { return P; }, setPalette: (p) => { P = Object.assign({}, P, p); }, setFonts: (f) => { F = Object.assign({}, F, f); } };
 })();
