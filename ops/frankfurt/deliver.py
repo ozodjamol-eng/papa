@@ -122,7 +122,7 @@ def main(folder):
             print(f"{p.name} (готовый пост) → владельцу: {'OK' if rs and all(r.get('ok') for r in rs) else rs}")
     for m in msgs:
         text = m.read_text(encoding="utf-8").strip()
-        key = {"razvedka-voda": "RAZVEDKA_VODA_CHAT", "razvedka-mebel": "RAZVEDKA_MEBEL_CHAT"}.get(m.stem)
+        key = {"razvedka-voda": "RAZVEDKA_VODA_CHAT", "razvedka-mebel": "RAZVEDKA_MEBEL_CHAT", "razvedka-umra": "RAZVEDKA_UMRA_CHAT"}.get(m.stem)
         targets = [routes[key]] if key in routes else owners
         for o in targets:
             r = send_message(token, o, text)
