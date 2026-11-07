@@ -47,25 +47,20 @@ def is_off(db, channel: str, t: dt.datetime) -> bool:
 
 
 def _locked_hours(db, ch: dict, channel: str, day: dt.date) -> set[str]:
-    out = {f"{t.astimezone(plan.TZ).hour:02d}" for t in smart.hour_slots(ch, day) if smart.is_minbar_hour(ch, t)}
-    for m in store.scheduled(db, channel):              # пост с твёрдым временем владельца (🔒) — не снимаем
-        x = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
-        if x.date() == day and m["locked"] and smart.is_grid_post(m):
-            out.add(f"{x.hour:02d}")
-    return out
+    # 07.11 владелец: «дай мне выбор — галочка есть, идёт; нет — не идёт». Замок — только Муфтий 22:00 (протокол);
+    # час с вашим постом твёрдого времени теперь тоже галочка (сняли — пост уходит в 📦 запас).
+    return {f"{t.astimezone(plan.TZ).hour:02d}" for t in smart.hour_slots(ch, day) if smart.is_minbar_hour(ch, t)}
 
 
 def items(db, cfg: dict, channel: str, day: dt.date, now: dt.datetime) -> list[tuple[str, str, bool]]:
-    """Часы сетки, которые можно выключить: (час, рубрика, можно ли трогать). Прошедшие часы сегодня — не показываем."""
+    """Все часы сетки дня: (час, рубрики, можно ли трогать). 07.11 владелец: из списка ничего не пропадает — и прошедшие тоже."""
     ch = cfg["channels"][channel]
     locked = _locked_hours(db, ch, channel, day)
     out = []
     for t in smart.hour_slots(ch, day):
-        if t < now:
-            continue
         h = f"{t.astimezone(plan.TZ).hour:02d}"
         w = smart.hour_wants(ch, t)
-        out.append((h, (w[0] if w else "пост"), h not in locked))
+        out.append((h, ("/".join(w[:2]) if w else "пост"), h not in locked))
     return out
 
 
@@ -77,7 +72,8 @@ def card(db, cfg: dict, channel: str, day: dt.date, now: dt.datetime, note: str 
     d = day.strftime("%Y%m%d")
     for h, rub, free in items(db, cfg, channel, day, now):
         mark = "🔒" if not free else ("⬜" if h in draft else "✅")
-        line.append({"text": f"{mark} {h}:00 {rub}"[:30], "callback_data": f"rz:t:{channel}:{d}:{h}" if free else "rz:lk"})
+        past = day == now.date() and plan.slot_time(day, f"{h}:00") < now
+        line.append({"text": (f"{mark} {h}:00 {rub}" + (" ·прошёл" if past else ""))[:40], "callback_data": f"rz:t:{channel}:{d}:{h}" if free else "rz:lk"})
         if len(line) == 2:
             rows.append(line); line = []
     if line:
@@ -85,11 +81,16 @@ def card(db, cfg: dict, channel: str, day: dt.date, now: dt.datetime, note: str 
     changed = draft != act
     rows.append([{"text": "✅ Утверждаю" + (" (есть изменения)" if changed else ""), "callback_data": f"rz:ok:{channel}:{d}"}])
     rows.append([{"text": "↺ Всё включить", "callback_data": f"rz:all:{channel}:{d}"}])
+    prev_, next_ = day - dt.timedelta(days=1), day + dt.timedelta(days=1)       # 07.11: «в любое время» — любой день
+    nav = [] if prev_ < now.date() else [{"text": f"◀ {prev_:%d.%m}", "callback_data": f"rz:day:{channel}:{prev_:%Y%m%d}"}]
+    nav.append({"text": f"{next_:%d.%m} ▶", "callback_data": f"rz:day:{channel}:{next_:%Y%m%d}"})
+    rows.append(nav)
     when = "сегодня" if day == now.date() else ("завтра" if day == now.date() + dt.timedelta(days=1) else f"{day:%d.%m}")
     off_txt = ", ".join(f"{h}:00" for h in sorted(act)) or "нет — всё работает"
     text = (f"📅 РЕЖИМ ДНЯ — {ch['title']} · {day:%d.%m} ({when})\n"
             "Нажмите на час: ✅ работает / ⬜ сегодня не выходит. Потом «✅ Утверждаю».\n"
-            "🔒 всегда работает: намаз и Жума, оплаченная реклама, «Хайрли тонг», Муфтий 22:00, ваши посты с твёрдым временем.\n\n"
+            "Снятая галочка — пункт не выходит, но остаётся в списке: включите обратно в любой момент. ◀ ▶ — другой день.\n"
+            "🔒 всегда работает: Муфтий 22:00; вне сетки и не в этом списке — намаз и Жума, оплаченная реклама, «Хайрли тонг».\n\n"
             f"Сейчас выключено: {off_txt}")
     if note:
         text += "\n\n" + note
@@ -107,8 +108,8 @@ def _free_hours(db, channel: str, day: dt.date, hours: list[str]) -> int:
     n = 0
     for m in store.scheduled(db, channel):
         x = dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ)
-        if x.date() == day and f"{x.hour:02d}" in hours and smart.is_grid_post(m) and not m["locked"]:
-            store.update(db, m["id"], status="draft", stock=1, scheduled_at=None)
+        if x.date() == day and f"{x.hour:02d}" in hours and smart.is_grid_post(m):
+            store.update(db, m["id"], status="draft", stock=1, scheduled_at=None, locked=0)
             n += 1
     return n
 
@@ -143,6 +144,11 @@ def callback(bot, db, cfg: dict, cq: dict, now: dt.datetime) -> str:
         bot("sendMessage", chat_id=chat, text=t, reply_markup=kb)
         bot("answerCallbackQuery", callback_query_id=cq["id"])
         return "rz_open"
+    if kind == "day":                                   # 07.11: листаем дни — черновик = утверждённое этого дня
+        t, kb = open_card(db, cfg, channel, day, now)
+        _edit(bot, chat, msg_id, t, kb)
+        bot("answerCallbackQuery", callback_query_id=cq["id"])
+        return "rz_day"
     if kind == "t":
         h = parts[4]
         cur = set(_load(db, "draft", channel, day))

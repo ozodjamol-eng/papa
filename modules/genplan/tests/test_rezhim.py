@@ -74,19 +74,25 @@ class T(unittest.TestCase):
         self.assertIn("10:00", [f"{t:%H:%M}" for t in free])
         self.assertIn("⏸ 09:00", smart.day_view(self.db, self.cfg, "davra", now))
 
-    def test_queued_grid_post_back_to_stock_locked_stays(self):
+    def test_queued_grid_post_back_to_stock_owner_choice(self):
         now = at("06:00")
         d = DAY.strftime("%Y%m%d")
         a = self.add(at("09:00"))
         b = self.add(at("11:00"), locked=1)
         self.press(f"rz:open:davra:{d}", now)
         self.press(f"rz:t:davra:{d}:09", now)
-        self.press(f"rz:t:davra:{d}:11", now)                                  # 🔒 час — переключение не сохранится
+        self.press(f"rz:t:davra:{d}:11", now)            # 07.11 владелец: и час с его постом — галочка, сняли → в запас
         self.press(f"rz:ok:davra:{d}", now)
         self.assertEqual(store.get(self.db, a)["stock"], 1)
         self.assertIsNone(store.get(self.db, a)["scheduled_at"])
-        self.assertEqual(store.get(self.db, b)["status"], "queued")
-        self.assertEqual(rezhim.off_hours(self.db, "davra", DAY), ["09"])
+        self.assertEqual(store.get(self.db, b)["status"], "draft")
+        self.assertEqual(rezhim.off_hours(self.db, "davra", DAY), ["09", "11"])
+
+    def test_past_hours_stay_in_list(self):
+        hs = [h for h, _, _ in rezhim.items(self.db, self.cfg, "davra", DAY, at("15:00"))]
+        self.assertIn("09", hs)
+        text, kb = rezhim.card(self.db, self.cfg, "davra", DAY, at("15:00"))
+        self.assertTrue(any("▶" in b["text"] for r in kb["inline_keyboard"] for b in r))
 
     def test_minbar_locked(self):
         its = {h: ok for h, _, ok in rezhim.items(self.db, self.cfg, "davra", DAY, at("06:00"))}
