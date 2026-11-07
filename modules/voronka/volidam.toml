@@ -1,11 +1,11 @@
 # Воронка VOLIDAM / Safo Marva (клиент Нодирбек). Подготовлена 07.11.2026, НЕ запущена:
-# Instagram подключит сам Нодирбек при встрече (авторизует наше приложение). До запуска — dry_run = true.
+# Instagram подключит сам Нодирбек при встрече (тестировщик «PAPA Voronka» + свой токен). Запуск: volidam-voronka-token → volidam-voronka-install.
 # Единое правило воронок (07.11): клиент нажал — сразу в канале. Открытая ссылка канала.
 own_username = ""          # заполнить при подключении Instagram
 mode = "all"
 keywords = []
 spam_words = ["vpn", "впн", "заработ", "zarabot", "крипт", "crypto", "invest", "инвест", "казино", "casino", "ставк", "bonus", "бонус", "промокод", "pul ishlash", "пул ишлаш"]
-dry_run = true
+dry_run = false           # служба не существует, пока владелец не выполнит volidam-voronka-install
 
 posts = []
 only_users = []
