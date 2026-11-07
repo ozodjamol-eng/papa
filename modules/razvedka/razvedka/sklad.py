@@ -47,6 +47,7 @@ SKLAD = {
     "@madaniyatvazirligi": ("paparazzi",),
     "@RizaNovaUZ": ("paparazzi",),                  # 31.10 владелец: музыкальный лейбл, клипы; лого — проверка кадров
 }
+VIDEO_ONLY = {"Jonlik ijrolar", "РЕТРО КЛИПЛАР", "@RizaNovaUZ", "@sanatdunyosi", "@madaniyat_marifat_tv"}   # 07.11
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar", "СРОЧНО НОВОСТИ"}      # якорь: сначала свежий пост, нет нового — следующий из архива
 # 31.10 владелец: «в обоих каналах должен идти Муфтий, но разными постами». Склад Муфтия — один урок на ОДИН канал:
@@ -130,6 +131,8 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
     """Пост склада годится для канала: с медиа, не реклама, свежий (для «СРОЧНО НОВОСТИ»), не новость, по политике канала."""
     if item["kind"] not in ("video", "photo") or item["ad"]:
         return False
+    if stash in VIDEO_ONLY and item["kind"] != "video":
+        return False                                   # 07.11 владелец: музыка — только видео, не картинка
     if stash in LESSON_ONLY and not re.search(r"minbar|минбар", _norm(item["text"])):
         return False                                   # 31.10: в слот Муфтия — только уроки с минбара
     days = FRESH_DAYS.get(stash)

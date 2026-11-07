@@ -682,6 +682,16 @@ def intake(bot, db, cfg: dict, owners: set[int], hub: int, hub_ids: list[int], m
         store.update(db, mid, auto=0, stock=0, status="rejected")
         stock = sk = False
         notes = ["⛔ Новость — сама не выйдет (01.11: новости только из «СРОЧНО НОВОСТИ») · ваше решение — 🆘 кнопкой ниже"] + [n for n in (notes or []) if "выйдет сам" not in n]
+    if src and not mh and not hot and store.get(db, mid)["status"] != "rejected":
+        # 07.11 владелец: повтор из складов/источников (тот же ролик под другим номером, или уже убранный им) — сам не выходит
+        why = smart.repeat_block(db, channel, store.get(db, mid), dt.datetime.now(dt.timezone.utc))
+        if not why and smart.music_no_video(store.get(db, mid)):
+            why = "музыка без видео — только картинка"
+        if why:
+            store.update(db, mid, auto=0, stock=0, status="rejected")
+            stock = sk = False
+            notes = [f"⛔ Сам не выйдет ({why}) · нужен — верните кнопками ниже"] + \
+                    [n for n in (notes or []) if "выйдет сам" not in n]
     pol = smart.policy_note(cfg, channel, strip_sources(text))      # политика каналов (docs/CHANNELS.md)
     if pol:
         notes = (notes or []) + [pol]

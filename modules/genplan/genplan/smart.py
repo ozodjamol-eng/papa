@@ -254,7 +254,8 @@ def ad_closer(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
         pool = [m for m in store.stock(db, channel)
                 if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
                 and not waits_text(cfg, m) and not _stale(ch, m, now) and not is_sklad(ch, m)
-                and not is_ad_rubric(m["rubric"])]
+                and not is_ad_rubric(m["rubric"]) and not repeat_block(db, channel, m, now)
+                and not (m["auto"] and music_no_video(m))]
         pick = pool[0] if pool else None
     if pick is None:
         return None
@@ -631,6 +632,61 @@ def twin_today(db, channel: str, m, now: dt.datetime) -> bool:
                       "AND COALESCE(scheduled_at, created_at)>=? LIMIT 1", (m["fp"], channel, since)).fetchone() is not None
 
 
+# 07.11 владелец: «бот кидает почти каждый день одно и то же… договаривались 15–20 дней или месяц не бросать».
+# Причина: склады отсекали повтор только по номеру сообщения, а одно и то же видео лежит в складах под разными номерами.
+# Теперь по СОДЕРЖИМОМУ (отпечаток видео/фото, длинный текст): в своём канале — не чаще раза в 30 дней;
+# то, что владелец убрал (🗑 в пульте или «Удалить из канала»), — больше не берём никогда. Урок Муфтия — по своим правилам.
+REPEAT_BLOCK_DAYS = 30
+# 07.11 владелец: «нахрена он картинку бросает? это даже не клип» — музыка (песня, живое исполнение, клип, ретро)
+# из складов/источников выходит сама только ВИДЕО. Фото с подписью «ЖОНЛИ ИЖРО» — не музыка, сам не выходит.
+MUSIC_RUBRICS = {"Мусиқа", "Қўшиқ", "Жонли ижро", "Ретро хотира", "Кун қўшиғи", "Тунги қўшиқ", "Клип/премьера", "Премьера"}
+
+
+def music_no_video(m) -> bool:
+    if m["rubric"] not in MUSIC_RUBRICS:
+        return False
+    import json as _j
+    try:
+        media = _j.loads(m["media"] or "[]")
+    except (TypeError, ValueError):
+        media = []
+    return not any((x.get("type") or "") in ("video", "animation", "video_note") for x in media)
+
+
+
+def _txt_key(text) -> str:
+    from .text import strip_sources
+    k = _nrm(strip_sources(text or ""))
+    return k[:120] if len(k) >= 60 else ""
+
+
+def repeat_block(db, channel: str, m, now: dt.datetime) -> str:
+    """Почему пост не выходит как повтор ('' — можно). Сверка по fp и по тексту (≥ 60 букв)."""
+    if m["rubric"] == MINBAR:
+        return ""
+    fp, key = m["fp"], _txt_key(m["text"])
+    if not fp and not key:
+        return ""
+    def same(r) -> bool:
+        return bool((fp and r["fp"] == fp) or (key and _txt_key(r["text"]) == key))
+    for r in db.execute("SELECT id, fp, text FROM materials WHERE id<>? AND status='rejected'", (m["id"],)):
+        if same(r):
+            return "🗑 такой пост уже убран"
+    for r in db.execute("SELECT k FROM kv WHERE k LIKE 'xd\\_%' ESCAPE '\\'"):
+        try:
+            x = store.get(db, int(r[0][3:]))
+        except ValueError:
+            continue
+        if x is not None and x["id"] != m["id"] and same(x):
+            return "🗑 вы этот пост удаляли из канала"
+    since = (now - dt.timedelta(days=REPEAT_BLOCK_DAYS)).isoformat()
+    for r in db.execute("SELECT id, fp, text FROM materials WHERE id<>? AND channel=? AND status IN ('queued','published') "
+                        "AND COALESCE(scheduled_at, created_at)>=?", (m["id"], channel, since)):
+        if same(r):
+            return f"🔁 такой пост уже был в канале за {REPEAT_BLOCK_DAYS} дней"
+    return ""
+
+
 MINBAR_LAST = dt.timedelta(minutes=20)    # 01.11: за 20 мин до 22:00 свежего урока нет → запасной вариант
 
 
@@ -669,6 +725,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
             if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
             and not waits_text(cfg, m) and not _stale(ch, m, now)
             and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
+            and not repeat_block(db, channel, m, now) and not (m["auto"] and music_no_video(m))
             and not (urgent_sklad(ch, m["source"]) and dt.datetime.fromisoformat(m["created_at"]) < now - URGENT_TTL)
             and (not full or m["rubric"] == MINBAR or urgent_sklad(ch, m["source"]))]
     if not pool and not (hourly(ch) and store.stock(db, channel)):   # 01.11: час Муфтия может взять повтор урока
