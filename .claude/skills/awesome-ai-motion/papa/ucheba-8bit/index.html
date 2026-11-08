@@ -1,0 +1,185 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Учебная копия: 8-bit vs 16-bit (0–10.8 c)</title>
+<link rel="stylesheet" href="../../lib/stage.css">
+<style>
+@font-face{font-family:"AntonL";src:url("fonts/Anton.ttf")}
+@font-face{font-family:"MontV";src:url("fonts/Montserrat.ttf");font-weight:100 900}
+html,body{background:#000}.frame{background:#000!important;background-image:none!important}
+.scene{left:0!important;right:0!important;top:0!important;bottom:0!important;overflow:hidden}
+.abs{position:absolute}
+/* ---- сцена 1: чертёж ---- */
+#s1{position:absolute;inset:0}
+#cam1{position:absolute;inset:0;transform-origin:540px 960px}
+.bp{position:absolute;inset:-400px;background-color:#1f4a72;
+ background-image:radial-gradient(ellipse at 50% 45%,rgba(120,180,230,.35),transparent 60%),
+ linear-gradient(rgba(170,210,240,.33) 2px,transparent 2px),linear-gradient(90deg,rgba(170,210,240,.33) 2px,transparent 2px),
+ linear-gradient(rgba(170,210,240,.13) 1px,transparent 1px),linear-gradient(90deg,rgba(170,210,240,.13) 1px,transparent 1px);
+ background-size:100% 100%,150px 150px,150px 150px,30px 30px,30px 30px}
+#frm{position:absolute;left:70px;top:90px;width:940px;height:1740px;border:3px solid rgba(200,230,255,.75);border-radius:14px;box-shadow:0 0 0 6px rgba(0,0,0,.12) inset;opacity:0}
+.shirt{position:absolute;left:224px;width:632px;height:726px;filter:drop-shadow(0 18px 18px rgba(0,0,0,.45))}
+#sh1{top:600px}#sh2{top:600px;opacity:0}
+.lbl{position:absolute;left:0;right:0;text-align:center;opacity:0}
+.lbl span{display:inline-block;background:#7d26b8;color:#fff;font-family:"MontV";font-weight:900;font-size:92px;padding:4px 28px;letter-spacing:.01em;box-shadow:0 6px 14px rgba(0,0,0,.35)}
+/* мок «монтажки» */
+#ed{position:absolute;inset:0;opacity:0;background:#1d1f24}
+#ed .bar{position:absolute;left:0;right:0;height:10px;background:#d9d9d9}
+#ed .tl{position:absolute;left:40px;right:40px;top:1380px;height:420px;background:#24262c}
+#ed .tl i{position:absolute;left:0;height:22px;border-radius:3px}
+#badge{position:absolute;left:470px;top:140px;width:140px;height:140px;border-radius:30px;background:#130f40;border:5px solid #9b8cff;color:#cfc8ff;font:900 64px "MontV";display:flex;align-items:center;justify-content:center;opacity:0}
+#loop{position:absolute;left:0;top:0;overflow:visible}
+#loop path{fill:none;stroke:#fff;stroke-width:7;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+/* ---- круги ---- */
+.circ{position:absolute;left:250px;width:580px;height:580px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff,#e6e9ee 70%,#c9ced6);box-shadow:0 20px 40px rgba(0,0,0,.45);transform:scale(0)}
+/* ---- сцена 2: зелёный гранж ---- */
+#s2{position:absolute;inset:0;opacity:0;overflow:hidden}
+#cam2{position:absolute;inset:0;transform-origin:540px 960px}
+.gr{position:absolute;inset:-300px;background-color:#1d6b3a;
+ background-image:radial-gradient(ellipse at 30% 20%,rgba(120,220,140,.35),transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(0,40,10,.55),transparent 55%),
+ linear-gradient(rgba(255,255,255,.07) 2px,transparent 2px),linear-gradient(90deg,rgba(255,255,255,.07) 2px,transparent 2px);background-size:100% 100%,100% 100%,140px 140px,140px 140px}
+.gr:after{content:"";position:absolute;inset:0;opacity:.35;mix-blend-mode:multiply;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='5'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 .1  0 0 0 0 0  0 0 0 1.2 -.2'/></filter><rect width='600' height='600' filter='url(%23n)'/></svg>")}
+.hl{position:absolute;left:0;right:0;height:5px;background:#fff;transform:scaleX(0)}
+.sq{position:absolute;width:26px;height:22px;background:#fff;opacity:0}
+.T{position:absolute;left:0;right:0;text-align:center;font-family:"AntonL";color:#fff;line-height:1;text-shadow:0 8px 16px rgba(0,0,0,.35)}
+#tBit{top:600px;font-size:400px}#tDepth{top:1010px;font-size:240px}
+.strip{position:absolute;left:0;top:0;width:1300px;height:250px;
+ background:linear-gradient(90deg,#ff2a1a,#ffd400 22%,#9cff00 36%,#00e0a0 50%,#0080ff 66%,#5a2cff 80%,#ff00c8);
+ box-shadow:0 18px 30px rgba(0,0,0,.4)}
+#rb{left:540px;top:960px;width:0;height:0}
+#rbin{position:absolute;left:-90px;top:-70px;width:180px;height:140px;border-radius:26px;border:8px solid #fff;overflow:hidden;opacity:0}
+#rbin .strip{position:absolute;left:0;top:0;width:100%;height:100%}
+#torn{position:absolute;left:-110px;top:820px;width:1300px;height:260px;opacity:0;
+ clip-path:polygon(0 6%,4% 2%,8% 7%,12% 1%,17% 6%,22% 2%,27% 8%,32% 3%,37% 7%,43% 1%,48% 6%,53% 2%,58% 8%,63% 3%,69% 7%,74% 2%,79% 6%,84% 1%,89% 7%,94% 3%,100% 6%,100% 94%,95% 98%,90% 93%,85% 99%,80% 94%,75% 98%,70% 92%,64% 97%,59% 93%,54% 99%,49% 94%,44% 98%,38% 93%,33% 99%,28% 94%,23% 98%,18% 92%,13% 97%,8% 93%,4% 99%,0 94%);
+ filter:drop-shadow(0 0 0 #fff)}
+#tornEdge{position:absolute;left:-120px;top:808px;width:1320px;height:284px;background:#f4f1ea;opacity:0;
+ clip-path:polygon(0 5%,4% 0,8% 6%,12% 0,17% 5%,22% 0,27% 7%,32% 1%,37% 6%,43% 0,48% 5%,53% 0,58% 7%,63% 1%,69% 6%,74% 0,79% 5%,84% 0,89% 6%,94% 1%,100% 5%,100% 95%,95% 100%,90% 94%,85% 100%,80% 95%,75% 100%,70% 93%,64% 99%,59% 94%,54% 100%,49% 95%,44% 100%,38% 94%,33% 100%,28% 95%,23% 100%,18% 93%,13% 99%,8% 94%,4% 100%,0 95%)}
+.sml{position:absolute;left:0;right:0;text-align:center;font-family:"MontV";font-weight:900;color:#fff;font-size:40px;letter-spacing:.01em}
+#how{top:640px}#vals{top:690px;font-size:150px;font-family:"AntonL";font-weight:400}
+#lens{position:absolute;left:410px;top:-300px;width:260px;height:260px;border-radius:50%;border:8px solid #fff;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.4)}
+#lens .px{position:absolute;inset:0;background:linear-gradient(135deg,#f2ff6a 0 20%,#d4f53a 20% 40%,#a8e21c 40% 60%,#7cc90a 60% 80%,#4fa800 80%);image-rendering:pixelated;filter:contrast(1.1)}
+#lens .pxg{position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.12) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,.12) 2px,transparent 2px);background-size:27px 27px}
+#arcw{position:absolute;left:0;top:0;overflow:visible}
+#arcw path{fill:none;stroke:#fff;stroke-width:6;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+.bar2{position:absolute;left:110px;width:860px;height:170px;border-radius:30px;border:7px solid #fff;overflow:hidden;opacity:0;box-shadow:0 16px 30px rgba(0,0,0,.35)}
+.bar2 .strip{width:100%;height:100%}
+#b16 .strip{background:linear-gradient(90deg,#ffe600,#8cff00,#00e5a0,#00a2ff,#4b2cff,#ff00b4)}
+#b8 .strip{background:linear-gradient(90deg,#ffe600 0 12.5%,#9cff00 12.5% 25%,#00e5a0 25% 37.5%,#00b8ff 37.5% 50%,#0066ff 50% 62.5%,#4b2cff 62.5% 75%,#b000ff 75% 87.5%,#ff00b4 87.5%)}
+.cpt{position:absolute;left:0;right:0;text-align:center;font-family:"MontV";font-weight:800;font-size:26px;color:#fff;opacity:0}
+#store{top:1000px}#store b{font-family:"AntonL";font-weight:400;font-size:110px}#store small{font-size:40px;font-weight:900;margin-right:12px}
+#fe{top:1130px;font-size:40px;font-weight:900}
+#cc{top:1175px;font-family:"AntonL";font-size:110px;opacity:0}
+#cc span{background:linear-gradient(90deg,#ff3b2f,#ffd60a,#34c759,#00c7be,#0a84ff,#bf5af2);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:3px #fff}
+.vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 58%,rgba(0,0,0,.45) 100%)}
+</style></head>
+<body data-dur="10.8" data-size="1080x1920" data-poster="10.5"><main class="scene">
+<!-- СЦЕНА 1 -->
+<div id="s1"><div id="cam1">
+ <div class="bp"></div><div id="frm"></div>
+ <img class="shirt" id="sh2" src="shirt.png"><img class="shirt" id="sh1" src="shirt.png">
+ <div class="circ" id="c1" style="top:330px"></div><div class="circ" id="c2" style="top:1060px"></div>
+ <div class="lbl" id="l16" style="top:110px"><span>16-BIT</span></div>
+ <div class="lbl" id="l8" style="top:880px"><span>8-BIT</span></div>
+</div>
+ <div id="ed"><div class="bar" style="top:300px"></div><div class="bar" style="top:322px;height:4px"></div>
+  <div class="tl"><i style="top:40px;width:72%;background:#c04545"></i><i style="top:80px;left:6%;width:60%;background:#d9c35a"></i><i style="top:120px;left:12%;width:70%;background:#6bbf59"></i><i style="top:160px;left:3%;width:55%;background:#c04545"></i><i style="top:200px;left:20%;width:65%;background:#d9c35a"></i><i style="top:240px;left:9%;width:74%;background:#6bbf59"></i></div>
+  <div id="badge">OJ</div>
+  <svg id="loop" width="1080" height="1920"><path pathLength="1" d="M330 520 C180 520 150 330 290 300 C430 270 450 450 330 470 C230 486 220 380 300 370 C380 360 420 450 400 540 L380 600 M380 600 L340 572 M380 600 L410 566"/></svg>
+ </div>
+</div>
+<!-- СЦЕНА 2 -->
+<div id="s2"><div id="cam2">
+ <div class="gr"></div>
+ <div class="hl" id="hl1" style="top:640px"></div><div class="hl" id="hl2" style="top:1260px"></div>
+ <div class="sq" style="left:190px;top:600px"></div><div class="sq" style="left:864px;top:600px"></div><div class="sq" style="left:190px;top:1290px"></div><div class="sq" style="left:864px;top:1290px"></div>
+ <div class="T" id="tBit">BIT</div><div class="T" id="tDepth">DEPTH</div>
+ <div class="abs" id="rb"><div id="rbin"><div class="strip"></div></div></div>
+ <div id="tornEdge"></div><div id="torn"><div class="strip" style="width:100%;height:100%"></div></div>
+ <div class="sml" id="how">HOW MANY DIFFERENT</div><div class="T" id="vals">VALUES</div>
+ <svg id="arcw" width="1080" height="1920"><path pathLength="1" d="M210 800 C260 700 340 640 470 610"/></svg>
+ <div id="lens"><div class="px"></div><div class="pxg"></div></div>
+ <div class="cpt" id="cap16" style="top:770px">16-bit = 65,536 levels per channel</div>
+ <div class="bar2" id="b16" style="top:810px"><div class="strip"></div></div>
+ <div class="sml cpt" id="store"><small>CAN</small><b>STORE</b></div>
+ <div class="sml cpt" id="fe">FOR EACH</div>
+ <div class="T" id="cc"><span>COLOR CHANNEL</span></div>
+ <div class="bar2" id="b8" style="top:1330px"><div class="strip"></div></div>
+ <div class="cpt" id="cap8" style="top:1520px">8-bit = 256 levels per channel<br>256 × 256 × 256</div>
+</div></div>
+<div class="vig"></div>
+</main>
+<script src="../../lib/gsap.min.js"></script>
+<script src="../../lib/stage.js"></script>
+<script>
+const tl=Motion.timeline();
+/* 0.0–0.3 влёт футболки из размытия */
+tl.fromTo('#sh1',{scale:2.2,filter:'blur(30px) drop-shadow(0 18px 18px rgba(0,0,0,.45))',opacity:.5},{scale:1,filter:'blur(0px) drop-shadow(0 18px 18px rgba(0,0,0,.45))',opacity:1,duration:.32,ease:'power3.out'},0);
+/* 0.4–0.8 камера отъезжает, проявляется рамка */
+tl.fromTo('#cam1',{scale:1.12},{scale:1,duration:.6,ease:'power2.inOut'},.3);
+tl.to('#frm',{opacity:1,duration:.25},.5);
+/* 0.9–1.2 разделение на две футболки */
+tl.set('#sh2',{opacity:1},.9);
+tl.to('#sh1',{y:-410,scale:.95,duration:.35,ease:'power3.inOut'},.9);
+tl.to('#sh2',{y:420,scale:.95,duration:.35,ease:'power3.inOut'},.9);
+/* 1.15–1.7 ярлыки печатаются */
+tl.fromTo('#l8',{opacity:0,clipPath:'inset(0 50% 0 50%)'},{opacity:1,clipPath:'inset(0 0% 0 0%)',duration:.22,ease:'power2.out'},1.15);
+tl.fromTo('#l16',{opacity:0,clipPath:'inset(0 50% 0 50%)'},{opacity:1,clipPath:'inset(0 0% 0 0%)',duration:.22,ease:'power2.out'},1.45);
+tl.to('#cam1',{scale:1.04,duration:1.0,ease:'none'},1.5);
+/* 2.4–4.4 отъезд в «монтажку» и рисованная петля-стрелка */
+tl.set('#ed',{opacity:1},2.55);
+tl.fromTo('#ed',{clipPath:'inset(0 0 0 0)'},{clipPath:'inset(0 0 0 0)',duration:.01},2.55);
+tl.to('#cam1',{scale:.36,y:-90,duration:.55,ease:'power3.inOut'},2.35);
+tl.set('#cam1',{zIndex:2},2.35);
+tl.fromTo('#ed',{opacity:0},{opacity:1,duration:.2},2.4);
+tl.fromTo('#badge',{opacity:0,y:-40},{opacity:1,y:0,duration:.3,ease:'back.out(2)'},2.95);
+tl.to('#loop path',{strokeDashoffset:0,duration:.9,ease:'power2.inOut',autoRound:false},3.15);
+tl.to('#cam1',{scale:.39,duration:1.3,ease:'none'},2.9);
+/* 4.2–4.7 свип-наезд обратно */
+tl.to('#ed',{opacity:0,duration:.25},4.3);
+tl.to('#cam1',{scale:1.0,y:0,duration:.45,ease:'power3.in'},4.2);
+/* 4.8–5.9 белые круги за футболками, цвет «16-бит» */
+tl.to('.circ',{scale:1,duration:.35,ease:'back.out(1.6)',stagger:.06},4.75);
+tl.set(['#c1','#c2'],{zIndex:0},4.7);tl.set(['#sh1','#sh2'],{zIndex:1},4.7);tl.set(['#l16','#l8'],{zIndex:2},4.7);
+tl.to('.bp',{filter:'brightness(.55) saturate(.6)',duration:.3},4.7);
+tl.to('.shirt',{filter:'saturate(1.6) hue-rotate(-12deg) drop-shadow(0 18px 18px rgba(0,0,0,.45))',duration:.3},4.85);
+tl.to('#cam1',{scale:1.07,duration:1.1,ease:'none'},4.8);
+/* 6.0 сцена 2: BIT DEPTH */
+tl.set('#s1',{opacity:0},5.98);tl.set('#s2',{opacity:1},5.98);
+tl.fromTo('#cam2',{scale:1.15},{scale:1,duration:.5,ease:'power3.out'},5.98);
+tl.to(['#hl1','#hl2'],{scaleX:1,duration:.35,ease:'power3.out'},6.05);
+tl.to('.sq',{opacity:1,duration:.05,stagger:.03},6.2);
+tl.fromTo('#tBit',{opacity:0,scale:1.3,filter:'blur(10px)'},{opacity:1,scale:1,filter:'blur(0px)',duration:.25},6.15);
+tl.fromTo('#tDepth',{opacity:0,scale:1.3,filter:'blur(10px)'},{opacity:1,scale:1,filter:'blur(0px)',duration:.25},6.25);
+tl.to('#cam2',{scale:1.06,duration:.9,ease:'none'},6.4);
+/* 7.0–7.5 радуга раздвигает слова и становится рваной полосой */
+tl.to('#rbin',{opacity:1,duration:.05},6.98);
+tl.fromTo('#rbin',{scale:.4},{scale:1,duration:.15,ease:'back.out(2)'},6.98);
+tl.to('#rbin',{width:960,left:-480,height:240,top:-120,duration:.28,ease:'power3.inOut'},7.13);
+tl.to('#tBit',{y:-150,duration:.28,ease:'power3.inOut'},7.13);
+tl.to('#tDepth',{y:200,duration:.28,ease:'power3.inOut'},7.13);
+tl.to(['#hl1'],{y:-200,duration:.28},7.13);tl.to('#hl2',{y:200,duration:.28},7.13);
+tl.set(['#tornEdge','#torn'],{opacity:1},7.41);tl.set('#rbin',{opacity:0},7.41);
+tl.to('#cam2',{scale:1.25,duration:.25,ease:'power2.in'},7.35);
+tl.to('#tBit',{y:-900,duration:.3,ease:'power3.in'},7.4);tl.to('#tDepth',{y:900,duration:.3,ease:'power3.in'},7.4);
+tl.to(['#hl1','#hl2','.sq'],{opacity:0,duration:.1},7.4);tl.set(['#tBit','#tDepth'],{opacity:0},7.72);
+tl.to('#cam2',{scale:1.0,duration:.5,ease:'power3.out'},7.6);
+/* 7.6–8.6 HOW MANY DIFFERENT / VALUES */
+const how=document.getElementById('how');const ht='HOW MANY DIFFERENT';how.textContent='';
+ht.split('').forEach((c,i)=>{const s=document.createElement('span');s.textContent=c;s.style.opacity=0;how.appendChild(s);tl.set(s,{opacity:1},7.62+i*.022);});
+tl.fromTo('#vals',{opacity:0,y:40,scaleY:1.3},{opacity:1,y:0,scaleY:1,duration:.3,ease:'power3.out'},8.0);
+/* 8.6–9.4 лупа падает, дуга рисуется, полоса → закруглённая планка */
+tl.to('#lens',{top:470,duration:.4,ease:'power3.out'},8.6);
+tl.to('#arcw path',{strokeDashoffset:0,duration:.35,ease:'power2.out',autoRound:false},8.75);
+tl.to(['#how','#vals'],{opacity:0,y:-30,duration:.25},8.95);
+tl.to('#cap16',{opacity:1,duration:.2},9.1);
+tl.to(['#torn','#tornEdge'],{opacity:0,duration:.18},9.45);
+tl.fromTo('#b16',{opacity:0,scaleX:1.35,scaleY:1.5},{opacity:1,scaleX:1,scaleY:1,duration:.3,ease:'power3.out'},9.4);
+tl.to('#lens',{top:540,scale:.7,duration:.4,ease:'power2.inOut'},9.4);
+tl.to('#arcw',{opacity:0,duration:.2},9.4);
+/* 9.2–10.6 CAN STORE / FOR EACH / COLOR CHANNEL / 8-bit */
+tl.fromTo('#store',{opacity:0,y:40},{opacity:1,y:0,duration:.3,ease:'power3.out'},9.25);
+tl.fromTo('#fe',{opacity:0,y:20},{opacity:1,y:0,duration:.25},9.65);
+tl.fromTo('#cc',{opacity:0,scale:1.3,filter:'blur(8px)'},{opacity:1,scale:1,filter:'blur(0px)',duration:.3},9.95);
+tl.fromTo('#b8',{opacity:0,y:200},{opacity:1,y:0,duration:.35,ease:'power3.out'},9.85);
+tl.to('#cap8',{opacity:1,duration:.25},10.15);
+tl.to('#cam2',{scale:1.05,duration:1.2,ease:'none'},9.6);
+Motion.ready();
+</script></body></html>
