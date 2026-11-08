@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Слово-удар · премьера Mustafo</title>
+<link rel="stylesheet" href="../../lib/stage.css">
+<style>
+@font-face{font-family:"HJ";src:url("fonts/Handjet.ttf");font-weight:100 900;font-display:block}
+@font-face{font-family:"MontV";src:url("fonts/Montserrat.ttf");font-weight:100 900;font-display:block}
+html,body{background:#000}.frame{background:#000!important;background-image:none!important}
+.scene{left:0!important;right:0!important;top:0!important;bottom:0!important;overflow:hidden;background:radial-gradient(ellipse at 50% 55%,#2a1d07 0%,#0b0803 55%,#000 100%)}
+.su-px{position:absolute;background:#fff}
+.slot{position:absolute;left:0;right:0;text-align:center;font-family:"HJ";font-weight:700;color:#fff;line-height:1;font-variation-settings:"ELSH" 2}
+#s1{top:820px;font-size:210px}
+#p1{position:absolute;inset:0;opacity:0}
+#p1 .bg{position:absolute;left:40px;top:520px;width:1000px;height:1238px;filter:brightness(.42) blur(3px);-webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,#000 55%,transparent 100%);mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,#000 55%,transparent 100%)}
+#p1 .fg{position:absolute;left:40px;top:520px;width:1000px;height:1238px}
+#p1 .shade{position:absolute;left:0;right:0;top:1250px;height:700px;background:linear-gradient(to top,#000 30%,rgba(0,0,0,0))}
+.bh{position:absolute;left:0;right:0;text-align:center;font-family:"HJ";font-weight:800;line-height:1;color:#F2C94C;font-variation-settings:"ELSH" 2}
+#b1{top:470px;font-size:330px}
+#b2{top:470px;font-size:330px;color:#fff}
+.small{position:absolute;left:0;right:0;text-align:center;font-family:"MontV";font-weight:800;color:#fff;letter-spacing:.06em}
+#card{position:absolute;left:0;top:0;width:1080px;height:1920px;background:#F2C94C;opacity:0;display:flex;align-items:center;justify-content:center;flex-direction:column}
+#card .n{font-family:"HJ";font-weight:800;font-size:230px;color:#0b0803;font-variation-settings:"ELSH" 2;line-height:1}
+#card .s{font-family:"MontV";font-weight:900;font-size:40px;letter-spacing:.3em;color:#0b0803;margin-top:20px;padding-left:.3em}
+</style></head>
+<body data-dur="13" data-size="1080x1920" data-poster="12.6"><main class="scene" id="scene">
+<div id="p1"><img class="bg" src="demo/photo.png"><div class="bh" id="b1">ÖLÜRÜM</div><div class="bh" id="b2"></div><img class="fg" src="demo/person.png"><div class="shade"></div></div>
+<div class="slot" id="s1"></div>
+<div id="layer"></div>
+<div id="card"><div class="n">МУСТАФО</div><div class="s">ЯНГИ КЛИП</div></div>
+<div class="small" id="yt" style="top:1560px;font-size:44px;opacity:0">NevoMusic · YouTube</div>
+<div class="small" id="sub" style="top:1500px;font-size:40px;color:#F2C94C;letter-spacing:.3em;opacity:0">11-НОЯБР · 20:00</div>
+<div class="small" id="foot" style="top:1790px;font-size:34px;opacity:0;color:rgba(255,255,255,.8)">PAPARAZZI UZ · @ozodjamoll</div>
+</main>
+<script src="../../lib/gsap.min.js"></script>
+<script src="../../lib/stage.js"></script>
+<script src="js/su.js"></script>
+<script>
+const tl=Motion.timeline(), L=document.getElementById('layer');
+// удары песни (librosa): 1.56 2.18 2.81 3.44 4.06 4.69 5.29 5.92 6.55 7.17 7.80 8.43 9.06 9.68 10.31 10.94 11.56 12.19
+SU.blink(tl,L,[0.14,0.58,0.95,1.23],11);
+// 2. слово на удар
+SU.word(tl,document.getElementById('s1'),[[1.56,'11-НОЯБР'],[2.18,'СОАТ'],[2.81,'20:00'],[3.44,'ПРЕМЬЕРА']]);
+SU.dots(tl,L,1.56,{x:150,y:800,w:780,h:250},{out:4.0});
+tl.to('#s1',{opacity:0,duration:.08},4.0);
+// 3. влёт к артисту, ÖLÜRÜM за головой
+tl.set('#p1',{opacity:1},4.06); SU.whip(tl,document.getElementById('p1'),4.06);
+tl.fromTo('#b1',{yPercent:60,opacity:0},{yPercent:0,opacity:1,duration:.5,ease:'power3.out'},4.2);
+SU.glitch(tl,document.getElementById('b1'),4.69);
+tl.fromTo('#p1 .fg,#p1 .bg',{scale:1},{scale:1.05,duration:1.9,ease:'none'},4.06);
+// 4. пиксель-квадрат закрывает → звезда → золотая карточка
+SU.square(tl,L,5.62,[960,300],[540,900],{grow:60,growDur:.25,hold:.2,out:false});
+tl.set('#p1',{opacity:0},5.92);
+tl.to('.su-px',{opacity:0,duration:.01},6.25);
+const st=SU.star(tl,L,6.3,540,960,330,16,{line:'rgba(242,201,76,.8)'});
+tl.to(st.center,{backgroundColor:'#F2C94C',duration:.1},7.8);
+tl.to(st.center,{scale:60,duration:.35,ease:'power3.in'},8.1);
+tl.set('#card',{opacity:1},8.43); tl.set([st.svg,...st.nodes,st.center],{opacity:0},8.43);
+tl.fromTo('#card .n',{scale:1.25,filter:'blur(10px)'},{scale:1,filter:'blur(0px)',duration:.3},8.43);
+tl.fromTo('#card .s',{opacity:0,letterSpacing:'.8em'},{opacity:1,letterSpacing:'.3em',duration:.5},9.06);
+tl.to('#card',{scale:.9,duration:.6,ease:'none'},9.06);
+// 5. обратно к артисту: VALLAH + уголки
+tl.set('#card',{opacity:0},9.68); tl.set('#b1',{opacity:0},9.68); tl.set('#b2',{innerHTML:'VALLAH'},9.68);
+tl.set('#p1',{opacity:1},9.68); SU.whip(tl,document.getElementById('p1'),9.68);
+SU.glitch(tl,document.getElementById('b2'),9.9);
+SU.brackets(tl,L,10.31,{x:60,y:440,w:960,h:420},{color:'#F2C94C'});
+tl.fromTo('#sub',{opacity:0,y:20},{opacity:1,y:0,duration:.35},10.31);
+tl.fromTo('#yt',{opacity:0,y:20},{opacity:1,y:0,duration:.35},10.94);
+tl.fromTo('#foot',{opacity:0},{opacity:1,duration:.4},11.56);
+tl.fromTo('#p1 .fg,#p1 .bg',{scale:1},{scale:1.04,duration:3.3,ease:'none'},9.68);
+Motion.ready();
+</script></body></html>
