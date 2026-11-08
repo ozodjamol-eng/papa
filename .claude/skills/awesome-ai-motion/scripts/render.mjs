@@ -196,14 +196,21 @@ async function renderOne(browser, target, url) {
     if (!Number.isFinite(dur) || dur <= 0 || !size.every(v => Number.isInteger(v) && v > 0)) throw new Error('잘못된 duration/size');
     if (vw !== 1280 || vh !== 720) await page.setViewportSize({ width: vw, height: vh });
     fs.mkdirSync(out, { recursive: true });
-    const n = Math.round(dur * FPS);
+    // PAPA 08.11: MOTION_BLUR=N — N подкадров на кадр, усреднение (как RSMB / motion blur в AE), затвор 180°
+    const MB = Math.max(1, parseInt(process.env.MOTION_BLUR || '1', 10));
+    const n = Math.round(dur * FPS * MB);
     for (let f = 0; f < n; f++) {
-      await page.evaluate(t => window.__seek(t), f / FPS);
+      await page.evaluate(t => window.__seek(t), f / (FPS * MB));
       await page.screenshot({ path: path.join(cache, `f${String(f).padStart(4, '0')}.jpg`), type: 'jpeg', quality: 92 });
     }
     await page.evaluate(t => window.__seek(t), Number.isFinite(poster) ? poster : dur - 0.3);
     await page.screenshot({ path: path.join(out, 'poster.jpg'), type: 'jpeg', quality: 86 });
-    const inp = ['-framerate', String(FPS), '-i', path.join(cache, 'f%04d.jpg')];
+    let inp = ['-framerate', String(FPS), '-i', path.join(cache, 'f%04d.jpg')];
+    if (MB > 1) {
+      const half = Math.max(1, Math.round(MB / 2));
+      ff(['-framerate', String(FPS * MB), '-i', path.join(cache, 'f%04d.jpg'), '-vf', `tmix=frames=${half},select=not(mod(n\\,${MB})),setpts=N/${FPS}/TB`, '-r', String(FPS), '-q:v', '2', path.join(cache, 'b%04d.jpg')]);
+      inp = ['-framerate', String(FPS), '-i', path.join(cache, 'b%04d.jpg')];
+    }
     ff([...inp, '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-tune', 'animation', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(out, 'clip.mp4')]);
     ff([...inp, '-vf', `fps=15,scale=${vw >= vh ? '480:-1' : '-1:480'}:flags=lanczos,split[a][b];[a]palettegen=max_colors=48:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, path.join(out, 'preview.gif')]);
     const kb = f => Math.round(fs.statSync(path.join(out, f)).size / 1024);
