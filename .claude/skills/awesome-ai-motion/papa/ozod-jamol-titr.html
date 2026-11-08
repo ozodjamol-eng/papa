@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>OZOD JAMOL title</title>
+<link rel="stylesheet" href="../../lib/stage.css">
+<style>
+html,body{background:#0E0E10}
+.frame{background:#0E0E10 !important;background-image:radial-gradient(ellipse at 50% 45%,#1d1d22 0%,#0E0E10 70%) !important}
+.scene{left:0!important;right:0!important;top:0!important;bottom:0!important}
+.title{position:absolute;left:0;right:0;top:700px;text-align:center}
+.window{height:230px;overflow:hidden}
+.line{display:block;font-family:"Inter Display";font-weight:900;font-size:230px;line-height:230px;letter-spacing:-.02em;color:#F5F3EE}
+.underline{position:absolute;left:290px;top:1180px;width:500px;height:40px;overflow:visible}
+.underline path{fill:none;stroke:#D6A84A;stroke-width:10;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+.subtitle{position:absolute;left:0;right:0;top:1260px;text-align:center;font-family:"Inter Display";font-weight:800;font-size:52px;letter-spacing:.32em;padding-left:.32em;color:#F5F3EE;white-space:pre}
+.char{display:inline-block;opacity:0}
+</style></head>
+<body data-dur="5" data-size="1080x1920" data-poster="4.6"><main class="scene">
+<div class="title"><div class="window"><span class="line">OZOD</span></div><div class="window"><span class="line">JAMOL</span></div></div>
+<svg class="underline" viewBox="0 0 500 40" preserveAspectRatio="none"><path pathLength="1" d="M8 26 C140 12 340 14 492 20"/></svg>
+<div class="subtitle" id="sub"></div>
+</main>
+<script src="../../lib/gsap.min.js"></script>
+<script src="../../lib/stage.js"></script>
+<script>
+const tl = Motion.timeline();
+tl.fromTo('.line',{yPercent:110},{yPercent:0,duration:1.05,stagger:.35,ease:'power3.out'},.3);
+Array.from('MOTION GRAFIKA').forEach(c=>{const s=document.createElement('span');s.className='char';s.textContent=c;document.querySelector('#sub').appendChild(s);});
+tl.fromTo('.underline path',{strokeDashoffset:1},{strokeDashoffset:0,autoRound:false,duration:1.1,ease:'power2.inOut'},1.5);
+tl.fromTo('.char',{y:64,opacity:0},{y:0,opacity:1,duration:.62,stagger:.035,ease:'power3.out'},2.0);
+Motion.ready();
+</script></body></html>

@@ -11,3 +11,4 @@ venv/
 *.token
 *.key
 .pytest_cache/
+node_modules
