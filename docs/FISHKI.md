@@ -597,3 +597,9 @@ CorelDRAW 2025 (метка в файле); рабочка 10 стр. (план, 
   · obeskay/lottie-animator-skill (MIT) — SVG → Lottie, оживлять логотипы клиентов.
   · frankxai/awesome-motion-design-agent-skills (CC0), zhuyansen/awesome-claude-video-skills — каталоги, источник следующих находок.
 - Не берём: OpenMontage, OpenChatCut (AGPL), digital-human-koubo (платный MCP), html-anything (не про видео).
+
+## 08.11.2026 — 6 навыков из расширенного поиска — проверены skill-check и установлены
+- ✅ motion-design (LottieFiles, MIT) · ✅ motion2code (MIT) · ✅ lottie-animator (MIT; пробный рендер логотипа — работает) · ✅ ffmpeg-skill (MIT; ❌ сканера ложные — тесты защиты от инъекций; проба probe на нашем титре — работает).
+- ⚠️ video-shotcraft (Apache-2.0): вырезан модуль publish (платный Upload-Post API, ключ) и медиа (видео/картинки/BGM) — публикуем только своими ботами.
+- ⚠️ transitions.dev: взят только skills/transitions-dev (CSS-переходы для веб); вырезан refine (там `curl … | bash`). Лицензия: пользоваться можно, перепродавать библиотеку нельзя.
+- Маршрут добавлен в `papa-motion` → «какой движок открыть».
