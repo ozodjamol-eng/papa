@@ -30,9 +30,9 @@ from .trend import TrendError, _gpost, cost, gemini_ask
 SEARCH = "https://api.github.com/search/repositories"
 TZ = dt.timezone(dt.timedelta(hours=5))
 HISTORY_KEEP = 600
-MAX_CANDIDATES = 14
-SKILL_TOPICS = ("Скиллы Claude", "Моушн кодом")   # 01.11: разведка навыков — бронь в отчёте + очередь
-SKILL_RESERVE = 4
+MAX_CANDIDATES = 18
+SKILL_TOPICS = ("Скиллы Claude", "Моушн кодом", "Моушн-библиотеки", "Видео-скиллы", "Каталоги навыков")   # 01.11: разведка навыков — бронь в отчёте + очередь
+SKILL_RESERVE = 6
 QUEUE_KEEP = 60
 
 # (тема для отчёта, запрос GitHub). Звёзды/свежесть добавляются в search_queries().
@@ -40,6 +40,10 @@ TOPICS = [
     # 01.11: навыки — ПЕРВЫМИ: при лимите GitHub (403) до последних тем не доходит
     ("Скиллы Claude", "claude skills OR claude code skill OR agent skills OR SKILL.md"),
     ("Моушн кодом", "remotion OR hyperframes OR motion graphics OR kinetic typography"),
+    # 08.11 владелец («искать таких навыков, расширь поиски» — после awesome-ai-motion)
+    ("Моушн-библиотеки", "motion design skill OR gsap skill OR lottie animation OR awesome motion OR ui transitions"),
+    ("Видео-скиллы", "video skill claude OR video editing agent OR reels editor agent OR html to video"),
+    ("Каталоги навыков", "awesome claude skills OR awesome agent skills OR awesome claude code"),
     ("Telegram-боты", "telegram bot"),
     ("Автопостинг", "telegram autopost OR telegram scheduler OR channel autoposting"),
     ("Instagram", "instagram automation OR instagram graph api"),
@@ -88,6 +92,9 @@ def search_queries(today: dt.date) -> list[tuple[str, str]]:
     for label, q in TOPICS:
         out.append((label, f"{q} created:>={new_since} stars:>=30 fork:false archived:false"))
         out.append((label, f"{q} pushed:>={push_since} stars:>=300 fork:false archived:false"))
+        if label in SKILL_TOPICS:   # 08.11: средние навыки (★100+, живые 60 дн.) — так ловится awesome-ai-motion
+            mid_since = (today - dt.timedelta(days=60)).isoformat()
+            out.append((label, f"{q} pushed:>={mid_since} stars:>=100 fork:false archived:false"))
     return out
 
 

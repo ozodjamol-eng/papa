@@ -585,3 +585,15 @@ CorelDRAW 2025 (метка в файле); рабочка 10 стр. (план, 
 - Установлено: `.claude/skills/awesome-ai-motion/` (без клипов — смотреть на gongnyang.github.io/awesome-ai-motion), CRF рендера поднят 24→14 (оригинальное качество). Франкфурт — задача `ai-motion-install`.
 - Наш шаблон: `papa/ozod-jamol-titr.html` — вертикальный титр 1080×1920, тёмный фон, Inter Display Black, золотая линия, «MOTION GRAFIKA». Пробный рендер 08.11 владелец увидел.
 - Второй одноимённый репо guanmo-ai/awesome-ai-motion (441 работа с промптами) — лицензия неясна, только насмотренность.
+
+## 08.11.2026 — расширенный поиск навыков (владелец: «искать таких навыков, расширь поиски»)
+- GitHub-разведка: +3 темы («Моушн-библиотеки», «Видео-скиллы», «Каталоги навыков»), для навыков 3-й проход ★100+ / живые 60 дн., бронь в отчёте 4→6.
+- Разовый поиск 08.11 — кандидаты в проверку (skill-check → пробный рендер), лучшие для нас:
+  · LottieFiles/motion-design-skill (MIT, ★2.9K) — законы тайминга/изинга/хореографии → в papa-motion.
+  · Jakubantalik/transitions.dev (★6.1K) — 43+ переходов, лицензия неясна → только приёмы.
+  · kajisho5/ffmpeg-skill (MIT, ★4.8K) — 42 инструмента ffmpeg для агента → монтаж Фабрики.
+  · Vincentwei1021/video-shotcraft (Apache-2.0, ★17.7K) — промо товара на Remotion → реклама клиентов.
+  · lovisdotio/motion2code (MIT) — пересобрать чужой моушн-ролик в код GSAP → motion-po-refu.
+  · obeskay/lottie-animator-skill (MIT) — SVG → Lottie, оживлять логотипы клиентов.
+  · frankxai/awesome-motion-design-agent-skills (CC0), zhuyansen/awesome-claude-video-skills — каталоги, источник следующих находок.
+- Не берём: OpenMontage, OpenChatCut (AGPL), digital-human-koubo (платный MCP), html-anything (не про видео).

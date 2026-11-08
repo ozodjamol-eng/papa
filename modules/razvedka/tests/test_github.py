@@ -35,7 +35,8 @@ def fake_get(items_by_call):
 class TestGithub(unittest.TestCase):
     def test_queries_have_freshness(self):
         qs = github.search_queries(NOW.date())
-        self.assertEqual(len(qs), 2 * len(github.TOPICS))
+        skill = sum(1 for l, _ in github.TOPICS if l in github.SKILL_TOPICS)
+        self.assertEqual(len(qs), 2 * len(github.TOPICS) + skill)   # 08.11: навыкам 3-й проход ★100+
         self.assertTrue(all("fork:false" in q and "archived:false" in q for _, q in qs))
         self.assertIn("created:>=2026-09-04", qs[0][1]); self.assertEqual(qs[0][0], "Скиллы Claude")
         self.assertIn("pushed:>=2026-09-19", qs[1][1])
