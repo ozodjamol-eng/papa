@@ -1,0 +1,31 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}</style></head>
+<body>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const qs = new URLSearchParams(location.search);
+const W = +qs.get('w') || 720, H = +qs.get('h') || 1280;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+await document.fonts.load('900 80px Inter');
+const scene = new THREE.Scene();
+const pm = new THREE.PMREMGenerator(renderer);
+scene.environment = pm.fromScene(new RoomEnvironment(), 0.03).texture;
+const camera = new THREE.PerspectiveCamera(32, W / H, 0.05, 100);
+const mod = await import('./scenes/' + qs.get('scene') + '.js');
+const ctx = mod.build(THREE, scene, renderer);
+window.DURATION = mod.DURATION;
+window.renderFrame = (t) => {
+  ctx.update(t);
+  const c = mod.camera(t);
+  camera.position.set(...c.pos); camera.lookAt(...c.look);
+  renderer.render(scene, camera);
+  return renderer.domElement.toDataURL('image/jpeg', 0.93);
+};
+window.READY = true;
+</script></body></html>
