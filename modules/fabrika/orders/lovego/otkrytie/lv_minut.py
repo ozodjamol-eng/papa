@@ -46,28 +46,31 @@ def lab(s): return txt3d(s, 120, 'white', maxw=920)
 LABS = {k: lab(k) for k in ['ЭРКАКЛАР', 'БОЛАЛАР', 'ОЁҚ КИЙИМ · СУМКАЛАР', '2-ҚАВАТ', 'АЁЛЛАР БЎЛИМИ', 'ИЧКИ КИЙИМ · ЁТОҚ БУЮМЛАРИ']}
 TITLE0 = flat_txt('LOVE GO · ХЎЖАОБОД', 46, (255, 255, 255), BLACK, track=10)
 FAC_ADR = photo_cover('e8a62385'); FAC_FAM = photo_cover('5af191a1')
-PILLOW = photo_whole('11e0eac1', 900)
-PH_MEN = [photo_whole(n) for n in ['16502232', 'f4505d62', '17899604', '1027c547']]
-PH_WOM = [photo_whole(n) for n in ['f112b13a', '21a2c56d', '2676956c', 'ea20af73', '39eb937d']]
-PH_JNS = [photo_whole(n) for n in ['71cf9579', '35f1a0eb', 'b38aff7b', '31febab6']]
+PILLOW = photo_cover('11e0eac1')
+PH_MEN = [photo_cover(n) for n in ['16502232', 'f4505d62', '17899604', '1027c547']]
+PH_WOM = [photo_cover(n) for n in ['f112b13a', '21a2c56d', '2676956c', 'ea20af73', '39eb937d']]
+PH_JNS = [photo_cover(n) for n in ['71cf9579', '35f1a0eb', 'b38aff7b', '31febab6']]
 DIRS = [(0, -1), (-1, 0), (0, 1), (1, 0)]  # сверху, слева, снизу, справа
 
 def photo_pass(t, t0, t1, PH):
-    C = bg(t); n = len(PH); dur = (t1 - t0) / n
-    k = int(clamp((t - t0) / dur, 0, n - 1))
-    for j in (k - 1, k):
-        if j < 0: continue
-        lt = t - (t0 + j * dur)
-        dx, dy = DIRS[j % 4]
-        e_in = eout(lt / 0.28)
-        x = W / 2 + dx * 1400 * (1 - e_in); y = H / 2 + dy * 2200 * (1 - e_in)
-        if j < k:  # уходит в противоположную сторону от входа следующей
-            nx, ny = DIRS[(j + 1) % 4]; e_out = einout((t - (t0 + k * dur)) / 0.25)
-            x += -nx * 1400 * e_out; y += -ny * 2200 * e_out
-            if e_out >= 1: continue
-        rot = (-4, 3, -3, 4)[j % 4] * (1 - e_in)
-        blur = 60 * (1 - e_in) if dx else 0
-        place(C, PH[j], x, y, 0.98 + 0.03 * clamp(lt / dur), rot, 1, blur)
+    n = len(PH); dur = (t1 - t0) / n
+    k = int(clamp((t - t0) / dur, 0, n - 1)); lt = t - (t0 + k * dur)
+    dx, dy = DIRS[k % 4]
+    e = eout(lt / 0.22)
+    ox, oy = int(dx * W * (1 - e)), int(dy * H * (1 - e))
+    cur = zoom_frame(PH[k], 1.0 + 0.04 * clamp(lt / dur), 0.5)
+    prev = zoom_frame(PH[k - 1], 1.04, 0.5) if k > 0 else bg(t)
+    C = prev.copy()
+    if e < 1:
+        M = np.float32([[1, 0, ox], [0, 1, oy]])
+        sh = cv2.warpAffine(cur, M, (W, H), borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+        m = cv2.warpAffine(np.ones((H, W), np.float32), M, (W, H))[..., None]
+        C = C * (1 - m) + sh * m
+        if dx: C = cv2.blur(C, (int(1 + 70 * (1 - e)), 1))
+        else: C = cv2.blur(C, (1, int(1 + 70 * (1 - e))))
+    else:
+        C = cur
+    flash(C, 0.8 * clamp(1 - abs(lt - 0.2) / 0.12))
     return C
 
 # сегменты: (t0, t1, функция)
@@ -124,13 +127,22 @@ def adr2(t, t0):
     if t > 82.9: C *= clamp(1 - (t - 82.9) / 0.2)
     return C
 
-def pillow(t, t0):
+LOGO = make_logo()
+def logo_anim(t, t0):
     C = bg(t); lt = t - t0
-    place(C, PILLOW, W / 2, H / 2 + 2200 * (1 - eout(lt / 0.3)), 0.98 + 0.03 * lt); return C
+    s = 0.85 * spring(lt - 0.05, 0.55) + 0.02 * lt
+    place(C, logo_sweep(lt - 0.3), W / 2, H * 0.46, s, -10 * (1 - eout(lt / .5)), clamp(lt * 6))
+    flash(C, 0.45 * clamp(1 - (lt - 0.2) / 0.25) if lt > 0.2 else 0)
+    if t > 7.6: C *= 1  # 
+    return C
+
+def pillow(t, t0):
+    lt = t - t0
+    C = zoom_frame(PILLOW, 1.0 + 0.03 * lt, 0.5); flash(C, 0.8 * clamp(1 - lt / 0.15)); return C
 
 SEG = [
-    (0.0, 2.0, C_('2948', title=True)), (2.0, 4.8, C_('2880', title=True)), (4.8, 8.3, C_('2881', ramp=False)),
-    (8.3, 10.3, C_('2900')), (10.3, 12.4, C_('2924')),
+    (0.0, 2.0, C_('2948', title=True)), (2.0, 4.8, C_('2880', title=True)), (4.8, 6.3, C_('2881', ramp=False)), (6.3, 8.3, logo_anim),
+    (8.3, 10.3, C_('2900')), (10.3, 12.4, C_('2936')),
     (12.4, 16.3, lambda t, t0: photo_pass(t, t0, 16.3, PH_MEN)),
     (16.3, 18.4, C_('2938', label='ЭРКАКЛАР')), (18.4, 20.5, C_('2932', label='ЭРКАКЛАР', lab_t=16.3)),
     (20.5, 22.8, C_('2933', label='ЭРКАКЛАР', lab_t=16.3)),
