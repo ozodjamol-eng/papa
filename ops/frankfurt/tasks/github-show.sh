@@ -4,11 +4,15 @@
 set -Eeuo pipefail
 D=/var/lib/papa-razvedka-pub/github
 [[ -d "$D" ]] || { echo "❌ нет $D — разведка ещё не запускалась (задача github-now)"; exit 1; }
-for f in latest-github.txt latest-novinki.txt latest-masters.txt latest-tg-masters.txt latest-neyro.txt navyki-queue.json; do
+for f in latest-github.txt latest-masters.txt latest-tg-masters.txt navyki-queue.json; do
   if [[ -f "$D/$f" ]]; then echo "===== $f ($(date -r "$D/$f" '+%d.%m %H:%M'))"; cat "$D/$f"; echo; else echo "===== $f — нет"; fi
 done
 # 05.11: + тренд-разведка — для вечерней сводки Разведки (ассистент сортирует по направлениям к 22:00)
 for f in /var/lib/papa-razvedka-pub/trend/latest-daily.txt /var/lib/papa-razvedka-pub/trend/latest-market.txt; do
   [[ -f "$f" ]] && { echo "===== $(basename "$f") ($(date -r "$f" '+%d.%m %H:%M'))"; cat "$f"; echo; }
+done
+# 09.11: новинки и нейро — В КОНЦЕ: автопилот хранит только последние 12000 знаков вывода, начало обрезается
+for f in latest-neyro.txt latest-novinki.txt; do
+  if [[ -f "$D/$f" ]]; then echo "===== $f ($(date -r "$D/$f" '+%d.%m %H:%M'))"; cat "$D/$f"; echo; else echo "===== $f — нет"; fi
 done
 echo "== GITHUB_SHOW_DONE"
