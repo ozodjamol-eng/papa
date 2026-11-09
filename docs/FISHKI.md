@@ -659,3 +659,13 @@ CorelDRAW 2025 (метка в файле); рабочка 10 стр. (план, 
 - Следующее: предметы-наклейки (Nano Banana во Flow, 0 бонусов, + rembg).
 - 08.11 предметы-наклейки сделаны кодом в 3D (three.js, без Flow — решение владельца): 8 штук в `modules/fabrika/biblioteka/predmety/`, генератор там же. Демо: предметы «выпрыгивают» на бумажной фактуре со звуком pop.
 - 08.11 ПИЛОТ «ОГОҲ БЎЛИНГ» №1 «Битта ҳавола» (56 с): голос — главный диктор PAPA (8 фраз, eleven_v4, проверено Ушами), музыка Mixkit m188 тихо (−31), 16 звуков библиотеки, 3D-предметы (телефон, крючок, шар, щит), фактуры, газета кодом с маркером, счётчик 90%, MOTION_BLUR=2. Исходник: `modules/fabrika/orders/ogoh-boling-01/`. Урок: `fromTo` вспышки ставить с `immediateRender:false`, иначе белая пелена с 0 с.
+
+## 09.11.2026 — Охотник за навыками
+- Поиск: GitHub (14 запросов, активность ≤60 дн.). Уже есть/взято раньше — пропущено (bang-motion и iart-ai уже внутри ghost-editor). Не трогали: свежие репо случайных аккаунтов без лицензии (parallax-doc, parallex-2.5, kinetic-brand-label), AGPL (OpenMontage, pireel, guizang), без лицензии (herk-edit-kit, anything2explainer, video-talkcraft — NOASSERTION).
+- ⚠️ motionmaxxing (Tejashmakwana, Apache-2.0, ★1.5K) → `.claude/skills/motionmaxxing/`: режиссёр+критик моушна, 4300 измеренных движений из 53 проф. роликов, гейты look.py/lint.mjs (пустые кадры, концовка ≤1,4 с, «плашки»). Вырезано: install.sh, docs/ (20 МБ видео). ❌ сканера ложный («tokens» в таблице). Платное (ElevenLabs voice.py, Codex imagegen.py) — только с «да».
+- ⚠️ YouTube-AI-Motion-Graphics (sirioberati, MIT, ★180) → `explainer-board-system` (+74 доски в boards/), `explainer-board-brief`, `board-sync`. Вырезано: setup.sh/ps1 (`curl … | sh`, установка uv/пакетов). ❌ сканера по невидимым символам — безвредные (снятие BOM, пустой текст). Шрифты досок тонкие → перед показом менять на жирные.
+- ⚠️ claude-animated-shorts (mromidev, MIT, ★2.5K) → `cartoon-3d-short`: вырезаны 18 МБ кадров чужого канала (права). Берём: синтез звука/музыки кодом, камера (глайды, тряска на удар), формула сценария истории.
+- Код найденных репозиториев не запускался; пробный рендер — на первом нашем ролике.
+- Маршруты добавлены в `papa-motion`. Расход $0.
+- Отложено (кандидаты на следующий заход): echris6/motion-video-kit (MIT, реклама бизнеса + критик), alchaincyf/huashu-art-motion (MIT, ★6.5K, 35 арт-стилей, кит.), haiderfarooq3/khan-explainer (MIT, «рука рисует»).
+

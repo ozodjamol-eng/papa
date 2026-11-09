@@ -57,6 +57,9 @@ description: PAPA Motion — единый главный скилл моушна
 | Слово на удар, пиксельные переходы, текст за головой (стиль aslani) | `slovo-udar` |
 | Объяснитель «как Vox», ролик запуска, 3D-титр, анимированный график, счётчик-рубеж, петля-обложка, экспорт под Reels | `vox-explainer`, `launch-video`, `apple-launch-film`, `title-sequence-3d`, `animated-chart`, `milestone-reveal`, `loop-cover`, `reel-export` (пак charlie947) |
 | Пересобрать ролик по образцу с проверкой кадр-в-кадр, грабли кодового моушна | `howseen-motion` (`scripts/remake/`) |
+| Честная проверка рендера (гейты: пустые кадры, длинная концовка, «плашки-шапки»), измеренные кривые движения, «анти-слоп» | `motionmaxxing` (`scripts/look.py`, `lint.mjs`, `references/slop.md`) |
+| Объяснитель: 74 доски-схемы (графики, таймлайн, лупа, одометр, Венн) + элемент выходит на своём слове | `explainer-board-system` + `explainer-board-brief` → `board-sync` (слова из «Ушей») |
+| История-мультик в 3D-мире (three.js + Remotion), звук и музыка КОДОМ без лицензий | `cartoon-3d-short` (`templates/audio/`) |
 
 ## Копилка приёмов (вливается из разведки навыков)
 | Дата | Приём | Откуда | Статус |
