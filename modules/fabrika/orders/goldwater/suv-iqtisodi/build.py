@@ -27,10 +27,11 @@ ROLLS = {
  3: dict(name="SERVIS", dur=7.4, src=(f"{SEG}/D.mp4", 0), vo=0.4,
          word="СЕРВИС", items=[("line", 0.6, "ҲАР 6 ТОННА СУВДАН КЕЙИН"), ("big2", 4.15, "ФИЛЬТР АЛМАШАДИ")]),
 }
+WHOLE = True
 def render(k):
     R = ROLLS[k]; src = reader(*R["src"])
     out = subprocess.Popen(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS),
-        "-i", "-", "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", f"v{k}.mp4"], stdin=subprocess.PIPE)
+        "-i", "-", "-c:v", "libx264", "-crf", "17", "-preset", "slow", "-pix_fmt", "yuv420p", f"w{k}.mp4"], stdin=subprocess.PIPE)
     navy = np.zeros((H, W, 3), np.float32); navy[:] = (70, 26, 8)
     for i in range(int(R["dur"] * FPS)):
         t = i / FPS; fr = src.next().astype(np.float32)
@@ -58,7 +59,7 @@ def render(k):
             elif kind == "big2":
                 tracked(d, 980 + (1 - b) * 25, it[2], F(BLACK, 76), GOLD + (int(255 * b),), 2)
         c = ease((t - (R["dur"] - 1.6)) / 0.4)
-        if c > 0:
+        if c > 0 and not WHOLE:
             d.rounded_rectangle([120, 1560, W - 120, 1760], 36, fill=(10, 16, 34, int(220 * c)), outline=GOLD + (int(200 * c),), width=3)
             d.text((W / 2, 1620), "+998 97 290 10 40", font=F(BLACK, 64), fill=WHITE + (int(255 * c),), anchor="mm")
             d.text((W / 2, 1705), "@GoldWaterAndijonBot", font=F(XB, 44), fill=GOLD + (int(255 * c),), anchor="mm")
@@ -67,7 +68,7 @@ def render(k):
         f = bg * (1 - al) + rgba[..., :3][..., ::-1] * al
         out.stdin.write(f.astype(np.uint8).tobytes())
     kc = cv2.VideoCapture(KONC)
-    while True:
+    while not WHOLE:
         ok, f = kc.read()
         if not ok: break
         out.stdin.write(cv2.resize(f, (W, H)).tobytes())
