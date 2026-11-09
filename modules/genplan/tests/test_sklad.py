@@ -149,9 +149,10 @@ class SrochnoNewsTest(unittest.TestCase):
                    reply_chat=42, channel="xojaobod")
         r = store.get(self.db, 1)
         self.assertEqual((r["stock"], r["status"], r["rubric"]), (1, "draft", "Янгиликлар"))
-        ids = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("13:05"))
-        self.assertEqual(ids, [1])
-        self.assertEqual(dt.datetime.fromisoformat(store.get(self.db, 1)["scheduled_at"]), at("14:00"))
+        # 09.11 владелец: новости — 3 раза в день в свои слоты (07:40 / 13:00 / 19:00), не «в ближайший час»
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("13:05")), [])
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("17:40")), [1])
+        self.assertEqual(dt.datetime.fromisoformat(store.get(self.db, 1)["scheduled_at"]), at("19:00"))
 
     def test_srochno_stale_after_12h(self):
         bot = Bot()

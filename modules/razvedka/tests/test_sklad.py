@@ -35,7 +35,7 @@ class TestSklad(unittest.TestCase):
         self.assertFalse(sklad.eligible(it(1, ad=True), "ФОЙДАЛИК", "davra", MORNING))
         # 01.11 владелец: новости — только «СРОЧНО НОВОСТИ», свежие (≤ 12 ч), только в Хўжаобод
         self.assertNotIn("NEWS INBOX", sklad.SKLAD)
-        self.assertEqual(sklad.SKLAD["СРОЧНО НОВОСТИ"], ("xojaobod",))
+        self.assertEqual(sklad.SKLAD["СРОЧНО НОВОСТИ"], ("xojaobod", "davra"))   # 09.11: новости 3 раза в день в обоих
         self.assertFalse(sklad.eligible(it(1, days=1), "СРОЧНО НОВОСТИ", "xojaobod", MORNING))   # сутки — уже не срочно
         self.assertTrue(sklad.eligible(it(1, days=0.2, text="Расман: 1 ноябрдан"), "СРОЧНО НОВОСТИ", "xojaobod", MORNING))
         self.assertFalse(sklad.eligible(it(1, text="ТАДБИРКОРЛАРГА СОЛИҚДАН ИМТИЁЗ"), "УЙДА БИЗНЕС", "xojaobod", MORNING))
@@ -49,10 +49,10 @@ class TestSklad(unittest.TestCase):
         self.assertEqual([x for s, x in d if s == "ФОЙДАЛИК"], [1, 2, 3])                  # ровно 3, с начала
         self.assertEqual([s for s, _ in d].count("РАЗВЛЕКАТЕЛЬНО"), 2)                       # юмор — 2
         self.assertEqual([s for s, _ in d].count("Jonlik ijrolar"), 3)                       # 30.10 сверка: музыка — своя норма 3
-        self.assertEqual([s for s, _ in d].count("ФОЙДАЛИК ОВКАТ"), 3)                       # + 3 других по кругу
+        self.assertEqual([s for s, _ in d].count("ФОЙДАЛИК ОВКАТ"), 1)                       # 09.11: 1 в день — под завтрак 07:15
         x = [(s, i) for s, i, _ in [(s, x["id"], k) for s, x, k in p["xojaobod"]]]
         self.assertEqual([i for s, i in x if s == "ФОЙДАЛИК"], [20, 19, 18])                # Хўжаобод — с конца
-        self.assertEqual(len(x), 6)                                                        # 3 + юмор 1 + 2 по кругу
+        self.assertEqual(len(x), 5)                                                        # 3 + юмор 1 + ОВҚАТ 1 под завтрак (09.11)
         pp = [(s, x["id"]) for s, x, _ in p["paparazzi"]]
         self.assertEqual(pp[:4], [("ФОЙДАЛИК", 11), ("ФОЙДАЛИК", 12), ("Jonlik ijrolar", 202), ("Jonlik ijrolar", 203)])
         self.assertEqual([s for s, _ in pp].count("РАЗВЛЕКАТЕЛЬНО"), 2)

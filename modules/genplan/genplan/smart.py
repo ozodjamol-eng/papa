@@ -125,8 +125,8 @@ def is_ad_rubric(rubric: str | None) -> bool:
 
 
 def is_grid_post(m) -> bool:
-    """Пост сетки: обычный пост из рубрики — не срочный и не реклама."""
-    return not m["urgent"] and not is_ad_rubric(m["rubric"])
+    """Пост сетки: обычный пост из рубрики — не срочный, не реклама и не твёрдый слот протокола (09.11)."""
+    return not m["urgent"] and not is_ad_rubric(m["rubric"]) and not ("fixed" in m.keys() and m["fixed"])
 
 
 def hour_slots(ch: dict, day: dt.date) -> list[dt.datetime]:
@@ -716,6 +716,78 @@ def minbar_pick(db, ch: dict, channel: str, pool: list, used: list, t: dt.dateti
                  if m["id"] not in used and m["rubric"] == r and allowed(ch, t, r) and greet_ok(m["text"], t)), None)
 
 
+# ---------- 📌 Твёрдые слоты протокола (09.11.2026, владелец) ----------
+# Утро — до 08:00 (дальше люди уходят на работу): 06:30 зарядка, 06:45 здоровье, 07:15 завтрак; новости — 3 раза
+# в день (07:40 / 13:00 / 19:00) только из банка «СРОЧНО НОВОСТИ». config: [[channels.<канал>.fixed]]
+# t = "06:30", sklad = ["БАНК · БАДАНТАРБИЯ"], rubric = "Бадантарбия" (news = true — свежие ≤ 12 ч, сначала новейшая).
+# Вне часовой сетки и вне лимита 20; карточка с 🗑 в пульте за 30–90 мин; нет материала — слот пропускается
+# (пустых постов нет). Откат: удалить блоки fixed в config.toml.
+
+def fixed_slots(ch: dict, day: dt.date) -> list[tuple[dt.datetime, dict]]:
+    return [(plan.slot_time(day, s["t"]), s) for s in (ch.get("fixed") or [])]
+
+
+def fixed_news(ch: dict) -> bool:
+    """Новости идут только в своих твёрдых слотах — сетка их в «ближайший час» не ставит."""
+    return any(s.get("news") for s in (ch.get("fixed") or []))
+
+
+def _src_in(m, names) -> bool:
+    src = m["source"] if "source" in m.keys() else None
+    if not src:
+        return False
+    old = next((o for new, o in BANK_TITLES.items() if _nrm(src) == _nrm(new)), src)
+    return any(_nrm(n) in (_nrm(src), _nrm(old)) for n in names)
+
+
+def _base_pool(db, cfg: dict, channel: str, now: dt.datetime) -> list:
+    ch = cfg["channels"][channel]
+    return [m for m in store.stock(db, channel)
+            if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
+            and not waits_text(cfg, m) and not _stale(ch, m, now)
+            and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
+            and not repeat_block(db, channel, m, now) and not (m["auto"] and music_no_video(m))
+            and not (m["auto"] and not m["has_media"])
+            and not (urgent_sklad(ch, m["source"]) and dt.datetime.fromisoformat(m["created_at"]) < now - URGENT_TTL)]
+
+
+def _fixed_cands(ch: dict, s: dict, pool: list, used, t: dt.datetime, now: dt.datetime) -> list:
+    c = [m for m in pool if m["id"] not in used and _src_in(m, s.get("sklad") or []) and _fits(ch, m, t, now)]
+    if s.get("news"):
+        c = [m for m in c if dt.datetime.fromisoformat(m["created_at"]) >= now - URGENT_TTL]
+        c.reverse()                                     # новость — самая свежая
+    return c
+
+
+def fill_fixed(db, cfg: dict, channel: str, now: dt.datetime, pool: list) -> list[int]:
+    ch = cfg["channels"][channel]
+    used: list[int] = []
+    for t, s in fixed_slots(ch, now.date()) + fixed_slots(ch, now.date() + dt.timedelta(days=1)):
+        if not (now + LEAD <= t <= now + STOCK_AHEAD):
+            continue
+        key = f"fixed_{channel}_{t:%Y%m%d%H%M}"
+        if store.kv_get(db, key) or blocked(db, channel, t):   # протокол: галочки режима дня его не выключают
+            continue
+        pick = next(iter(_fixed_cands(ch, s, pool, used, t, now)), None)
+        if not pick:
+            continue
+        store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0, fixed=1,
+                     rubric=s.get("rubric") or pick["rubric"], planned_at=t.isoformat())
+        store.kv_set(db, key, str(pick["id"]))
+        used.append(pick["id"])
+    return used
+
+
+def fixed_reserve(ch: dict, pool: list, now: dt.datetime) -> set[int]:
+    """Сетка днём не съедает материал, отложенный под твёрдые слоты: под каждый слот — по 2 поста (сегодня + завтра)."""
+    keep: set[int] = set()
+    for s in (ch.get("fixed") or []):
+        if s.get("news"):
+            continue
+        keep.update(m["id"] for m in [m for m in pool if m["id"] not in keep and _src_in(m, s.get("sklad") or [])][:2])
+    return keep
+
+
 URGENT_TTL = dt.timedelta(hours=12)       # 01.11: срочная новость старше 12 ч — уже не срочная, не выходит
 
 
@@ -726,19 +798,16 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     # 31.10 владелец: «в обоих каналах должен идти Муфтий» — час Муфтия (22:00) — протокол дня, вне лимита 20
     # (в КАТТА ДАВРА 31.10 лимит кончился к 20:30 и Муфтий не вышел). Лимит исчерпан — запас ставит только Муфтия.
     full = room is not None and room <= 0
+    base = _base_pool(db, cfg, channel, now)
+    fixed_ids = fill_fixed(db, cfg, channel, now, base)     # 📌 09.11: твёрдые слоты протокола — первыми, вне лимита 20
     if full and not hourly(ch):
-        return []
-    pool = [m for m in store.stock(db, channel)
-            if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
-            and not waits_text(cfg, m) and not _stale(ch, m, now)
-            and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
-            and not repeat_block(db, channel, m, now) and not (m["auto"] and music_no_video(m))
-            and not (m["auto"] and not m["has_media"])
-            and not (urgent_sklad(ch, m["source"]) and dt.datetime.fromisoformat(m["created_at"]) < now - URGENT_TTL)
+        return fixed_ids
+    reserved = fixed_reserve(ch, [m for m in base if m["id"] not in fixed_ids], now)
+    pool = [m for m in base if m["id"] not in fixed_ids and m["id"] not in reserved
             and (not full or m["rubric"] == MINBAR or urgent_sklad(ch, m["source"]))]
     if not pool and not (hourly(ch) and store.stock(db, channel)):   # 01.11: час Муфтия может взять повтор урока
-        return []
-    used: list[int] = []
+        return fixed_ids
+    used: list[int] = list(fixed_ids)
     counted = 0
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
         for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1),
@@ -750,7 +819,7 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
                     store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
                     used.append(pick["id"])
                 continue
-            hot = None if MINBAR in (wants or [])[:1] else next(
+            hot = None if (MINBAR in (wants or [])[:1] or fixed_news(ch)) else next(
                 (m for m in pool if m["id"] not in used and urgent_sklad(ch, m["source"]) and _fits(ch, m, t, now)), None)   # 01.11: «СРОЧНО НОВОСТИ» — в ближайший свободный час, любой
             if hot is not None:
                 pick = hot

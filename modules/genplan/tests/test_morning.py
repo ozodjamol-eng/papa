@@ -74,7 +74,7 @@ class TestMorning(unittest.TestCase):
         morning.ensure_all(self.db, CFG, now)
         d = self.rows("davra")
         self.assertEqual(dt.datetime.fromisoformat(d["greeting"]["at"]), at("05:00", FRI))   # 17.10: день начинается в 05:00 с «Хайрли тонг»
-        self.assertEqual(dt.datetime.fromisoformat(d["day"]["at"]), at("06:30", FRI))
+        self.assertEqual(dt.datetime.fromisoformat(d["day"]["at"]), at("06:20", FRI))   # 09.11: в 06:30 — зарядка
         x = self.rows("xojaobod")                                  # без времени намаза — запасное
         self.assertEqual(dt.datetime.fromisoformat(x["day"]["at"]), at("06:10", FRI))
         namaz.save(self.db, [(THU, {"bomdod": "05:46", "peshin": "12:45", "asr": "15:59", "shom": "17:44", "xufton": "19:09"})], now)
@@ -88,7 +88,7 @@ class TestMorning(unittest.TestCase):
         now = at("22:40")
         morning.ensure_all(self.db, CFG, now)
         busy = smart.occupied(self.db, "davra", at("06:00", FRI))
-        self.assertIn(at("06:30", FRI), busy)
+        self.assertIn(at("06:20", FRI), busy)
 
     def test_calendar_and_no_invented_day(self):
         self.assertEqual(morning.calendar_day(FRI)["name"], "Бутунжаҳон озиқ-овқат куни")
