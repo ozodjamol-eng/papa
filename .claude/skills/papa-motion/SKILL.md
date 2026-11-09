@@ -54,7 +54,7 @@ description: PAPA Motion — единый главный скилл моушна
 | Свой моушн-ролик, реклама кодом, интро, мультик без видеомодели | `vizavi-motion` (HTML/JS + ffmpeg) или `rivera-motion-free` (Remotion, 2D/3D) |
 | Сделать «как в этом ролике» по образцу, мебель/товары | `motion-po-refu` |
 | Короткая плашка, счётчик, логотип, кинетический текст < 30 с | `motion-graphics`, `gsap-core`, `gsap-timeline` |
-| Монтаж говорящей головы | `ghost-editor`, `editorial-film-edit` |
+| Монтаж говорящей головы | `ghost-editor`, `editorial-film-edit`, `talking-head-reels` (стиль red/white/ч-б, EDL, раунды правок) |
 | Коллаж из рваной бумаги | `paper-collage-film` |
 | Полёт с Земли к объекту | `earth-fly-in` |
 | ИИ-видео с живыми людьми (Flow/Veo) | `ii-video-rezhissyor` |
