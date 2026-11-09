@@ -20,3 +20,8 @@ description: Библиотека переходов и эффектов PAPA д
 
 Правила: люди без цветофильтров (ч/б удар и силуэт — короткие акценты 0,2–0,4 с, не грейд). Слово не шире 960 px. Структура репортажа — FISHKI 09.11 (Amazon: детали → приход → пик → общее фото → финал).
 Съёмка под приёмы: телефон 0.5×, снизу; вещь/пакет в объектив; каждый человек отдельно на чистом фоне (для коллажа); «сердце» руками в объектив; вывеска в начале и конце.
+
+## v2 (09.11): разведка → gl-transitions + бит
+- `glt.py` — запуск **gl-transitions** (MIT, 213 переходов, github.com/gl-transitions/gl-transitions) через moderngl EGL без экрана (~0.1–0.7 с/кадр). Клон: `git clone --depth 1 https://github.com/gl-transitions/gl-transitions /home/claude/ext/gl-transitions` (skill-check пройден). Лучшие для репортажа: WhipPan, WhipSpin, WhipTilt, CrossZoom, TangentMotionBlur, LightStreaks, Overexposure, FlashFade, GlitchFlicker, CameraShake. ZoomInOut — криво (не брать).
+- Бит: `librosa.beat.beat_track` (идея из ZiadAbdelkarim/beat-synced-edit, MIT, skill-check пройден) — склейка на каждые 2 бита, строб — 1 бит, переход 0,22 с центром на бите, жёсткая склейка + микро-вспышка 0,05 с.
+- `beat_edit.py` — образец (проба №2 LOVE GO).
