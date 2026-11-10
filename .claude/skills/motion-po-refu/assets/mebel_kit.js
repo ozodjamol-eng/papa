@@ -27,7 +27,7 @@
  *                                                       «Йўл чизиғи»: маршрут поездки по остановкам — линия рисуется, маркер едет к остановке в момент t,
  *                                                       пройденные точки «вспыхивают» золотом, текущая подпись крупнее (разведка «Умра» 07.11 — дневник группы)
  *  day(ctx,{x,y,n,place,note,t,t0,out,size,bg,fg,accent})  «Кун плашкаси»: штамп дневника «3-КУН · МАДИНА» + строка-заметка; при смене n — перелистывание
- *  strike(ctx,{x,y,word,real,chips:[..],t,t0,out,size,ink,line,realInk,chipBg,chipFg}) «Номи — аслида»: слово-название (СТОЛ) появляется, его зачёркивает
+ *  strike(ctx,{x,y,word,real,chips:[..],t,t0,out,size,ink,line,realInk,chipBg,chipFg,tStrike,tReal,tChips:[..]}) «Номи — аслида»: слово-название (СТОЛ) появляется, его зачёркивает
  *                                                       рисуемая полоса, слово уходит вниз и бледнеет, на его месте выпрыгивает «настоящая роль» (ОИЛА ДАСТУРХОНИ),
  *                                                       под ней фишки-моменты по очереди (тушлик · дарс · туғилган кун) (разведка «Мебель» 10.11, IKEA Canada «You Give It Meaning»)
  */
@@ -384,20 +384,24 @@
   /* ---------- «Номи — аслида»: зачёркнутое название → настоящая роль вещи (разведка «Мебель» 10.11.2026, IKEA Canada «You Give It Meaning») ---------- */
   // Тайминг от t0: 0–0.4 слово влетает; 0.9–1.3 полоса зачёркивает; 1.4–1.8 слово падает и бледнеет; 1.6–2.1 «real» выпрыгивает; фишки — с 2.2 каждые 0.35 с.
   function strike(ctx, o) {
-    const k = life(o.t, o.t0, o.out, 0.4); if (k <= 0) return; const t = o.t - o.t0, fz = o.size || 170, x = o.x ?? W() / 2, y = o.y ?? 800;
+    const k = life(o.t, o.t0, o.out, 0.4); if (k <= 0) return; const fz = o.size || 170, x = o.x ?? W() / 2, y = o.y ?? 800;
+    // под озвучку (10.11, владелец: «всегда с озвучкой»): tStrike/tReal/tChips — абсолютные моменты слов из тайм-кодов голоса (align.json)
+    const sS = o.tStrike != null ? o.tStrike - o.t0 : 0.9, sR = o.tReal != null ? o.tReal - o.t0 - 0.1 : 1.6;
+    const tl = (rt) => (rt < sS ? Math.min(rt, 0.9) : rt < sR ? Math.min(0.9 + (rt - sS), 1.55) : 1.6 + (rt - sR));
+    const t = tl(o.t - o.t0), tc = o.tChips;
     ctx.save(); ctx.globalAlpha *= k; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `400 ${fz}px ${F.head}`; const ww = ctx.measureText(o.word).width;
-    const drop = E.inOut3(prog(t, 1.4, 1.8)), wy = y + drop * fz * 0.55, wa = 1 - 0.75 * drop, ws = 1 - 0.45 * drop;
+    const drop = E.inOut3(prog(t, 1.4, 1.8)), wy = y + drop * fz * 0.55, wa = 1 - 0.75 * drop, ws = (1 - 0.45 * drop) * (1 + 0.07 * E.inOut3(prog(o.t - o.t0, 0.4, Math.max(0.5, sS + 0.4)))); // ожидание удара — слово медленно растёт (не «мёртвый» кадр)
     const inK = E.outBack(prog(t, 0, 0.4)); ctx.save(); ctx.globalAlpha *= wa; ctx.translate(x, wy - (1 - inK) * 60); ctx.scale(ws, ws);
     ctx.fillStyle = o.ink || P.ink; ctx.fillText(o.word, 0, fz * 0.04);
     const sk = E.out3(prog(t, 0.9, 1.3)); if (sk > 0) { ctx.lineCap = 'round'; ctx.strokeStyle = o.line || P.accent; ctx.lineWidth = fz * 0.13;
       ctx.beginPath(); ctx.moveTo(-ww / 2 - fz * 0.12, fz * 0.06); ctx.lineTo(-ww / 2 - fz * 0.12 + (ww + fz * 0.24) * sk, -fz * 0.02); ctx.stroke(); }
     ctx.restore();
     const rk = E.outBack(prog(t, 1.6, 2.1), 1.8); if (rk > 0) { const lines = [].concat(o.real), rz = o.realSize || fz * 0.62;
-      ctx.save(); ctx.translate(x, y - fz * 0.55); ctx.scale(rk, rk); ctx.font = `400 ${rz}px ${F.head}`; ctx.fillStyle = o.realInk || P.green; shadow(ctx, 0.15, 14, 5);
+      const gr = 1 + 0.05 * E.inOut3(prog(t, 2.1, 4.5)); ctx.save(); ctx.translate(x, y - fz * 0.55); ctx.scale(rk * gr, rk * gr); ctx.font = `400 ${rz}px ${F.head}`; ctx.fillStyle = o.realInk || P.green; shadow(ctx, 0.15, 14, 5);
       lines.forEach((l, i) => { const lw = ctx.measureText(l).width, f = Math.min(1, (W() - 120) / lw); ctx.save(); ctx.scale(f, f); ctx.fillText(l, 0, (i - (lines.length - 1)) * rz * 1.05 / f); ctx.restore(); });
       ctx.restore(); }
-    (o.chips || []).forEach((c, i) => { const ck = E.outBack(prog(t, 2.2 + i * 0.35, 2.55 + i * 0.35)); if (ck <= 0) return;
+    (o.chips || []).forEach((c, i) => { const ca = tc ? tc[i] - o.t0 : 2.2 + i * 0.35, ck = E.outBack(prog(o.t - o.t0, tc ? ca : ca - 1.6 + sR, (tc ? ca : ca - 1.6 + sR) + 0.35)); if (ck <= 0) return;
       ctx.save(); ctx.translate(x, y + fz * 1.35 + i * fz * 0.55); ctx.scale(ck, ck); pill(ctx, 0, 0, c, { size: fz * 0.26, bg: o.chipBg || P.green, fg: o.chipFg || P.cream, font: F.head, weight: 400 }); ctx.restore(); });
     ctx.restore();
   }
