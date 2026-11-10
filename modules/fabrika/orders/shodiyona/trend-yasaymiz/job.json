@@ -1,0 +1,71 @@
+{
+ "steps": [
+  {
+   "do": "credits"
+  },
+  {
+   "do": "tts",
+   "name": "p1",
+   "voice_id": "$asosiy",
+   "text": "Интернетда чиройли мебель ko'rdingizmi? ... Трендга чиққан, ҳамма гапираётган мебель?",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "next_text": "Ҳавас қилдингиз — лекин бундайини қаердан топаман, деб o'yladingizmi?"
+  },
+  {
+   "do": "tts",
+   "name": "p2",
+   "voice_id": "$asosiy",
+   "text": "Ҳавас қилдингиз — лекин бундайини қаердан топаман, деб o'yladingizmi?",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Интернетда чиройли мебель ko'rdingizmi? ... Трендга чиққан, ҳамма гапираётган мебель?",
+   "next_text": "Шодиёна Мебель — орзуйингиздаги мебелни худди шундай ясаб беради."
+  },
+  {
+   "do": "tts",
+   "name": "p3",
+   "voice_id": "$asosiy",
+   "text": "Шодиёна Мебель — орзуйингиздаги мебелни худди шундай ясаб беради.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Ҳавас қилдингиз — лекин бундайини қаердан топаман, деб o'yladingizmi?",
+   "next_text": "O'z цехимиз бор. ... O'lcham, ранг ва материални — o'zingiz танлайсиз."
+  },
+  {
+   "do": "tts",
+   "name": "p4",
+   "voice_id": "$asosiy",
+   "text": "O'z цехимиз бор. ... O'lcham, ранг ва материални — o'zingiz танлайсиз.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Шодиёна Мебель — орзуйингиздаги мебелни худди шундай ясаб беради.",
+   "next_text": "Видеони юборинг — ботимизга, Телеграмга, ёки qo'ng'iroq қилинг."
+  },
+  {
+   "do": "tts",
+   "name": "p5",
+   "voice_id": "$asosiy",
+   "text": "Видеони юборинг — ботимизга, Телеграмга, ёки qo'ng'iroq қилинг.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "O'z цехимиз бор. ... O'lcham, ранг ва материални — o'zingiz танлайсиз.",
+   "next_text": "Шодиёна — ишлаб чиқарувчидан, to'g'ridan-to'g'ri."
+  },
+  {
+   "do": "tts",
+   "name": "p6",
+   "voice_id": "$asosiy",
+   "text": "Шодиёна — ишлаб чиқарувчидан, to'g'ridan-to'g'ri.",
+   "model": "eleven_v4",
+   "format": "mp3_44100_128",
+   "timestamps": true,
+   "previous_text": "Видеони юборинг — ботимизга, Телеграмга, ёки qo'ng'iroq қилинг."
+  }
+ ]
+}
