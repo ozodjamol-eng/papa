@@ -24,8 +24,8 @@ ROLLS = {
          word="КАПИТАЛ", items=[("num", 1.33, 2300, "$", ""), ("sub", 3.13, "НОЯБРЬ НАРХИ")]),
  2: dict(name="KUNLIK_TUSHUM", dur=8.5, src=(f"{SEG}/C.mp4", 120), vo=0.4,
          word="КУНЛИК ТУШУМ", items=[("line", 0.6, "400 Л × 500 СЎМ"), ("small", 4.1, "ЎРТАЧА"), ("num", 4.25, 200000, "", " СЎМ")]),
- 3: dict(name="SERVIS", dur=7.4, src=(f"{SEG}/D.mp4", 0), vo=0.4,
-         word="СЕРВИС", items=[("line", 0.6, "ҲАР 6 ТОННА СУВДАН КЕЙИН"), ("big2", 4.15, "ФИЛЬТР АЛМАШАДИ")]),
+ 3: dict(name="SERVIS", dur=13.7, src=(f"{SEG}/D.mp4", 0), vo=0.4,
+         word="СЕРВИС", items=[("line", 1.1, "БОСҚИЧМА-БОСҚИЧ"), ("row", 3.9, "30 Т", "ПАХТАЛИ ВА КЎМИРЛИ", 0), ("row", 7.15, "60 Т", "МЕМБРАНА", 1), ("row", 9.3, "90 Т", "МИНЕРАЛЛАШТИРУВЧИ", 2)]),
 }
 WHOLE = True
 def render(k):
@@ -56,6 +56,11 @@ def render(k):
                 tracked(d, 830 + (1 - b) * 20, it[2], F(BLACK, 66 if len(it[2]) < 18 else 54), WHITE + (int(255 * b),), 3)
             elif kind == "small":
                 tracked(d, 930 + (1 - b) * 20, it[2], F(XB, 50), GREY + (int(255 * b),), 10)
+            elif kind == "row":
+                _, _, ton, lab, j = it; y = 980 + j * 150; x0 = 150 + (1 - b) * 50
+                d.rounded_rectangle([110, y - 60, W - 110, y + 60], 26, fill=(12, 18, 36, int(200 * b)), outline=GOLD + (int(150 * b),), width=3)
+                d.text((x0, y), ton, font=F(BLACK, 64), fill=GOLD + (int(255 * b),), anchor="lm")
+                d.text((x0 + 175, y), lab, font=F(BLACK, 46 if len(lab) > 14 else 54), fill=WHITE + (int(255 * b),), anchor="lm")
             elif kind == "big2":
                 tracked(d, 980 + (1 - b) * 25, it[2], F(BLACK, 76), GOLD + (int(255 * b),), 2)
         c = ease((t - (R["dur"] - 1.6)) / 0.4)
