@@ -248,15 +248,20 @@ def ad_closer(db, cfg: dict, channel: str, now: dt.datetime) -> int | None:
     if any(dt.datetime.fromisoformat(m["scheduled_at"]) <= now for m in store.scheduled(db, channel)):
         return None                                            # уже стоит на сейчас (ждёт прохода)
     pick = next((m for m in upcoming if is_grid_post(m) and not m["locked"] and not is_sklad(ch, m)
-                 and dt.datetime.fromisoformat(m["scheduled_at"]).date() == now.date()), None)
+                 and m["rubric"] != MINBAR and dt.datetime.fromisoformat(m["scheduled_at"]).date() == now.date()), None)
     room = day_room(db, cfg, channel, now)                     # 30.10 сверка №10: лимит дня — запас не трогаем
     if pick is None and (room is None or room > 0):
         pool = [m for m in store.stock(db, channel)
                 if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
                 and not waits_text(cfg, m) and not _stale(ch, m, now) and not is_sklad(ch, m)
                 and not is_ad_rubric(m["rubric"]) and not repeat_block(db, channel, m, now)
-                and not (m["auto"] and music_no_video(m))]
+                and not (m["auto"] and music_no_video(m)) and m["rubric"] != MINBAR]
         pick = pool[0] if pool else None
+    if pick is None:   # 11.11 владелец: «через 10 минут должен быть любой пост» — реклама висела 07:30→09:00, потому что
+        # в очереди был только складской пост (ФОЙДАЛИК). Последний шанс: ближайший пост сетки сегодня, склад тоже
+        # (его превью с 🗑 уже ушло при постановке); Муфтий (22:00) — никогда. Откат: удалить этот блок.
+        pick = next((m for m in upcoming if is_grid_post(m) and not m["locked"] and m["rubric"] != MINBAR
+                     and dt.datetime.fromisoformat(m["scheduled_at"]).date() == now.date()), None)
     if pick is None:
         return None
     store.update(db, pick["id"], status="queued", scheduled_at=now.isoformat(), stock=0)

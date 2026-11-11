@@ -121,13 +121,21 @@ class T(unittest.TestCase):
         self.tick("13:21")
         self.assertEqual(self.st(nxt), "published")               # после окна — закрываем
 
-    def test_sklad_post_not_pulled(self):
+    def test_sklad_post_pulled_as_last_resort(self):
+        # 11.11 владелец: «через 10 минут должен быть любой пост» — нет другого, закрываем складским
         self.add(rubric="Реклама", t=at("19:30"), locked=1)
         sk = self.add(t=at("20:00"))
-        store.update(self.db, sk, source="ФОЙДАЛИК")              # склад: владелец получил «выйдет сам в 20:00» с 🗑
+        store.update(self.db, sk, source="ФОЙДАЛИК")
         self.tick("19:30")
         self.tick("19:40")
-        self.assertEqual(self.st(sk), "queued")
+        self.assertEqual(self.st(sk), "published")
+
+    def test_minbar_never_closes_ad(self):
+        self.add(rubric="Реклама", t=at("19:30"), locked=1)
+        mb = self.add(rubric="Муфтий минбари", t=at("22:00"))
+        self.tick("19:30")
+        self.tick("19:40")
+        self.assertEqual(self.st(mb), "queued")
 
 
 ORIG = service.publish_one
