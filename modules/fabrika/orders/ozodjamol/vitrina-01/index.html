@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root { --red: #ff1024; --ink: #ffffff; --black: #000; --graphite: #1a1a1a; --font-display: Montserrat; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { width: 100%; height: 100%; position: relative; font-family: var(--font-display); color: var(--ink); overflow: hidden; }
+      .full { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .band { position: absolute; left: 0; right: 0; bottom: 0; height: 760px; background: linear-gradient(to top, #000 0%, #000 42%, rgba(0,0,0,.85) 60%, rgba(0,0,0,0) 100%); }
+      .lab { position: absolute; left: 96px; right: 96px; bottom: 300px; }
+      .lab .num { display: inline-block; font-size: 30px; font-weight: 900; color: var(--red); letter-spacing: .2em; margin-bottom: 18px; }
+      .lab .bar { width: 120px; height: 8px; background: var(--red); margin-bottom: 26px; transform-origin: left center; }
+      .lab .name { font-size: 70px; font-weight: 900; letter-spacing: .06em; line-height: 1.05; }
+      .lab .svc { font-size: 38px; font-weight: 800; letter-spacing: .22em; margin-top: 18px; color: rgba(255,255,255,.88); }
+      .title { position: absolute; left: 0; right: 0; bottom: 330px; text-align: center; font-size: 50px; font-weight: 900; letter-spacing: .28em; }
+      .title b { color: var(--red); font-weight: 900; }
+      #mana { position: absolute; left: 0; right: 0; top: 820px; text-align: center; font-size: 120px; font-weight: 900; letter-spacing: .02em; text-shadow: 0 10px 40px rgba(0,0,0,.7); }
+      #grid { position: absolute; inset: 0; background: #000; }
+      .tile { position: absolute; width: 516px; height: 600px; overflow: hidden; border-radius: 22px; }
+      
+      .words { position: absolute; left: 60px; right: 60px; top: 730px; height: 460px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+      .w { display: inline-block; white-space: nowrap; background: #000; padding: 14px 34px; border-radius: 16px; font-size: 66px; font-weight: 900; letter-spacing: .03em; }
+      .w.red { background: var(--red); font-size: 62px; }
+      #cta { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, #2a0a0e 0%, #000 65%); }
+      #cta1 { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 96px; font-weight: 900; line-height: 1.08; }
+      #cta1 span { display: inline-block; }
+      #cta1 .r { color: var(--red); }
+      #cta2 { position: absolute; left: 0; right: 0; top: 1130px; text-align: center; }
+      #cta2 .k { font-size: 40px; font-weight: 800; letter-spacing: .3em; color: rgba(255,255,255,.8); }
+      #cta2 .h { display: inline-block; margin-top: 26px; background: var(--red); padding: 26px 60px; border-radius: 90px; font-size: 76px; font-weight: 900; }
+      #cta2 .n { margin-top: 30px; font-size: 44px; font-weight: 900; letter-spacing: .32em; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="31.8" data-width="1080" data-height="1920">
+      <!-- 1 DANDANA hook -->
+      <video id="v1" class="full clip" src="assets/c1_dandana.mp4" muted data-start="0" data-duration="4.4" data-track-index="0"></video>
+      <div id="b1" class="band clip" data-start="0" data-duration="4.4" data-track-index="1"></div>
+      <div id="t1" class="title clip" data-start="0.2" data-duration="2.5" data-track-index="2"><span id="t1s">ХЎЖАОБОДДА <b>РЕКЛАМА</b></span></div>
+      <div id="mana" class="clip" data-start="2.95" data-duration="1.45" data-track-index="3"><span id="manas">МАНА ШУНДАЙ</span></div>
+      <div id="l1" class="lab clip" data-start="2.8" data-duration="1.6" data-track-index="2"><div id="l1i"><div class="num">01</div><div class="bar"></div><div class="name">DANDANA</div><div class="svc">ФАСТФУД РЕКЛАМА</div></div></div>
+
+      <!-- 2..5 clients -->
+      <video id="v2" class="full clip" src="assets/c2_shodiyona.mp4" muted data-start="4.4" data-duration="3.8" data-track-index="0"></video>
+      <video id="v3" class="full clip" src="assets/c3_sushi.mp4" muted data-start="8.2" data-duration="3.8" data-track-index="0"></video>
+      <video id="v4" class="full clip" src="assets/c4_lovego.mp4" muted data-start="12.0" data-duration="3.8" data-track-index="0"></video>
+      <video id="v5" class="full clip" src="assets/c5_gw.mp4" muted data-start="15.8" data-duration="3.8" data-track-index="0"></video>
+      <div id="b2" class="band clip" data-start="4.4" data-duration="15.2" data-track-index="1"></div>
+      <div id="l2" class="lab clip" data-start="4.4" data-duration="3.8" data-track-index="2"><div id="l2i"><div class="num">02</div><div class="bar"></div><div class="name">SHODIYONA MEBEL</div><div class="svc">МОУШН РЕКЛАМА</div></div></div>
+      <div id="l3" class="lab clip" data-start="8.2" data-duration="3.8" data-track-index="2"><div id="l3i"><div class="num">03</div><div class="bar"></div><div class="name">SUSHI HOUSE</div><div class="svc">ВИДЕО РЕКЛАМА</div></div></div>
+      <div id="l4" class="lab clip" data-start="12.0" data-duration="3.8" data-track-index="2"><div id="l4i"><div class="num">04</div><div class="bar"></div><div class="name">LOVE GO</div><div class="svc">ОЧИЛИШ ВИДЕОСИ</div></div></div>
+      <div id="l5" class="lab clip" data-start="15.8" data-duration="3.8" data-track-index="2"><div id="l5i"><div class="num">05</div><div class="bar"></div><div class="name">GOLD WATER</div><div class="svc">БРЕНД ВА РЕКЛАМА</div></div></div>
+
+      <!-- collage + V3 -->
+      <div id="gridbg" class="clip" style="position:absolute;inset:0;background:#000" data-start="19.6" data-duration="5.4" data-track-index="4"></div>
+      <video id="g1" class="tile clip" style="left:16px;top:40px;object-fit:cover" src="assets/g1.mp4" muted data-start="19.6" data-duration="5.4" data-track-index="5"></video>
+      <video id="g2" class="tile clip" style="left:548px;top:40px;object-fit:cover" src="assets/g2.mp4" muted data-start="19.6" data-duration="5.4" data-track-index="5"></video>
+      <video id="g3" class="tile clip" style="left:16px;top:660px;object-fit:cover" src="assets/g3.mp4" muted data-start="19.6" data-duration="5.4" data-track-index="5"></video>
+      <video id="g4" class="tile clip" style="left:548px;top:660px;object-fit:cover" src="assets/g4.mp4" muted data-start="19.6" data-duration="5.4" data-track-index="5"></video>
+      <video id="g5" class="tile clip" style="left:282px;top:1280px;object-fit:cover" src="assets/g5.mp4" muted data-start="19.6" data-duration="5.4" data-track-index="5"></video>
+
+      <div id="words" class="words clip" data-start="19.6" data-duration="5.4" data-track-index="6">
+        <span class="w" id="w1">ВИДЕО</span>
+        <span class="w" id="w2">МОУШН-ГРАФИКА</span>
+        <span class="w" id="w3">ТЕЛЕГРАМ РЕКЛАМА</span>
+        <span class="w red" id="w4">ҲАММАСИ БИР ЖОЙДА</span>
+      </div>
+
+      <!-- CTA -->
+      <div id="cta" class="clip" data-start="25.0" data-duration="6.8" data-track-index="7">
+        <div id="cta1"><span id="c1a">СИЗНИНГ</span><br /><span id="c1b">БИЗНЕСИНГИЗ</span><br /><span id="c1c" class="r">НАВБАТДА</span></div>
+        <div id="cta2"><div class="k" id="c2k">БУЮРТМА УЧУН</div><div class="h" id="c2h">@Ozodjamol</div><div class="n" id="c2n">ОЗОД ЖАМОЛ</div></div>
+      </div>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const E = "power3.out";
+      // hook
+      tl.fromTo("#v1", { scale: 1.12 }, { scale: 1.0, duration: 4.4, ease: "none" }, 0);
+      tl.fromTo("#t1s", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: E }, 0.25);
+      tl.to("#t1s", { opacity: 0, duration: 0.25 }, 2.4);
+      tl.fromTo("#manas", { scale: 1.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.7)" }, 2.95);
+      // labels
+      const labs = [["#l1i", 2.8], ["#l2i", 4.4], ["#l3i", 8.2], ["#l4i", 12.0], ["#l5i", 15.8]];
+      labs.forEach(([id, t]) => {
+        tl.fromTo(id + " .num", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.4, ease: E }, t + 0.1);
+        tl.fromTo(id + " .bar", { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "power2.inOut" }, t + 0.15);
+        tl.fromTo(id + " .name", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.55, ease: E }, t + 0.25);
+        tl.fromTo(id + " .svc", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, t + 0.45);
+      });
+      // slow push on clients
+      ["#v2", "#v3", "#v4", "#v5"].forEach((id, i) => {
+        tl.fromTo(id, { scale: 1.0 }, { scale: 1.07, duration: 3.8, ease: "none" }, 4.4 + i * 3.8);
+      });
+      // collage
+      ["#g1", "#g2", "#g3", "#g4", "#g5"].forEach((id, i) => {
+        tl.fromTo(id, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.4)" }, 19.6 + i * 0.08);
+      });
+      [["#w1", 20.0], ["#w2", 20.88], ["#w3", 22.08], ["#w4", 23.44]].forEach(([id, t]) => {
+        tl.fromTo(id, { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(2)" }, t);
+      });
+      // CTA
+      tl.fromTo("#cta", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 25.0);
+      [["#c1a", 25.4], ["#c1b", 25.96], ["#c1c", 26.72]].forEach(([id, t]) => {
+        tl.fromTo(id, { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: E }, t);
+      });
+      tl.fromTo("#c2k", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 28.3);
+      tl.fromTo("#c2h", { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 28.95);
+      tl.fromTo("#c2n", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, ease: E }, 29.8);
+      tl.to("#c2h", { scale: 1.05, duration: 0.4, yoyo: true, repeat: 1, ease: "sine.inOut" }, 30.4);
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

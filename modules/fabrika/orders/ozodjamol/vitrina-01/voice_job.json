@@ -1,0 +1,10 @@
+{"steps": [
+ {"do": "credits"},
+ {"do": "music", "name": "M_vitrina", "ms": 50000, "instrumental": true,
+  "prompt": "Premium cinematic corporate advertising track, confident and modern, 110 BPM, deep warm bass, light percussion with subtle doira hand-drum accents, clean piano and soft strings, steady build, no vocals, polished agency showreel feel, gentle ending with natural decay, not aggressive"},
+ {"do": "tts", "name": "V1", "voice_id": "YiACFAo5GlRl6fviBljB", "model": "eleven_v4", "language_code": "uz", "timestamps": true, "settings": {"stability": 0.5, "similarity_boost": 0.85}, "format": "mp3_44100_128", "text": "Реклама қандай бўлиши керак?"},
+ {"do": "tts", "name": "V2", "voice_id": "YiACFAo5GlRl6fviBljB", "model": "eleven_v4", "language_code": "uz", "timestamps": true, "settings": {"stability": 0.5, "similarity_boost": 0.85}, "format": "mp3_44100_128", "text": "Мана шундай."},
+ {"do": "tts", "name": "V3", "voice_id": "YiACFAo5GlRl6fviBljB", "model": "eleven_v4", "language_code": "uz", "timestamps": true, "settings": {"stability": 0.5, "similarity_boost": 0.85}, "format": "mp3_44100_128", "text": "Видео, моушн-графика, Телеграм реклама — ҳаммаси бир жойда."},
+ {"do": "tts", "name": "V4", "voice_id": "YiACFAo5GlRl6fviBljB", "model": "eleven_v4", "language_code": "uz", "timestamps": true, "settings": {"stability": 0.5, "similarity_boost": 0.85}, "format": "mp3_44100_128", "text": "Сизнинг бизнесингиз навбатда."},
+ {"do": "tts", "name": "V5", "voice_id": "YiACFAo5GlRl6fviBljB", "model": "eleven_v4", "language_code": "uz", "timestamps": true, "settings": {"stability": 0.5, "similarity_boost": 0.85}, "format": "mp3_44100_128", "text": "Буюртма учун — Озод Жамол."}
+], "hear": true}
