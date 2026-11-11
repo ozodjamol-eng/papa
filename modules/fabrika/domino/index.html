@@ -1,0 +1,254 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:M;src:url(/Montserrat.ttf);font-weight:100 900}
+html,body{margin:0;background:#000;overflow:hidden}
+</style></head>
+<body>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import R from '/node_modules/@dimforge/rapier3d-compat/rapier.es.js';
+import { P, buildWorld, simulate } from '/sim.js';
+import { CFG } from '/cfg.js';
+
+const qs = new URLSearchParams(location.search);
+const W = +qs.get('w') || 1080, H = +qs.get('h') || 1920, S = W / 1080;
+await document.fonts.load('900 40px M'); await document.fonts.load('800 40px M');
+const RED = '#FF1024';
+
+// ---------- картинка числа для поля ----------
+const FONT = {
+  '0': ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
+  '3': ['.###.', '#...#', '....#', '..##.', '....#', '#...#', '.###.'],
+  '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
+};
+function bitmapFrom(lines, cols, rows, sc = 2, gap = 4) {
+  const G = new Set(); const bh = 7 * sc, totalH = lines.length * bh + (lines.length - 1) * gap, y0 = Math.floor((rows - totalH) / 2);
+  lines.forEach((t, li) => {
+    const w = (t.length * 6 - 1) * sc, x0 = Math.floor((cols - w) / 2), yy = y0 + li * (bh + gap);
+    [...t].forEach((ch, k) => FONT[ch].forEach((row, r) => [...row].forEach((px, c) => {
+      if (px === '#') for (let a = 0; a < sc; a++) for (let b = 0; b < sc; b++) G.add(`${x0 + (k * 6 + c) * sc + a},${yy + r * sc + b}`);
+    })));
+  });
+  return { cols, rows, on: (c, r) => G.has(`${c},${r}`) };
+}
+const bm = bitmapFrom(CFG.number, CFG.cols, CFG.rows);
+window.BITMAP = Array.from({ length: bm.rows }, (_, r) => Array.from({ length: bm.cols }, (_, c) => bm.on(c, r) ? '#' : '.').join('')).join('\n');
+
+// ---------- физика (весь ролик заранее) ----------
+await R.init();
+const WR = buildWorld(R, bm);
+const SIM = simulate(R, WR, CFG.dur);
+// сглаженный фронт волны (только вперёд)
+const FR = []; { let x = 0, z = 0, v = 0;
+  for (let f = 0; f < SIM.nf; f++) { const tx = Math.max(x, SIM.front[f].x), tz = SIM.front[f].z;
+    x += (tx - x) * 0.12; z += (tz - z) * 0.08; FR.push({ x, z }); } }
+
+// ---------- сцена ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.FogExp2(0x000000, 0.010);
+const camera = new THREE.PerspectiveCamera(38, W / H, 0.05, 400);
+
+scene.add(new THREE.HemisphereLight(0x8a8a9a, 0x050505, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(-18, 40, 22); key.target.position.set(30, 0, 0);
+key.castShadow = true; key.shadow.mapSize.set(4096, 4096);
+Object.assign(key.shadow.camera, { left: -45, right: 45, top: 30, bottom: -30, near: 1, far: 140 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; scene.add(key, key.target);
+const heroLight = new THREE.SpotLight(0xffffff, 22, 30, 0.55, 0.7, 1.5); heroLight.position.set(-5, 8, 5); heroLight.target.position.set(0, 1.5, 0); scene.add(heroLight, heroLight.target);
+
+// пол: тёмный, чуть глянцевый, с мягким пятном света
+const floorTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(256, 256, 10, 256, 256, 256); gr.addColorStop(0, '#2a2a2e'); gr.addColorStop(1, '#070707');
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 512); return new THREE.CanvasTexture(c); })();
+floorTex.colorSpace = THREE.SRGBColorSpace;
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.42, metalness: 0.25 }));
+floor.rotation.x = -Math.PI / 2; floor.position.set(35, 0, 0); floor.receiveShadow = true; scene.add(floor);
+
+// герой: белая костяшка с надписью
+function heroTex() { const c = document.createElement('canvas'); c.width = 640; c.height = 1138; const g = c.getContext('2d');
+  g.fillStyle = '#f4f4f4'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = RED; g.fillRect(0, 0, c.width, 26); g.fillRect(0, c.height - 26, c.width, 26);
+  g.textAlign = 'center'; g.fillStyle = '#111';
+  g.font = '900 86px M'; g.fillText('СИЗНИНГ', 320, 520);
+  g.fillStyle = RED; let fs = 120; g.font = `900 ${fs}px M`; while (g.measureText('РЕКЛАМАНГИЗ').width > 590) { fs -= 2; g.font = `900 ${fs}px M`; }
+  g.fillText('РЕКЛАМАНГИЗ', 320, 520 + fs * 1.05);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
+const white = new THREE.MeshStandardMaterial({ color: 0xd9d9d9, roughness: 0.38, metalness: 0.0 });
+const faceMat = new THREE.MeshStandardMaterial({ map: heroTex(), color: 0xe0e0e0, roughness: 0.38 });
+const hb = WR.hero;
+const heroMesh = new THREE.Mesh(new THREE.BoxGeometry(hb.hx * 2, hb.hy * 2, hb.hz * 2), [white, faceMat, white, white, white, white]);
+heroMesh.castShadow = heroMesh.receiveShadow = true; scene.add(heroMesh);
+
+// костяшки: InstancedMesh по группам
+const graph = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.38, metalness: 0.15 });
+const offFace = new THREE.MeshStandardMaterial({ color: 0x2c2c30, roughness: 0.4 });
+const onFace = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
+const GLOW = { value: 0 };
+onFace.onBeforeCompile = (sh) => { sh.uniforms.uGlow = GLOW;
+  sh.fragmentShader = 'uniform float uGlow;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+    '#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance += vColor.rgb * uGlow * clamp((vColor.r - vColor.g) * 1.4, 0.0, 1.0);\n#endif'); };
+const C_OFF = new THREE.Color(0x2c2c30), C_ON = new THREE.Color(0xff1024), CT = new THREE.Color();
+const groups = [];
+function group(list, mats) {
+  if (!list.length) return;
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const m = new THREE.InstancedMesh(geo, mats, list.length);
+  m.castShadow = m.receiveShadow = true; m.frustumCulled = false; scene.add(m);
+  if (mats[1] === onFace) list.forEach((b, i) => m.setColorAt(i, C_OFF));
+  groups.push({ m, list, lit: mats[1] === onFace });
+}
+group([...WR.trunk], white);
+group([...WR.wedge], white);
+group(WR.field.filter((b) => b.on), [graph, onFace, graph, graph, graph, graph]);
+group(WR.field.filter((b) => !b.on), [graph, offFace, graph, graph, graph, graph]);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.45, 0.45, 0.88); composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- титры по голосу ----------
+const VO = [];
+for (const v of CFG.voice) {
+  const a = await fetch(`/a/${v.file}.align.json`).then((r) => r.json());
+  const ch = a.characters, st = a.character_start_times_seconds, en = a.character_end_times_seconds;
+  const words = []; let cur = null;
+  ch.forEach((c, i) => { if (/[\s]/.test(c)) { cur = null; return; }
+    if (!cur) { cur = { s: st[i] + v.at, e: en[i] + v.at, t: '' }; words.push(cur); }
+    cur.t += c; cur.e = en[i] + v.at; });
+  words.forEach((w) => { w.t = w.t.replace(/\.+|…/g, '').toUpperCase(); });
+  VO.push({ ...v, words: words.filter((w) => w.t) });
+}
+window.VO = VO.map((v) => v.words.map((w) => `${w.s.toFixed(2)} ${w.t}`).join(' | '));
+
+const out = document.createElement('canvas'); out.width = W; out.height = H; document.body.appendChild(out);
+const ctx = out.getContext('2d');
+const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function drawWords(words, t, y, size, redSet, maxW) {
+  ctx.font = `900 ${size}px M`; ctx.textBaseline = 'middle';
+  const sp = size * 0.28, track = size * 0.04;
+  const wd = (s) => ctx.measureText(s).width + track * (s.length - 1);
+  // раскладка по строкам
+  const lines = [[]]; let lw = 0;
+  for (const w of words) { const ww = wd(w.t); if (lw && lw + sp + ww > maxW) { lines.push([]); lw = 0; } lines[lines.length - 1].push({ ...w, ww }); lw += (lw ? sp : 0) + ww; }
+  lines.forEach((ln, li) => {
+    const tot = ln.reduce((s, w, i) => s + w.ww + (i ? sp : 0), 0); let x = (W - tot) / 2;
+    const yy = y + (li - (lines.length - 1) / 2) * size * 1.18;
+    for (const w of ln) {
+      const k = ease((t - w.s + 0.05) / 0.22);
+      if (k > 0) {
+        ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * size * 0.35);
+        ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 18 * S;
+        ctx.fillStyle = redSet.has(w.t) ? RED : '#fff';
+        let xx = x; for (const ch of w.t) { ctx.fillText(ch, xx, yy); xx += ctx.measureText(ch).width + track; }
+        ctx.restore();
+      }
+      x += w.ww + sp;
+    }
+  });
+}
+function overlay(t) {
+  const red = new Set(CFG.red);
+  for (const v of VO) {
+    if (v.card) continue;
+    const t0 = v.words[0].s, t1 = v.words[v.words.length - 1].e + (v.hold || 0.5);
+    if (t < t0 - 0.1 || t > t1 + 0.25) continue;
+    const fade = 1 - sstep(t1, t1 + 0.25, t);
+    ctx.save(); ctx.globalAlpha = fade;
+    // фраза может делиться на части
+    const cut = [0, ...(v.split || []), v.words.length]; const parts = cut.slice(1).map((n, i) => v.words.slice(cut[i], n));
+    let part = parts[0];
+    for (const p of parts) if (t >= p[0].s - 0.05) part = p;
+    const pi = parts.indexOf(part), pEnd = pi < parts.length - 1 ? parts[pi + 1][0].s - 0.05 : 1e9;
+    if (t < pEnd) drawWords(part, t, CFG.subY * H, 64 * S, red, 940 * S);
+    ctx.restore();
+  }
+  // карточка
+  const cv = VO.find((v) => v.card);
+  if (cv) {
+    const c0 = cv.words[0].s - 0.35;
+    const k = sstep(c0, c0 + 0.5, t);
+    if (k > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${0.72 * k})`; ctx.fillRect(0, 0, W, H);
+      cv.words.forEach((w, i) => drawWords([w], t, H * 0.30 + i * 128 * S, 124 * S, new Set(['ЁЗИНГ']), 1000 * S));
+      const pk = ease((t - (cv.words[cv.words.length - 1].e - 0.1)) / 0.35);
+      if (pk > 0) {
+        const txt = CFG.handle; ctx.font = `900 ${84 * S}px M`; const tw = ctx.measureText(txt).width;
+        const pw = tw + 90 * S, ph = 136 * S, px = (W - pw) / 2, py = H * 0.30 + 3 * 128 * S;
+        ctx.save(); ctx.globalAlpha = pk; ctx.translate(W / 2, py + ph / 2); const sc = 0.85 + 0.15 * pk; ctx.scale(sc, sc); ctx.translate(-W / 2, -(py + ph / 2));
+        ctx.shadowColor = 'rgba(255,16,36,0.55)'; ctx.shadowBlur = 40 * S;
+        ctx.fillStyle = RED; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, ph / 2); ctx.fill();
+        ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+        ctx.fillText(txt, px + 45 * S, py + ph / 2 + 4 * S);
+        ctx.restore();
+        ctx.save(); ctx.globalAlpha = pk; ctx.font = `900 ${50 * S}px M`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+        ctx.fillText(CFG.under, W / 2, py + ph + 70 * S); ctx.restore();
+      }
+    }
+  }
+}
+
+// ---------- камера ----------
+const lerp = (a, b, k) => a + (b - a) * k;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const fb = WR.fieldBox, fcx = (fb.x0 + fb.x1) / 2 + 0.45;
+function cam(t) {
+  const f = Math.min(SIM.nf - 1, Math.round(t * P.fps)), fr = FR[f];
+  // 1) герой
+  const k0 = sstep(0, CFG.t.heroEnd, t);
+  let pos = V(lerp(-3.4, -2.6, k0), lerp(1.15, 2.0, k0), lerp(4.0, 4.6, k0)), look = V(lerp(0.2, 1.4, k0), lerp(1.7, 1.2, k0), 0), up = V(0, 1, 0), fov = 38;
+  // 2) погоня за волной
+  const k1 = sstep(CFG.t.heroEnd - 0.4, CFG.t.heroEnd + 0.6, t);
+  if (k1 > 0) {
+    const g = sstep(CFG.t.heroEnd, CFG.t.fieldIn, t);
+    const p2 = V(fr.x - lerp(3.5, 9, g), lerp(2.2, 10, g), fr.z + lerp(4.6, 6.5, g)), l2 = V(fr.x + lerp(2.0, 6, g), 0.4, fr.z * 0.6);
+    pos.lerp(p2, k1); look.lerp(l2, k1);
+  }
+  // 3) над полем — сверху
+  const k2 = sstep(CFG.t.fieldIn, CFG.t.top, t);
+  if (k2 > 0) {
+    const hgt = lerp(CFG.topH, CFG.topH * 0.9, sstep(CFG.t.top, CFG.dur, t));
+    pos.lerp(V(fcx - 0.01, hgt, 0), k2); look.lerp(V(fcx, 0, 0), k2);
+    up = V(0, 1, 0).lerp(V(1, 0, 0), k2).normalize();
+  }
+  camera.position.copy(pos); camera.up.copy(up); camera.lookAt(look); camera.fov = fov; camera.updateProjectionMatrix();
+}
+
+const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), PV = new THREE.Vector3(), SV = new THREE.Vector3();
+window.DURATION = CFG.dur;
+// моменты удара о пол/соседа (наклон > 70°) — для щелчков
+{ const ev = []; for (const b of WR.bodies) { for (let f = 0; f < SIM.nf; f++) { const o = (f * SIM.nb + b.order) * 7, qx = SIM.data[o + 3], qz = SIM.data[o + 5];
+    if (1 - 2 * (qx * qx + qz * qz) < 0.34) { ev.push([+(f / P.fps).toFixed(3), b.kind]); break; } } } window.EVENTS = ev; }
+window.renderFrame = (t) => {
+  const f = Math.min(SIM.nf - 1, Math.round(t * P.fps)), base = f * SIM.nb * 7, D = SIM.data;
+  const tr = (b) => { const o = base + b.order * 7; PV.set(D[o], D[o + 1], D[o + 2]); Q.set(D[o + 3], D[o + 4], D[o + 5], D[o + 6]); };
+  tr(hb); heroMesh.position.copy(PV); heroMesh.quaternion.copy(Q);
+  for (const g of groups) { g.list.forEach((b, i) => { tr(b); SV.set(b.hx * 2, b.hy * 2, b.hz * 2); M4.compose(PV, Q, SV); g.m.setMatrixAt(i, M4); }); g.m.instanceMatrix.needsUpdate = true;
+    if (g.lit) { g.list.forEach((b, i) => { const o = base + b.order * 7; const qx = D[o + 3], qz = D[o + 5];
+        const up = 1 - 2 * (qx * qx + qz * qz); const k = Math.min(1, Math.max(0, (0.97 - up) / 0.55));
+        CT.copy(C_OFF).lerp(C_ON, k * k * (3 - 2 * k)); g.m.setColorAt(i, CT); }); g.m.instanceColor.needsUpdate = true; } }
+  GLOW.value = 0.4 + 0.9 * sstep(CFG.t.fieldIn + 0.6, CFG.t.top + 0.4, t);
+  heroLight.intensity = 22 * (1 - sstep(2.5, 4, t));
+  cam(t);
+  composer.render();
+  ctx.drawImage(renderer.domElement, 0, 0);
+  overlay(t);
+  // лёгкая виньетка
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  return out.toDataURL('image/jpeg', 0.94);
+};
+window.READY = true;
+</script></body></html>
