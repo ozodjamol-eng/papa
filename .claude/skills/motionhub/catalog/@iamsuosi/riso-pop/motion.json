@@ -1,0 +1,40 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "riso-pop",
+  "version": "1.0.7",
+  "name": {
+    "en": "Riso Pop",
+    "zh-CN": "孔版双色"
+  },
+  "line": {
+    "en": "A two-ink risograph print on warm off-white paper."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "print",
+    "retro",
+    "playful",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "Light explainers in two-colour print: everyday science, products and brands, culture.",
+      "zh-CN": "双色套印的轻松讲解：日常科普、产品与品牌介绍、文化话题。"
+    },
+    "not": {
+      "en": "Sombre subjects; long step-by-step processes.",
+      "zh-CN": "沉重的题材；很长的多步骤流程。"
+    }
+  }
+}

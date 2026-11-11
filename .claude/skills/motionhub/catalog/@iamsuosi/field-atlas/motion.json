@@ -1,0 +1,40 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "field-atlas",
+  "version": "1.1.3",
+  "name": {
+    "en": "Field Atlas",
+    "zh-CN": "地图志"
+  },
+  "line": {
+    "en": "An editorial atlas map that the narration moves across."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "flat-vector",
+    "print",
+    "modern",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "Geography on a real map: routes and journeys, migrations, data by country or state, where something happened and what a place's name means.",
+      "zh-CN": "真实地图上的地理叙事：路线与旅程、迁徙、按国家或省州的数据、事件发生地和地名的含义。"
+    },
+    "not": {
+      "en": "Subjects with no place in them; disputed borders, unless the film draws its own.",
+      "zh-CN": "没有地点的题材；争议边界，除非影片自己绘制。"
+    }
+  }
+}

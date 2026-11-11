@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "marker-margin",
+  "version": "1.0.7",
+  "name": {
+    "en": "Marker Margin",
+    "zh-CN": "马克笔批注"
+  },
+  "line": {
+    "en": "A felt-tip marker on the glass in front of the person's own footage or screen recording."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "footage",
+    "hand-drawn",
+    "playful"
+  ],
+  "fit": {
+    "for": {
+      "en": "Hand-drawn highlighter marks over your own footage or screen recording: unboxings, tutorials, commentary. Needs your own video.",
+      "zh-CN": "叠在你自己画面或录屏上的手绘荧光笔标注：开箱、教程、解说。需要你自己的视频。"
+    },
+    "not": {
+      "en": "Films with no footage of their own.",
+      "zh-CN": "没有自己素材的影片。"
+    }
+  }
+}

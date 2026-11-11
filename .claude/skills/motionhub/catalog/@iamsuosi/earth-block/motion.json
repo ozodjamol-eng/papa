@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "earth-block",
+  "version": "1.0.4",
+  "name": {
+    "en": "Earth Block",
+    "zh-CN": "大地块"
+  },
+  "line": {
+    "en": "One isometric block of the world on a pale textbook plate, cut open as it is explained."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "isometric",
+    "flat-vector",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "Anything in layers, cut open: geology, soil and groundwater, the tissues of the body, the structure of a building.",
+      "zh-CN": "剖开看分层的一切：地质、土壤与地下水、人体组织、建筑结构。"
+    },
+    "not": {
+      "en": "Processes over time; things with no inside to show.",
+      "zh-CN": "随时间展开的过程；没有内部可看的东西。"
+    }
+  }
+}

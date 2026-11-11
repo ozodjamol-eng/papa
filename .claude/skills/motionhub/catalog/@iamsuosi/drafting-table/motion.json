@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "drafting-table",
+  "version": "1.0.7",
+  "name": {
+    "en": "Drafting Table",
+    "zh-CN": "绘图台"
+  },
+  "line": {
+    "en": "A deep-blue drawing sheet where a mechanism is drafted in white line as it is explained."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "line-art",
+    "retro",
+    "dark"
+  ],
+  "fit": {
+    "for": {
+      "en": "Engineering and mechanisms as blueprints: structures, assemblies, dimensions, plans and elevations.",
+      "zh-CN": "蓝图式的工程与机械原理：结构、装配、尺寸、建筑平立面。"
+    },
+    "not": {
+      "en": "Stories about people; soft or living subjects.",
+      "zh-CN": "人物故事；柔软或有生命的题材。"
+    }
+  }
+}

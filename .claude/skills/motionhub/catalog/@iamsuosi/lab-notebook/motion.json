@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "lab-notebook",
+  "version": "1.1.2",
+  "name": {
+    "en": "Lab Notebook",
+    "zh-CN": "实验手记"
+  },
+  "line": {
+    "en": "A page of a squared notebook where the diagram is drawn stroke by stroke as it is explained, labelled by hand, the result boxed in red."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "hand-drawn",
+    "line-art",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "How things work and what the numbers mean, worked out by hand: science and engineering principles, money and consumer explainers, comparisons and step-by-step reasoning.",
+      "zh-CN": "手算推导的讲解：理工原理、财经与消费类解释、对比和分步推理。"
+    },
+    "not": {
+      "en": "Stories carried by people and places: it has no map and no characters. Brand films.",
+      "zh-CN": "靠人物和地点推动的故事：它没有地图，也没有角色。品牌片。"
+    }
+  }
+}

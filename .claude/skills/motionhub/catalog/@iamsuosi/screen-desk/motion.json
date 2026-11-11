@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "screen-desk",
+  "version": "1.0.7",
+  "name": {
+    "en": "Screen Desk",
+    "zh-CN": "屏幕工作台"
+  },
+  "line": {
+    "en": "A pale desk where an app window, a terminal or a phone is the subject."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "modern",
+    "minimal",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "Software and products: set-up tutorials, feature launches, command-line lessons, demos across devices.",
+      "zh-CN": "软件与产品：设置教程、功能发布、命令行教学、多设备演示。"
+    },
+    "not": {
+      "en": "Subjects with no screen in them.",
+      "zh-CN": "画面里没有屏幕的题材。"
+    }
+  }
+}

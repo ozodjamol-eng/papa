@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "watercolor-tale",
+  "version": "1.0.7",
+  "name": {
+    "en": "Watercolor Tale",
+    "zh-CN": "水彩绘本"
+  },
+  "line": {
+    "en": "An open picture book painted in transparent watercolour on cold-press paper."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "watercolor",
+    "playful",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "Gentle stories told as a picture book: children, nature, the seasons, people and places.",
+      "zh-CN": "像绘本一样讲的温和故事：儿童、自然、季节变化、人文故事。"
+    },
+    "not": {
+      "en": "Data-heavy, technical or business subjects.",
+      "zh-CN": "数据密集、技术或商业题材。"
+    }
+  }
+}

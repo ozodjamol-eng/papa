@@ -1,0 +1,39 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "night-diagram",
+  "version": "1.1.3",
+  "name": {
+    "en": "Night Diagram",
+    "zh-CN": "夜光图解"
+  },
+  "line": {
+    "en": "A science diagram at night."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "flat-vector",
+    "modern",
+    "dark"
+  ],
+  "fit": {
+    "for": {
+      "en": "Science where light is the event: lightning, nerve signals, stars, reactions, light bent by glass, from the event to the planet it happens on.",
+      "zh-CN": "以光为事件的科学：闪电、神经信号、天体、化学反应、玻璃折射的光，从事件一直拉到它所在的星球。"
+    },
+    "not": {
+      "en": "Business and software; subjects where nothing shines.",
+      "zh-CN": "商业和软件；没有发光之物的题材。"
+    }
+  }
+}

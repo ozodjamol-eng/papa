@@ -1,0 +1,38 @@
+{
+  "spec": "motion/0.6",
+  "scope": "iamsuosi",
+  "slug": "red-pencil",
+  "version": "1.0.7",
+  "name": {
+    "en": "Red Pencil",
+    "zh-CN": "红笔批注"
+  },
+  "line": {
+    "en": "A printed page marked up in red as it is read: figures circled, wrong sums struck and corrected, verdicts written in the margin."
+  },
+  "authors": [
+    {
+      "name": "SuoSi",
+      "github": "iamsuosi"
+    }
+  ],
+  "license": {
+    "text": "CC-BY-4.0",
+    "code": "MIT"
+  },
+  "lang": "en",
+  "tags": [
+    "hand-drawn",
+    "light"
+  ],
+  "fit": {
+    "for": {
+      "en": "Checking a document line by line: what a price is made of, contract terms, claims in an ad, numbers corrected, money and consumer explainers.",
+      "zh-CN": "逐条核对一份材料：价格构成、合同条款、广告承诺、数据纠错、财经和消费类讲解。"
+    },
+    "not": {
+      "en": "Processes told step by step; nature and history.",
+      "zh-CN": "按步骤讲的流程；自然和历史。"
+    }
+  }
+}
