@@ -38,6 +38,10 @@ DIRECTIONS = {
     "biz":    ("🏠 Уйда бизнес", "КАТТА ДАВРА", "Уйда бизнес", ["uydabiznes", "biznesgoya", "ayollarbiznesi"], 2),
     "motiv":  ("🔥 Мотивация", "КАТТА ДАВРА", "Мотивация", ["motivatsiya", "ozustidaishlash"], 2),
     "ibrat":  ("📖 Ибрат", "КАТТА ДАВРА / Хўжаобод", "Ибрат", ["ibratli", "ibrat_olamiz", "ibratlihikoya"], 2),
+    # 12.11 владелец выбрал (Apify Starter): аудитория + рекламодатели. Пока — склад в KATTA BANK, в сетку каналов — отдельным решением.
+    "auto":   ("🚗 Авто", "КАТТА ДАВРА", "Авто", ["avtouz", "mashinalar", "avtobozor"], 2),
+    "toy":    ("💍 Тўй", "КАТТА ДАВРА", "Тўй", ["uzbektoy", "toylar", "kelinsalom"], 2),
+    "money":  ("💰 Пул/молия", "КАТТА ДАВРА", "Пул/молия", ["pul", "daromad", "moliya"], 2),
 }
 HUB_TITLE = "PAPA РАЗВЕДКА · ТРЕНДЫ"     # 30.10 владелец: в одной семье с «PAPA РАЗВЕДКА · ВОДА / · МЕБЕЛЬ»
 OLD_TITLES = ("📸 PAPA ТРЕНДЫ",)
