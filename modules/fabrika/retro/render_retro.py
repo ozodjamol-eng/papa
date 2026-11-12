@@ -7,16 +7,20 @@ import sys, subprocess, math
 import numpy as np, cv2
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-SRC = "/home/claude/retro/src.mp4"; OUT = "/home/claude/retro/main.mp4"
+import json
+CFG = json.load(open(sys.argv[1], encoding="utf-8")) if len(sys.argv) > 1 and sys.argv[1].endswith(".json") else {}
+WD = CFG.get("dir", "/home/claude/retro")
+SRC = f"{WD}/src.mp4"; OUT = f"{WD}/main.mp4"
+TALL = bool(CFG.get("tall"))            # исходник — вертикальный клип во весь кадр (как Sandra), а не «окно» (как Maxx)
 W, H, FPS = 1080, 1920, 30
 SW, SH = 720, 1280
-CY0, CY1 = 334, 986                      # клип внутри исходника
-DUR = 180.0
-ARTIST, SONG, YEAR = "MAXX", "GET-A-WAY", "1993"
-FACT = ("1993 · ГЕРМАНИЯ", "ЕВРОПАДА 1 МИЛЛИОНДАН ОРТИҚ", "НУСХА СОТИЛГАН")
+CY0, CY1 = CFG.get("crop", [334, 986])   # клип внутри исходника
+DUR = float(CFG.get("dur", 180.0))
+ARTIST, SONG, YEAR = CFG.get("artist", "MAXX"), CFG.get("song", "GET-A-WAY"), CFG.get("year", "1993")
+FACT = tuple(CFG.get("fact", ("1993 · ГЕРМАНИЯ", "ЕВРОПАДА 1 МИЛЛИОНДАН ОРТИҚ", "НУСХА СОТИЛГАН")))
 BLK = "/usr/share/fonts/opentype/inter/Inter-Black.otf"; XB = "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf"
 MAG, CYA, WHT, YEL = (255, 45, 170), (40, 230, 255), (255, 255, 255), (255, 214, 64)
-CX, CYT = 0, 430                          # клип на холсте
+CX, CYT = 0, (250 if TALL else 430)                          # клип на холсте
 CW, CH = W, int((CY1 - CY0) * W / SW)     # 1080 x 978
 CYB = CYT + CH
 
@@ -74,22 +78,26 @@ for y, c in ((CYT - 14, CYA), (CYB + 8, MAG)):                      # неоно
     d.rectangle([0, y, W, y + 6], fill=c)
 BG = np.asarray(pil).copy()
 gl = cv2.GaussianBlur(BG, (0, 0), 18); BG = cv2.addWeighted(BG, 1.0, gl, 0.55, 0)
-put(BG, text("КАТТА ДАВРА · РЕТРО", 62, WHT, BLK, glow=MAG, track=4), W / 2, 150)
-put(BG, text(f"{ARTIST} — {SONG}", 58, WHT, BLK), W / 2, 268)
-put(BG, text(YEAR, 54, YEL, BLK, track=6), W / 2, 350)
+if TALL:
+    put(BG, text("КАТТА ДАВРА · РЕТРО", 56, WHT, BLK, glow=MAG, track=4), W / 2, 82)
+    put(BG, text(f"{ARTIST} — {SONG} · {YEAR}", 40, WHT, BLK), W / 2, 178)
+else:
+    put(BG, text("КАТТА ДАВРА · РЕТРО", 62, WHT, BLK, glow=MAG, track=4), W / 2, 150)
+    put(BG, text(f"{ARTIST} — {SONG}", 58, WHT, BLK), W / 2, 268)
+    put(BG, text(YEAR, 54, YEL, BLK, track=6), W / 2, 350)
 # кассета
-KX, KY, KW, KH = 70, 1500, 400, 250
+KX, KY, KW, KH = 70, (1578 if TALL else 1500), 400, 250
 pil = Image.fromarray(BG); d = ImageDraw.Draw(pil)
 d.rounded_rectangle([KX, KY, KX + KW, KY + KH], 26, fill=(18, 12, 30), outline=CYA, width=5)
 d.rounded_rectangle([KX + 40, KY + 50, KX + KW - 40, KY + 170], 60, fill=(48, 30, 70), outline=MAG, width=4)
 d.rectangle([KX + 30, KY + 16, KX + KW - 30, KY + 40], fill=YEL)
 d.polygon([(KX + 60, KY + KH), (KX + 90, KY + 195), (KX + KW - 90, KY + 195), (KX + KW - 60, KY + KH)], fill=(30, 20, 46), outline=CYA)
 BG = np.asarray(pil).copy()
-put(BG, text("RETRO · 90", 17, (20, 10, 30), BLK, track=3)[40:-40], KX + KW / 2, KY + 28)
-put(BG, text("@kattadavrauz", 50, WHT, BLK, glow=CYA), W / 2, 1838)
+put(BG, text("RETRO DAVRA", 17, (20, 10, 30), BLK, track=3)[40:-40], KX + KW / 2, KY + 28)
+put(BG, text("@kattadavrauz", 44 if TALL else 50, WHT, BLK, glow=CYA), (760 if TALL else W / 2), (1872 if TALL else 1838))
 R1, R2 = (KX + 125, KY + 110), (KX + KW - 125, KY + 110)
 # эквалайзер
-NB, EX0, EX1, EYB, EHT = 16, 520, 1010, 1740, 230
+NB, EX0, EX1, EYB, EHT = 16, 520, 1010, (1815 if TALL else 1740), (216 if TALL else 230)
 BWD = (EX1 - EX0) // NB
 # оверлеи
 L_PLAY = text("PLAY", 34, WHT, BLK, track=3)
@@ -117,8 +125,9 @@ def bands(t):
 ALL = np.array([bands(i / FPS) for i in range(int(DUR * FPS) + 2)]); ALL /= max(1e-6, np.percentile(ALL, 99)); ALL = np.clip((ALL - 0.38) / 0.62, 0, 1) ** 1.3
 
 state = {"prev": None, "glitch": -99.0, "eq": np.zeros(NB)}
-PAP = [28, 58, 88, 118, 148]            # знак PAPARAZZI UZ в промежутках
-CARDS = [(20, 27.5, L_FACT), (62, 67.5, L_Q), (104, 111.5, L_FACT), (140, 145.5, L_Q)]
+PAP = [a for a in range(28, 600, 30) if a < DUR - 10]            # знак PAPARAZZI UZ в промежутках
+CARDS = [c for c in [(20, 27.5, L_FACT), (62, 67.5, L_Q), (104, 111.5, L_FACT), (140, 145.5, L_Q)] if c[1] < DUR - 6]
+PH = 130 if TALL else 96                # высота плашек PLAY / счётчика (в TALL счётчик закрывает чужое лого справа сверху)
 
 
 def reel(cv, c, ang):
@@ -148,13 +157,16 @@ def frame(t, src):
         clip = cv2.addWeighted(clip, 1 - k, (cv2.GaussianBlur(clip, (0, 0), 16) * .35).astype(np.uint8), k, 0)
     cv[CYT:CYB] = clip
     # PLAY-плашка (закрывает угол) + счётчик ленты
-    cv2.rectangle(cv, (0, CYT), (300, CYT + 96), (10, 6, 22), -1)
-    if (i // 20) % 2 == 0: cv2.fillPoly(cv, [np.array([(34, CYT + 28), (34, CYT + 68), (70, CYT + 48)])], (60, 255, 120))
-    put(cv, L_PLAY, 170, CYT + 50)
+    cv2.rectangle(cv, (0, CYT), (300, CYT + PH), (10, 6, 22), -1)
+    if (i // 20) % 2 == 0: cv2.fillPoly(cv, [np.array([(34, CYT + PH // 2 - 20), (34, CYT + PH // 2 + 20), (70, CYT + PH // 2)])], (60, 255, 120))
+    put(cv, L_PLAY, 170, CYT + PH // 2 + 2)
     s = int(t); cnt = f"0:{s // 60:02d}:{s % 60:02d}"; x = W - 30 - sum(DIG[c].shape[1] + 2 for c in cnt)
-    cv2.rectangle(cv, (x - 20, CYT), (W, CYT + 70), (10, 6, 22), -1)
+    if TALL:
+        cv2.rectangle(cv, (650, CYT), (W, CYT + PH), (10, 6, 22), -1); x = 650 + (W - 650 - (W - 30 - x)) // 2
+    else:
+        cv2.rectangle(cv, (x - 20, CYT), (W, CYT + 70), (10, 6, 22), -1)
     for c in cnt:
-        put(cv, DIG[c], x + DIG[c].shape[1] / 2, CYT + 36); x += DIG[c].shape[1] + 2
+        put(cv, DIG[c], x + DIG[c].shape[1] / 2, CYT + (PH // 2 if TALL else 36)); x += DIG[c].shape[1] + 2
     # кассета и эквалайзер
     reel(cv, R1, t * 4.2); reel(cv, R2, t * 4.2 + .5)
     e = state["eq"] = np.maximum(ALL[min(i, len(ALL) - 1)], state["eq"] * 0.86)
@@ -202,10 +214,10 @@ def reader(ss=None, n=None):
         yield np.frombuffer(b, np.uint8).reshape(SH, SW, 3)
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "stills":
-        for t in [0.6, 1.8, 10.0, 23.0, 30.0, 64.0, 177.5, 179.0]:
+    if "stills" in sys.argv:
+        for t in [1.8, 10.0, 23.0, 30.0, 64.0, DUR - 1.0]:
             state.update(prev=None, glitch=-99.0 if t != 10.0 else 9.95)
-            s = next(reader(ss=t)); cv2.imwrite(f"/home/claude/retro/s_{t:05.1f}.jpg", frame(t, s)[:, :, ::-1])
+            s = next(reader(ss=t)); cv2.imwrite(f"{WD}/s_{t:05.1f}.jpg", frame(t, s)[:, :, ::-1])
         sys.exit()
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
                             "-c:v", "libx264", "-preset", "veryfast", "-crf", "15", "-pix_fmt", "yuv420p", OUT], stdin=subprocess.PIPE)
