@@ -84,7 +84,8 @@
     "volidam-voronka-install",
     "volidam-voronka-stop",
     "apify-usage",
-    "sources-list"
+    "sources-list",
+    "insta-stop"
   ],
   "approve": [
     "morning-pool-clear",
