@@ -82,7 +82,8 @@
     "goldwater-voronka-restart",
     "goldwater-voronka-stop",
     "volidam-voronka-install",
-    "volidam-voronka-stop"
+    "volidam-voronka-stop",
+    "apify-usage"
   ],
   "approve": [
     "morning-pool-clear",
