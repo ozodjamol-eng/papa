@@ -42,7 +42,7 @@ DIRECTIONS = {
 HUB_TITLE = "PAPA РАЗВЕДКА · ТРЕНДЫ"     # 30.10 владелец: в одной семье с «PAPA РАЗВЕДКА · ВОДА / · МЕБЕЛЬ»
 OLD_TITLES = ("📸 PAPA ТРЕНДЫ",)
 MARK = "🏷 PAPA ТРЕНД:"
-JOURNAL_TITLE = "📸 INSTAGRAM · ХАБ"     # 12.11 владелец: «всё, что он берёт, мы будем знать» — журнал всех находок агента
+JOURNAL_TITLE = "INSTAGRAM · ХАБ"     # 12.11 владелец создал канал сам (без эмодзи)     # 12.11 владелец: «всё, что он берёт, мы будем знать» — журнал всех находок агента
 
 
 def journal_caption(it: dict, label: str, where: str, cap: str) -> str:
@@ -306,11 +306,17 @@ async def hub(client):
     return r.chats[0]
 
 
+def _norm(t) -> str:
+    """Название без эмодзи и лишних пробелов: «📸 INSTAGRAM · ХАБ» = «INSTAGRAM · ХАБ»."""
+    import re
+    return re.sub(r"[^\w·]+", " ", (t or "")).strip().upper()
+
+
 async def journal(client):
     """Свой закрытый канал-журнал находок Instagram (создаём, если нет)."""
     from telethon.tl.functions.channels import CreateChannelRequest
     async for d in client.iter_dialogs():
-        if d.is_channel and not d.is_group and (d.title or "").strip() == JOURNAL_TITLE:
+        if d.is_channel and not d.is_group and _norm(d.title) == _norm(JOURNAL_TITLE):
             return d.entity
     r = await client(CreateChannelRequest(title=JOURNAL_TITLE, about="Всё, что берёт агент Instagram: оригинал, просмотры, куда ушло",
                                           megagroup=False))
