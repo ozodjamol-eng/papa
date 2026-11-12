@@ -351,7 +351,13 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
         try:
             items = fresh(await asyncio.to_thread(apify_tags, tags, per_tag, token), now)
         except Exception as e:  # noqa: BLE001 — одно направление не роняет остальные
-            log(f"{label}: Apify {type(e).__name__}")
+            det = ""
+            if isinstance(e, urllib.error.HTTPError):  # 12.11: код и причина Apify — видеть, лимит это или ключ
+                try:
+                    det = f" {e.code} {e.read()[:200].decode(errors='replace')}"
+                except Exception:  # noqa: BLE001
+                    det = f" {e.code}"
+            log(f"{label}: Apify {type(e).__name__}{det}")
             continue
         total += len(items)
         learn(st, items)
