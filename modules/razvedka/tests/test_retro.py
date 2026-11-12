@@ -21,5 +21,15 @@ class TestRetro(unittest.TestCase):
         self.assertIn("5.0 млн", t); self.assertIn("ҚИДИРУВ", t); self.assertIn("3:40", t); self.assertIn("watch?v=a", t)
 
 
+
+class TestCardSurvivesCleanup(unittest.TestCase):
+    def test_scout_card_is_not_junk(self):
+        from razvedka import hubaudit
+        t = retro.card([{"id": "a", "title": "Song", "views": 5_000_000, "sec": 220, "channel": "X", "url": "https://www.youtube.com/watch?v=a"}], "12.11", "🌍 ЖАҲОН РЕТРО")
+        self.assertTrue(hubaudit.is_card({"media": [""], "text": t}))
+        self.assertFalse(hubaudit.is_card({"media": [""], "text": "просто текст"}))
+        self.assertFalse(hubaudit.is_card({"media": ["d1"], "text": t}))
+
+
 if __name__ == "__main__":
     unittest.main()

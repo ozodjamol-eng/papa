@@ -188,6 +188,12 @@ async def _to(client, target, it: dict, check_keys: bool = True) -> bool:
     return await H.put(client, target, msgs, it["text"], check=False)
 
 
+def is_card(it: dict) -> bool:
+    """12.11: подборка ссылок ретро-разведчика YouTube (retro.card) — служебная карточка для владельца, не мусор.
+    Урок 12.11: первую подборку уборка унесла в корзину как «пост без медиа»."""
+    return not any(it.get("media") or []) and "ҚИДИРУВ" in (it.get("text") or "") and "youtube.com/" in (it.get("text") or "")
+
+
 async def clean(client, log=print) -> dict:
     import asyncio
     import datetime as dt
@@ -212,8 +218,8 @@ async def clean(client, log=print) -> dict:
             await client.delete_messages(ent, [m.id for m in by_id[i]["msgs"]])
             await asyncio.sleep(0.5)
         left = [it for it in items if it["id"] not in set(dels)]
-        junk = [it for it in left if not any(it["media"])
-                or (name in G.VIDEO_ONLY and not any(getattr(m, "video", None) for m in it["msgs"]))]
+        junk = [it for it in left if not is_card(it) and (not any(it["media"])
+                or (name in G.VIDEO_ONLY and not any(getattr(m, "video", None) for m in it["msgs"])))]
         moves: dict[int, str] = {it["id"]: "NONE" for it in junk}
         if name in G.TOPIC and os.environ.get("GEMINI_API_KEY"):
             lines = [(it["id"], it["text"].strip().replace("\n", " ")[:140]) for it in left
