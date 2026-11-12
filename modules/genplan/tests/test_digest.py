@@ -206,7 +206,7 @@ class VideoDigest(unittest.TestCase):
         self.assertEqual(r["status"], "READY")
         m = json.loads((Path(r["dir"]) / "manifest.json").read_text(encoding="utf-8"))
         cap = m["caption"]
-        for part in ("📍 Ўзбекистон", "Тошкент: +10…+23°", "Самарқанд", "🎉 @kattadavrauz", "МБ КУРСИ (17 октябрдан)"):
+        for part in ("📍 Ўзбекистон", "Тошкент: +10…+23°", "Фарғона", "🎉 @kattadavrauz", "МБ КУРСИ (17 октябрдан)"):
             self.assertIn(part, cap)
         self.assertNotIn("Хайрли", cap)
         self.assertNotIn("Хўжаобод", cap.split("━━━━━━━━━━━━")[0])
