@@ -347,7 +347,13 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
     per_tag = int(ic.get("per_tag", 4))
     report: dict[str, object] = {}
     total = 0
+    only = set(ic.get("only") or DIRECTIONS)          # 🧪 12.11: эксперимент — только нужные Давре направления
+    max_tags = int(ic.get("max_tags", 99))            # и не больше N лучших хэштегов (бюджет Apify $5/мес)
+    fails: list[str] = []
     for code, (label, chan, rub, tags, quota) in DIRECTIONS.items():
+        if code not in only:
+            continue
+        tags = tags[:max_tags]
         try:
             items = fresh(await asyncio.to_thread(apify_tags, tags, per_tag, token), now)
         except Exception as e:  # noqa: BLE001 — одно направление не роняет остальные
@@ -358,6 +364,7 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
                 except Exception:  # noqa: BLE001
                     det = f" {e.code}"
             log(f"{label}: Apify {type(e).__name__}{det}")
+            fails.append(det.strip()[:3] or type(e).__name__)
             continue
         total += len(items)
         learn(st, items)
@@ -446,6 +453,20 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
         report["🔎 сигналы"] = await watch(client, target, ic.get("watch") or {}, st, token, now, log)
     except Exception as e:  # noqa: BLE001 — сигналы не роняют тренды
         log(f"сигналы: {type(e).__name__}")
+    if fails and not total:                            # 🚨 12.11: агент молчал незаметно — теперь тревога в ШТАБ (раз в сутки)
+        day = now.strftime("%Y-%m-%d")
+        if st.get("alarm_day") != day:
+            why = ("ключ Apify недействителен — papa-update apify-token (Франкфурт)" if "401" in fails else
+                   "кончился бесплатный лимит Apify ($5/мес)" if ("402" in fails or "403" in fails) else
+                   f"Apify не отвечает ({', '.join(sorted(set(fails)))})")
+            try:
+                from . import telegram as T
+                tok, ids = T.owner_bot()
+                for i in ids:
+                    T.bot_send_kb(tok, i, f"🚨 Агент Instagram стоит: {why}. Находок сегодня нет.", None)
+                st["alarm_day"] = day
+            except Exception as e:  # noqa: BLE001
+                log(f"тревога: {type(e).__name__}")
     st["seen"] = st.get("seen", [])[-3000:]
     st["last"] = now.isoformat()
     state_dir.mkdir(parents=True, exist_ok=True)
