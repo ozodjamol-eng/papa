@@ -499,7 +499,7 @@ def _nrm(s) -> str:
 # 07.11 владелец переименовывает хабы KATTA BANK в «БАНК · …» — новое имя = прежний склад (как razvedka.hubs.TITLES)
 BANK_TITLES = {"БАНК · КУЛГИ": "РАЗВЛЕКАТЕЛЬНО", "БАНК · ФОЙДАЛИ": "ФОЙДАЛИК", "БАНК · ОВҚАТ": "ФОЙДАЛИК ОВКАТ",
                "БАНК · МАЪНАВИЯТ": "МАЪНАВИЯТ", "БАНК · УЙ БИЗНЕСИ": "УЙДА БИЗНЕС", "БАНК · МОТИВАЦИЯ": "МОТИВАЦИЯ",
-               "БАНК · МУСИҚА": "Jonlik ijrolar", "БАНК · ИБРАТ": "ИБРАТ", "БАНК · ТРЕНДЛАР": "ТРЕНДЛАР"}
+               "БАНК · МУСИҚА": "Jonlik ijrolar", "БАНК · РЕТРО": "РЕТРО КЛИПЛАР", "БАНК · ЎЗБЕК РЕТРО": "ЎЗБЕК РЕТРО", "БАНК · ИБРАТ": "ИБРАТ", "БАНК · ТРЕНДЛАР": "ТРЕНДЛАР"}
 
 
 def sklad_rubric(ch: dict, source: str | None, n: int = 0) -> str | None:
@@ -729,7 +729,8 @@ def minbar_pick(db, ch: dict, channel: str, pool: list, used: list, t: dt.dateti
 # (пустых постов нет). Откат: удалить блоки fixed в config.toml.
 
 def fixed_slots(ch: dict, day: dt.date) -> list[tuple[dt.datetime, dict]]:
-    return [(plan.slot_time(day, s["t"]), s) for s in (ch.get("fixed") or [])]
+    return [(plan.slot_time(day, s["t"]), s) for s in (ch.get("fixed") or [])
+            if not s.get("days") or day.isoweekday() in s["days"]]          # 12.11: days — слот только в эти дни недели
 
 
 def fixed_news(ch: dict) -> bool:
@@ -786,8 +787,9 @@ def fill_fixed(db, cfg: dict, channel: str, now: dt.datetime, pool: list) -> lis
 def fixed_reserve(ch: dict, pool: list, now: dt.datetime) -> set[int]:
     """Сетка днём не съедает материал, отложенный под твёрдые слоты: под каждый слот — по 2 поста (сегодня + завтра)."""
     keep: set[int] = set()
+    days = {now.date().isoweekday(), (now.date() + dt.timedelta(days=1)).isoweekday()}
     for s in (ch.get("fixed") or []):
-        if s.get("news"):
+        if s.get("news") or (s.get("days") and not days & set(s["days"])):   # слот не сегодня и не завтра — запас не держим
             continue
         keep.update(m["id"] for m in [m for m in pool if m["id"] not in keep and _src_in(m, s.get("sklad") or [])][:2])
     return keep

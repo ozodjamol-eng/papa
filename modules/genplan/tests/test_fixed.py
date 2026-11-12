@@ -41,7 +41,11 @@ class T(unittest.TestCase):
     def test_morning_slots(self):
         for ch in ("davra", "xojaobod"):
             ts = [f"{t:%H:%M}" for t, _ in smart.fixed_slots(CFG["channels"][ch], MON)]
-            self.assertEqual(ts, ["06:30", "06:45", "07:15", "07:40", "13:00", "19:00"])
+            self.assertEqual(ts, ["06:30", "06:45", "07:15", "07:40", "13:00", "19:00"] + (["21:30"] if ch == "davra" else []))
+        # 12.11: вечерние программы по дням недели — Пт жонли ижро, Сб жаҳон ретро, Вс ўзбек ретро (19:30)
+        ev = {d: [s["rubric"] for t, s in smart.fixed_slots(CFG["channels"]["davra"], MON + dt.timedelta(days=d)) if f"{t:%H:%M}" == "19:30"]
+              for d in range(7)}
+        self.assertEqual(ev, {0: [], 1: [], 2: [], 3: [], 4: ["Жонли ижро"], 5: ["Жаҳон ретро"], 6: ["Ўзбек ретро"]})
         self.assertEqual(CFG["channels"]["davra"]["morning"]["day_post"], "06:20")
 
     def test_fills_zaryadka_and_health(self):

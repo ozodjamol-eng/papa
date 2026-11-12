@@ -16,7 +16,7 @@ import re
 import urllib.request
 
 GATE = True
-VIDEO_ONLY = {"Jonlik ijrolar"}
+VIDEO_ONLY = {"Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО"}
 NO_TOPIC = {"ТАБРИКЛАР", "ТЕКШИРУВ"}                  # поздравления сортирует timing.kind (без ИИ)
 SCAN = 3000
 

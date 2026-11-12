@@ -285,6 +285,11 @@ async def _archive() -> dict:
             out["🧹 Тозаловчи"] = await tozalash.run(c, log=lambda s: print(s, flush=True))
         except Exception as e:  # noqa: BLE001 — чистка не должна ломать архивариуса
             out["🧹 Тозаловчи"] = {"ошибка": f"{type(e).__name__}: {e}"}
+        try:                                    # 🇺🇿 12.11 владелец: старые узбекские шлягеры из «БАНК · МУСИҚА» → копия в «БАНК · ЎЗБЕК РЕТРО»
+            from . import retrouz
+            out["🇺🇿 Ўзбек ретро"] = await retrouz.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+        except Exception as e:  # noqa: BLE001 — сборщик не должен ломать архивариуса
+            out["🇺🇿 Ўзбек ретро"] = {"ошибка": f"{type(e).__name__}: {e}"}
         try:                                    # 🧹 07.11 владелец: копии в хабах — удалять, не по теме — в свой хаб/корзину
             from . import hubaudit
             out["🧹 Порядок в хабах"] = await hubaudit.clean(c, log=lambda s: print(s, flush=True))

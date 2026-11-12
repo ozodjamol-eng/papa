@@ -18,7 +18,7 @@ class TestRetro(unittest.TestCase):
 
     def test_card(self):
         t = retro.card([{"id": "a", "title": "Song", "views": 5_000_000, "sec": 220, "channel": "X", "url": "https://www.youtube.com/watch?v=a"}], "12.11")
-        self.assertIn("5.0 млн", t); self.assertIn("3:40", t); self.assertIn("watch?v=a", t)
+        self.assertIn("5.0 млн", t); self.assertIn("ҚИДИРУВ", t); self.assertIn("3:40", t); self.assertIn("watch?v=a", t)
 
 
 if __name__ == "__main__":
