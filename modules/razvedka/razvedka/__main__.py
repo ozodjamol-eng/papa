@@ -240,6 +240,18 @@ async def _sort_folders() -> dict:
         await c.disconnect()
 
 
+async def _retro() -> dict:
+    """📼 12.11: ретро-разведчик YouTube → подборка ссылок в «БАНК · РЕТРО»."""
+    from . import retro
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    try:
+        return await retro.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _insta() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim") if subprocess.run(
@@ -629,6 +641,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "sources":
         print("SOURCES_DONE", asyncio.run(_sources()))
+        return
+    if cmd == "retro":                          # 📼 12.11: ретро-разведчик YouTube
+        print("RETRO_DONE", asyncio.run(_retro()))
         return
     if cmd == "insta":                          # 📸 30.10: агент Instagram-трендов → пульт канала
         print("INSTA_DONE", asyncio.run(_insta()))

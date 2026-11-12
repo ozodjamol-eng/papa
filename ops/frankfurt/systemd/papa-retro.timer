@@ -1,0 +1,11 @@
+[Unit]
+Description=PAPA 📼 ретро-разведчик YouTube → подборка ссылок в «БАНК · РЕТРО» (каждый день 09:40 Ташкент)
+
+[Timer]
+OnCalendar=*-*-* 04:40:00 UTC
+RandomizedDelaySec=3min
+Persistent=false
+Unit=papa-razvedka@retro.service
+
+[Install]
+WantedBy=timers.target
