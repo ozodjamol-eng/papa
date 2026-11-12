@@ -42,6 +42,18 @@ DIRECTIONS = {
 HUB_TITLE = "PAPA РАЗВЕДКА · ТРЕНДЫ"     # 30.10 владелец: в одной семье с «PAPA РАЗВЕДКА · ВОДА / · МЕБЕЛЬ»
 OLD_TITLES = ("📸 PAPA ТРЕНДЫ",)
 MARK = "🏷 PAPA ТРЕНД:"
+JOURNAL_TITLE = "📸 INSTAGRAM · ХАБ"     # 12.11 владелец: «всё, что он берёт, мы будем знать» — журнал всех находок агента
+
+
+def journal_caption(it: dict, label: str, where: str, cap: str) -> str:
+    """Подпись в журнале: наш текст + откуда взято (ссылка на оригинал), цифры, куда ушло."""
+    v = int(it.get("_views") or 0)
+    vs = f"{v / 1e6:.1f} млн" if v >= 1e6 else f"{v // 1000} минг"
+    code = it.get("shortCode") or it.get("_code") or ""
+    url = it.get("url") or (f"https://www.instagram.com/reel/{code}/" if code else "")
+    tail = (f"\n\n— — —\n📸 {label} · @{it.get('_owner') or '?'}\n👁 {vs} · ×{float(it.get('_ratio') or 1):.1f} к обычным\n"
+            f"➡️ {where}\n🔗 {url}")
+    return (cap or "")[: max(0, 1024 - len(tail))] + tail
 
 
 def footer(code: str, owner: str, views: int) -> str:
@@ -294,6 +306,17 @@ async def hub(client):
     return r.chats[0]
 
 
+async def journal(client):
+    """Свой закрытый канал-журнал находок Instagram (создаём, если нет)."""
+    from telethon.tl.functions.channels import CreateChannelRequest
+    async for d in client.iter_dialogs():
+        if d.is_channel and not d.is_group and (d.title or "").strip() == JOURNAL_TITLE:
+            return d.entity
+    r = await client(CreateChannelRequest(title=JOURNAL_TITLE, about="Всё, что берёт агент Instagram: оригинал, просмотры, куда ушло",
+                                          megagroup=False))
+    return r.chats[0]
+
+
 async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None, log=print) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     ic = cfg.get("insta") or {}
@@ -306,6 +329,11 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
     except (OSError, ValueError):
         st = {}
     target = await hub(client)
+    try:
+        jr = await journal(client)
+    except Exception as e:  # noqa: BLE001 — журнал не роняет тренды
+        log(f"журнал: {type(e).__name__}")
+        jr = None
     hub_cache: dict = {}
     gemini = bool(os.environ.get("GEMINI_API_KEY"))
     if gemini:
@@ -390,6 +418,15 @@ async def run(client, cfg: dict, state_dir: Path, now: dt.datetime | None = None
                 log(f"  отправка: {type(e).__name__}")
                 continue
             sent += 1
+            if jr is not None:                         # 📸 12.11: копия в журнал «INSTAGRAM · ХАБ»
+                try:
+                    where = (getattr(dest, "title", None) or "?")
+                    f2 = io.BytesIO(video) if isinstance(video, (bytes, bytearray)) else video
+                    if isinstance(f2, io.BytesIO):
+                        f2.name = "video.mp4"
+                    await client.send_file(jr, f2, caption=journal_caption(it, label, where, cap), supports_streaming=True)
+                except Exception as e:  # noqa: BLE001
+                    log(f"  журнал: {type(e).__name__}")
             log(f"  📸 {label} @{it['_owner']} · {it['_views']} просм.")
             await asyncio.sleep(4)
         report[label] = sent
