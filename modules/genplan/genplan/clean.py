@@ -60,6 +60,21 @@ def strict(m) -> bool:
     return machine and any((m["rubric"] or "").lower().startswith(r) for r in STRICT)
 
 
+def photo_humor(m) -> bool:
+    """13.11 владелец: «в БАНК · КУЛГИ фотографии нельзя». Юмор из складов/источников — только видео; фото и текст не выходят.
+    Пост, который владелец сам бросил в пульт, не трогаем."""
+    import json
+    keys = m.keys()
+    machine = bool(("auto" in keys and m["auto"]) or ("source" in keys and m["source"]))
+    if not machine or not (m["rubric"] or "").lower().startswith("ҳажвия"):
+        return False
+    try:
+        media = json.loads(m["media"] or "[]") if "media" in keys else []
+    except ValueError:
+        media = []
+    return bool(media) and not any(x.get("type") in ("video", "animation") for x in media)
+
+
 def images(pub, m) -> list[bytes]:
     """Картинки/кадры поста (до MAX_IMAGES). Пусто — файла нет или он больше 20 МБ (Bot API)."""
     import json
@@ -92,6 +107,8 @@ def images(pub, m) -> list[bytes]:
 def check(db, pub, m, look=None) -> tuple[str, str]:
     """('ok'|'bad'|'unknown', причина). look(prompt, images) -> dict — подмена ИИ в тестах."""
     from . import store
+    if photo_humor(m):
+        return "bad", "ҳажвия — фақат видео (расм/фото чиқмайди)"
     w = bad_words(m["text"] or "")
     if w:
         return "bad", f"слово «{w}» в подписи"

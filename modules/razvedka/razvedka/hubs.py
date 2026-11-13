@@ -172,7 +172,7 @@ async def put(client, hub_ent, msgs: list, text: str, check: bool = True) -> boo
                 GATE_LOG.append(f"{name} → {want}")
                 hub_ent, name = target, want
         if name in G.VIDEO_ONLY and not any(getattr(m, "video", None) for m in msgs):
-            GATE_LOG.append(f"{name}: музыка без видео")
+            GATE_LOG.append(f"{name}: только видео (фото не кладём)")
             return False
         keys = G.keys_of(msgs, text)
         if keys & await G.index(client, hub_ent):

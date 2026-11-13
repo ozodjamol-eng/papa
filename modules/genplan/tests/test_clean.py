@@ -42,6 +42,14 @@ class Gate(unittest.TestCase):
         self.assertFalse(clean.strict(row(auto=0, source=None)))          # бросил владелец
         self.assertFalse(clean.strict(row(rubric="Янгиликлар")))
 
+    def test_humor_video_only(self):
+        ph = '[{"type": "photo", "file_id": "a"}]'
+        vd = '[{"type": "video", "file_id": "a"}]'
+        self.assertEqual(clean.check(None, None, row(media=ph))[0], "bad")
+        self.assertFalse(clean.photo_humor(row(media=vd)))
+        self.assertFalse(clean.photo_humor(row(media=ph, auto=0, source=None)))      # бросил владелец
+        self.assertFalse(clean.photo_humor(row(media=ph, rubric="Фойдали видео")))
+
     def test_text_bad_without_ai(self):
         self.assertEqual(clean.check(None, None, row(text="секс ҳазил"))[0], "bad")
 

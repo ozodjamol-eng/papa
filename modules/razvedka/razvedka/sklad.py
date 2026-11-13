@@ -52,7 +52,7 @@ SKLAD = {
     "@madaniyatvazirligi": ("paparazzi",),
     "@RizaNovaUZ": ("paparazzi",),                  # 31.10 владелец: музыкальный лейбл, клипы; лого — проверка кадров
 }
-VIDEO_ONLY = {"Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО", "@RizaNovaUZ", "@sanatdunyosi", "@madaniyat_marifat_tv"}   # 07.11
+VIDEO_ONLY = {"РАЗВЛЕКАТЕЛЬНО", "Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО", "@RizaNovaUZ", "@sanatdunyosi", "@madaniyat_marifat_tv"}   # 07.11
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar", "СРОЧНО НОВОСТИ"}      # якорь: сначала свежий пост, нет нового — следующий из архива
 # 31.10 владелец: «в обоих каналах должен идти Муфтий, но разными постами». Склад Муфтия — один урок на ОДИН канал:

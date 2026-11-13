@@ -16,7 +16,7 @@ import re
 import urllib.request
 
 GATE = True
-VIDEO_ONLY = {"Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО"}
+VIDEO_ONLY = {"Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО", "РАЗВЛЕКАТЕЛЬНО"}   # 13.11 владелец: в БАНК · КУЛГИ фото нельзя — только видео
 NO_TOPIC = {"ТАБРИКЛАР", "ТЕКШИРУВ"}                  # поздравления сортирует timing.kind (без ИИ)
 SCAN = 3000
 
