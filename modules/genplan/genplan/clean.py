@@ -60,19 +60,33 @@ def strict(m) -> bool:
     return machine and any((m["rubric"] or "").lower().startswith(r) for r in STRICT)
 
 
-def photo_humor(m) -> bool:
-    """13.11 владелец: «в БАНК · КУЛГИ фотографии нельзя». Юмор из складов/источников — только видео; фото и текст не выходят.
-    Пост, который владелец сам бросил в пульт, не трогаем."""
+BANKS = ("РАЗВЛЕКАТЕЛЬНО", "ТРЕНДЛАР", "ФОЙДАЛИК", "ФОЙДАЛИК ОВКАТ", "МАЪНАВИЯТ", "УЙДА БИЗНЕС", "МОТИВАЦИЯ", "Jonlik ijrolar",
+         "ИБРАТ", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО")          # старые имена хабов; новые начинаются с «БАНК ·»
+
+
+def from_bank(source) -> bool:
+    s = re.sub(r"[\W_]+", "", str(source or "")).casefold()
+    return bool(s) and (s.startswith("банк") or any(s == re.sub(r"[\W_]+", "", b).casefold() for b in BANKS))
+
+
+def photo_only(m) -> str:
+    """13.11 владелец: «вообще фотографии не ставить, лучше видео. Во всех банках». Причина или ''.
+    Материал из банка (любая рубрика) и юмор из любого источника — только видео. Что владелец сам бросил в пульт,
+    новости («СРОЧНО НОВОСТИ»), Муфтий, реклама — не трогаем."""
     import json
     keys = m.keys()
-    machine = bool(("auto" in keys and m["auto"]) or ("source" in keys and m["source"]))
-    if not machine or not (m["rubric"] or "").lower().startswith("ҳажвия"):
-        return False
+    src = m["source"] if "source" in keys else None
+    machine = bool(("auto" in keys and m["auto"]) or src)
+    humor = (m["rubric"] or "").lower().startswith("ҳажвия")
+    if not machine or not (humor or from_bank(src)):
+        return ""
     try:
         media = json.loads(m["media"] or "[]") if "media" in keys else []
     except ValueError:
         media = []
-    return bool(media) and not any(x.get("type") in ("video", "animation") for x in media)
+    if media and not any(x.get("type") in ("video", "animation") for x in media):
+        return "ҳажвия — фақат видео (расм чиқмайди)" if humor else "банкдан фақат видео чиқади (расм чиқмайди)"
+    return ""
 
 
 def images(pub, m) -> list[bytes]:
@@ -107,8 +121,9 @@ def images(pub, m) -> list[bytes]:
 def check(db, pub, m, look=None) -> tuple[str, str]:
     """('ok'|'bad'|'unknown', причина). look(prompt, images) -> dict — подмена ИИ в тестах."""
     from . import store
-    if photo_humor(m):
-        return "bad", "ҳажвия — фақат видео (расм/фото чиқмайди)"
+    why = photo_only(m)
+    if why:
+        return "bad", why
     w = bad_words(m["text"] or "")
     if w:
         return "bad", f"слово «{w}» в подписи"

@@ -42,13 +42,17 @@ class Gate(unittest.TestCase):
         self.assertFalse(clean.strict(row(auto=0, source=None)))          # бросил владелец
         self.assertFalse(clean.strict(row(rubric="Янгиликлар")))
 
-    def test_humor_video_only(self):
+    def test_video_only(self):
         ph = '[{"type": "photo", "file_id": "a"}]'
         vd = '[{"type": "video", "file_id": "a"}]'
         self.assertEqual(clean.check(None, None, row(media=ph))[0], "bad")
-        self.assertFalse(clean.photo_humor(row(media=vd)))
-        self.assertFalse(clean.photo_humor(row(media=ph, auto=0, source=None)))      # бросил владелец
-        self.assertFalse(clean.photo_humor(row(media=ph, rubric="Фойдали видео")))
+        self.assertFalse(clean.photo_only(row(media=vd)))
+        self.assertFalse(clean.photo_only(row(media=ph, auto=0, source=None)))                       # бросил владелец
+        self.assertTrue(clean.photo_only(row(media=ph, rubric="Фойдали видео", source="БАНК · ФОЙДАЛИ")))
+        self.assertTrue(clean.photo_only(row(media=ph, rubric="Маънавият", source="МАЪНАВИЯТ")))
+        self.assertFalse(clean.photo_only(row(media=ph, rubric="Янгиликлар", source="СРОЧНО НОВОСТИ")))
+        self.assertFalse(clean.photo_only(row(media=ph, rubric="Муфтий минбари", source="@shayx_nuriddinxoliqnazar")))
+        self.assertTrue(clean.photo_only(row(media=ph, source="@AbduraxmonQiziq")))                  # юмор — любой источник
 
     def test_text_bad_without_ai(self):
         self.assertEqual(clean.check(None, None, row(text="секс ҳазил"))[0], "bad")
