@@ -4,9 +4,9 @@ import cv2, numpy as np, subprocess, math, random, sys, os
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 W, H, FPS = 1080, 1920, 30
-V = 2.8                 # старт диктора
+V = 4.5                 # старт диктора: ≥4 с музыки до голоса (правило владельца 13.11)
 VEND = V + 24.03
-DUR = 27.9
+DUR = 31.5
 BEAT = float(os.environ.get("BEAT", 0.441)); PH = float(os.environ.get("PHASE", 0.0))
 WD = "/home/claude/work"
 BLK = "/usr/share/fonts/opentype/inter/Inter-Black.otf"
