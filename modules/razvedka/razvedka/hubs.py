@@ -171,6 +171,9 @@ async def put(client, hub_ent, msgs: list, text: str, check: bool = True) -> boo
                     return False
                 GATE_LOG.append(f"{name} → {want}")
                 hub_ent, name = target, want
+        if name in G.CLOSED:
+            GATE_LOG.append(f"{name}: закрыт (религиозное агенты не собирают)")
+            return False
         if name in G.VIDEO_ONLY and not any(getattr(m, "video", None) for m in msgs):
             GATE_LOG.append(f"{name}: только видео (фото не кладём)")
             return False

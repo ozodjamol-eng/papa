@@ -88,10 +88,11 @@ class TestSklad(unittest.TestCase):
         self.assertTrue(sklad.eligible(it(1, text="Бугунги кунда ҳам фойдали"), "ФОЙДАЛИК", "davra", MORNING))  # «бугунги» ≠ «бугун»
         friday = dt.datetime(2026, 10, 30, 8, 0, tzinfo=TZ)
         self.assertFalse(sklad.eligible(it(1, text="Жума муборак!"), "МАЪНАВИЯТ", "xojaobod", MORNING))   # понедельник
-        self.assertTrue(sklad.eligible(it(1, text="Жума муборак!"), "МАЪНАВИЯТ", "xojaobod", friday))
+        # ⚖️ 13.11 владелец: религиозные материалы — уголовная ответственность. Хаб МАЪНАВИЯТ закрыт: каналы из него не берут.
+        self.assertFalse(sklad.eligible(it(1, text="Жума муборак!"), "МАЪНАВИЯТ", "xojaobod", friday))
         st = {"МАЪНАВИЯТ": [it(1, text="Дуо"), it(2, text="Жума муборак"), it(3, text="Ҳадис")]}
         p = sklad.plan(st, {}, {}, friday.replace(hour=17))
-        self.assertEqual([x["id"] for s, x, _ in p["xojaobod"] if s == "МАЪНАВИЯТ"], [2, 3, 1])   # пятница: 3, «Жума» первой
+        self.assertEqual([x["id"] for s, x, _ in p["xojaobod"] if s == "МАЪНАВИЯТ"], [])
 
     def test_left_counts_hungriest_channel(self):
         stashes = {"ФОЙДАЛИК": [it(i) for i in range(1, 6)]}

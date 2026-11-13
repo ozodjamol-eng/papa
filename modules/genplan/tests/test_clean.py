@@ -54,6 +54,24 @@ class Gate(unittest.TestCase):
         self.assertFalse(clean.photo_only(row(media=ph, rubric="Муфтий минбари", source="@shayx_nuriddinxoliqnazar")))
         self.assertTrue(clean.photo_only(row(media=ph, source="@AbduraxmonQiziq")))                  # юмор — любой источник
 
+    def test_religion(self):
+        vd = '[{"type": "video", "file_id": "a"}]'
+        self.assertEqual(clean.check(None, None, row(media=vd, rubric="Маънавият", source="БАНК · МАЪНАВИЯТ"))[0], "bad")
+        self.assertTrue(clean.religious_source(row(rubric="Маънавият", source="@someone")))
+        self.assertFalse(clean.religious_source(row(rubric="Муфтий минбари", source="@shayx_nuriddinxoliqnazar")))
+        self.assertFalse(clean.religious_source(row(rubric="Маънавият", auto=0, source=None)))       # бросил владелец
+        seen = []
+        orig = clean.images
+        clean.images = lambda pub, m: [b"jpg"]
+        try:
+            clean.check(None, None, row(media=vd, rubric="Ибрат", source="БАНК · ИБРАТ"), look=lambda p, i: seen.append(p) or {"ok": True})
+            clean.check(None, None, row(media=vd, rubric="Муфтий минбари", source="@shayx_nuriddinxoliqnazar"),
+                        look=lambda p, i: seen.append(p) or {"ok": True})
+        finally:
+            clean.images = orig
+        self.assertIn("диний материал", seen[0])
+        self.assertNotIn("диний материал", seen[1])
+
     def test_text_bad_without_ai(self):
         self.assertEqual(clean.check(None, None, row(text="секс ҳазил"))[0], "bad")
 

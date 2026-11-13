@@ -89,6 +89,35 @@ def photo_only(m) -> str:
     return ""
 
 
+OFFICIAL = ("@shayx_nuriddinxoliqnazar",)       # официальный Муфтий — единственный религиозный источник
+RELIGION = """
+ЕЩЁ ОДНО ПРАВИЛО (закон Узбекистана: религиозные материалы — только после государственной экспертизы): НЕЛЬЗЯ, если это
+религиозный материал — проповедь (ваъз, маъруза), чтение Корана (қироат), аят или хадис на экране, дуо, речь домлы/имама/шейха,
+съёмка внутри мечети, нашид. Причина тогда: "диний материал"."""
+
+
+def machine(m) -> bool:
+    keys = m.keys()
+    return bool(("auto" in keys and m["auto"]) or ("source" in keys and m["source"]))
+
+
+def official(m) -> bool:
+    src = str(m["source"] if "source" in m.keys() and m["source"] else "").casefold()
+    return any(src == o.casefold() for o in OFFICIAL)
+
+
+def religious_source(m) -> str:
+    """⚖️ 13.11 владелец: «религиозные материалы… за это уголовная ответственность». Причина или ''.
+    Всё, что взято агентами в рубрику «Маънавият» или из хаба МАЪНАВИЯТ, не выходит. Официальный Муфтий и посты,
+    которые владелец сам бросил в пульт, — не трогаем."""
+    if not machine(m) or official(m):
+        return ""
+    src = re.sub(r"[\W_]+", "", str(m["source"] if "source" in m.keys() else "")).casefold()
+    if "маънавият" in src or (m["rubric"] or "").casefold().startswith("маънавият"):
+        return "диний материал — фақат расмий манба (Муфтий) чиқади"
+    return ""
+
+
 def images(pub, m) -> list[bytes]:
     """Картинки/кадры поста (до MAX_IMAGES). Пусто — файла нет или он больше 20 МБ (Bot API)."""
     import json
@@ -121,7 +150,7 @@ def images(pub, m) -> list[bytes]:
 def check(db, pub, m, look=None) -> tuple[str, str]:
     """('ok'|'bad'|'unknown', причина). look(prompt, images) -> dict — подмена ИИ в тестах."""
     from . import store
-    why = photo_only(m)
+    why = religious_source(m) or photo_only(m)
     if why:
         return "bad", why
     w = bad_words(m["text"] or "")
@@ -138,7 +167,10 @@ def check(db, pub, m, look=None) -> tuple[str, str]:
         if look is None:
             from . import ai
             look = lambda p, i: ai.vision(db, p, i)   # noqa: E731
-        v = look(PROMPT.format(text=(m["text"] or "")[:300]), imgs) or {}
+        prompt = PROMPT.format(text=(m["text"] or "")[:300])
+        if machine(m) and not official(m):
+            prompt = prompt.replace("Сомневаешься — НЕЛЬЗЯ.", RELIGION.strip() + "\nСомневаешься — НЕЛЬЗЯ.")
+        v = look(prompt, imgs) or {}
     except Exception as e:  # noqa: BLE001 — лимит/сеть
         return "unknown", f"{type(e).__name__}: {str(e)[:60]}"
     if v.get("ok") is True:

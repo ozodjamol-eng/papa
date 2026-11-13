@@ -56,6 +56,7 @@ SKLAD = {
 # Не банки (фото остаётся): «СРОЧНО НОВОСТИ», Муфтий, @madaniyatvazirligi.
 VIDEO_ONLY = {"РАЗВЛЕКАТЕЛЬНО", "ФОЙДАЛИК", "ФОЙДАЛИК ОВКАТ", "УЙДА БИЗНЕС", "МОТИВАЦИЯ", "ТРЕНДЛАР", "ИБРАТ", "МАЪНАВИЯТ",
               "БАНК · БАДАНТАРБИЯ", "БАНК · САЛОМАТЛИК", "@AbduraxmonQiziq", "Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО", "@RizaNovaUZ", "@sanatdunyosi", "@madaniyat_marifat_tv"}   # 07.11
+CLOSED = {"МАЪНАВИЯТ"}                          # ⚖️ 13.11 владелец: религиозные материалы — уголовная ответственность
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar", "СРОЧНО НОВОСТИ"}      # якорь: сначала свежий пост, нет нового — следующий из архива
 # 31.10 владелец: «в обоих каналах должен идти Муфтий, но разными постами». Склад Муфтия — один урок на ОДИН канал:
@@ -145,6 +146,8 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
     """Пост склада годится для канала: с медиа, не реклама, свежий (для «СРОЧНО НОВОСТИ»), не новость, по политике канала."""
     if item["kind"] not in ("video", "photo") or item["ad"]:
         return False
+    if stash in CLOSED:
+        return False                                   # ⚖️ 13.11: религиозное из банка в каналы не идёт (только официальный Муфтий)
     if stash in VIDEO_ONLY and item["kind"] != "video":
         return False                                   # 07.11 владелец: музыка — только видео, не картинка
     if stash in LESSON_ONLY and not re.search(r"minbar|минбар", _norm(item["text"])):
