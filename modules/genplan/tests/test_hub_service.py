@@ -681,8 +681,9 @@ class TestPapaHubClean(Base):
                                              MON.isoformat(), log=lambda *_: None, now=at("09:00")))
         self.assertTrue(ok)
         self.assertEqual(acc.sent, [(-100777, 7001, True)])                     # аккаунт взял секундную копию
-        self.assertEqual(xb.calls[0][0], "copyMessage")
-        self.assertEqual(xb.calls[0][1]["from_chat_id"], 42)                     # из чата пульта
+        work = [c for c in xb.calls if c[0] != "getFile"]                        # 🧼 13.11: до копии — проверка «тоза контент»
+        self.assertEqual(work[0][0], "copyMessage")
+        self.assertEqual(work[0][1]["from_chat_id"], 42)                         # из чата пульта
         self.assertIn(("deleteMessages", {"chat_id": -100777, "message_ids": [7001]}), xb.calls)   # и сразу убрал
         self.assertEqual(store.kv_get(self.db, "hub_staging", ""), "")
 

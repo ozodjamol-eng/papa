@@ -336,6 +336,31 @@ async def publish_one(db, cfg, env, pubs, channel: str, m, slot: str | None, day
             log(f"{channel} {slot or 'срочно'}: ЖДЁТ — нет подписи (ИИ не смог), повтор в {later:%H:%M}, #{m['id']}")
             return HELD
         m = store.get(db, m["id"])
+    from . import clean                        # 🧼 13.11 владелец: «чтоб вообще такого не было» — пошлое в каналы не выходит
+    if clean.applies(ch, m):
+        via = m["via"] if "via" in m.keys() else None
+        cp = (pubs.get(f"bot:{via}") if via and via != "main" else None) or pubs.get("bot")
+        verdict, why = clean.check(db, cp, m)
+        if verdict == "bad":
+            store.update(db, m["id"], status="rejected", stock=0, scheduled_at=None)
+            store.record(db, channel, day, slot, m["id"], "failed", error=f"тоза контент: {why}")
+            ERRORS.append(f"🧼 {ch['title']}: #{m['id']} ({m['rubric']}) НЕ опубликован — {why}. Каналда бундай пост чиқмайди.")
+            log(f"{channel} {slot or 'срочно'}: снят — тоза контент ({why}), #{m['id']}")
+            return False
+        if verdict == "unknown" and clean.strict(m):
+            k = f"cleanhold_{m['id']}"
+            n = int(store.kv_get(db, k) or 0) + 1
+            store.kv_set(db, k, str(n))
+            if n > clean.HOLDS:
+                store.update(db, m["id"], status="rejected", stock=0, scheduled_at=None)
+                store.record(db, channel, day, slot, m["id"], "failed", error=f"тоза контент: не проверен ({why})")
+                ERRORS.append(f"🧼 {ch['title']}: #{m['id']} ({m['rubric']}) снят — ИИ так и не смог проверить на пошлость ({why})")
+                log(f"{channel} {slot or 'срочно'}: снят — не проверен на пошлость, #{m['id']}")
+                return False
+            later = (now or dt.datetime.now(plan.TZ)) + dt.timedelta(hours=1)
+            store.update(db, m["id"], status="queued", scheduled_at=later.isoformat())
+            log(f"{channel} {slot or 'срочно'}: ЖДЁТ — не проверен на пошлость ({why}), повтор в {later:%H:%M}, #{m['id']}")
+            return HELD
     own = tuple(c["username"] for c in cfg["channels"].values())
     if smart.is_sklad(ch, m):
         # 31.10 аудит: в КАТТА ДАВРА вышел пост склада с чужой для неё строкой «👉@XOJAOBODCITY24- Обуна бўлишни унутманг».
