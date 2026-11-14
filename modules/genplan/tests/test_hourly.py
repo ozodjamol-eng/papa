@@ -186,6 +186,23 @@ class T(unittest.TestCase):
         self.assertEqual(pool(), {ids["Мусиқа"]})
         self.assertEqual(CFG["channels"]["davra"]["mark_must"], "all")
 
+    def test_hub_sorted_by_caption(self):
+        """14.11: «INSTAGRAM · ХАБ» — смешанный: рубрика по словам подписи владельца, метка первой строкой сильнее."""
+        ch = CFG["channels"]["davra"]
+        f = lambda t, src="INSTAGRAM · ХАБ": smart.sort_rubric(ch, src, t, "Мусиқа")   # noqa: E731
+        self.assertEqual(f("🥹💔 «СОҒИНИБ КЕТЯПМАН СИЗНИ, ОНАЖОН…»"), "Кечки мусиқа")
+        self.assertEqual(f("Жамоладдин Саидов Онасиз колмасин хеч бир ханодон"), "Кечки мусиқа")
+        self.assertEqual(f("🎶 ТАЛАБЛАРГА БИНОАН — «ТОПМАДИМ»! Устозлар ижросида соғинч ва дардга тўла тарона"), "Кечки мусиқа")
+        self.assertEqual(f("Шер Муаллифи, Кумуш Хасанова🌸"), "Ибрат")
+        self.assertEqual(f("❤️ БАХТИЁР МАВЛОНОВ — «ДЎСТЛАР ДИЙДОРИ ШИРИН…» Қадрдон дўстлар давраси"), "Мусиқа")
+        self.assertEqual(f("🎤 ГУЛСАРА ҒОЙИБОВА — «ИЛТИМОСИМ» ❤️ Бетакрор овоз, нозик ҳислар"), "Мусиқа")
+        self.assertEqual(f("Дустлар давраси"), "Мусиқа")
+        self.assertEqual(f("🔥 Тез кунда премьера! Хонанда янги клип суратга олди"), "Шоу-бизнес")
+        self.assertEqual(f("😂 Аския устозлари"), "Ҳажвия")
+        self.assertEqual(f("#КЕЧКИ\nБахтиёр Мавлонов — Дўстлар"), "Кечки мусиқа")
+        self.assertEqual(f("#МУСИҚА\nОнажон ҳақида шўх қўшиқ"), "Мусиқа")
+        self.assertEqual(f("Онажон", src="Jonlik ijrolar"), "Мусиқа")              # другие склады не сортируются
+
     def test_davra_hour_rubrics(self):
         self.assertTrue(self.davra_hours)
         self.cfg["channels"]["davra"]["hour_rubrics"] = self.davra_hours

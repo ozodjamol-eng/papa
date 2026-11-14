@@ -512,6 +512,39 @@ def sklad_rubric(ch: dict, source: str | None, n: int = 0) -> str | None:
     return None
 
 
+# 📸 14.11 владелец: «это хаб — там может быть всякое: и трогательное, и весёлое, и шоу… надо отсеивать оттуда».
+# Смешанный хаб (config: sklad_sort = [названия]) раскладывается по рубрикам по словам ЕГО подписи. Порядок правил важен.
+# Первая строка-метка владельца (#КЕЧКИ, #ИБРАТ, #ШОУ, #КУЛГИ, #МУСИҚА) сильнее слов.
+import re as _re
+SORT_TAGS = (("Кечки мусиқа", ("#кечки", "#kechki")), ("Ибрат", ("#ибрат", "#ibrat", "#шеър")),
+             ("Шоу-бизнес", ("#шоу", "#shou", "#премьера", "#premyera")), ("Ҳажвия", ("#кулги", "#kulgi", "#ҳажвия")),
+             ("Мусиқа", ("#мусиқа", "#musiqa")))
+SORT_RULES = (
+    ("Шоу-бизнес", _re.compile(r"премьера|premyera|янги клип|yangi klip|суратга ол|suratga ol|концерт|konsert|мукофот|"
+                               r"юбилей|шоу-бизнес|shou-biznes|турмушга чиқ|фарзандли бўл", _re.I)),
+    ("Кечки мусиқа", _re.compile(r"(?<!\w)она(?:м|нг|си|жон\w*|сиз|лар\w*|га|ни|дан)?(?!\w)|(?<!\w)ота(?:м|нг|си|жон\w*|сиз|га|ни|дан)?(?!\w)|"
+                                 r"(?<!\w)ona(?:m|ng|si|jon\w*|siz|ga|ni|dan)?(?!\w)|соғин|sog['ʻ’]?in|айрилиқ|ayriliq|ҳижрон|hijron|"
+                                 r"(?<!\w)дард|(?<!\w)dard|армон|armon|кўз ёш|ko['ʻ’]?z yosh|йиғла|yig['ʻ’]?la|💔", _re.I)),
+    ("Ибрат", _re.compile(r"шеър|she['ʻ’]?r|(?<!\w)шер(?!\w)|шеърият|ғазал|муаллифи", _re.I)),
+    ("Ҳажвия", _re.compile(r"кулги|kulgi|ҳазил|hazil|аския|askiya|қизиқчи|qiziqchi|😂|🤣", _re.I)),
+)
+
+
+def sort_rubric(ch: dict, source: str | None, text: str | None, default: str | None) -> str | None:
+    """Рубрика поста из смешанного хаба — по метке владельца, потом по словам подписи; не подошло — рубрика склада."""
+    if not default or not source or not any(_nrm(source) == _nrm(s) for s in (ch.get("sklad_sort") or [])):
+        return default
+    t = (text or "").casefold()
+    first = t.strip().split("\n", 1)[0]
+    for rub, tags in SORT_TAGS:
+        if any(first.startswith(x) for x in tags):
+            return rub
+    for rub, rx in SORT_RULES:
+        if rx.search(text or ""):
+            return rub
+    return default
+
+
 def is_sklad(ch: dict, m) -> bool:
     """Выходит сам, с вето 🗑: склад владельца или канал, выбранный владельцем (auto=1)."""
     keys = m.keys()
