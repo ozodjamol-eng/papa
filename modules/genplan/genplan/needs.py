@@ -44,11 +44,23 @@ def build(db, cfg: dict, now: dt.datetime) -> dict:
                      if s["kind"] != "ad" and t >= now + smart.LEAD and smart.is_free(ch, t, busy) and not smart.blocked(db, channel, t)]
         else:
             slots = [(t, smart.hour_wants(ch, t) or []) for t in smart.free_hours(db, ch, channel, None, now, now.date(), minbar=True)]
+        once = set() if grid_mode else smart.day_used(db, ch, channel, now.date())
         for t, want in slots:
+            if ch.get("rubric_once") and not grid_mode:   # 14.11: рубрика — один раз в день; все уже были — час не заказываем
+                full = want
+                want = smart.once_wants(want, once) or []
+                if full and not want:
+                    continue
             have = next((r for r in want if left.get(r, 0) > 0), None)
             if have:                                   # запас этой рубрики закроет час — не заказываем
                 left[have] -= 1
+                if have != smart.MINBAR:
+                    once.add(have)
                 continue
+            if ch.get("rubric_once") and not grid_mode:   # якорь принесёт первую рубрику со складом — вторую такую же не заказываем
+                first = next((r for r in want if stash.get(r)), None)
+                if first and first != smart.MINBAR:
+                    once.add(first)
             empty.append({"h": f"{t.astimezone(plan.TZ):%H}", "at": t.isoformat(), "want": want,
                           "codes": [c for r in want for c in inv.get(r, [])],
                           "stash": [s for r in want for s in stash.get(r, [])]})

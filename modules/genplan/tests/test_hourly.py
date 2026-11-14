@@ -142,18 +142,43 @@ class T(unittest.TestCase):
         t, why = smart.smart_time(self.db, self.cfg, "xojaobod", "Ҳажвия", at("06:00"))
         self.assertEqual((f"{t:%H:%M}", why), ("10:00", "час рубрики «Ҳажвия»"))
         t, _ = smart.smart_time(self.db, self.cfg, "xojaobod", "Огоҳлантириш", at("06:00"))
-        self.assertEqual(f"{t:%H:%M}", "17:00")
+        self.assertEqual(f"{t:%H:%M}", "15:00")                      # 14.11: новая сетка без повторов
         self.assertIn("Огоҳлантириш", __import__("genplan.hub", fromlist=["x"]).rubrics(self.cfg, "xojaobod"))
 
     def test_xojaobod_stock_takes_only_hour_rubric(self):
         self.cfg["channels"]["xojaobod"]["mode"] = "shadow"
         fun = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
-        news = self.add(rubric="Фойдали видео", ch="xojaobod", status="draft")
+        news = self.add(rubric="Соғлиқ/Оила", ch="xojaobod", status="draft")
         for m in (fun, news):
             store.update(self.db, m, stock=1, scheduled_at=None)
         used = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("08:40"))   # впереди часы 09 и 10
         self.assertEqual(sorted(used), sorted([fun, news]))
-        self.assertEqual((self.when(news), self.when(fun)), ("09:00", "10:00"))   # 09 — фойдали, 10 — кулги
+        self.assertEqual((self.when(news), self.when(fun)), ("09:00", "10:00"))   # 09 — соғлиқ, 10 — кулги
+
+    def test_xojaobod_rubric_once_a_day(self):
+        """14.11 владелец: «Хўжаобод Сити тоже — одну и ту же рубрику в день не повторять»."""
+        ch = self.cfg["channels"]["xojaobod"]
+        ch["mode"] = "shadow"
+        self.assertTrue(ch["rubric_once"])
+        prim = [v[0] for h, v in ch["hour_rubrics"].items()]
+        for r in ("Фойдали видео", "Ҳажвия", "Соғлиқ/Оила", "Уйда бизнес", "Ибрат", "Маънавият", "Видео"):
+            self.assertEqual(sum(r in v for h, v in ch["hour_rubrics"].items() if h != "22"), 1, r)   # рубрика с банком — один час (22:00 — Муфтий)
+        self.assertEqual(prim.count("Фойдали видео"), 1)
+        ch["hour_rubrics"] = {**ch["hour_rubrics"], "09": ["Ҳажвия"], "10": ["Ҳажвия", "Ибрат"], "11": ["Ҳажвия"]}
+        a = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
+        b = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")
+        c = self.add(rubric="Ибрат", ch="xojaobod", status="draft")
+        for m in (a, b, c):
+            store.update(self.db, m, stock=1, scheduled_at=None)
+        used = smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("08:40"))   # часы 09 и 10
+        self.assertEqual(sorted(used), sorted([a, c]))                  # второй кулги в этот день не идёт — в 10 берём Ибрат
+        self.assertEqual((self.when(a), self.when(c)), ("09:00", "10:00"))
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("09:40")), [])   # 11:00 — только кулги: пусто
+        self.assertEqual(smart.day_used(self.db, ch, "xojaobod", MON), {"Ҳажвия", "Ибрат"})
+        news = self.add(rubric="Ҳажвия", ch="xojaobod", urgent=1, t=at("12:00"))    # срочное — не в счёт
+        self.assertEqual(store.get(self.db, news)["urgent"], 1)
+        del ch["rubric_once"]
+        self.assertEqual(smart.fill_from_stock(self.db, self.cfg, "xojaobod", at("09:40")), [b])   # без правила — как раньше
 
     def test_xojaobod_no_match_leaves_hour_empty(self):
         fun = self.add(rubric="Ҳажвия", ch="xojaobod", status="draft")

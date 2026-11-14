@@ -19,14 +19,14 @@ class T(unittest.TestCase):
     def test_needs(self):
         db = store.connect(":memory:")
         cfg = {**CFG, "channels": {k: dict(v) for k, v in CFG["channels"].items()}}
-        mid = store.add_material(db, -100777, 1, "кулги", False)
-        store.update(db, mid, channel="xojaobod", rubric="Ҳажвия", status="draft", stock=1)
+        mid = store.add_material(db, -100777, 1, "хабдан видео", False)
+        store.update(db, mid, channel="xojaobod", rubric="Видео", status="draft", stock=1)
         now = plan.slot_time(MON, "12:20")
         d = needs.build(db, cfg, now)
         x = d["channels"]["xojaobod"]
         hours = [e["h"] for e in x["empty"]]
-        self.assertNotIn("18", hours)                  # 31.10: кулги в запасе закрывает пиковый 18:00 (раньше — 21:00)
-        e17 = next(e for e in x["empty"] if e["h"] == "17")
+        self.assertNotIn("18", hours)                  # 14.11: видео из хаба в запасе закрывает пиковый 18:00
+        e17 = next(e for e in x["empty"] if e["h"] == "15")   # 14.11: новая сетка — огоҳлантириш в 15:00
         self.assertEqual(e17["want"][0], "Огоҳлантириш")
         self.assertIn("warn", e17["codes"])
         e20 = next(e for e in x["empty"] if e["h"] == "20")

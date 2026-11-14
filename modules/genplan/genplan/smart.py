@@ -112,6 +112,26 @@ def hour_wants(ch: dict, t: dt.datetime) -> list[str] | None:
     return [w] if isinstance(w, str) else list(w)
 
 
+def day_used(db, ch: dict, channel: str, day: dt.date) -> set[str]:
+    """14.11 владелец (Хўжаобод): «одну и ту же рубрику в день не повторять» — рубрики постов сетки, которые сегодня
+    уже вышли или стоят в очереди. Срочные, реклама и твёрдые слоты протокола (новости ×3, утро) не считаются.
+    config: rubric_once = true. Нет ключа — пустое множество (как раньше)."""
+    if not ch.get("rubric_once"):
+        return set()
+    rows = db.execute("SELECT m.* FROM publications p JOIN materials m ON m.id=p.material_id "
+                      "WHERE p.channel=? AND p.slot_date=? AND p.status='done' AND p.slot IS NOT NULL",
+                      (channel, day.isoformat())).fetchall()
+    rows += [m for m in store.scheduled(db, channel) if dt.datetime.fromisoformat(m["scheduled_at"]).astimezone(plan.TZ).date() == day]
+    return {m["rubric"] for m in rows if m["rubric"] and is_grid_post(m) and m["rubric"] != MINBAR}
+
+
+def once_wants(wants: list[str] | None, used: set[str]) -> list[str] | None:
+    """Рубрики часа без тех, что сегодня уже были. Час Муфтия (22:00) не трогаем — это протокол дня."""
+    if wants is None or not used or wants[:1] == [MINBAR]:
+        return wants
+    return [r for r in wants if r not in used]
+
+
 def minbar_hour(ch: dict, t: dt.datetime, rubric: str | None) -> bool:
     """01.11 разбор: час, где главная рубрика — «Муфтий минбари» (22:00), — только для Муфтия. Посты Маънавият
     вставали туда при выборе рубрики в карточке (Маънавият — запасная рубрика часа) раньше, чем запас ставил урок,
@@ -893,9 +913,10 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
     used: list[int] = list(fixed_ids)
     counted = 0
     if hourly(ch):                                   # сетка без рубрик: в пустой час — самый старый материал запаса
+        once = day_used(db, ch, channel, now.date())
         for t in free_hours(db, ch, channel, None, now, now.date(), until=now + STOCK_AHEAD + dt.timedelta(seconds=1),
                             minbar=True):
-            wants = hour_wants(ch, t)
+            wants = once_wants(hour_wants(ch, t), once)   # 14.11: рубрика — один раз в день (rubric_once)
             if is_minbar_hour(ch, t):                  # 01.11 ТВЁРДЫЙ ЗАКОН: 22:00 — Муфтий в обоих каналах
                 pick = minbar_pick(db, ch, channel, pool, used, t, now)
                 if pick:
@@ -917,6 +938,8 @@ def fill_from_stock(db, cfg: dict, channel: str, now: dt.datetime) -> list[int]:
             if pick:
                 store.update(db, pick["id"], status="queued", scheduled_at=t.isoformat(), stock=0)
                 used.append(pick["id"])
+                if ch.get("rubric_once") and pick["rubric"] != MINBAR and not pick["urgent"]:
+                    once.add(pick["rubric"])
                 counted += pick["rubric"] != MINBAR
                 if room is not None and counted >= room:
                     break
@@ -974,16 +997,25 @@ def day_view(db, cfg: dict, channel: str, now: dt.datetime) -> str:
         left: dict[str, int] = {}
         for m in store.stock(db, channel):
             left[m["rubric"]] = left.get(m["rubric"], 0) + 1
+        once = day_used(db, ch, channel, day)
         for t in free_hours(db, ch, channel, None, now, day, minbar=True):
-            w = hour_wants(ch, t)
+            w0 = hour_wants(ch, t)
+            w = once_wants(w0, once)
+            if w0 and not w:                           # 14.11: все рубрики часа сегодня уже были — час честно пустой
+                items.append((f"{t:%H:%M}", f"▫️ {t:%H:%M}  пусто — рубрики часа сегодня уже были"))
+                continue
             got = next((r for r in (w or []) if left.get(r, 0) > 0), None)
             if got is None and w is None and left:
                 got = next(iter(left))
             if got:
                 left[got] -= 1
+                if ch.get("rubric_once") and got != MINBAR:
+                    once.add(got)
                 items.append((f"{t:%H:%M}", f"📦 {t:%H:%M}  {got} — возьмёт из запаса"))
                 continue
             sk = next((r for r in (w or []) if stash.get(r)), None)
+            if sk and ch.get("rubric_once") and sk != MINBAR:
+                once.add(sk)
             if sk:                                     # 05.11: склад этой рубрики есть — якорь закроет час за 2,5 ч до него
                 items.append((f"{t:%H:%M}", f"⚓ {t:%H:%M}  {sk} — закроет якорь"))
                 continue
