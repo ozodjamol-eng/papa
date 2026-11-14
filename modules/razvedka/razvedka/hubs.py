@@ -86,7 +86,7 @@ def is_ours(text: str) -> bool:
     return len(letters) >= 10 and sum(1 for ch in letters if CYR.match(ch)) >= 0.5 * len(letters)
 
 
-def write(text: str) -> str:
+def write(text: str, prompt: str | None = None) -> str:
     """Наш текст (Gemini, бесплатно). 01.11 владелец (в МАЪНАВИЯТ ушёл сырой «Mention your harami… follow karlo plz»):
     без ключа / лимит / ошибка / ответ не кириллицей — ПУСТО, материал не кладётся. Чужой текст как есть — никогда."""
     import json
@@ -98,7 +98,7 @@ def write(text: str) -> str:
             budget.gate()                        # 30.10: лимит общий — без Gemini берём исходный текст
         except budget.BudgetStop:
             return ""
-        body = {"systemInstruction": {"parts": [{"text": PROMPT}]},
+        body = {"systemInstruction": {"parts": [{"text": prompt or PROMPT}]},
                 "contents": [{"role": "user", "parts": [{"text": f"Матн:\n{(text or '(матн йўқ)')[:2500]}"}]}],
                 "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.5}}
         for model in dict.fromkeys([os.environ.get("HUB_TEXT_MODEL", "gemini-flash-latest"), "gemini-flash-lite-latest"]):

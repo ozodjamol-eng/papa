@@ -9,6 +9,7 @@
   python -m razvedka publish          — только обновить отчёт для Pult (без отправки в Telegram)
   python -m razvedka curate           — агент-куратор: лучшее из папок PAPA·… → карточки в пульты каналов
   python -m razvedka muhim            — ⚡ МУҲИМ: срочное полезное без политики → карточка в пульт Хўжаобода
+  python -m razvedka news             — 📰 агент новостей: одна лучшая свежая новость → банк «СРОЧНО НОВОСТИ» (перед слотами 07:40/13:00/19:00)
   python -m razvedka pain            — «боль аудитории», этап А: комментарии под сильными постами → вопросы/жалобы/просьбы
   python -m razvedka trend daily|market [--send] (trend-auto / trend-now — для таймера и установки) — 🎬 Тренд-разведка: AI-видео тренды (ежедневно) и рынок «панелей» (по понедельникам)
   python -m razvedka github [--send] (github-auto — для таймера) — 🧭 GitHub-разведка: новые полезные инструменты (раз в неделю)
@@ -412,6 +413,24 @@ async def _scout() -> str:
         await c.disconnect()
 
 
+async def _news() -> dict:
+    import subprocess
+    busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "muhim", "insta", "archive") if subprocess.run(
+        ["systemctl", "is-active", "-q", f"papa-razvedka@{u}.service"]).returncode == 0]
+    if busy:                                   # один профиль — одна задача; таймер повторит через 10 минут
+        return {"пропуск": f"профиль занят: {', '.join(busy)}"}
+    from . import news
+    from .telegram import client_from_env
+    c = client_from_env()
+    await c.connect()
+    if not await c.is_user_authorized():
+        raise SystemExit("NOT_AUTHORIZED")
+    try:
+        return await news.run(c, Path(PUB) / "curator", log=lambda s: print(s, flush=True))
+    finally:
+        await c.disconnect()
+
+
 async def _muhim() -> dict:
     import subprocess
     busy = [u for u in ("hunt", "collect", "run", "sources", "pain", "curate", "insta", "archive") if subprocess.run(
@@ -676,6 +695,9 @@ def main(argv: list[str]) -> None:
         return
     if cmd == "curate":
         print("CURATE_DONE", asyncio.run(_curate()))
+        return
+    if cmd == "news":                           # 📰 14.11: агент новостей → банк «СРОЧНО НОВОСТИ» (шаг 2 решения 09.11)
+        print("NEWS_DONE", asyncio.run(_news()))
         return
     if cmd == "muhim":                          # ⚡ 05.11: срочное полезное без политики → пульт Хўжаобода
         print("MUHIM_DONE", asyncio.run(_muhim()))
