@@ -79,7 +79,7 @@ class TestSklad(unittest.TestCase):
             now = dt.datetime(2026, 11, day, 8, 0, tzinfo=sklad.TZ)
             got[name] = sorted({s for s, _, _ in sklad.plan(stashes, {}, {}, now)["davra"]})
             self.assertIn("РЕТРО КЛИПЛАР", [s for s, _, _ in sklad.plan(stashes, {}, {}, now)["paparazzi"]])
-        self.assertEqual(got, {"чт": [], "сб": ["РЕТРО КЛИПЛАР"], "вс": ["ЎЗБЕК РЕТРО"]})
+        self.assertEqual(got, {"чт": ["ЎЗБЕК РЕТРО"], "сб": ["РЕТРО КЛИПЛАР"], "вс": ["ЎЗБЕК РЕТРО"]})   # 14.11: ретро каждый день, по дням — мировое/узбекское
 
     def test_stale_words_and_juma_only_friday(self):
         self.assertFalse(sklad.eligible(it(1, text="Бугун об-ҳаво иссиқ"), "ФОЙДАЛИК", "davra", MORNING))
