@@ -429,8 +429,12 @@ class PromoTest(unittest.TestCase):
         return asyncio.run(service.tick_extras(self.db, self.cfg, ENV, self.pubs, now, log=lambda *_: None))
 
     def test_off_by_default(self):
-        self.assertIsNone(extras.opts(CFG["channels"]["xojaobod"], "promo"))       # в боевом config блока нет — ничего не выходит
-        self.assertIsNone(extras.opts(CFG["channels"]["davra"], "promo"))
+        self.assertIsNone(extras.opts(CFG["channels"]["davra"], "promo"))          # КАТТА ДАВРА и PaparazziUZ — блока нет, не выходит
+        self.assertIsNone(extras.opts(CFG["channels"]["paparazzi"], "promo"))
+        o = extras.opts(CFG["channels"]["xojaobod"], "promo")                       # Хўжаобод — включён владельцем 14.11 до 21.11
+        self.assertEqual((o["at"], o["until"]), ("11:30", "2026-11-21"))
+        self.assertIn("@Ozodjamol", o["text"])
+        self.assertIsNotNone(extras.promo_file(o))                                  # файл ролика на месте
 
     def test_free_day_publishes_once(self):
         self.assertEqual(self.tick(at("11:29")), 0)
