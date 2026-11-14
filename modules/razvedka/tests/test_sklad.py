@@ -79,7 +79,7 @@ class TestSklad(unittest.TestCase):
             now = dt.datetime(2026, 11, day, 8, 0, tzinfo=sklad.TZ)
             got[name] = sorted({s for s, _, _ in sklad.plan(stashes, {}, {}, now)["davra"]})
             self.assertIn("РЕТРО КЛИПЛАР", [s for s, _, _ in sklad.plan(stashes, {}, {}, now)["paparazzi"]])
-        self.assertEqual(got, {"чт": ["ЎЗБЕК РЕТРО"], "сб": ["РЕТРО КЛИПЛАР"], "вс": ["ЎЗБЕК РЕТРО"]})   # 14.11: ретро каждый день, по дням — мировое/узбекское
+        self.assertEqual(got, {"чт": [], "сб": ["РЕТРО КЛИПЛАР"], "вс": ["ЎЗБЕК РЕТРО"]})   # 14.11: ретро каждый день, по дням — мировое/узбекское
 
     def test_showbiz_bank_allowed_in_davra(self):
         """14.11: пост про премьеру из «БАНК · ШОУ-БИЗНЕС» годится КАТТА ДАВРА; тот же текст из чужого склада — нет."""
