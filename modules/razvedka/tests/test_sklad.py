@@ -86,6 +86,9 @@ class TestSklad(unittest.TestCase):
         t = "#ПРЕМЬЕРА Хонанда Моҳимдан янги тарона ҳамда таъсирли клип. Тез кунда премьера"
         self.assertTrue(sklad.eligible(it(1, text=t), "БАНК · ШОУ-БИЗНЕС", "davra", MORNING))
         self.assertFalse(sklad.eligible(it(1, text=t), "ТРЕНДЛАР", "davra", MORNING))
+        from razvedka import curate
+        self.assertFalse(curate.is_ad("Премьерани кутаётганлардан реакция! Reaksiya qoldiring", False))   # «реакция» — не «акция»
+        self.assertTrue(curate.is_ad("Катта акция! Aksiya davom etmoqda", False))
 
     def test_stale_words_and_juma_only_friday(self):
         self.assertFalse(sklad.eligible(it(1, text="Бугун об-ҳаво иссиқ"), "ФОЙДАЛИК", "davra", MORNING))

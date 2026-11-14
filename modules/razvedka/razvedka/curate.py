@@ -33,7 +33,7 @@ PER_RUN = {k: int(v) for k, v in (x.split("=", 1) for x in os.environ.get(
 MAX_HOURS, MIN_AGE_MIN, MIN_VIEWS = 12, 40, 300
 MIN_CAPTION_WORDS = 3          # 30.10 владелец: «непонятное» — посты без подписи; нужна хотя бы короткая подпись
 AD = re.compile(r"#?реклама|#?reklama|ҳамкорлик|hamkorlik|sotiladi|сотилади|нархи|narxi|скидк|chegirma|"
-                r"чегирма|буюртма|buyurtma|доставка|yetkazib|📞|☎️|\+998[\s\d-]{9,}|t\.me/\+|joinchat|aksiya|акция", re.I)
+                r"чегирма|буюртма|buyurtma|доставка|yetkazib|📞|☎️|\+998[\s\d-]{9,}|t\.me/\+|joinchat|(?<![a-zа-яё])aksiya|(?<![a-zа-яё])акция", re.I)
 URL = re.compile(r"https?://|t\.me/", re.I)
 # Политика каналов (docs/CHANNELS.md, 16.10): политика и криминал — ни в КАТТА ДАВРА, ни в PaparazziUZ;
 # шоу-бизнес и клипы — только в PaparazziUZ. Признаки — начало слова, кириллица и латиница.
