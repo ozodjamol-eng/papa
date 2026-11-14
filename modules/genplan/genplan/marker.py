@@ -108,6 +108,8 @@ def candidates(db, cfg: dict, now: _dt.datetime) -> list:
             continue
         if decide(cfg["channels"][r["channel"]], r)[0]:
             out.append(r)
+    # 14.11: рубрики «метка обязательна» (клипы, песни) — первыми среди запаса: без метки они в сетку не встанут
+    out.sort(key=lambda r: not (r["status"] == "queued" or r["rubric"] in (cfg["channels"][r["channel"]].get("mark_must") or [])))
     return out
 
 
@@ -254,8 +256,16 @@ async def step(acc, db, cfg: dict, env: dict, pubs: dict, db_path: str, log=prin
                 ok = bool(msg and msg.media and await acc.download_media(msg, file=str(src)))
             if not ok:
                 p = pub_for(pubs, ch, code, m["via"] if "via" in m.keys() else None, from_hub=str(m["hub_chat"]) == hub)
-                ok = await asyncio.to_thread(_bot_download, p, md.get("file_id", ""), src)
-                if not ok and hub:                        # больше 20 МБ: копия на секунды в PAPA HUB → аккаунт качает
+                if not hasattr(p, "http"):              # 14.11: группа публикует аккаунтом (нет Bot API) — качаем аккаунтом,
+                    try:                                # иначе ботом пульта канала (ошибка 'AccountPublisher' … 'http' — 219 неудач)
+                        msg = await acc.get_messages(int(m["hub_chat"]), ids=int(m["hub_msg"]))
+                        ok = bool(msg and msg.media and await acc.download_media(msg, file=str(src)))
+                    except Exception:  # noqa: BLE001
+                        ok = False
+                    p = pubs.get(f"bot:{code}") or pubs.get("bot") or p
+                if not ok and hasattr(p, "http"):
+                    ok = await asyncio.to_thread(_bot_download, p, md.get("file_id", ""), src)
+                if not ok and hub and hasattr(p, "http"):   # больше 20 МБ: копия на секунды в PAPA HUB → аккаунт качает
                     store.kv_set(db, "hub_staging", "1")
                     try:
                         r = await asyncio.to_thread(p.http, "copyMessage", {"chat_id": int(hub), "from_chat_id": m["hub_chat"],

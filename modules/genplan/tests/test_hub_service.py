@@ -639,6 +639,7 @@ class TestChannelHub(Base):
     def test_stock_from_hub_fills_slot(self):
         self.h(hub_post(7, "КАТТА ДАВРА · ХАБ"))
         m = store.get(self.db, 1)
+        store.kv_set(self.db, "marked_1", "1")           # 14.11: песни/клипы встают в сетку только с меткой на видео
         now = at("08:00")
         ids = []
         for h in range(8, 23):

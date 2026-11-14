@@ -746,10 +746,28 @@ def _src_in(m, names) -> bool:
     return any(_nrm(n) in (_nrm(src), _nrm(old)) for n in names)
 
 
+def mark_ok(db, cfg: dict, channel: str, m) -> bool:
+    """🏷 14.11 владелец: «метка должна быть ВСЕГДА в клипах, песнях». Рубрики из `mark_must` канала берутся из 📦 запаса
+    в сетку только уже помеченными (@канала стоит на видео, пост лежит на полке). То, что Маркировщик не метит по правилам
+    (наше с Фабрики/дайжест, альбом, текст, пост без своей подписи), — проходит как раньше."""
+    ch = cfg["channels"][channel]
+    must = ch.get("mark_must") or []
+    if not must or m["rubric"] not in must:
+        return True
+    from . import caption, marker
+    o = marker.opts(cfg)
+    if not o or channel not in o.get("channels", []):
+        return True
+    if not marker.decide(ch, m)[0] or caption.needs_caption(m):
+        return True
+    return store.kv_get(db, f"marked_{m['id']}") == "1"
+
+
 def _base_pool(db, cfg: dict, channel: str, now: dt.datetime) -> list:
     ch = cfg["channels"][channel]
     return [m for m in store.stock(db, channel)
-            if dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
+            if mark_ok(db, cfg, channel, m)
+            and dt.datetime.fromisoformat(m["created_at"]) >= now - dt.timedelta(days=STOCK_DAYS)
             and not waits_text(cfg, m) and not _stale(ch, m, now)
             and minbar_ok(m) and not twin_taken(db, channel, m) and not twin_today(db, channel, m, now)
             and not repeat_block(db, channel, m, now) and not (m["auto"] and music_no_video(m))

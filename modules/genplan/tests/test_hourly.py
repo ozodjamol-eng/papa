@@ -169,6 +169,19 @@ class T(unittest.TestCase):
         store.pulse_add(self.db, "davra", at("15:00"), "bot")              # обычный пост — не держит
         self.assertIsNone(smart.ad_hold(self.db, self.cfg, "davra", at("15:04")))
 
+    def test_music_only_marked(self):
+        """14.11: песня из запаса встаёт в сетку только с меткой на видео; прочие рубрики — как раньше."""
+        import json
+        now = at("09:10")
+        ids = {}
+        for r in ("Мусиқа", "Ҳажвия"):
+            ids[r] = self.add(r, status="draft")
+            store.update(self.db, ids[r], stock=1, has_media=1, media=json.dumps([{"type": "video", "file_id": "x"}]))
+        pool = lambda: {m["id"] for m in smart._base_pool(self.db, self.cfg, "davra", now)}   # noqa: E731
+        self.assertEqual(pool(), {ids["Ҳажвия"]})
+        store.kv_set(self.db, f"marked_{ids['Мусиқа']}", "1")
+        self.assertEqual(pool(), {ids["Мусиқа"], ids["Ҳажвия"]})
+
     def test_davra_hour_rubrics(self):
         self.assertTrue(self.davra_hours)
         self.cfg["channels"]["davra"]["hour_rubrics"] = self.davra_hours
