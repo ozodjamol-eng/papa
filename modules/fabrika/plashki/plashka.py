@@ -55,7 +55,7 @@ def layers(channel: str, rubric: str, user: str, look: dict):
     word = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(word)
     lines = rubric.split("|")
-    fs = [_fit(t, 940, 300) for t in lines]
+    fs = [_fit(t, 1000, 190) for t in lines]      # потолок 190: короткие слова не раздуваются, набор ровный
     tot = sum(b[3] - b[1] for _, b in fs) + (len(lines) - 1) * 44
     y = 940 - tot / 2
     for (f, b), t in zip(fs, lines):

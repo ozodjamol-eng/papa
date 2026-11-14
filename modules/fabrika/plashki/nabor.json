@@ -1,0 +1,13 @@
+{"_": "Набор плашек рубрик (утверждён владельцем 14.11: список по номерам — «Да»). «|» — перенос строки. Музыка и шоу-бизнес — на красном, остальное — на чёрном.",
+ "davra": {"channel": "KATTA DAVRA", "user": "@kattadavrauz", "items": [
+  ["musiqa", "MUSIQA", "red"], ["shou-biznes", "SHOU-BIZNES", "red"], ["premyera", "PREMYERA", "red"],
+  ["jonli-ijro", "JONLI|IJRO", "red"], ["jahon-retro", "JAHON|RETRO", "red"], ["ozbek-retro", "OʻZBEK|RETRO", "red"],
+  ["kechki-musiqa", "KECHKI|MUSIQA", "red"], ["tungi-qoshiq", "TUNGI|QOʻSHIQ", "red"],
+  ["hajviya", "HAJVIYA", "black"], ["ibrat", "IBRAT", "black"], ["motivatsiya", "MOTIVATSIYA", "black"],
+  ["foydali", "FOYDALI", "black"], ["yangiliklar", "YANGILIKLAR", "black"], ["badantarbiya", "BADANTARBIYA", "black"],
+  ["salomatlik", "SALOMATLIK", "black"], ["uyda-biznes", "UYDA|BIZNES", "black"]]},
+ "xojaobod": {"channel": "XOʻJAOBOD CITY", "user": "@xojaobodcity24", "items": [
+  ["yangiliklar", "YANGILIKLAR", "black"], ["xojaobod-andijon", "XOʻJAOBOD|ANDIJON", "black"],
+  ["ogohlantirish", "OGOHLANTIRISH", "black"], ["muhim", "MUHIM", "black"], ["kurs-narx", "KURS · NARX", "black"],
+  ["foydali", "FOYDALI", "black"], ["salomatlik", "SALOMATLIK", "black"], ["badantarbiya", "BADANTARBIYA", "black"],
+  ["ibrat", "IBRAT", "black"], ["elon", "E’LON", "black"]]}}
