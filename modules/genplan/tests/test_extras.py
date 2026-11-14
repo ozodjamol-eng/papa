@@ -403,3 +403,55 @@ class HubCopyCleanup(unittest.TestCase):
         store.kv_set(self.db, "hubcopy_501", "1")
         store.kv_set(self.db, "final_xojaobod", json.dumps({"material_id": 9, "hub_msg": 501}))
         self.assertEqual(service.cleanup_hubcopy(self.db, ENV, self.pubs, self.R(self.row()), lambda *_: None), 0)
+
+
+class PromoTest(unittest.TestCase):
+    """📣 14.11: «Reklama uchun joy» — раз в день, только в день без рекламы клиентов, до даты конца эксперимента."""
+    FILE = "docs/brand/kanaly/plashki/sluzhebnye/xojaobod_reklama-uchun-joy.mp4"
+
+    def setUp(self):
+        import copy
+        self.cfg = copy.deepcopy(CFG)
+        x = self.cfg["channels"]["xojaobod"]
+        x.pop("info", None); x.pop("final_post", None); x.pop("namaz_quiet", None)
+        x["promo"] = {"at": "11:30", "file": self.FILE, "text": "📣 ТЕСТ", "until": "2026-10-25"}
+        self.db = store.connect(":memory:") if hasattr(store, "connect") else None
+        if self.db is None:
+            import sqlite3
+            self.db = sqlite3.connect(":memory:"); self.db.row_factory = sqlite3.Row
+            store.setup(self.db)
+        extras.setup(self.db)
+        self.acc = Acc()
+        self.pubs = {"account": self.acc, "bot": self.acc}
+        service.ERRORS.clear()
+
+    def tick(self, now):
+        return asyncio.run(service.tick_extras(self.db, self.cfg, ENV, self.pubs, now, log=lambda *_: None))
+
+    def test_off_by_default(self):
+        self.assertIsNone(extras.opts(CFG["channels"]["xojaobod"], "promo"))       # в боевом config блока нет — ничего не выходит
+        self.assertIsNone(extras.opts(CFG["channels"]["davra"], "promo"))
+
+    def test_free_day_publishes_once(self):
+        self.assertEqual(self.tick(at("11:29")), 0)
+        self.assertEqual(self.tick(at("11:30")), 1)
+        chat, body, kind, name = self.acc.sent[0]
+        self.assertEqual((kind, name, body), ("FILE", "xojaobod_reklama-uchun-joy.mp4", "📣 ТЕСТ"))
+        self.assertEqual(self.tick(at("11:31")), 0)                                 # второй раз в тот же день — нет
+        self.assertEqual(len(self.acc.sent), 1)
+
+    def test_ad_today_skips(self):
+        self.db.execute("INSERT INTO pulse(channel, at, source) VALUES (?,?,?)", ("xojaobod", at("09:00").isoformat(), "ad"))
+        self.db.commit()
+        self.assertEqual(self.tick(at("11:30")), 0)
+        self.assertEqual(self.acc.sent, [])
+        row = self.db.execute("SELECT status, error FROM daily_posts WHERE key='promo'").fetchone()
+        self.assertEqual(row["status"], "skipped")
+        self.assertIn("место занято", row["error"])
+
+    def test_until_and_days(self):
+        o = {"until": "2026-10-25", "days": [1, 3]}
+        self.assertTrue(extras.promo_active(o, dt.date(2026, 10, 21)))               # среда, до конца эксперимента
+        self.assertFalse(extras.promo_active(o, dt.date(2026, 10, 22)))              # четверг — не свой день
+        self.assertFalse(extras.promo_active(o, dt.date(2026, 10, 26)))              # после until
+        self.assertEqual(self.tick(at("11:30", dt.date(2026, 10, 26))), 0)           # эксперимент кончился — не выходит

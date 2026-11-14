@@ -734,6 +734,28 @@ async def tick_extras(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime, lo
         video = None
         staged = None
         try:
+            if r["key"] == "promo":                # 📣 14.11: «Reklama uchun joy» — только в день без рекламы клиентов
+                o = extras.opts(ch, "promo")
+                if not o:
+                    extras.mark(db, r, status="skipped", error="выключено в config")
+                    continue
+                if extras.ads_today(db, r["channel"], now.date()):
+                    extras.mark(db, r, status="skipped", error="сегодня есть реклама клиента — место занято")
+                    continue
+                end = smart.namaz_quiet_end(db, ch, now)
+                if end:                                # тихое окно намаза — выйдет сразу после него
+                    extras.mark(db, r, at=end.isoformat())
+                    continue
+                path = extras.promo_file(o)
+                if not path or not hasattr(p, "publish_file"):
+                    raise PublishError("нет файла ролика или канал не умеет отправлять файл")
+                res = p.publish_file(to, str(path), o["text"], duration=4)
+                mid = await res if asyncio.iscoroutine(res) else res
+                extras.mark(db, r, status="done", message_id=mid)
+                store.pulse_add(db, r["channel"], now, "promo")
+                log(f"{r['channel']} promo: опубликовано")
+                n += 1
+                continue
             if r["key"] == "info":
                 from . import digest
                 get = fetch or digest._get

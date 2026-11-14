@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS ad_campaign_days (
 );
 """
 
-TITLE = {"info": "☀️ Об-ҳаво ва курс", "final": "🌙 Якуний пост"}
+TITLE = {"info": "☀️ Об-ҳаво ва курс", "final": "🌙 Якуний пост", "promo": "📣 Реклама учун жой"}
+REPO = __import__("pathlib").Path(__file__).resolve().parents[3]
 
 
 def setup(db) -> None:
@@ -50,6 +51,9 @@ def setup(db) -> None:
 
 
 def opts(ch: dict, key: str) -> dict | None:
+    if key == "promo":                       # 📣 14.11: «Reklama uchun joy» — только если в config канала есть блок promo
+        o = ch.get("promo")
+        return dict(o) if o and o.get("enabled", True) and o.get("at") and o.get("file") and o.get("text") else None
     o = ch.get("info" if key == "info" else "final_post")
     if not o or not o.get("enabled", True):
         return None
@@ -104,6 +108,30 @@ def weather_video(day: dt.date, get=None, folder: str | None = None):
     path = Path(folder or tempfile.gettempdir()) / f"xojaobod-weather-{day.isoformat()}.mp4"
     path.write_bytes(data)
     return path
+
+
+# ---------- 📣 «Reklama uchun joy» в свободный рекламный день (14.11, путь «А» владельца) ----------
+def promo_active(o: dict, day: dt.date) -> bool:
+    """Эксперимент идёт до даты until (включительно) и только в свои дни недели (days: 1=Пн … 7=Вс; нет — каждый день)."""
+    if o.get("until") and day > dt.date.fromisoformat(o["until"]):
+        return False
+    return not o.get("days") or day.isoweekday() in o["days"]
+
+
+def ads_today(db, channel: str, day: dt.date) -> int:
+    """Сколько реклам клиентов сегодня в канале (стоят в очереди или уже вышли). Есть хоть одна — место занято,
+    ролик «место для рекламы» не выходит: рядом с рекламой клиента он её обесценивает."""
+    d = day.isoformat()
+    n = db.execute("SELECT COUNT(*) FROM materials WHERE channel=? AND lower(rubric) LIKE 'реклама%' "
+                   "AND status IN ('queued','published') AND substr(COALESCE(scheduled_at, created_at),1,10)=?",
+                   (channel, d)).fetchone()[0]
+    n += db.execute("SELECT COUNT(*) FROM pulse WHERE channel=? AND source='ad' AND substr(at,1,10)=?", (channel, d)).fetchone()[0]
+    return int(n)
+
+
+def promo_file(o: dict):
+    p = REPO / o["file"]
+    return p if p.is_file() and p.stat().st_size > 50_000 else None
 
 
 # ---------- 🌙 Якуний пост ----------
@@ -375,11 +403,13 @@ def ensure_campaigns(db, now: dt.datetime, cfg: dict | None = None) -> list[int]
 def ensure_day(db, cfg: dict, day: dt.date, now: dt.datetime | None = None) -> None:
     """Посты дня. Время уже давно прошло (служба только что запущена) — не создаём, чтобы не было ложных «пропущен»."""
     for channel, ch in cfg["channels"].items():
-        for key in ("info", "final"):
+        for key in ("info", "final", "promo"):
             o = opts(ch, key)
             if not o:
                 continue
             if key == "final" and not final_get(db, channel):
+                continue
+            if key == "promo" and not promo_active(o, day):
                 continue
             at = plan.slot_time(day, o["at"])
             if now is not None and now - at > GRACE:
