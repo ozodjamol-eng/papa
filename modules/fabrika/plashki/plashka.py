@@ -20,7 +20,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 W, H, FPS, N = 1080, 1920, 30, 45
 REPO = Path(__file__).resolve().parents[3]
-FONT = "/usr/share/fonts/opentype/inter/Inter-Black.otf"
+# 14.11 владелец: «шрифт не очень хороший, лучше на латинице» → Montserrat Black (широкий геометрический, как надпись OZOD
+# в знаке; лицензия OFL, файл лежит рядом — одинаково здесь, на сервере и в GitHub Actions). Только латиница.
+FONT = str(Path(__file__).resolve().parent / "fonts/Montserrat-Black-Latin.ttf")
 RED, WHITE, BLACK = (255, 16, 36), (255, 255, 255), (0, 0, 0)          # фирменные: #FF1024 · #FFFFFF · #000000
 LOOKS = {"black": {"bg": "BG01_grafit_9x16.png", "word": WHITE, "accent": RED, "small": WHITE, "band": RED},
          "red": {"bg": "BG03_krasnyy_9x16.png", "word": WHITE, "accent": BLACK, "small": WHITE, "band": WHITE},
