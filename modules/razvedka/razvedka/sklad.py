@@ -58,6 +58,7 @@ SKLAD = {
 # Не банки (фото остаётся): «СРОЧНО НОВОСТИ», Муфтий, @madaniyatvazirligi.
 VIDEO_ONLY = {"РАЗВЛЕКАТЕЛЬНО", "ФОЙДАЛИК", "ФОЙДАЛИК ОВКАТ", "УЙДА БИЗНЕС", "МОТИВАЦИЯ", "ТРЕНДЛАР", "ИБРАТ", "МАЪНАВИЯТ",
               "БАНК · БАДАНТАРБИЯ", "БАНК · САЛОМАТЛИК", "БАНК · ШОУ-БИЗНЕС", "БАНК · КЕЧКИ МУСИҚА", "@AbduraxmonQiziq", "Jonlik ijrolar", "РЕТРО КЛИПЛАР", "ЎЗБЕК РЕТРО", "@RizaNovaUZ", "@sanatdunyosi", "@madaniyat_marifat_tv"}   # 07.11
+SHOWBIZ_OK = {"БАНК · ШОУ-БИЗНЕС", "БАНК · КЕЧКИ МУСИҚА"}   # 14.11: банки владельца, где слова «хонанда/клип/премьера» — норма
 CLOSED = {"МАЪНАВИЯТ"}                          # ⚖️ 13.11 владелец: религиозные материалы — уголовная ответственность
 TRUSTED_EXT = {"@shayx_nuriddinxoliqnazar"}       # 30.10 владелец: Муфтий — без проверки лого (его подпись допустима)
 NEWEST_FIRST = {"@shayx_nuriddinxoliqnazar", "СРОЧНО НОВОСТИ"}      # якорь: сначала свежий пост, нет нового — следующий из архива
@@ -165,7 +166,10 @@ def eligible(item: dict, stash: str, channel: str, now: dt.datetime) -> bool:
         return False                                   # «Жума» — только в пятницу
     if stash != URGENT and stash not in LESSON_ONLY and channel in curate.NEWS_TEXT_CHANNELS and curate.is_news(item["text"]):
         return False                                   # 01.11 владелец: новости — только из «СРОЧНО НОВОСТИ»
-    return not curate.off_policy(item["text"], channel)
+    pol = curate.off_policy(item["text"], channel)
+    if pol == "showbiz" and stash in SHOWBIZ_OK:
+        return True                                    # 14.11 владелец: свой банк шоу-бизнеса — в КАТТА ДАВРА можно (чужие источники — по-прежнему нет)
+    return not pol
 
 
 def order(items: list[dict], channel: str, now: dt.datetime | None = None, stash: str = "") -> list[dict]:

@@ -81,6 +81,12 @@ class TestSklad(unittest.TestCase):
             self.assertIn("РЕТРО КЛИПЛАР", [s for s, _, _ in sklad.plan(stashes, {}, {}, now)["paparazzi"]])
         self.assertEqual(got, {"чт": ["ЎЗБЕК РЕТРО"], "сб": ["РЕТРО КЛИПЛАР"], "вс": ["ЎЗБЕК РЕТРО"]})   # 14.11: ретро каждый день, по дням — мировое/узбекское
 
+    def test_showbiz_bank_allowed_in_davra(self):
+        """14.11: пост про премьеру из «БАНК · ШОУ-БИЗНЕС» годится КАТТА ДАВРА; тот же текст из чужого склада — нет."""
+        t = "#ПРЕМЬЕРА Хонанда Моҳимдан янги тарона ҳамда таъсирли клип. Тез кунда премьера"
+        self.assertTrue(sklad.eligible(it(1, text=t), "БАНК · ШОУ-БИЗНЕС", "davra", MORNING))
+        self.assertFalse(sklad.eligible(it(1, text=t), "ТРЕНДЛАР", "davra", MORNING))
+
     def test_stale_words_and_juma_only_friday(self):
         self.assertFalse(sklad.eligible(it(1, text="Бугун об-ҳаво иссиқ"), "ФОЙДАЛИК", "davra", MORNING))
         self.assertFalse(sklad.eligible(it(1, text="2024 йил натижалари"), "ФОЙДАЛИК", "davra", MORNING))
