@@ -109,7 +109,7 @@ def candidates(db, cfg: dict, now: _dt.datetime) -> list:
         if decide(cfg["channels"][r["channel"]], r)[0]:
             out.append(r)
     # 14.11: рубрики «метка обязательна» (клипы, песни) — первыми среди запаса: без метки они в сетку не встанут
-    out.sort(key=lambda r: not (r["status"] == "queued" or r["rubric"] in (cfg["channels"][r["channel"]].get("mark_must") or [])))
+    out.sort(key=lambda r: not (r["status"] == "queued" or r["rubric"] in (cfg["channels"][r["channel"]].get("mark_first") or [])))
     return out
 
 

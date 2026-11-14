@@ -752,7 +752,7 @@ def mark_ok(db, cfg: dict, channel: str, m) -> bool:
     (наше с Фабрики/дайжест, альбом, текст, пост без своей подписи), — проходит как раньше."""
     ch = cfg["channels"][channel]
     must = ch.get("mark_must") or []
-    if not must or m["rubric"] not in must:
+    if must != "all" and (not must or m["rubric"] not in must):   # "all" — ЗАКОН 14.11: каждое видео/фото канала только с меткой
         return True
     from . import caption, marker
     o = marker.opts(cfg)

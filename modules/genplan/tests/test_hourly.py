@@ -178,9 +178,13 @@ class T(unittest.TestCase):
             ids[r] = self.add(r, status="draft")
             store.update(self.db, ids[r], stock=1, has_media=1, media=json.dumps([{"type": "video", "file_id": "x"}]))
         pool = lambda: {m["id"] for m in smart._base_pool(self.db, self.cfg, "davra", now)}   # noqa: E731
+        self.cfg["channels"]["davra"]["mark_must"] = ["Мусиқа"]
         self.assertEqual(pool(), {ids["Ҳажвия"]})
         store.kv_set(self.db, f"marked_{ids['Мусиқа']}", "1")
         self.assertEqual(pool(), {ids["Мусиқа"], ids["Ҳажвия"]})
+        self.cfg["channels"]["davra"]["mark_must"] = "all"       # ЗАКОН 14.11: все видео канала — только с меткой
+        self.assertEqual(pool(), {ids["Мусиқа"]})
+        self.assertEqual(CFG["channels"]["davra"]["mark_must"], "all")
 
     def test_davra_hour_rubrics(self):
         self.assertTrue(self.davra_hours)

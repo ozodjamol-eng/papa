@@ -182,6 +182,8 @@ class TestStock(Base):
         self.assertIn("📦 В запасе", hub.card(self.db, CFG, 1, at("07:00"))[0])
         self.assertIn("📦 В запасе: Ҳажвия 1", smart.day_view(self.db, CFG, "davra", at("07:00")))
         self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("07:00")), [])      # 09:45 ещё далеко
+        self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("08:30")), [])      # 🏷 ЗАКОН 14.11: без метки не берём
+        store.kv_set(self.db, "marked_1", "1")
         self.assertEqual(smart.fill_from_stock(self.db, CFG, "davra", at("08:30")), [1])     # слот «Ҳажвия» 09:45 пуст
         m = store.get(self.db, 1)
         self.assertEqual((m["status"], dt.datetime.fromisoformat(m["scheduled_at"])), ("queued", at("09:45")))
