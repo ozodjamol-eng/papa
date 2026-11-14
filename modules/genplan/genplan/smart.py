@@ -154,6 +154,30 @@ def is_minbar_hour(ch: dict, t: dt.datetime) -> bool:
     return bool(w) and w[0] == MINBAR
 
 
+def namaz_quiet_end(db, ch: dict, t: dt.datetime) -> dt.datetime | None:
+    """🕌 14.11 владелец: «это идёт время намаза» — тихое окно КАЖДОГО намаза (config канала: namaz_quiet = [до, после] минут).
+    t внутри окна → время сразу после окна, иначе None. Времена — из расписания намаза (namaz_schedule), на каждый день свои."""
+    q = ch.get("namaz_quiet")
+    if not q:
+        return None
+    try:
+        from . import namaz
+        s = namaz.schedule_for(db, t.date())
+    except Exception:  # noqa: BLE001 — таблицы намаза может не быть
+        return None
+    if not s:
+        return None
+    lo, hi = int(q[0]), int(q[1])
+    for n in namaz.NAMES:
+        try:
+            p = plan.slot_time(t.date(), s[n])
+        except Exception:  # noqa: BLE001 — пустое/битое время в расписании
+            continue
+        if p - dt.timedelta(minutes=lo) <= t <= p + dt.timedelta(minutes=hi):
+            return p + dt.timedelta(minutes=hi + 1)
+    return None
+
+
 def free_hours(db, ch: dict, channel: str, rubric: str | None, now: dt.datetime, day: dt.date,
                exclude: int | None = None, until: dt.datetime | None = None,
                minbar: bool = False) -> list[dt.datetime]:

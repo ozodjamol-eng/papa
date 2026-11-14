@@ -531,6 +531,14 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
                 log(f"{channel}: тихое окно Жумы — {len(wait)} пост(ов) выйдут в {quiet:%H:%M}")
             urgent = [m for m in urgent if smart.is_ad_rubric(m["rubric"])]
             regular = [m for m in regular if smart.is_ad_rubric(m["rubric"])]
+        nq = smart.namaz_quiet_end(db, cfg["channels"][channel], now)   # 🕌 14.11: тихое окно каждого намаза (путь А: любой контент и реклама)
+        if nq:
+            for m in regular:
+                store.update(db, m["id"], scheduled_at=nq.isoformat())
+                out["moved"] += 1
+            if regular:
+                log(f"{channel}: время намаза — {len(regular)} пост(ов) выйдут в {nq:%H:%M}")
+            regular = []                                     # срочные (🆘) не ждут: «срочно значит срочно»
         for m in urgent:                                     # срочные — все и сразу
             # 🆘 14.11 10:21 владелец: «срочно значит срочно» — срочный пост метку НЕ ждёт (правило 27.10 сильнее закона о метке)
             if hold:                                         # 30.10 владелец: реклама держится 10 мин — обещание клиенту

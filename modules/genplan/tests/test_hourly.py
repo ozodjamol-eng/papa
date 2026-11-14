@@ -186,6 +186,23 @@ class T(unittest.TestCase):
         self.assertEqual(pool(), {ids["Мусиқа"]})
         self.assertEqual(CFG["channels"]["davra"]["mark_must"], "all")
 
+    def test_namaz_quiet_window(self):
+        """14.11: тихое окно каждого намаза — за 5 мин до и 20 после; пост из окна выходит сразу после; 🆘 не ждёт."""
+        from genplan import namaz
+        namaz.setup(self.db)
+        namaz.save(self.db, [(MON, {"bomdod": "05:45", "peshin": "12:35", "asr": "15:15", "shom": "17:00", "xufton": "18:30"})], at("05:00"))
+        ch = CFG["channels"]["davra"]
+        q = lambda hhmm: smart.namaz_quiet_end(self.db, ch, at(hhmm))   # noqa: E731
+        self.assertEqual(f"{q('17:00'):%H:%M}", "17:21")                 # музыка ровно в Шом — после окна
+        self.assertEqual(f"{q('12:30'):%H:%M}", "12:56")                 # реклама за 5 мин до Пешина
+        self.assertIsNone(q("12:29")); self.assertIsNone(q("12:56")); self.assertIsNone(q("16:00"))
+        self.assertIsNone(smart.namaz_quiet_end(self.db, CFG["channels"]["paparazzi"], at("17:00")))   # там окна нет
+        self.cfg["channels"]["xojaobod"]["namaz"] = {"enabled": False}   # посты намаза Хўжаобода здесь не проверяем
+        reg = self.add("Ҳажвия", at("17:00"))
+        self.tick(at("17:00"))
+        self.assertEqual(self.when(reg), "17:21")                        # не пропал — вышел сразу после окна
+        self.assertEqual(store.get(self.db, reg)["status"], "queued")
+
     def test_hub_sorted_by_caption(self):
         """14.11: «INSTAGRAM · ХАБ» — смешанный: рубрика по словам подписи владельца, метка первой строкой сильнее."""
         ch = CFG["channels"]["davra"]
