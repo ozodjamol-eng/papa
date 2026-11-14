@@ -556,7 +556,7 @@ class TestChannelPolicy(unittest.TestCase):
         self.assertIn("политика", n)
         self.assertIn("Хўжаобод", n)
         n = smart.policy_note(self.REAL, "davra", "Xonanda yangi klip premyerasini taqdim etdi")   # латиница
-        self.assertIn("PaparazziUZ", n)
+        self.assertEqual(n, "")                                      # 14.11 владелец: шоу-бизнес разрешён и в КАТТА ДАВРА
         self.assertEqual(smart.policy_note(self.REAL, "davra", "Уйда тез тайёрланадиган фойдали таом рецепти"), "")
         self.assertEqual(smart.policy_note(self.REAL, "davra", "OpenAI янги сунъий интеллект моделини чиқарди"), "")
 

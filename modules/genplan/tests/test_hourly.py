@@ -175,7 +175,7 @@ class T(unittest.TestCase):
         t, why = smart.smart_time(self.db, self.cfg, "davra", "Маънавият", at("06:00"))
         self.assertNotEqual(f"{t:%H:%M}", "22:00")                   # 01.11: час Муфтия — только Муфтию (Маънавият туда ставит лишь запас)
         t, _ = smart.smart_time(self.db, self.cfg, "davra", "Мусиқа", at("06:00"))
-        self.assertEqual(f"{t:%H:%M}", "12:00")                      # музыка — с 10:00 (правило канала)
+        self.assertEqual(f"{t:%H:%M}", "11:00")                      # музыка — с 10:00 (правило канала); 14.11: 11:00 — музыка
 
     async def _fake_publish(self, db, cfg, env, pubs, channel, m, slot, day, log=print, now=None):
         store.update(db, m["id"], status="published")
