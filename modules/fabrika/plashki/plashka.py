@@ -4,6 +4,7 @@
 «у нас же есть фирменный стиль… определяемся по нему».
 
   python plashka.py one  <out.mp4> "<КАНАЛ>" "<РУБРИКА>" "<@username>" [black|red|white]
+  python plashka.py one  <out.mp4> "<КАНАЛ>" "<ТЕКСТ>" "<@username>" <цвет> "<строка-контакт>" <секунд>   — служебный мини-ролик
   python plashka.py sheet <out.jpg> "<КАНАЛ>" "<РУБРИКА>" "<@username>" [black|red|white]   — контрольный лист кадров
 
 Ход (45 кадров, 30 к/с, без звука — тихая дорожка, чтобы клеилась к любому видео):
@@ -50,7 +51,7 @@ def _tracked(d, txt, base_y, size, fill, gap):
         x += w + gap
 
 
-def layers(channel: str, rubric: str, user: str, look: dict):
+def layers(channel: str, rubric: str, user: str, look: dict, sub: str = ""):
     """Слой слова (RGBA), слой мелких надписей (RGBA), прямоугольник черты."""
     word = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(word)
@@ -66,6 +67,9 @@ def layers(channel: str, rubric: str, user: str, look: dict):
     ds = ImageDraw.Draw(small)
     _tracked(ds, channel, int(940 - tot / 2 - 70), 72, look["accent"] + (255,), 14)
     _tracked(ds, user, 1660, 60, look["small"] + (240,), 5)
+    if sub:                                                             # служебный мини-ролик: строка-контакт под чертой
+        f, b = _fit(sub, 960, 92)
+        ds.text(((W - (b[2] - b[0])) / 2 - b[0], bar_y + 110 - b[1]), sub, font=f, fill=look["word"] + (255,))
     return (np.asarray(word, dtype=np.float32) / 255, np.asarray(small, dtype=np.float32) / 255, bar_y)
 
 
@@ -74,17 +78,20 @@ def _ease(x):
     return 1 - (1 - x) ** 3
 
 
-def frames(channel: str, rubric: str, user: str, look_name: str = "black"):
+def frames(channel: str, rubric: str, user: str, look_name: str = "black", sub: str = "", seconds: float = 0.0):
+    """seconds = 0 — плашка рубрики (1,5 с, в конце вспышка в белое: склейка с видео).
+    seconds > 0 — служебный мини-ролик: надпись держится, в конце диагональ проходит второй раз и закрывает её."""
+    n_all = int(seconds * FPS) if seconds else N
     look = LOOKS[look_name]
     bg = np.asarray(Image.open(REPO / "docs/brand/ozod-jamol/fony" / look["bg"]).convert("RGB").resize((W, H), Image.LANCZOS),
                     dtype=np.float32) / 255
-    word, small, bar_y = layers(channel, rubric, user, look)
+    word, small, bar_y = layers(channel, rubric, user, look, sub)
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     u = xx + yy * SLOPE                                                 # координата поперёк диагонали
     umax = W + H * SLOPE
     band_col = np.array(look["band"], np.float32) / 255
     acc = np.array(look["accent"], np.float32) / 255
-    for i in range(N):
+    for i in range(n_all):
         c = -260 + (umax + 520) * _ease((i - 1) / 15.0)                 # центр красной диагонали: проход за ~0,5 с
         fr = bg.copy()
         reveal = np.clip((c - u) / 60.0, 0, 1)[:, :, None]              # слово открыто там, где диагональ уже прошла
@@ -98,18 +105,24 @@ def frames(channel: str, rubric: str, user: str, look_name: str = "black"):
             fr = fr * (1 - sa) + small[:, :, :3] * sa
         ba = (np.clip(1 - np.abs(u - c) / 130.0, 0, 1) ** 0.6)[:, :, None] * (1 if i < 20 else 0)
         fr = fr * (1 - ba) + band_col * ba
-        if i >= 36:                                                     # лёгкий наезд и вспышка в белое — склейка с видео
+        if not seconds and i >= 36:                                     # вспышка в белое — склейка с видео
             f = ((i - 36) / (N - 1 - 36)) ** 2
             fr = fr + (1 - fr) * f
+        if seconds and i >= n_all - 20:                                 # вторая диагональ закрывает надпись
+            c2 = -260 + (umax + 520) * _ease((i - (n_all - 20)) / 15.0)
+            hide = np.clip((c2 - u) / 60.0, 0, 1)[:, :, None]
+            fr = fr * (1 - hide) + bg * hide
+            b2 = (np.clip(1 - np.abs(u - c2) / 130.0, 0, 1) ** 0.6)[:, :, None]
+            fr = fr * (1 - b2) + band_col * b2
         yield (np.clip(fr, 0, 1) * 255).astype(np.uint8)
 
 
-def one(out: str, channel: str, rubric: str, user: str, look: str = "black") -> None:
+def one(out: str, channel: str, rubric: str, user: str, look: str = "black", sub: str = "", seconds: str = "0") -> None:
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
                             "-i", "-", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-c:v", "libx264", "-crf", "16",
                             "-preset", "slow", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-shortest",
                             "-movflags", "+faststart", out], stdin=subprocess.PIPE)
-    for f in frames(channel, rubric, user, look):
+    for f in frames(channel, rubric, user, look, sub, float(seconds)):
         enc.stdin.write(f.tobytes())
     enc.stdin.close()
     if enc.wait() != 0:
@@ -128,4 +141,4 @@ def sheet(out: str, channel: str, rubric: str, user: str, look: str = "black") -
 if __name__ == "__main__":
     if len(sys.argv) < 6 or sys.argv[1] not in ("one", "sheet"):
         raise SystemExit(__doc__)
-    (one if sys.argv[1] == "one" else sheet)(*sys.argv[2:7])
+    (one if sys.argv[1] == "one" else sheet)(*(sys.argv[2:9] if sys.argv[1] == "one" else sys.argv[2:7]))
