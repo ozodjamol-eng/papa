@@ -536,12 +536,13 @@ def sort_rubric(ch: dict, source: str | None, text: str | None, default: str | N
         return default
     t = (text or "").casefold()
     first = t.strip().split("\n", 1)[0]
+    names = ch.get("sklad_sort_map") or {}           # у каждого канала свои названия рубрик (хаб общий на три канала)
     for rub, tags in SORT_TAGS:
         if any(first.startswith(x) for x in tags):
-            return rub
+            return names.get(rub, default if rub == "Мусиқа" else rub)
     for rub, rx in SORT_RULES:
         if rx.search(text or ""):
-            return rub
+            return names.get(rub, rub)
     return default
 
 

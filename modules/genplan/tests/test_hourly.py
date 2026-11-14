@@ -202,6 +202,13 @@ class T(unittest.TestCase):
         self.assertEqual(f("#КЕЧКИ\nБахтиёр Мавлонов — Дўстлар"), "Кечки мусиқа")
         self.assertEqual(f("#МУСИҚА\nОнажон ҳақида шўх қўшиқ"), "Мусиқа")
         self.assertEqual(f("Онажон", src="Jonlik ijrolar"), "Мусиқа")              # другие склады не сортируются
+        px, xo = CFG["channels"]["paparazzi"], CFG["channels"]["xojaobod"]         # хаб общий: у каналов свои рубрики
+        self.assertEqual(smart.sort_rubric(px, "INSTAGRAM · ХАБ", "Онажон, соғиндим", "Қўшиқ"), "Тунги қўшиқ")
+        self.assertEqual(smart.sort_rubric(px, "INSTAGRAM · ХАБ", "Дўстлар давраси", "Қўшиқ"), "Қўшиқ")
+        self.assertEqual(smart.sort_rubric(px, "INSTAGRAM · ХАБ", "Янги клип премьера", "Қўшиқ"), "Клип/премьера")
+        self.assertEqual(smart.sort_rubric(xo, "INSTAGRAM · ХАБ", "Онажон, соғиндим", "Видео"), "Ибрат")
+        self.assertEqual(smart.sort_rubric(xo, "INSTAGRAM · ХАБ", "Дўстлар давраси", "Видео"), "Видео")
+        self.assertEqual(smart.sort_rubric(xo, "INSTAGRAM · ХАБ", "#МУСИҚА\nОнажон", "Видео"), "Видео")
 
     def test_davra_hour_rubrics(self):
         self.assertTrue(self.davra_hours)
