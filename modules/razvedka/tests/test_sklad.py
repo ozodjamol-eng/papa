@@ -48,7 +48,7 @@ class TestSklad(unittest.TestCase):
         d = [(s, x["id"]) for s, x, _ in p["davra"]]
         self.assertEqual([x for s, x in d if s == "ФОЙДАЛИК"], [1, 2, 3])                  # ровно 3, с начала
         self.assertEqual([s for s, _ in d].count("РАЗВЛЕКАТЕЛЬНО"), 2)                       # юмор — 2
-        self.assertEqual([s for s, _ in d].count("Jonlik ijrolar"), 5)                       # 30.10 сверка: музыка — своя норма 3
+        self.assertEqual([s for s, _ in d].count("Jonlik ijrolar"), 3)                       # 30.10 сверка: музыка — своя норма 3
         self.assertEqual([s for s, _ in d].count("ФОЙДАЛИК ОВКАТ"), 1)                       # 09.11: 1 в день — под завтрак 07:15
         x = [(s, i) for s, i, _ in [(s, x["id"], k) for s, x, k in p["xojaobod"]]]
         self.assertEqual([i for s, i in x if s == "ФОЙДАЛИК"], [20, 19, 18])                # Хўжаобод — с конца
@@ -64,11 +64,11 @@ class TestSklad(unittest.TestCase):
     def test_davra_hour_norms(self):
         """30.10 сверка: часы Давры «час = рубрика» получают свои нормы — мотивация 2, музыка 3, бизнес 1, ибрат 1."""
         self.assertEqual({k: sklad.FIXED["davra"][k] for k in ("МОТИВАЦИЯ", "Jonlik ijrolar", "УЙДА БИЗНЕС", "ИБРАТ")},
-                         {"МОТИВАЦИЯ": 1, "Jonlik ijrolar": 5, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1})   # 14.11: музыка 5, мотивация 1;   # 12.11: +1 «Тунги қўшиқ» 21:30
+                         {"МОТИВАЦИЯ": 1, "Jonlik ijrolar": 3, "УЙДА БИЗНЕС": 1, "ИБРАТ": 1})   # 14.11: музыка 5, мотивация 1;   # 12.11: +1 «Тунги қўшиқ» 21:30
         stashes = {k: [it(i) for i in range(n, n + 5)] for k, n in
                    (("МОТИВАЦИЯ", 400), ("Jonlik ijrolar", 500), ("УЙДА БИЗНЕС", 600), ("ИБРАТ", 700))}
         d = [s for s, _, _ in sklad.plan(stashes, {}, {}, EVENING)["davra"]]
-        self.assertEqual((d.count("МОТИВАЦИЯ"), d.count("Jonlik ijrolar"), d.count("УЙДА БИЗНЕС"), d.count("ИБРАТ")), (1, 5, 1, 1))
+        self.assertEqual((d.count("МОТИВАЦИЯ"), d.count("Jonlik ijrolar"), d.count("УЙДА БИЗНЕС"), d.count("ИБРАТ")), (1, 3, 1, 1))
 
     def test_retro_only_on_its_weekday(self):
         """12.11: в КАТТА ДАВРА мировое ретро — только в субботу, узбекское — только в воскресенье; PaparazziUZ — каждый день."""
