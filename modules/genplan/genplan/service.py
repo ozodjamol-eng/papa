@@ -532,12 +532,7 @@ async def tick(db, cfg: dict, env: dict, pubs: dict, now: dt.datetime | None = N
             urgent = [m for m in urgent if smart.is_ad_rubric(m["rubric"])]
             regular = [m for m in regular if smart.is_ad_rubric(m["rubric"])]
         for m in urgent:                                     # срочные — все и сразу
-            if not smart.mark_ok(db, cfg, channel, m):         # 🏷 ЗАКОН 14.11: без метки @канала видео не выходит — ждём Маркировщика
-                if int(store.kv_get(db, f"markfail_{m['id']}") or 0) >= 2:
-                    store.update(db, m["id"], status="draft", stock=1, scheduled_at=None)
-                    log(f"{channel}: пост #{m['id']} не удалось пометить — не выпускаем, вернули в запас")
-                out["moved"] += 1
-                continue
+            # 🆘 14.11 10:21 владелец: «срочно значит срочно» — срочный пост метку НЕ ждёт (правило 27.10 сильнее закона о метке)
             if hold:                                         # 30.10 владелец: реклама держится 10 мин — обещание клиенту
                 store.update(db, m["id"], scheduled_at=hold.isoformat())
                 out["moved"] += 1
